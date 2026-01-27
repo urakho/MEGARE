@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Retro Tanks - Procedural Walls</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #1a1a1a; 
+            font-family: 'Courier New', Courier, monospace; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+        }
+        canvas { 
+            background: #445522; 
+            border: 8px solid #333; 
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            image-rendering: pixelated;
+        }
+        .ui { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            color: #fff; 
+            background: rgba(0,0,0,0.7); 
+            padding: 15px; 
+            border: 2px solid #555;
+            pointer-events: none; 
+            line-height: 1.5;
+        }
+        b { color: #ffcc00; }
+    </style>
+</head>
+<body>
+
+<div class="ui">
+    <b>WASD</b> — Ход танка<br>
+    <b>WHEEL</b> — Вращение башни<br>
+    <b>SPACE</b> — Выстрел<br>
+    <b>F5</b> — Перегенерировать мир<br>
+    <hr>
+    <small>Стены создаются сегментами,<br>проезд всегда свободен.</small>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Main menu overlay -->
+<div id="mainMenu" style="position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; z-index:10;">
+    <div style="background: rgba(0,0,0,0.88); padding: 28px; border: 2px solid #666; text-align:center; color:#fff; width:440px; border-radius:8px;">
+        <h1 style="margin:6px 0 14px 0; font-size:28px;">Главное меню</h1>
+        <div id="previewWrap" style="display:flex;flex-direction:column;align-items:center;">
+            <canvas id="previewCanvas" width="200" height="150" style="background:#2b5a2b; border:2px solid #444; border-radius:4px;"></canvas>
+            <div id="previewLabel" style="margin-top:10px; font-size:16px; font-weight:600;">Ваш танк</div>
+        </div>
+        <button id="startBtn" style="margin-top:16px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">START</button>
+    </div>
+</div>
+
+<!-- Mode selection modal (hidden by default) -->
+<div id="modeModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:11;">
+    <div style="background: rgba(0,0,0,0.95); padding: 22px; border: 2px solid #666; text-align:center; color:#fff; width:520px; border-radius:8px;">
+        <h2 style="margin:6px 0 12px 0; font-size:22px;">Выберите режим</h2>
+        <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
+            <button id="modeSingle" style="padding:10px 18px; width:80%; font-size:16px;">Одиночный режим</button>
+            <button id="modeTeam" style="padding:10px 18px; width:80%; font-size:16px;">Командный режим (4 команды по 2)</button>
+            <button id="modeCancel" style="padding:10px 18px; width:80%; font-size:16px;">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * КЛАССИЧЕСКИЕ ТАНКИ С ПРОЦЕДУРНЫМИ СТЕНАМИ
+ * Логика: Генерация длинных препятствий с проверкой путей
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+// Display size (canvas kept reasonable for performance)
+const DISPLAY_W = 900, DISPLAY_H = 700;
+canvas.width = DISPLAY_W;
+canvas.height = DISPLAY_H;
+// World size (can be larger than display for big maps like War)
+let worldWidth = DISPLAY_W, worldHeight = DISPLAY_H;
+
+// Глобальное состояние
+const keys = {};
+let objects = [];
+let particles = [];
+let bullets = [];
+let enemies = [];
+let allies = [];
+let gameState = 'menu';
+let currentMode = 'menu';
+// Временная отладочная коллекция линий для AI (не сохраняется)
+let debugLines = [];
+// Показать отладочные линии AI (true — показать отладочные трассы)
+const SHOW_AI_DEBUG = false;
+
+// Навигационная сетка для A* (перестраивается при перемещении ящиков)
+let navGrid = null;
+let navCols = 0, navRows = 0, navCell = 24;
+// Размер агента, используемый при построении безопасных ячеек
+let navAgentW = 38, navAgentH = 38;
+let navNeedsRebuild = true;
+// War mode team spawn centers (filled by spawnWarMode)
+let warTeamSpawns = [];
+
+// Глобальная перезарядка в тиках (1 тик = 1/60s)
+const FIRE_COOLDOWN = 20; // ~333ms at 60fps
+// Базовая вероятность успешного уклонения AI (0..1)
+const DODGE_BASE_ACCURACY = 0.8;
+
+// Camera follow flag
+let cameraFollow = false;
+
+const tank = {
+    x: 50,
+    y: 50,
+    w: 38,
+    h: 38,
+    speed: 3.2,
+    turretAngle: 0,
+    baseAngle: 0,
+    color: '#0000FF',
+    trackOffset: 0,
+    hp: 3
+    ,
+    team: 0
+    ,
+    fireCooldown: 0
+};
+
+// Слушатели событий
+window.onkeydown = (e) => keys[e.code] = true;
+window.onkeyup = (e) => keys[e.code] = false;
+window.addEventListener('wheel', (e) => {
+    tank.turretAngle += e.deltaY * 0.0015;
+});
+
+// Preview canvas drawing
+const previewCanvas = document.getElementById('previewCanvas');
+const previewCtx = previewCanvas && previewCanvas.getContext ? previewCanvas.getContext('2d') : null;
+function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // tracks (top/bottom)
+    const trackThick = Math.max(6, W * 0.12);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
+    ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
+    // body (between tracks)
+    ctx.fillStyle = color;
+    ctx.fillRect(-W/2 + 2, -H/2 + trackThick/2 + 2, W - 4, H - trackThick - 4);
+    // hatch outline
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(-W*0.12, -H*0.12, W*0.24, H*0.24);
+    // turret
+    ctx.rotate(turretAngle || 0);
+    const tSize = Math.min(W, H) * 0.34 * turretScale;
+    ctx.fillStyle = '#5c7041';
+    ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+    // barrel
+    ctx.fillStyle = '#111';
+    const barrelLen = Math.max(20, W * 0.45) * turretScale;
+    const barrelH = Math.max(4, H * 0.08) * turretScale;
+    ctx.fillRect(tSize/2 - 2 * turretScale, -barrelH/2, barrelLen, barrelH);
+    ctx.restore();
+}
+function drawPreview() {
+    if (!previewCtx) return;
+    previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
+    // draw tank smaller and square (half size) with larger turret/barrel for preview
+    const side = Math.min(previewCanvas.width, previewCanvas.height) / 2; // половина меньшей стороны
+    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 2);
+}
+
+// Start button handler (open mode selection modal)
+const mainMenu = document.getElementById('mainMenu');
+const modeModal = document.getElementById('modeModal');
+const startBtn = document.getElementById('startBtn');
+if (startBtn) startBtn.addEventListener('click', () => {
+    if (modeModal) modeModal.style.display = 'flex';
+});
+
+// Mode buttons
+const modeSingle = document.getElementById('modeSingle');
+const modeTeam = document.getElementById('modeTeam');
+const modeCancel = document.getElementById('modeCancel');
+
+function startGame(mode) {
+    // reset basic state
+    tank.turretAngle = 0; tank.hp = 3; enemies = []; bullets = []; particles = [];
+    navNeedsRebuild = true;
+
+    if (mode === 'single') {
+        // normal world
+        worldWidth = 900; worldHeight = 700;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        tank.x = 50; tank.y = 50;
+        generateMap();
+    } else if (mode === 'team') {
+        // larger world map
+        worldWidth = 1400; worldHeight = 1000;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        tank.x = 60; tank.y = 60;
+        generateMap();
+        spawnTeamMode();
+        cameraFollow = true;
+    } else if (mode === 'war') {
+        // large world (previously 6x) — reduced by half to 3x for performance
+        worldWidth = 900 * 3; worldHeight = 700 * 3;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        // place player and spawn war layout
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+        // coarser nav grid for performance
+        navCell = 48;
+        generateMap();
+        spawnWarMode();
+        cameraFollow = true;
+    }
+
+    // set current mode for runtime logic
+    currentMode = mode;
+
+    if (modeModal) modeModal.style.display = 'none';
+    if (mainMenu) mainMenu.style.display = 'none';
+    gameState = 'playing';
+    navNeedsRebuild = true;
+    try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
+}
+
+                // very large world (6x single)
+                worldWidth = 900 * 6; worldHeight = 700 * 6;
+                // keep display canvas small for performance
+                canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+if (modeTeam) modeTeam.addEventListener('click', () => startGame('team'));
+// War mode button (added dynamically to modal) — insert above Cancel for consistent spacing
+const modeWarBtn = document.createElement('button');
+modeWarBtn.id = 'modeWar';
+modeWarBtn.textContent = 'Война (2x10)';
+modeWarBtn.style.padding = '10px 18px';
+modeWarBtn.style.width = '80%';
+modeWarBtn.style.fontSize = '16px';
+if (modeModal) {
+    // find the inner button group (the second div inside the modal container)
+    const container = modeModal.querySelector('div');
+    const btnGroup = container ? container.querySelector('div') : null;
+    if (btnGroup) {
+        // insert the War button before the Cancel button so it appears above
+        const cancelBtn = btnGroup.querySelector('#modeCancel');
+        if (cancelBtn) btnGroup.insertBefore(modeWarBtn, cancelBtn);
+        else btnGroup.appendChild(modeWarBtn);
+    } else {
+        container.appendChild(modeWarBtn);
+    }
+}
+if (modeWarBtn) modeWarBtn.addEventListener('click', () => startGame('war'));
+if (modeCancel) modeCancel.addEventListener('click', () => { if (modeModal) modeModal.style.display = 'none'; });
+
+// По умолчанию показываем главное меню
+if (mainMenu) mainMenu.style.display = 'flex';
+
+// Обновлять превью танка в меню в цикле, чтобы оно всегда рисовалось
+function previewLoop() {
+    if (previewCtx) drawPreview();
+    requestAnimationFrame(previewLoop);
+}
+requestAnimationFrame(previewLoop);
+
+/**
+ * ГЕНЕРАЦИЯ КАРТЫ
+ * Создаем длинные стены как в оригинале (вертикальные и горизонтальные)
+ */
+function generateMap() {
+    objects = [];
+    const step = 100; // Шаг сетки
+    
+    // Внешние границы (невидимые, чтобы не выезжать)
+    // Внутренние стены
+    for (let x = step; x < worldWidth - step; x += step) {
+        for (let y = step; y < worldHeight - step; y += step) {
+            
+            if (Math.random() > 0.65) {
+                const isVertical = Math.random() > 0.5;
+                const length = Math.floor(Math.random() * 2) + 1; // Длина 1-2 блока
+                
+                if (isVertical) {
+                    objects.push({
+                        x: x + 25, y: y, 
+                        w: 30, h: length * step - 20, 
+                        type: 'wall', color: '#2b2b2b'
+                    });
+                } else {
+                    objects.push({
+                        x: x, y: y + 25, 
+                        w: length * step - 20, h: 30, 
+                        type: 'wall', color: '#2b2b2b'
+                    });
+                }
+            }
+        }
+    }
+    
+    // Ящики в случайных местах, проверяя коллизии со стенами
+    for (let x = step; x < worldWidth - step; x += step) {
+        for (let y = step; y < worldHeight - step; y += step) {
+            if (Math.random() > 0.8) {
+                const newBox = {
+                    x: x + 25, y: y + 25, 
+                    w: 50, h: 50, 
+                    type: 'box', color: '#7a4a21'
+                };
+                // Проверяем, не пересекается ли с существующими стенами
+                let canPlace = true;
+                for (let obj of objects) {
+                    if (obj.type === 'wall' && checkRectCollision(newBox, obj)) {
+                        canPlace = false;
+                        break;
+                    }
+                }
+                if (canPlace) {
+                    objects.push(newBox);
+                }
+            }
+        }
+    }
+    
+    // Удаляем объекты, которые слишком близко к старту игрока
+    objects = objects.filter(obj => {
+        const dist = Math.hypot(obj.x - tank.x, obj.y - tank.y);
+        return dist > 100;
+    });
+
+    // Генерация врагов в углах
+    enemies = [];
+    const cornerPositions = [
+        {x: worldWidth - 50, y: 50},
+        {x: 50, y: worldHeight - 50},
+        {x: worldWidth - 50, y: worldHeight - 50}
+    ];
+    for (let i = 0; i < 3; i++) {
+        const cp = cornerPositions[i];
+        const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
+        enemies.push({
+            x: p.x, y: p.y, w: 38, h: 38,
+            color: ['#8B0000', '#006400', '#FFD700'][i],
+            hp: 3,
+            turretAngle: 0,
+            baseAngle: 0,
+            speed: 2.5,
+            trackOffset: 0,
+            alive: true,
+            stuckCount: 0,
+            fireCooldown: 0,
+            team: i+1,
+            dodgeAccuracy: 0.75 + Math.random() * 0.2
+        });
+    }
+}
+
+// Spawn teams: numTeams teams, each of teamSize tanks
+function spawnAllies(numTeams, teamSize) {
+    allies = [];
+    const pads = [50, 50];
+    const corners = [
+        { x: 60, y: 60 },
+        { x: worldWidth - 60, y: 60 },
+        { x: 60, y: worldHeight - 60 },
+        { x: worldWidth - 60, y: worldHeight - 60 }
+    ];
+    for (let t = 0; t < numTeams; t++) {
+        const teamColor = ['#8B0000', '#006400', '#FFD700', '#00BFFF'][t % 4];
+        const base = corners[t % corners.length];
+        for (let s = 0; s < teamSize; s++) {
+            const offset = s * 44;
+            // ensure ally spawn is inside and not colliding
+            let pos = findFreeSpot(base.x + offset, base.y + offset, 38, 38);
+            allies.push({
+                x: pos.x, y: pos.y, w: 38, h: 38,
+                color: teamColor,
+                hp: 3,
+                turretAngle: 0,
+                baseAngle: 0,
+                speed: 2.5,
+                trackOffset: 0,
+                alive: true,
+                team: t,
+                fireCooldown: 0,
+                stuckCount: 0,
+                dodgeAccuracy: 0.75 + Math.random() * 0.2
+            });
+        }
+    }
+    navNeedsRebuild = true;
+}
+
+// Spawn team-mode: place player + 1 ally in one corner, spawn 6 enemies in other corners (total 8 players)
+function spawnTeamMode() {
+    enemies = [];
+    allies = [];
+    const corners = [
+        { x: 60, y: 60 },
+        { x: worldWidth - 60, y: 60 },
+        { x: 60, y: worldHeight - 60 },
+        { x: worldWidth - 60, y: worldHeight - 60 }
+    ];
+
+    // helper: remove objects overlapping a rectangle so spawn areas are free
+    function clearArea(x, y, w, h) {
+        objects = objects.filter(o => {
+            const ox = o.x, oy = o.y, ow = o.w || 40, oh = o.h || 40;
+            if (ox < x + w && ox + ow > x && oy < y + h && oy + oh > y) return false;
+            return true;
+        });
+    }
+
+    // choose corner 0 for player team
+    const playerCorner = corners[0];
+    tank.x = playerCorner.x; tank.y = playerCorner.y; tank.team = 0;
+    // clear around player spawn
+    clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
+    // spawn one ally near player (use player's color)
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15 });
+
+    const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
+    // spawn other corners with 2 enemies each; clear spawn areas first
+    for (let ci = 1; ci < 4; ci++) {
+        const base = corners[ci];
+        clearArea(base.x - 48, base.y - 48, 96, 96);
+        for (let k = 0; k < 2; k++) {
+            enemies.push({ x: base.x + k*44, y: base.y + k*28, w:38, h:38, color: enemyColors[(ci-1)%enemyColors.length], hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25 });
+        }
+    }
+
+    // add explosive barrels for team mode only (place a few in free spots)
+    const barrelCount = 5;
+    for (let b = 0; b < barrelCount; b++) {
+        // try random positions near center area
+        const rx = 80 + Math.random() * (worldWidth - 160);
+        const ry = 80 + Math.random() * (worldHeight - 160);
+        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 300, 16);
+        // avoid placing extremely close to player
+        if (Math.hypot(p.x - tank.x, p.y - tank.y) < 120) continue;
+        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#b33' });
+    }
+
+    navNeedsRebuild = true;
+}
+
+// Spawn War mode: 2 teams x 10 players (player is on blue team = team 0)
+function spawnWarMode() {
+    enemies = [];
+    allies = [];
+    objects = objects || [];
+    // huge map already set in startGame
+    const corners = [
+        { x: 120, y: 120 },
+        { x: worldWidth - 120, y: worldHeight - 120 }
+    ];
+    // record team spawn centers
+    const teamSpawns = [ corners[0], corners[1] ];
+    warTeamSpawns = teamSpawns;
+
+    // place player near team 0 spawn
+    const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
+    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+
+    // spawn allies (team 0) - 9 bots + player = 10
+    for (let i = 0; i < 9; i++) {
+            const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
+            const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
+        const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2 });
+    }
+
+    // spawn enemies (team 1) - 10 bots
+    for (let i = 0; i < 10; i++) {
+        const rx = teamSpawns[1].x - 30 - (i % 4) * 80 + (Math.random() - 0.5) * 40;
+        const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
+        const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
+        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2 });
+    }
+
+    // spawn some barrels and boxes in war map
+    for (let b = 0; b < 20; b++) {
+        const rx = 200 + Math.random() * (worldWidth - 400);
+        const ry = 200 + Math.random() * (worldHeight - 400);
+        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
+        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
+    }
+
+    navNeedsRebuild = true;
+}
+
+function teamHasAliveMember(team) {
+    if (team === 0) {
+        if (tank.alive) return true;
+        for (const a of allies) if (a && a.alive) return true;
+        return false;
+    } else {
+        for (const e of enemies) if (e && e.alive) return true;
+        return false;
+    }
+}
+
+/**
+ * ФИЗИКА И КОЛЛИЗИИ
+ */
+function checkRectCollision(r1, r2) {
+    return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
+           r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+// Проверяет, чист ли путь вдоль направления `angle` на расстояние `dist`.
+// Делает несколько сэмплов по пути, чтобы заметить узкие препятствия.
+function pathClearFor(entity, angle, dist, samples = 4) {
+    // use entity center for sampling so narrow passages are tested correctly
+    const cx = entity.x + (entity.w || 0) / 2;
+    const cy = entity.y + (entity.h || 0) / 2;
+    for (let s = 1; s <= samples; s++) {
+        const t = s / samples;
+        const sampleCx = cx + Math.cos(angle) * dist * t;
+        const sampleCy = cy + Math.sin(angle) * dist * t;
+        const tx = sampleCx - (entity.w || 0) / 2;
+        const ty = sampleCy - (entity.h || 0) / 2;
+        const rect = { x: tx, y: ty, w: entity.w, h: entity.h };
+        for (const obj of objects) {
+            if (checkRectCollision(rect, obj)) return false;
+        }
+    }
+    // также проверка границ канвы по конечной позиции центра
+    const endCx = cx + Math.cos(angle) * dist;
+    const endCy = cy + Math.sin(angle) * dist;
+    const endX = endCx - (entity.w || 0) / 2;
+    const endY = endCy - (entity.h || 0) / 2;
+    if (endX < 0 || endY < 0 || endX + entity.w > worldWidth || endY + entity.h > worldHeight) return false;
+    return true;
+}
+
+// Найти свободную точку рядом с (x,y) чтобы сущность не появлялась в стене
+function findFreeSpot(x, y, w, h, maxRadius = 200, step = 16) {
+    // clamp initial
+    x = Math.max(0, Math.min(worldWidth - w, x));
+    y = Math.max(0, Math.min(canvas.height - h, y));
+    // quick check
+    function collides(px, py) {
+        const rect = { x: px, y: py, w: w, h: h };
+        for (const o of objects) if (checkRectCollision(rect, o)) return true;
+        return false;
+    }
+    if (!collides(x, y)) return { x, y };
+    // search in expanding square/spiral
+    for (let r = step; r <= maxRadius; r += step) {
+        for (let dx = -r; dx <= r; dx += step) {
+            for (let dy of [-r, r]) {
+                const nx = Math.max(0, Math.min(worldWidth - w, x + dx));
+                const ny = Math.max(0, Math.min(worldHeight - h, y + dy));
+                if (!collides(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+        for (let dy = -r + step; dy <= r - step; dy += step) {
+            for (let dx of [-r, r]) {
+                const nx = Math.max(0, Math.min(worldWidth - w, x + dx));
+                const ny = Math.max(0, Math.min(worldHeight - h, y + dy));
+                if (!collides(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+    }
+    // fallback clamp
+    return { x: Math.max(0, Math.min(worldWidth - w, x)), y: Math.max(0, Math.min(worldHeight - h, y)) };
+}
+
+// Проверяем, летят ли по сущности снаряды; если да — попробуем уклониться
+function tryDodgeIncoming(entity) {
+    const ex = entity.x + (entity.w||0)/2; const ey = entity.y + (entity.h||0)/2;
+    const dangerLookahead = 30; // ticks to look ahead
+    const accuracy = (entity.dodgeAccuracy !== undefined) ? entity.dodgeAccuracy : DODGE_BASE_ACCURACY;
+    for (const b of bullets) {
+        if (!b || b.team === undefined) continue;
+        if (b.team === entity.team) continue; // ignore friendly
+        // probabilistic: sometimes AI fails to notice or react
+        if (Math.random() > accuracy) continue;
+        const bvx = b.vx, bvy = b.vy;
+        const rx = ex - b.x, ry = ey - b.y;
+        const vv = bvx*bvx + bvy*bvy;
+        if (vv === 0) continue;
+        const t = (rx*bvx + ry*bvy) / vv; // time to closest approach in ticks (approx)
+        if (t < 0 || t > dangerLookahead) continue;
+        const cx = b.x + bvx * t, cy = b.y + bvy * t;
+        const dist = Math.hypot(cx - ex, cy - ey);
+        const safeDist = Math.max((entity.w||20), (entity.h||20)) * 0.9;
+        if (dist < safeDist) {
+            // try perpendicular dodge but add angle noise proportional to (1-accuracy)
+            const bulletAng = Math.atan2(bvy, bvx);
+            const maxNoise = Math.PI * 0.45; // up to ~81 degrees
+            const noise = (1 - accuracy) * maxNoise * (Math.random() - 0.5) * 2;
+            const cand = [bulletAng + Math.PI/2 + noise, bulletAng - Math.PI/2 + noise, Math.atan2(ey - b.y, ex - b.x) + noise];
+            for (const ang of cand) {
+                if (moveSmallSteps(entity, ang, (entity.speed || 2.5) * 1.3)) {
+                    entity.baseAngle = ang;
+                    return true;
+                }
+            }
+            // if couldn't move, try small backward step (with chance to fail as well)
+            const backAng = Math.atan2(ey - b.y, ex - b.x) + ((1 - accuracy) * (Math.random() - 0.5));
+            if (moveSmallSteps(entity, backAng, (entity.speed || 2.5) * 0.9)) {
+                entity.baseAngle = backAng;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Взрыв бочки: эффекты и урон всем танкам в радиусе
+function explodeBarrel(obj) {
+    // visual particles
+    for (let i = 0; i < 40; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 6 + 2;
+        particles.push({ x: obj.x + obj.w/2, y: obj.y + obj.h/2, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 1, size: 2 + Math.random() * 3 });
+    }
+    // explosion damage radius
+    const R = 120;
+    function applyDamageToTank(t) {
+        if (!t) return;
+        const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
+        const dist = Math.hypot(tx - (obj.x + obj.w/2), ty - (obj.y + obj.h/2));
+        if (dist <= R) {
+            const damage = Math.max(1, Math.round((1 - dist / R) * 3));
+            t.hp = (t.hp || 0) - damage;
+            if (t === tank && t.hp <= 0) {
+                for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
+                if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
+                else { gameState = 'lose'; }
+            }
+        }
+    }
+    // apply to player
+    applyDamageToTank(tank);
+    // allies
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const a = allies[i]; applyDamageToTank(a);
+        if (a.hp <= 0) {
+            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+            else { allies.splice(i, 1); for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+        }
+    }
+    // enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; applyDamageToTank(e);
+        if (e.hp <= 0) {
+            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+            else { enemies.splice(i, 1); for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+        }
+    }
+    // remove barrel object
+    const idx = objects.indexOf(obj);
+    if (idx >= 0) objects.splice(idx, 1);
+    navNeedsRebuild = true;
+}
+
+// Построить навигационную сетку: 1 = блокировано, 0 = свободно
+function buildNavGrid(cellSize = navCell) {
+    navCell = cellSize;
+    navCols = Math.ceil(worldWidth / navCell);
+    navRows = Math.ceil(worldHeight / navCell);
+    navGrid = new Array(navCols * navRows).fill(0);
+    for (let j = 0; j < navRows; j++) {
+        for (let i = 0; i < navCols; i++) {
+            // Проверяем, можно ли поместить агента (танк) с центром в центре клетки
+            const center = cellCenter(i, j);
+            const agentRect = { x: center.x - navAgentW/2, y: center.y - navAgentH/2, w: navAgentW, h: navAgentH };
+            let blocked = false;
+            for (const o of objects) {
+                if (o.type === 'wall') {
+                    if (checkRectCollision(agentRect, o)) { blocked = true; break; }
+                }
+                // Для ящиков считаем клетку блокированной, если ящик занимает значительную часть клетки
+                if (o.type === 'box') {
+                    if (checkRectCollision(agentRect, o)) { blocked = true; break; }
+                }
+            }
+            // Также учитываем границы канвы
+            if (agentRect.x < 0 || agentRect.y < 0 || agentRect.x + agentRect.w > worldWidth || agentRect.y + agentRect.h > worldHeight) blocked = true;
+            navGrid[j * navCols + i] = blocked ? 1 : 0;
+        }
+    }
+}
+
+function worldToCell(x, y) {
+    const ci = Math.max(0, Math.min(navCols - 1, Math.floor(x / navCell)));
+    const rj = Math.max(0, Math.min(navRows - 1, Math.floor(y / navCell)));
+    return { ci, rj };
+}
+function cellCenter(i, j) { return { x: (i + 0.5) * navCell, y: (j + 0.5) * navCell }; }
+
+// Найти путь от мировых координат start->goal, вернуть массив контрольных точек (центры ячеек)
+function findPath(sx, sy, gx, gy) {
+    if (!navGrid) buildNavGrid();
+    const start = worldToCell(sx, sy);
+    const goal = worldToCell(gx, gy);
+    const startKey = start.ci + ',' + start.rj;
+    const goalKey = goal.ci + ',' + goal.rj;
+    if (navGrid[start.rj * navCols + start.ci]) {
+        // try to find nearby free start
+        let found = false;
+        for (let r = 1; r < 4 && !found; r++) {
+            for (let dj = -r; dj <= r && !found; dj++) {
+                for (let di = -r; di <= r && !found; di++) {
+                    const ni = start.ci + di, nj = start.rj + dj;
+                    if (ni < 0 || nj < 0 || ni >= navCols || nj >= navRows) continue;
+                    if (!navGrid[nj * navCols + ni]) { start.ci = ni; start.rj = nj; found = true; }
+                }
+            }
+        }
+        if (!found) return null;
+    }
+    if (navGrid[goal.rj * navCols + goal.ci]) {
+        let found = false;
+        for (let r = 1; r < 6 && !found; r++) {
+            for (let dj = -r; dj <= r && !found; dj++) {
+                for (let di = -r; di <= r && !found; di++) {
+                    const ni = goal.ci + di, nj = goal.rj + dj;
+                    if (ni < 0 || nj < 0 || ni >= navCols || nj >= navRows) continue;
+                    if (!navGrid[nj * navCols + ni]) { goal.ci = ni; goal.rj = nj; found = true; }
+                }
+            }
+        }
+        if (!found) return null;
+    }
+
+    const key = (i, j) => i + ',' + j;
+    const open = new Map();
+    const closed = new Set();
+    const gScore = {};
+    const fScore = {};
+    const cameFrom = {};
+
+    function heuristic(i, j) { return Math.hypot(i - goal.ci, j - goal.rj); }
+
+    const startK = key(start.ci, start.rj);
+    gScore[startK] = 0;
+    fScore[startK] = heuristic(start.ci, start.rj);
+    open.set(startK, { i: start.ci, j: start.rj, f: fScore[startK] });
+
+    const neigh = [ [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1] ];
+    const maxIter = navCols * navRows * 4;
+    let iter = 0;
+    while (open.size && iter++ < maxIter) {
+        // get node in open with min f
+        let curKey = null, curNode = null;
+        for (const [k,v] of open) { if (!curNode || v.f < curNode.f) { curNode = v; curKey = k; } }
+        if (!curNode) break;
+        open.delete(curKey);
+        if (curNode.i === goal.ci && curNode.j === goal.rj) {
+            // reconstruct path
+            const path = [];
+            let ck = curKey;
+            while (ck && cameFrom[ck]) {
+                const parts = ck.split(',').map(Number);
+                path.push(cellCenter(parts[0], parts[1]));
+                ck = cameFrom[ck];
+            }
+            path.push(cellCenter(start.ci, start.rj));
+            path.reverse();
+            return path;
+        }
+        closed.add(curKey);
+
+        for (const d of neigh) {
+            const ni = curNode.i + d[0], nj = curNode.j + d[1];
+            if (ni < 0 || nj < 0 || ni >= navCols || nj >= navRows) continue;
+            const nk = key(ni, nj);
+            if (closed.has(nk)) continue;
+            if (navGrid[nj * navCols + ni]) continue; // blocked
+            const tentativeG = (gScore[curKey] || 0) + ((d[0] && d[1]) ? Math.SQRT2 : 1);
+            if (open.has(nk) && tentativeG >= (gScore[nk] || Infinity)) continue;
+            cameFrom[nk] = curKey;
+            gScore[nk] = tentativeG;
+            fScore[nk] = tentativeG + heuristic(ni, nj);
+            open.set(nk, { i: ni, j: nj, f: fScore[nk] });
+        }
+    }
+    return null;
+}
+
+// Проверить, можно ли поместить `entity` в позицию x,y без пересечений со стенами
+function canPlaceAt(entity, nx, ny) {
+    const rect = { x: nx, y: ny, w: entity.w, h: entity.h };
+    for (const obj of objects) {
+        if (obj.type === 'wall' && checkRectCollision(rect, obj)) return false;
+    }
+    if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > worldWidth || rect.y + rect.h > worldHeight) return false;
+    return true;
+}
+
+// Найти первый объект, пересекающий прямоугольник (или null)
+function getCollidingObject(rect) {
+    for (const obj of objects) {
+        if (checkRectCollision(rect, obj)) return obj;
+    }
+    return null;
+}
+
+// Попытаться сдвинуть entity на расстояние dist в направлении angle малыми шагами.
+// Если на пути ящик — предпринять попытку безопасно его толкнуть (только если у ящика есть куда сдвинуться).
+function moveSmallSteps(entity, angle, dist) {
+    const step = 1; // пиксельный шаг
+    const steps = Math.max(1, Math.round(dist / step));
+    const dxStep = Math.cos(angle) * step;
+    const dyStep = Math.sin(angle) * step;
+    for (let i = 0; i < steps; i++) {
+        const nx = entity.x + dxStep;
+        const ny = entity.y + dyStep;
+
+        // Быстрая проверка на стены/границы
+        if (!canPlaceAt(entity, nx, ny)) {
+            if (SHOW_AI_DEBUG) console.log('move blocked (wall) for', entity.id || entity.color || 'enemy', 'at', nx, ny);
+            return false;
+        }
+
+        // Проверяем, не пересекается ли с ящиком — тогда попробуем его сдвинуть
+        const rect = { x: nx, y: ny, w: entity.w, h: entity.h };
+        const coll = getCollidingObject(rect);
+        if (coll && coll.type === 'box') {
+            const boxNx = coll.x + dxStep;
+            const boxNy = coll.y + dyStep;
+            const boxRect = { x: boxNx, y: boxNy, w: coll.w, h: coll.h };
+
+            // Проверяем, можно ли сдвинуть ящик (не врезается в стену/другой объект и в пределах канвы)
+            let blocked = false;
+            if (boxRect.x < 0 || boxRect.y < 0 || boxRect.x + boxRect.w > worldWidth || boxRect.y + boxRect.h > worldHeight) blocked = true;
+            for (const o of objects) {
+                if (o === coll) continue;
+                if (checkRectCollision(boxRect, o)) { blocked = true; break; }
+            }
+            if (blocked) {
+                if (SHOW_AI_DEBUG) console.log('box cannot be pushed for', entity.id || entity.color || 'enemy', 'at', nx, ny);
+                return false;
+            }
+
+            // Толкаем ящик на один шаг
+            coll.x = boxNx; coll.y = boxNy;
+            spawnParticle(coll.x + coll.w / 2, coll.y + coll.h / 2);
+            // Нужно перестроить навигационный грид, т.к. объект изменил позицию
+            navNeedsRebuild = true;
+        }
+
+        // Наконец, двигаем сущность на шаг
+        entity.x = nx; entity.y = ny;
+    }
+    return true;
+}
+
+// Добавляем функцию для рисования отладочных линий
+function drawDebugLines() {
+    for (const l of debugLines) {
+        ctx.beginPath();
+        ctx.strokeStyle = l.color || 'red';
+        ctx.lineWidth = l.width || 2;
+        ctx.moveTo(l.x1, l.y1);
+        ctx.lineTo(l.x2, l.y2);
+        ctx.stroke();
+    }
+    // очищаем после рисования
+    debugLines = [];
+}
+
+function spawnParticle(x, y) {
+    particles.push({
+        x, y, 
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        life: 1,
+        size: Math.random() * 3 + 2
+    });
+}
+
+function shoot() {
+    bullets.push({
+        x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+        y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+        w: 4, h: 4,
+        vx: Math.cos(tank.turretAngle) * 5,
+        vy: Math.sin(tank.turretAngle) * 5,
+        life: 100,
+        owner: 'player',
+        team: 0
+    });
+    tank.fireCooldown = FIRE_COOLDOWN;
+}
+
+function update() {
+    if (gameState !== 'playing') return;
+    if (navNeedsRebuild) { buildNavGrid(); navNeedsRebuild = false; }
+    // player input only when alive
+    if (tank.alive !== false) {
+        let dx = 0, dy = 0;
+        if (keys['KeyW']) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
+        if (keys['KeyS']) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
+        if (keys['KeyA']) { dx -= tank.speed; tank.baseAngle = Math.PI; }
+        if (keys['KeyD']) { dx += tank.speed; tank.baseAngle = 0; }
+        if (dx !== 0 || dy !== 0) {
+            tank.trackOffset = (tank.trackOffset + 0.2) % 10;
+            moveWithCollision(dx, 0);
+            moveWithCollision(0, dy);
+        }
+        // Перезарядка игрока
+        if (tank.fireCooldown > 0) tank.fireCooldown--;
+        // Стрельба (только если перезарядка закончилась)
+        if (keys['Space'] && tank.fireCooldown <= 0) {
+            shoot();
+            keys['Space'] = false;
+        }
+    }
+    
+    // AI для врагов: выбирать ближайшую цель (игрок или другой враг) и действовать
+    for (let enemy of enemies) {
+        if (!enemy || !enemy.alive) continue;
+        // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
+        const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
+        const potentialTargets = [tank, ...allies, ...otherEnemies];
+        const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
+        if (targets.length === 0) continue;
+        let nearest = targets[0];
+        let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
+        for (const t of targets) {
+            const d = Math.hypot((t.x + (t.w||0)/2) - (enemy.x + enemy.w/2), (t.y + (t.h||0)/2) - (enemy.y + enemy.h/2));
+            if (d < nd) { nearest = t; nd = d; }
+        }
+
+        // Башня смотрит на ближайшую цель
+        enemy.turretAngle = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
+
+        // Двигаться к цели с помощью навигационной сетки (A*). Если путь не найден — падаем обратно на прежнюю эвристику.
+        const mdx = (nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2);
+        const mdy = (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2);
+        const mdist = Math.hypot(mdx, mdy);
+        if (mdist > 0) {
+            const targetCx = nearest.x + (nearest.w||0)/2;
+            const targetCy = nearest.y + (nearest.h||0)/2;
+            const tryDist = enemy.speed; // per-tick movement distance
+
+            // Построим/обновим путь при необходимости
+            if (!enemy.path || !enemy.path.length || (enemy.pathRecalc || 0) <= 0) {
+                const sx = enemy.x + enemy.w/2, sy = enemy.y + enemy.h/2;
+                const newPath = findPath(sx, sy, targetCx, targetCy);
+                if (newPath && newPath.length) {
+                    enemy.path = newPath;
+                    enemy.pathIndex = 0;
+                    enemy.pathRecalc = 20; // тиков до следующего пересчёта
+                } else {
+                    enemy.path = [];
+                    enemy.pathIndex = 0;
+                    enemy.pathRecalc = 10;
+                    if (SHOW_AI_DEBUG) console.log('no path found for', enemy.color || enemy.id);
+                }
+            } else {
+                enemy.pathRecalc--;
+            }
+
+            // Если есть путь — следуем по waypoints
+            // If incoming bullet detected, attempt dodge and skip normal pathing for this tick
+            if (tryDodgeIncoming(enemy)) continue;
+
+            if (enemy.path && enemy.path.length) {
+                const wp = enemy.path[Math.min(enemy.pathIndex, enemy.path.length - 1)];
+                const cx = enemy.x + enemy.w/2, cy = enemy.y + enemy.h/2;
+                const toWpX = wp.x - cx, toWpY = wp.y - cy;
+                const distToWp = Math.hypot(toWpX, toWpY);
+                const ang = Math.atan2(toWpY, toWpX);
+                // Дистанция шага — не больше, чем расстояние до точки
+                const moveDist = Math.min(tryDist, distToWp);
+                let movedAlongPath = false;
+                // Попробуем основной шаг, затем уменьшенные фракции, чтобы пролезть в узких местах
+                const fracs = [1, 0.8, 0.5];
+                for (const f of fracs) {
+                    if (moveSmallSteps(enemy, ang, moveDist * f)) {
+                        movedAlongPath = true;
+                        enemy.baseAngle = ang;
+                        enemy.stuckCount = 0;
+                        break;
+                    }
+                }
+                if (movedAlongPath) {
+                    if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) {
+                        enemy.pathIndex++;
+                    }
+                } else {
+                    enemy.stuckCount = (enemy.stuckCount || 0) + 1;
+                    // если не можем двигаться к точке — форсируем пересчёт пути
+                    if (enemy.stuckCount > 2) enemy.pathRecalc = 0;
+                }
+            } else {
+                // fallback: старая эвристика (локальные сэмплы углов)
+                enemy.baseAngle = Math.atan2(mdy, mdx);
+                const desiredAng = enemy.baseAngle;
+                // Попытка сделать малые шаги в желаемом направлении
+                let moved = false;
+                if (moveSmallSteps(enemy, desiredAng, tryDist)) {
+                    moved = true;
+                    enemy.baseAngle = desiredAng;
+                    enemy.stuckCount = 0;
+                } else {
+                    const MAX_STEPS = 24;
+                    const ANG_STEP = Math.PI / 24;
+                    for (let s = 1; s <= MAX_STEPS && !moved; s++) {
+                        const sign = (s % 2 === 0) ? 1 : -1;
+                        const mag = Math.ceil(s / 2);
+                        const ang = desiredAng + sign * mag * ANG_STEP;
+                        if (moveSmallSteps(enemy, ang, tryDist)) {
+                            moved = true; enemy.baseAngle = ang; enemy.stuckCount = 0; break;
+                        } else if (SHOW_AI_DEBUG) {
+                            const px1 = enemy.x + enemy.w/2; const py1 = enemy.y + enemy.h/2;
+                            const px2 = px1 + Math.cos(ang) * tryDist * 4;
+                            const py2 = py1 + Math.sin(ang) * tryDist * 4;
+                            debugLines.push({ x1: px1, y1: py1, x2: px2, y2: py2, color: 'orange', width: 1 });
+                        }
+                    }
+                }
+                if (!moved) {
+                    enemy.stuckCount = (enemy.stuckCount || 0) + 1;
+                    const sidesteps = [desiredAng + Math.PI/2, desiredAng - Math.PI/2, desiredAng + Math.PI*0.6, desiredAng - Math.PI*0.6];
+                    for (const ang of sidesteps) {
+                        if (moveSmallSteps(enemy, ang, tryDist)) { moved = true; enemy.baseAngle = ang; enemy.stuckCount = 0; break; }
+                        else if (SHOW_AI_DEBUG) { const px1 = enemy.x + enemy.w/2; const py1 = enemy.y + enemy.h/2; const px2 = px1 + Math.cos(ang) * tryDist * 4; const py2 = py1 + Math.sin(ang) * tryDist * 4; debugLines.push({ x1: px1, y1: py1, x2: px2, y2: py2, color: 'aqua', width: 1 }); }
+                    }
+                    if (!moved && enemy.stuckCount > 4) {
+                        const newAng = desiredAng + Math.PI + (Math.random() - 0.5) * Math.PI/2;
+                        if (moveSmallSteps(enemy, newAng, tryDist * 1.2)) { moved = true; enemy.baseAngle = newAng; enemy.stuckCount = 0; }
+                    }
+                    if (!moved) { enemy.x -= Math.cos(enemy.baseAngle) * enemy.speed * 0.25; enemy.y -= Math.sin(enemy.baseAngle) * enemy.speed * 0.25; }
+                }
+            }
+        }
+
+        // (Толкание ящиков теперь обрабатывается внутри moveSmallSteps при необходимости)
+
+        // Стрелять по ближайшей цели; если цель враждебна (другая команда), стрелять чаще
+        const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
+        if (enemy.fireCooldown > 0) enemy.fireCooldown--;
+        if (enemy.fireCooldown <= 0 && Math.random() < shootProb) {
+            bullets.push({
+                x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25,
+                y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25,
+                w: 4, h: 4,
+                vx: Math.cos(enemy.turretAngle) * 6,
+                vy: Math.sin(enemy.turretAngle) * 6,
+                life: 100,
+                owner: 'enemy',
+                team: enemy.team
+            });
+            enemy.fireCooldown = FIRE_COOLDOWN;
+        }
+    }
+
+    // AI для союзников — действуют как враги, но цель у них — враги
+    for (let ally of allies) {
+        if (!ally || !ally.alive) continue;
+        const targets = enemies.filter(e => e && e.alive);
+        if (targets.length === 0) continue;
+        let nearest = targets[0];
+        let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2), (nearest.y + (nearest.h||0)/2) - (ally.y + ally.h/2));
+        for (const t of targets) {
+            const d = Math.hypot((t.x + (t.w||0)/2) - (ally.x + ally.w/2), (t.y + (t.h||0)/2) - (ally.y + ally.h/2));
+            if (d < nd) { nearest = t; nd = d; }
+        }
+        // Aim turret at nearest enemy
+        ally.turretAngle = Math.atan2(nearest.y - ally.y, nearest.x - ally.x);
+
+        // Movement towards nearest enemy (reuse enemy logic: pathfinding then small-step fallback)
+        const mdx = (nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2);
+        const mdy = (nearest.y + (nearest.h||0)/2) - (ally.y + ally.h/2);
+        const mdist = Math.hypot(mdx, mdy);
+        if (mdist > 0) {
+            const targetCx = nearest.x + (nearest.w||0)/2;
+            const targetCy = nearest.y + (nearest.h||0)/2;
+            const tryDist = ally.speed;
+
+            if (!ally.path || !ally.path.length || (ally.pathRecalc || 0) <= 0) {
+                const sx = ally.x + ally.w/2, sy = ally.y + ally.h/2;
+                const newPath = findPath(sx, sy, targetCx, targetCy);
+                if (newPath && newPath.length) {
+                    ally.path = newPath; ally.pathIndex = 0; ally.pathRecalc = 20;
+                } else { ally.path = []; ally.pathIndex = 0; ally.pathRecalc = 10; }
+            } else ally.pathRecalc--;
+
+            // If incoming bullet detected, attempt dodge and skip normal pathing for this tick
+            if (tryDodgeIncoming(ally)) continue;
+
+            if (ally.path && ally.path.length) {
+                const wp = ally.path[Math.min(ally.pathIndex, ally.path.length - 1)];
+                const cx = ally.x + ally.w/2, cy = ally.y + ally.h/2;
+                const toWpX = wp.x - cx, toWpY = wp.y - cy;
+                const distToWp = Math.hypot(toWpX, toWpY);
+                const ang = Math.atan2(toWpY, toWpX);
+                const moveDist = Math.min(tryDist, distToWp);
+                let movedAlongPath = false;
+                const fracs = [1, 0.8, 0.5];
+                for (const f of fracs) {
+                    if (moveSmallSteps(ally, ang, moveDist * f)) { movedAlongPath = true; ally.baseAngle = ang; ally.stuckCount = 0; break; }
+                }
+                if (movedAlongPath) {
+                    if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) ally.pathIndex++;
+                } else { ally.stuckCount = (ally.stuckCount || 0) + 1; if (ally.stuckCount > 2) ally.pathRecalc = 0; }
+            } else {
+                // fallback local sampling
+                ally.baseAngle = Math.atan2(mdy, mdx);
+                const desiredAng = ally.baseAngle; let moved = false;
+                if (moveSmallSteps(ally, desiredAng, tryDist)) { moved = true; ally.baseAngle = desiredAng; ally.stuckCount = 0; }
+                else {
+                    const MAX_STEPS = 24; const ANG_STEP = Math.PI/24;
+                    for (let s=1; s<=MAX_STEPS && !moved; s++) {
+                        const sign = (s%2===0)?1:-1; const mag = Math.ceil(s/2); const ang = desiredAng + sign*mag*ANG_STEP;
+                        if (moveSmallSteps(ally, ang, tryDist)) { moved = true; ally.baseAngle = ang; ally.stuckCount = 0; break; }
+                    }
+                }
+                if (!moved) { ally.stuckCount = (ally.stuckCount||0) + 1; if (ally.stuckCount > 4) { const newAng = desiredAng + Math.PI + (Math.random()-0.5)*Math.PI/2; if (moveSmallSteps(ally, newAng, tryDist*1.2)) { ally.baseAngle = newAng; ally.stuckCount = 0; } } if (!moved) { ally.x -= Math.cos(ally.baseAngle)*ally.speed*0.25; ally.y -= Math.sin(ally.baseAngle)*ally.speed*0.25; } }
+            }
+
+            // Shoot at target occasionally with cooldown
+            const shootProb = 0.06;
+            if (ally.fireCooldown > 0) ally.fireCooldown--;
+            if (ally.fireCooldown <= 0 && Math.random() < shootProb) {
+                bullets.push({ x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:4, h:4, vx:Math.cos(ally.turretAngle)*6, vy:Math.sin(ally.turretAngle)*6, life:100, owner:'ally', team: ally.team });
+                ally.fireCooldown = FIRE_COOLDOWN;
+            }
+        }
+    }
+    
+    // Обновление пуль
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        if (b.life <= 0) {
+            bullets.splice(i, 1);
+            continue;
+        }
+        // Check collision with objects
+        let hit = false;
+        for (const obj of objects) {
+            if (checkRectCollision(b, obj)) {
+                bullets.splice(i, 1);
+                hit = true;
+                if (obj.type === 'box') {
+                    objects.splice(objects.indexOf(obj), 1);
+                    for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                    navNeedsRebuild = true;
+                } else if (obj.type === 'barrel') {
+                    // barrel explodes
+                    explodeBarrel(obj);
+                }
+                break;
+            }
+        }
+            if (!hit) {
+            // Check collision with tank (player team = 0)
+            if (tank.alive && checkRectCollision(b, tank) && b.team !== 0) {
+                tank.hp--;
+                bullets.splice(i, 1);
+                if (tank.hp <= 0) {
+                    for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
+                    if (currentMode === 'war') {
+                        tank.alive = false;
+                        tank.respawnTimer = 600; // 10s
+                    } else {
+                        gameState = 'lose';
+                    }
+                }
+                continue;
+            }
+            // Check collision with allies
+            for (let j = allies.length - 1; j >= 0; j--) {
+                const a = allies[j];
+                if (!a || !a.alive) continue;
+                if (checkRectCollision(b, a) && b.team !== a.team) {
+                    a.hp = (a.hp || 3) - 1;
+                    bullets.splice(i, 1);
+                        if (a.hp <= 0) {
+                            if (currentMode === 'war') {
+                                a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                            } else {
+                                allies.splice(j, 1);
+                                for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                            }
+                        }
+                    break;
+                }
+            }
+            // Check collision with enemies
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                if (!e || !e.alive) continue;
+                if (checkRectCollision(b, e) && b.team !== e.team) {
+                    e.hp--;
+                    bullets.splice(i, 1);
+                    if (e.hp <= 0) {
+                        if (currentMode === 'war') {
+                            e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                        } else {
+                            enemies.splice(j, 1);
+                            for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Обновление частиц
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.life -= 0.02;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Respawn timers (War mode): decrement and respawn if team still has members
+    if (currentMode === 'war') {
+        // player
+        if (tank.alive === false && tank.respawnTimer > 0) {
+            tank.respawnTimer--;
+            if (tank.respawnTimer <= 0) {
+                if (teamHasAliveMember(0)) {
+                    // respawn near team spawn
+                    const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
+                    const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
+                    tank.x = p.x; tank.y = p.y; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+                }
+            }
+        }
+        // allies
+        for (const a of allies) {
+            if (!a) continue;
+            if (a.alive === false && (a.respawnTimer || 0) > 0) {
+                a.respawnTimer--;
+                if (a.respawnTimer <= 0) {
+                    if (teamHasAliveMember(a.team)) {
+                        const sp = warTeamSpawns[a.team] || { x: 120, y: 120 };
+                        const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, a.w, a.h, 600, 24);
+                        a.x = p.x; a.y = p.y; a.hp = 3; a.alive = true; a.respawnTimer = 0;
+                    }
+                }
+            }
+        }
+        // enemies
+        for (const e of enemies) {
+            if (!e) continue;
+            if (e.alive === false && (e.respawnTimer || 0) > 0) {
+                e.respawnTimer--;
+                if (e.respawnTimer <= 0) {
+                    if (teamHasAliveMember(e.team)) {
+                        const sp = warTeamSpawns[e.team] || { x: worldWidth - 120, y: worldHeight - 120 };
+                        const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, e.w, e.h, 600, 24);
+                        e.x = p.x; e.y = p.y; e.hp = 3; e.alive = true; e.respawnTimer = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // Проверка победы/поражения
+    if (enemies.length === 0) {
+        gameState = 'win';
+    }
+}
+
+function moveWithCollision(dx, dy) {
+    tank.x += dx;
+    tank.y += dy;
+
+    for (const obj of objects) {
+        if (checkRectCollision(tank, obj)) {
+            if (obj.type === 'box' || obj.type === 'barrel') {
+                // Пытаемся толкать ящик
+                obj.x += dx;
+                obj.y += dy;
+                
+                const blocked = objects.some(o => o !== obj && checkRectCollision(obj, o)) ||
+                                obj.x < 0 || obj.y < 0 || 
+                                obj.x + obj.w > worldWidth || obj.y + obj.h > worldHeight;
+                
+                if (blocked) {
+                    obj.x -= dx; obj.y -= dy;
+                    tank.x -= dx; tank.y -= dy;
+                } else if (dx !== 0 || dy !== 0) {
+                    spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                }
+            } else {
+                // Жесткая стена
+                tank.x -= dx;
+                tank.y -= dy;
+            }
+        }
+    }
+    
+    // Края мира
+    tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
+    tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
+}
+
+/**
+ * ОТРИСОВКА ГРАФИКИ
+ */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // ensure normal drawing mode
+    ctx.globalCompositeOperation = 'source-over';
+    // Camera follow: translate so player is centered when enabled
+    let cameraTranslated = false;
+    if (cameraFollow) {
+        const offsetX = canvas.width/2 - (tank.x + tank.w/2);
+        const offsetY = canvas.height/2 - (tank.y + tank.h/2);
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        cameraTranslated = true;
+    }
+
+    // 1. Фон (сетка) — use finer nav-cell grid in War mode, default 50px elsewhere
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    const gridStep = (currentMode === 'war') ? navCell : 50;
+    for(let i=0; i<canvas.width; i+=gridStep) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+    }
+    for(let j=0; j<canvas.height; j+=gridStep) {
+        ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke();
+    }
+
+    // 2. Частицы пыли
+    particles.forEach(p => {
+        ctx.fillStyle = `rgba(139, 69, 19, ${p.life})`;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+
+    // 3. Объекты
+    objects.forEach(obj => {
+        ctx.save();
+        ctx.fillStyle = obj.color;
+        if (obj.type === 'wall') {
+            ctx.shadowBlur = 5; ctx.shadowColor = 'black';
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            ctx.shadowBlur = 0;
+            // Кирпичный узор
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+        } else if (obj.type === 'barrel') {
+            // brown metallic barrel: cylindrical body, steel bands and highlights
+            const cx = obj.x + obj.w/2;
+            const cy = obj.y + obj.h/2;
+            const rx = obj.w/2;
+            const ry = Math.max(6, obj.h * 0.18);
+
+            // metallic vertical gradient (dark -> mid -> highlight -> dark)
+            const grad = ctx.createLinearGradient(obj.x, obj.y, obj.x, obj.y + obj.h);
+            grad.addColorStop(0, '#4b2b17');
+            grad.addColorStop(0.45, '#7a4d2a');
+            grad.addColorStop(0.55, '#c27f48');
+            grad.addColorStop(1, '#5a2f18');
+            ctx.fillStyle = grad;
+            // body (leave small top/bottom for ellipses)
+            ctx.fillRect(obj.x, obj.y + ry * 0.5, obj.w, obj.h - ry);
+
+            // top ellipse (slightly darker rim)
+            ctx.beginPath();
+            ctx.ellipse(cx, obj.y + ry * 0.6, rx * 0.92, ry * 0.9, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#6b361b';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+
+            // steel bands (two rings) with slight specular
+            const bandH = Math.max(4, obj.h * 0.08);
+            const bandY1 = obj.y + obj.h * 0.28;
+            const bandY2 = obj.y + obj.h * 0.62;
+            ctx.fillStyle = '#33363a'; ctx.fillRect(obj.x, bandY1, obj.w, bandH);
+            ctx.fillStyle = '#2b2f34'; ctx.fillRect(obj.x, bandY2, obj.w, bandH);
+            // thin highlight on top edge of rings
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(obj.x, bandY1 + 1, obj.w, 1);
+            ctx.fillRect(obj.x, bandY2 + 1, obj.w, 1);
+
+            // rivets on bands
+            ctx.fillStyle = 'rgba(220,220,220,0.6)';
+            const rivetCount = Math.max(3, Math.floor(obj.w / 40));
+            for (let r = 0; r < rivetCount; r++) {
+                const rxpos = obj.x + 8 + (r / (rivetCount - 1)) * (obj.w - 16);
+                ctx.beginPath(); ctx.arc(rxpos, bandY1 + bandH/2, 2, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(rxpos, bandY2 + bandH/2, 2, 0, Math.PI*2); ctx.fill();
+            }
+
+            // vertical specular highlight (curved)
+            ctx.beginPath();
+            ctx.moveTo(obj.x + obj.w * 0.18, obj.y + obj.h * 0.12);
+            ctx.quadraticCurveTo(obj.x + obj.w * 0.23, obj.y + obj.h * 0.5, obj.x + obj.w * 0.18, obj.y + obj.h * 0.88);
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = Math.max(2, obj.w * 0.06); ctx.stroke();
+
+            // subtle top gloss (radial)
+            const radial = ctx.createRadialGradient(cx, obj.y + ry*0.6, 2, cx, obj.y + ry*0.6, rx*1.1);
+            radial.addColorStop(0, 'rgba(255,255,255,0.22)');
+            radial.addColorStop(0.25, 'rgba(255,255,255,0.06)');
+            radial.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = radial;
+            ctx.beginPath(); ctx.ellipse(cx, obj.y + ry * 0.6, rx * 0.9, ry * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+
+            // bottom shadow ellipse
+            ctx.beginPath();
+            ctx.ellipse(cx, obj.y + obj.h - ry * 0.35, rx * 0.9, ry * 0.6, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.22)';
+            ctx.fill();
+        } else {
+            // Ящик
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            ctx.strokeStyle = '#5a361a';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(obj.x + 5, obj.y + 5, obj.w - 10, obj.h - 10);
+            ctx.beginPath();
+            ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x+obj.w, obj.y+obj.h);
+            ctx.moveTo(obj.x+obj.w, obj.y); ctx.lineTo(obj.x, obj.y+obj.h);
+            ctx.stroke();
+        }
+        ctx.restore();
+    });
+
+    // 3.5. Пули
+    bullets.forEach(b => {
+        ctx.fillStyle = '#ffff00';
+        ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+    });
+
+    // reset any drawing state that object rendering might have changed
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+
+    // Нарисовать линии отладки AI (если включено)
+    if (SHOW_AI_DEBUG) drawDebugLines();
+
+    // 4. Враги
+    // Allies (friendly bots)
+    allies.forEach(a => {
+        if (!a || !a.alive) return;
+        ctx.save();
+        ctx.translate(a.x + a.w/2, a.y + a.h/2);
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-a.w/2, -a.h/2 - 4, a.w, 8);
+        ctx.fillRect(-a.w/2, a.h/2 - 4, a.w, 8);
+        ctx.fillStyle = a.color || '#888';
+        ctx.fillRect(-a.w/2 + 4, -a.h/2 + 2, a.w - 8, a.h - 4);
+        ctx.rotate(a.turretAngle || 0);
+        ctx.fillStyle = '#5c7041'; ctx.fillRect(-12, -12, 24, 24);
+        ctx.fillStyle = '#111'; ctx.fillRect(0, -3, 35, 6);
+        ctx.restore();
+        // small ally tag
+        ctx.fillStyle = 'white'; ctx.font = '10px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('ALLY', a.x + a.w/2, a.y - 14);
+    });
+
+    enemies.forEach(enemy => {
+        if (!enemy || !enemy.alive) return;
+        ctx.save();
+        ctx.translate(enemy.x + enemy.w/2, enemy.y + enemy.h/2);
+        // Гусеницы (верх/низ)
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-enemy.w/2, -enemy.h/2 - 4, enemy.w, 8);
+        ctx.fillRect(-enemy.w/2, enemy.h/2 - 4, enemy.w, 8);
+        // Корпус
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(-enemy.w/2 + 4, -enemy.h/2 + 2, enemy.w - 8, enemy.h - 4);
+        // Башня
+        ctx.rotate(enemy.turretAngle);
+        ctx.fillStyle = '#5c7041';
+        ctx.fillRect(-12, -12, 24, 24);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, -3, 35, 6);
+        ctx.fillRect(32, -4, 5, 8);
+        ctx.restore();
+        // HP bar
+        ctx.fillStyle = 'red';
+        ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(enemy.x, enemy.y - 10, enemy.w * (enemy.hp / 3), 5);
+    });
+
+    // 5. Танк
+    if (tank.alive !== false) {
+        ctx.save();
+        ctx.translate(tank.x + tank.w/2, tank.y + tank.h/2);
+    
+    // Гусеницы (верх/низ)
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-tank.w/2, -tank.h/2 - 4, tank.w, 8);
+    ctx.fillRect(-tank.w/2, tank.h/2 - 4, tank.w, 8);
+
+    // Корпус
+    ctx.fillStyle = tank.color;
+    ctx.fillRect(-tank.w/2 + 4, -tank.h/2 + 2, tank.w - 8, tank.h - 4);
+    
+    // Люк и детали
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.strokeRect(-10, -10, 20, 20);
+
+    // Башня (поворачивается колесиком)
+    ctx.rotate(tank.turretAngle);
+    ctx.fillStyle = '#5c7041';
+    ctx.fillRect(-12, -12, 24, 24); // Основание башни
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, -3, 35, 6);   // Пушка
+    ctx.fillRect(32, -4, 5, 8);   // Набалдашник
+    
+        ctx.restore();
+        // HP bar для игрока
+        ctx.fillStyle = 'red';
+        ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / 3), 5);
+    } else {
+        // show respawn countdown for player
+        if (currentMode === 'war' && tank.respawnTimer > 0) {
+            ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('Respawn in ' + Math.ceil(tank.respawnTimer / 60) + 's', canvas.width/2, 40);
+        }
+    }
+    // restore camera transform before drawing UI/modal overlays
+    if (cameraTranslated) ctx.restore();
+
+    // Модальные окна
+    if (gameState === 'menu') {
+        // затемняем фон
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0,0,canvas.width, canvas.height);
+        // немного текста, но основное меню — DOM-элемент поверх
+        ctx.fillStyle = 'white';
+        ctx.font = '28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Главное меню', canvas.width/2, 120);
+    } else if (gameState === 'win') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU WIN!', canvas.width / 2, canvas.height / 2);
+        ctx.font = '24px Arial';
+        ctx.fillText('Press F5 to restart', canvas.width / 2, canvas.height / 2 + 50);
+    } else if (gameState === 'lose') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU LOSE!', canvas.width / 2, canvas.height / 2);
+        ctx.font = '24px Arial';
+        ctx.fillText('Press F5 to restart', canvas.width / 2, canvas.height / 2 + 50);
+    }
+
+    // draw preview inside menu DOM as well
+    drawPreview();
+
+    requestAnimationFrame(draw);
+}
+
+// Make draw globally available (ensure load handler can call it)
+window.draw = draw;
+
+// Постоянный цикл обновления физики
+setInterval(update, 1000/60);
+
+// Инициализация после загрузки страницы — защищаем от ранних ошибок
+window.addEventListener('load', () => {
+    try {
+        console.log('Game init');
+        generateMap();
+        // draw() may be block-scoped in some environments; retry until available
+        const tryStart = () => {
+            if (typeof draw === 'function') {
+                draw();
+            } else {
+                console.warn('draw not ready, retrying');
+                setTimeout(tryStart, 50);
+            }
+        };
+        tryStart();
+    } catch (err) {
+        console.error('Init error', err);
+    }
+});
+
+</script>
+</body>
+</html>
