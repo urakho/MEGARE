@@ -213,7 +213,7 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         // coarser nav grid for performance
         navCell = 48;
         generateMap();
@@ -236,6 +236,7 @@ function startGame(mode) {
                 // keep display canvas small for performance
                 canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
 if (modeTeam) modeTeam.addEventListener('click', () => startGame('team'));
+if (modeSingle) modeSingle.addEventListener('click', () => startGame('single'));
 // War mode button (added dynamically to modal) — insert above Cancel for consistent spacing
 const modeWarBtn = document.createElement('button');
 modeWarBtn.id = 'modeWar';
@@ -472,7 +473,7 @@ function spawnWarMode() {
             const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2 });
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0 });
     }
 
     // spawn enemies (team 1) - 10 bots
@@ -480,7 +481,7 @@ function spawnWarMode() {
         const rx = teamSpawns[1].x - 30 - (i % 4) * 80 + (Math.random() - 0.5) * 40;
         const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2 });
+        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0 });
     }
 
     // spawn some barrels and boxes in war map
@@ -894,7 +895,15 @@ function shoot() {
 }
 
 function update() {
-    if (gameState !== 'playing') return;
+    if (gameState !== 'playing') {
+        if (gameState === 'win' || gameState === 'lose') {
+            if (keys['Space']) {
+                location.reload();
+                keys['Space'] = false;
+            }
+        }
+        return;
+    }
     if (navNeedsRebuild) { buildNavGrid(); navNeedsRebuild = false; }
     // player input only when alive
     if (tank.alive !== false) {
@@ -908,6 +917,9 @@ function update() {
             moveWithCollision(dx, 0);
             moveWithCollision(0, dy);
         }
+        // turret rotation with arrow keys (same effect as mouse wheel)
+        if (keys['ArrowLeft']) tank.turretAngle -= 0.06;
+        if (keys['ArrowRight']) tank.turretAngle += 0.06;
         // Перезарядка игрока
         if (tank.fireCooldown > 0) tank.fireCooldown--;
         // Стрельба (только если перезарядка закончилась)
@@ -974,6 +986,17 @@ function update() {
                 const ang = Math.atan2(toWpY, toWpX);
                 // Дистанция шага — не больше, чем расстояние до точки
                 const moveDist = Math.min(tryDist, distToWp);
+                // If direct path to waypoint is blocked, attempt local sidestep avoidance
+                if (!pathClearFor(enemy, ang, moveDist)) {
+                    const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
+                    let avoided = false;
+                    for (const a of sideAngles) {
+                        if (moveSmallSteps(enemy, a, moveDist * 0.9)) { enemy.baseAngle = a; avoided = true; break; }
+                    }
+                    if (avoided) continue;
+                    // unable to sidestep — force path recalculation next tick
+                    enemy.pathRecalc = 0;
+                }
                 let movedAlongPath = false;
                 // Попробуем основной шаг, затем уменьшенные фракции, чтобы пролезть в узких местах
                 const fracs = [1, 0.8, 0.5];
@@ -1098,6 +1121,16 @@ function update() {
                 const distToWp = Math.hypot(toWpX, toWpY);
                 const ang = Math.atan2(toWpY, toWpX);
                 const moveDist = Math.min(tryDist, distToWp);
+                    // Local avoidance: if blocked, try sidesteps before forcing path recalculation
+                    if (!pathClearFor(ally, ang, moveDist)) {
+                        const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
+                        let avoided = false;
+                        for (const a of sideAngles) {
+                            if (moveSmallSteps(ally, a, moveDist * 0.9)) { ally.baseAngle = a; avoided = true; break; }
+                        }
+                        if (avoided) continue;
+                        ally.pathRecalc = 0;
+                    }
                 let movedAlongPath = false;
                 const fracs = [1, 0.8, 0.5];
                 for (const f of fracs) {
@@ -1141,10 +1174,12 @@ function update() {
             bullets.splice(i, 1);
             continue;
         }
+        // normalize bullet rect (bullets stored by center)
+        const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
         // Check collision with objects
         let hit = false;
         for (const obj of objects) {
-            if (checkRectCollision(b, obj)) {
+            if (checkRectCollision(bRect, obj)) {
                 bullets.splice(i, 1);
                 hit = true;
                 if (obj.type === 'box') {
@@ -1158,16 +1193,20 @@ function update() {
                 break;
             }
         }
-            if (!hit) {
+        if (!hit) {
             // Check collision with tank (player team = 0)
-            if (tank.alive && checkRectCollision(b, tank) && b.team !== 0) {
+            if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
                 tank.hp--;
                 bullets.splice(i, 1);
                 if (tank.hp <= 0) {
                     for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
                     if (currentMode === 'war') {
-                        tank.alive = false;
-                        tank.respawnTimer = 600; // 10s
+                        if (tank.respawnCount >= 2) {
+                            gameState = 'lose';
+                        } else {
+                            tank.alive = false;
+                            tank.respawnTimer = 600; // 10s
+                        }
                     } else {
                         gameState = 'lose';
                     }
@@ -1178,17 +1217,17 @@ function update() {
             for (let j = allies.length - 1; j >= 0; j--) {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
-                if (checkRectCollision(b, a) && b.team !== a.team) {
+                if (checkRectCollision(bRect, a) && b.team !== a.team) {
                     a.hp = (a.hp || 3) - 1;
                     bullets.splice(i, 1);
-                        if (a.hp <= 0) {
-                            if (currentMode === 'war') {
-                                a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
-                            } else {
-                                allies.splice(j, 1);
-                                for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
-                            }
+                    if (a.hp <= 0) {
+                        if (currentMode === 'war') {
+                            a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                        } else {
+                            allies.splice(j, 1);
+                            for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
                         }
+                    }
                     break;
                 }
             }
@@ -1196,7 +1235,7 @@ function update() {
             for (let j = enemies.length - 1; j >= 0; j--) {
                 const e = enemies[j];
                 if (!e || !e.alive) continue;
-                if (checkRectCollision(b, e) && b.team !== e.team) {
+                if (checkRectCollision(bRect, e) && b.team !== e.team) {
                     e.hp--;
                     bullets.splice(i, 1);
                     if (e.hp <= 0) {
@@ -1227,11 +1266,11 @@ function update() {
         if (tank.alive === false && tank.respawnTimer > 0) {
             tank.respawnTimer--;
             if (tank.respawnTimer <= 0) {
-                if (teamHasAliveMember(0)) {
+                if (tank.respawnCount < 2) {
                     // respawn near team spawn
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
-                    tank.x = p.x; tank.y = p.y; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+                    tank.x = p.x; tank.y = p.y; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                 }
             }
         }
@@ -1241,10 +1280,10 @@ function update() {
             if (a.alive === false && (a.respawnTimer || 0) > 0) {
                 a.respawnTimer--;
                 if (a.respawnTimer <= 0) {
-                    if (teamHasAliveMember(a.team)) {
+                    if (teamHasAliveMember(a.team) && (a.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[a.team] || { x: 120, y: 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, a.w, a.h, 600, 24);
-                        a.x = p.x; a.y = p.y; a.hp = 3; a.alive = true; a.respawnTimer = 0;
+                        a.x = p.x; a.y = p.y; a.hp = 3; a.alive = true; a.respawnTimer = 0; a.respawnCount = (a.respawnCount || 0) + 1;
                     }
                 }
             }
@@ -1255,10 +1294,10 @@ function update() {
             if (e.alive === false && (e.respawnTimer || 0) > 0) {
                 e.respawnTimer--;
                 if (e.respawnTimer <= 0) {
-                    if (teamHasAliveMember(e.team)) {
+                    if (teamHasAliveMember(e.team) && (e.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[e.team] || { x: worldWidth - 120, y: worldHeight - 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, e.w, e.h, 600, 24);
-                        e.x = p.x; e.y = p.y; e.hp = 3; e.alive = true; e.respawnTimer = 0;
+                        e.x = p.x; e.y = p.y; e.hp = 3; e.alive = true; e.respawnTimer = 0; e.respawnCount = (e.respawnCount || 0) + 1;
                     }
                 }
             }
@@ -1266,7 +1305,12 @@ function update() {
     }
 
     // Проверка победы/поражения
-    if (enemies.length === 0) {
+    if (currentMode === 'war') {
+        const aliveEnemies = enemies.filter(e => e && e.alive !== false && e.hp > 0);
+        if (aliveEnemies.length === 0) {
+            gameState = 'win';
+        }
+    } else if (enemies.length === 0) {
         gameState = 'win';
     }
 }
@@ -1322,15 +1366,27 @@ function draw() {
         cameraTranslated = true;
     }
 
-    // 1. Фон (сетка) — use finer nav-cell grid in War mode, default 50px elsewhere
+    // 1. Фон (сетка) — cell grid aligned to nav cells (visible window only)
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
-    const gridStep = (currentMode === 'war') ? navCell : 50;
-    for(let i=0; i<canvas.width; i+=gridStep) {
-        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+    const gridStep = navCell;
+    // compute visible world bounds in world coordinates
+    let visX = 0, visY = 0;
+    if (cameraFollow) {
+        visX = tank.x + tank.w/2 - canvas.width/2;
+        visY = tank.y + tank.h/2 - canvas.height/2;
+    } else {
+        visX = 0; visY = 0;
     }
-    for(let j=0; j<canvas.height; j+=gridStep) {
-        ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke();
+    const minX = Math.max(0, Math.floor(visX / gridStep) * gridStep);
+    const minY = Math.max(0, Math.floor(visY / gridStep) * gridStep);
+    const maxX = Math.min(worldWidth, visX + canvas.width);
+    const maxY = Math.min(worldHeight, visY + canvas.height);
+    for (let x = minX; x <= maxX; x += gridStep) {
+        ctx.beginPath(); ctx.moveTo(x, minY); ctx.lineTo(x, maxY); ctx.stroke();
+    }
+    for (let y = minY; y <= maxY; y += gridStep) {
+        ctx.beginPath(); ctx.moveTo(minX, y); ctx.lineTo(maxX, y); ctx.stroke();
     }
 
     // 2. Частицы пыли
@@ -1520,15 +1576,15 @@ function draw() {
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / 3), 5);
-    } else {
-        // show respawn countdown for player
-        if (currentMode === 'war' && tank.respawnTimer > 0) {
-            ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
-            ctx.fillText('Respawn in ' + Math.ceil(tank.respawnTimer / 60) + 's', canvas.width/2, 40);
-        }
     }
     // restore camera transform before drawing UI/modal overlays
     if (cameraTranslated) ctx.restore();
+
+    // show respawn countdown for player if dead in war
+    if (tank.alive === false && currentMode === 'war' && tank.respawnTimer > 0 && gameState !== 'lose') {
+        ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
+        ctx.fillText('Respawn in ' + Math.ceil(tank.respawnTimer / 60) + 's', canvas.width/2, 40);
+    }
 
     // Модальные окна
     if (gameState === 'menu') {
@@ -1536,10 +1592,6 @@ function draw() {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0,0,canvas.width, canvas.height);
         // немного текста, но основное меню — DOM-элемент поверх
-        ctx.fillStyle = 'white';
-        ctx.font = '28px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Главное меню', canvas.width/2, 120);
     } else if (gameState === 'win') {
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1548,7 +1600,7 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillText('YOU WIN!', canvas.width / 2, canvas.height / 2);
         ctx.font = '24px Arial';
-        ctx.fillText('Press F5 to restart', canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
     } else if (gameState === 'lose') {
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1557,7 +1609,7 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillText('YOU LOSE!', canvas.width / 2, canvas.height / 2);
         ctx.font = '24px Arial';
-        ctx.fillText('Press F5 to restart', canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
     }
 
     // draw preview inside menu DOM as well
