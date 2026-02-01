@@ -41,6 +41,7 @@
     <b>WHEEL</b> — Вращение башни<br>
     <b>SPACE</b> — Выстрел<br>
     <b>F5</b> — Перегенерировать мир<br>
+    <b>Coins: <span id="coinDisplay">0</span></b><br>
     <hr>
     <small>Стены создаются сегментами,<br>проезд всегда свободен.</small>
 </div>
@@ -55,6 +56,8 @@
             <div id="previewLabel" style="margin-top:10px; font-size:16px; font-weight:600;">Ваш танк</div>
         </div>
         <button id="startBtn" style="margin-top:16px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">START</button>
+        <button id="shopBtn" style="margin-top:8px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">Магазин</button>
+        <button id="characterBtn" style="margin-top:8px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">Персонажи</button>
     </div>
 </div>
 
@@ -67,6 +70,52 @@
             <button id="modeTeam" style="padding:10px 18px; width:80%; font-size:16px;">Командный режим (4 команды по 2)</button>
             <button id="modeCancel" style="padding:10px 18px; width:80%; font-size:16px;">Отмена</button>
         </div>
+    </div>
+</div>
+
+<!-- Shop modal (hidden by default) -->
+<div id="shopModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:12;">
+    <div style="background: linear-gradient(135deg, #2c3e50, #34495e); padding: 30px; border: 4px solid #f39c12; text-align:center; color:#fff; width:600px; border-radius:15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
+        <h2 style="margin:0 0 20px 0; font-size:28px; color:#f39c12;">🛒 Магазин</h2>
+        <div style="display:flex; flex-direction:column; gap:15px; align-items:center;">
+            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
+                <img src="png/cont1.png" alt="Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
+                <p style="margin:5px 0; font-size:16px;">Контейнер с случайным цветом танка</p>
+                <button id="buyContainer" style="padding:10px 20px; font-size:16px; background:#e74c3c; color:white; border:none; border-radius:8px; cursor:pointer;">Купить (100 монет)</button>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
+                <img src="png/super-cont.png" alt="Супер Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
+                <p style="margin:5px 0; font-size:16px;">Супер Контейнер с редкими бонусами</p>
+                <button id="buySuperContainer" style="padding:10px 20px; font-size:16px; background:#9b59b6; color:white; border:none; border-radius:8px; cursor:pointer;">Купить (200 монет)</button>
+            </div>
+            <button id="shopCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- Character modal (hidden by default) -->
+<div id="characterModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:13;">
+    <div style="background: linear-gradient(135deg, #34495e, #2c3e50); padding: 30px; border: 4px solid #f39c12; text-align:center; color:#fff; width:600px; border-radius:15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
+        <h2 style="margin:0 0 20px 0; font-size:28px; color:#f39c12;">👤 Персонажи</h2>
+        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center;">
+            <div style="text-align:center; width:180px;">
+                <canvas id="normalTankPreview" width="150" height="150" style="border:2px solid #e74c3c; border-radius:8px;"></canvas>
+                <button id="selectNormalTank" style="padding:10px 20px; font-size:16px; background:#e74c3c; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Обычный танк</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="iceTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
+                <button id="selectIceTank" style="padding:10px 20px; font-size:16px; background:#3498db; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Ледяной танк</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="fireTankPreview" width="150" height="150" style="border:2px solid #e67e22; border-radius:8px;"></canvas>
+                <button id="selectFireTank" style="padding:10px 20px; font-size:16px; background:#e67e22; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Огнемётчик</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="buratinoTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
+                <button id="selectBuratinoTank" style="padding:10px 20px; font-size:16px; background:#9b59b6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Буратино</button>
+            </div>
+        </div>
+        <button id="characterCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:20px;">Закрыть</button>
     </div>
 </div>
 
@@ -90,6 +139,7 @@ const keys = {};
 let objects = [];
 let particles = [];
 let bullets = [];
+let flames = [];
 let enemies = [];
 let allies = [];
 let gameState = 'menu';
@@ -113,8 +163,14 @@ const FIRE_COOLDOWN = 20; // ~333ms at 60fps
 // Базовая вероятность успешного уклонения AI (0..1)
 const DODGE_BASE_ACCURACY = 0.8;
 
+// Глобальная валюта
+let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
+
 // Camera follow flag
 let cameraFollow = false;
+
+// Тип танка игрока
+let tankType = 'normal';
 
 const tank = {
     x: 50,
@@ -143,29 +199,225 @@ window.addEventListener('wheel', (e) => {
 // Preview canvas drawing
 const previewCanvas = document.getElementById('previewCanvas');
 const previewCtx = previewCanvas && previewCanvas.getContext ? previewCanvas.getContext('2d') : null;
-function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1) {
+// Character modal previews
+const normalTankPreview = document.getElementById('normalTankPreview');
+const normalTankCtx = normalTankPreview && normalTankPreview.getContext ? normalTankPreview.getContext('2d') : null;
+const iceTankPreview = document.getElementById('iceTankPreview');
+const iceTankCtx = iceTankPreview && iceTankPreview.getContext ? iceTankPreview.getContext('2d') : null;
+const fireTankPreview = document.getElementById('fireTankPreview');
+const fireTankCtx = fireTankPreview && fireTankPreview.getContext ? fireTankPreview.getContext('2d') : null;
+const buratinoTankPreview = document.getElementById('buratinoTankPreview');
+const buratinoTankCtx = buratinoTankPreview && buratinoTankPreview.getContext ? buratinoTankPreview.getContext('2d') : null;
+function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal') {
     ctx.save();
     ctx.translate(cx, cy);
+    if (type === 'fire') {
+        W *= 1.2; // make wider
+    } else if (type === 'buratino') {
+        W *= 1.1; // make longer
+    }
     // tracks (top/bottom)
     const trackThick = Math.max(6, W * 0.12);
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = type === 'ice' ? '#F0F8FF' : '#222';
     ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
     ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
+    if (type === 'buratino') {
+        // track segments
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        for (let x = -W/2 + 5; x < W/2; x += 10) {
+            ctx.beginPath();
+            ctx.moveTo(x, -H/2 - trackThick/2);
+            ctx.lineTo(x, -H/2 + trackThick/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, H/2 - trackThick/2);
+            ctx.lineTo(x, H/2 + trackThick/2);
+            ctx.stroke();
+        }
+    }
     // body (between tracks)
     ctx.fillStyle = color;
     ctx.fillRect(-W/2 + 2, -H/2 + trackThick/2 + 2, W - 4, H - trackThick - 4);
+    if (type === 'fire') {
+        // fuel tanks (horizontal on top and bottom)
+        ctx.fillStyle = '#CCC';
+        const tankWidth = W * 0.8 * (turretScale === 1 ? 0.8 : 1);
+        const tankRadius = 4 * (turretScale === 1 ? 0.8 : 1);
+        // top tank
+        ctx.beginPath();
+        ctx.ellipse(0, -H/2 + 3, tankWidth/2, tankRadius, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillRect(-tankWidth/2, -H/2 + 3 - tankRadius, tankWidth, tankRadius*2);
+        ctx.beginPath();
+        ctx.ellipse(0, -H/2 + 3, tankWidth/2, tankRadius, 0, Math.PI, 2 * Math.PI);
+        ctx.fill();
+        // bottom tank
+        ctx.beginPath();
+        ctx.ellipse(0, H/2 - 3, tankWidth/2, tankRadius, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillRect(-tankWidth/2, H/2 - 3 - tankRadius, tankWidth, tankRadius*2);
+        ctx.beginPath();
+        ctx.ellipse(0, H/2 - 3, tankWidth/2, tankRadius, 0, Math.PI, 2 * Math.PI);
+        ctx.fill();
+    }
+    if (type === 'ice') {
+        // ice crystals
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        // crystal 1
+        ctx.beginPath();
+        ctx.moveTo(-W/3, -H/3);
+        ctx.lineTo(-W/3 + 3, -H/3 - 6);
+        ctx.lineTo(-W/3 + 6, -H/3);
+        ctx.closePath();
+        ctx.fill();
+        // crystal 2
+        ctx.beginPath();
+        ctx.moveTo(W/4, -H/4);
+        ctx.lineTo(W/4 + 3, -H/4 - 6);
+        ctx.lineTo(W/4 + 6, -H/4);
+        ctx.closePath();
+        ctx.fill();
+        // crystal 3
+        ctx.beginPath();
+        ctx.moveTo(-W/4, H/4);
+        ctx.lineTo(-W/4 + 3, H/4 + 6);
+        ctx.lineTo(-W/4 + 6, H/4);
+        ctx.closePath();
+        ctx.fill();
+        // crystal 4
+        ctx.beginPath();
+        ctx.moveTo(W/3, H/3);
+        ctx.lineTo(W/3 + 3, H/3 + 6);
+        ctx.lineTo(W/3 + 6, H/3);
+        ctx.closePath();
+        ctx.fill();
+        // crystal 5
+        ctx.beginPath();
+        ctx.moveTo(0, -H/2 + trackThick/2 + 5);
+        ctx.lineTo(3, -H/2 + trackThick/2 - 1);
+        ctx.lineTo(6, -H/2 + trackThick/2 + 5);
+        ctx.closePath();
+        ctx.fill();
+        // frost lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-W/2 + 5, -H/2 + trackThick/2 + 5);
+        ctx.lineTo(-W/2 + 15, -H/2 + trackThick/2 + 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(W/2 - 15, H/2 - trackThick/2 - 5);
+        ctx.lineTo(W/2 - 5, H/2 - trackThick/2 - 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-W/2 + 10, H/2 - trackThick/2 - 10);
+        ctx.lineTo(-W/2 + 20, H/2 - trackThick/2 - 20);
+        ctx.stroke();
+    }
     // hatch outline
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(-W*0.12, -H*0.12, W*0.24, H*0.24);
     // turret
     ctx.rotate(turretAngle || 0);
-    const tSize = Math.min(W, H) * 0.34 * turretScale;
-    ctx.fillStyle = '#5c7041';
+    const tSize = Math.min(W, H) * 0.35 * turretScale * ((type === 'normal' && turretScale === 1 ? 1.95 : 1) * (type === 'ice' && turretScale === 1 ? 1.8 : 1) * (type === 'fire' && turretScale === 1 ? 1.6 : 1) * (type === 'buratino' ? 1.5 : 1));
+    // Make hull/turret blue for 'fire' type; barrel stays fire-colored below
+    ctx.fillStyle = type === 'ice' ? '#E0FFFF' : type === 'fire' ? '#2D8C6C' : type === 'buratino' ? '#9370DB' : '#5c7041';
     ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+    if (type === 'buratino') {
+    }
+    if (type === 'ice') {
+        // ice crystals on turret
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        // crystal on turret top-left
+        ctx.beginPath();
+        ctx.moveTo(-tSize/2 + 2, -tSize/2 + 2);
+        ctx.lineTo(-tSize/2 + 5, -tSize/2 - 3);
+        ctx.lineTo(-tSize/2 + 8, -tSize/2 + 2);
+        ctx.closePath();
+        ctx.fill();
+        // crystal on turret bottom-right
+        ctx.beginPath();
+        ctx.moveTo(tSize/2 - 8, tSize/2 - 2);
+        ctx.lineTo(tSize/2 - 5, tSize/2 + 3);
+        ctx.lineTo(tSize/2 - 2, tSize/2 - 2);
+        ctx.closePath();
+        ctx.fill();
+    } else if (type === 'buratino') {
+        // textured purple turret to better match the in-game Buratino appearance
+        // base gradient
+        const grad = ctx.createLinearGradient(-tSize/2, -tSize/2, tSize/2, tSize/2);
+        grad.addColorStop(0, '#B58CEB');
+        grad.addColorStop(0.5, '#8F63D6');
+        grad.addColorStop(1, '#6E38B0');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+
+        // subtle vertical sheen stripes
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        const stripeW = Math.max(3, Math.floor(tSize / 12));
+        for (let s = -tSize/2; s < tSize/2; s += stripeW * 3) {
+            ctx.fillRect(s, -tSize/2, stripeW, tSize);
+        }
+
+        // panel seams
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-tSize/2 + 6, -tSize/4); ctx.lineTo(tSize/2 - 6, -tSize/4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-tSize/2 + 6, tSize/4); ctx.lineTo(tSize/2 - 6, tSize/4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-tSize/8, -tSize/2 + 6); ctx.lineTo(-tSize/8, tSize/2 - 6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(tSize/8, -tSize/2 + 6); ctx.lineTo(tSize/8, tSize/2 - 6); ctx.stroke();
+
+        // rivets (small dark dots)
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        const rivetGap = Math.max(12, Math.floor(tSize / 6));
+        for (let rx = -tSize/2 + 8; rx <= tSize/2 - 8; rx += rivetGap) {
+            for (let ry = -tSize/2 + 8; ry <= tSize/2 - 8; ry += rivetGap) {
+                ctx.beginPath(); ctx.arc(rx, ry, 1.3, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        // horizontal rocket tubes across the turret (rows x cols)
+        ctx.fillStyle = '#222';
+        const rows = 3;
+        const cols = Math.max(5, Math.floor(tSize / 8));
+        const tubeH = Math.max(4, Math.floor(tSize / (rows * 3)));
+        const inset = 6;
+        const usableW = tSize - inset * 2;
+        const usableH = tSize - inset * 2;
+
+        for (let r = 0; r < rows; r++) {
+            const ry = -tSize/2 + inset + r * (usableH / (rows - 1 || 1));
+            for (let c = 0; c < cols; c++) {
+                const cx = -tSize/2 + inset + c * (usableW / (cols - 1 || 1));
+                const tw = Math.min(usableW / cols * 0.9, tSize * 0.18);
+                // tube base
+                ctx.fillStyle = '#222';
+                ctx.fillRect(cx - tw/2, ry - tubeH/2, tw, tubeH);
+                // tube highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.fillRect(cx - tw/2 + 1, ry - tubeH/2 + 1, tw - 2, Math.max(1, tubeH - 2));
+                // small inner darkness to suggest depth
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.fillRect(cx + tw/4, ry - tubeH/4, tw/2, tubeH/2);
+            }
+        }
+    }
     // barrel
-    ctx.fillStyle = '#111';
-    const barrelLen = Math.max(20, W * 0.45) * turretScale;
-    const barrelH = Math.max(4, H * 0.08) * turretScale;
-    ctx.fillRect(tSize/2 - 2 * turretScale, -barrelH/2, barrelLen, barrelH);
+    if (type !== 'buratino') {
+        ctx.fillStyle = type === 'ice' ? '#B0C4DE' : type === 'fire' ? '#FFA500' : '#111';
+        const barrelLen = Math.max(20, W * 0.45) * turretScale * (type === 'normal' && turretScale === 1 ? 1.65 : 1);
+        const barrelH = Math.max(4, H * 0.08) * turretScale * (type === 'normal' && turretScale === 1 ? 1.75 : 1);
+        if (type === 'fire') {
+            // special flamethrower nozzle
+            ctx.beginPath();
+            ctx.moveTo(tSize/2, 0);
+            ctx.lineTo(tSize/2 + barrelLen, -barrelH);
+            ctx.lineTo(tSize/2 + barrelLen, barrelH);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            ctx.fillRect(tSize/2 - 2 * turretScale, -barrelH/2, barrelLen, barrelH);
+        }
+    }
     ctx.restore();
 }
 function drawPreview() {
@@ -173,7 +425,29 @@ function drawPreview() {
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
     // draw tank smaller and square (half size) with larger turret/barrel for preview
     const side = Math.min(previewCanvas.width, previewCanvas.height) / 2; // половина меньшей стороны
-    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 2);
+    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 1, tankType);
+}
+function drawCharacterPreviews() {
+    if (normalTankCtx) {
+        normalTankCtx.clearRect(0,0,normalTankPreview.width, normalTankPreview.height);
+        const side = Math.min(normalTankPreview.width, normalTankPreview.height) / 2;
+        drawTankOn(normalTankCtx, normalTankPreview.width/2, normalTankPreview.height/2, side, side, '#0000FF', 0, 1, 'normal');
+    }
+    if (iceTankCtx) {
+        iceTankCtx.clearRect(0,0,iceTankPreview.width, iceTankPreview.height);
+        const side = Math.min(iceTankPreview.width, iceTankPreview.height) / 2;
+        drawTankOn(iceTankCtx, iceTankPreview.width/2, iceTankPreview.height/2, side, side, '#0000FF', 0, 1, 'ice');
+    }
+    if (fireTankCtx) {
+        fireTankCtx.clearRect(0,0,fireTankPreview.width, fireTankPreview.height);
+        const side = Math.min(fireTankPreview.width, fireTankPreview.height) / 2;
+        drawTankOn(fireTankCtx, fireTankPreview.width/2, fireTankPreview.height/2, side, side, '#0000FF', 0, 1, 'fire');
+    }
+    if (buratinoTankCtx) {
+        buratinoTankCtx.clearRect(0,0,buratinoTankPreview.width, buratinoTankPreview.height);
+        const side = Math.min(buratinoTankPreview.width, buratinoTankPreview.height) / 2;
+        drawTankOn(buratinoTankCtx, buratinoTankPreview.width/2, buratinoTankPreview.height/2, side, side, '#0000FF', 0, 1, 'buratino');
+    }
 }
 
 // Start button handler (open mode selection modal)
@@ -191,7 +465,7 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = 3; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = 3; tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
 
     if (mode === 'single') {
@@ -259,6 +533,67 @@ if (modeModal) {
 }
 if (modeWarBtn) modeWarBtn.addEventListener('click', () => startGame('war'));
 if (modeCancel) modeCancel.addEventListener('click', () => { if (modeModal) modeModal.style.display = 'none'; });
+
+// Shop button handler
+const shopModal = document.getElementById('shopModal');
+const characterModal = document.getElementById('characterModal');
+const shopBtn = document.getElementById('shopBtn');
+const characterBtn = document.getElementById('characterBtn');
+const buyContainer = document.getElementById('buyContainer');
+const buySuperContainer = document.getElementById('buySuperContainer');
+const shopCancel = document.getElementById('shopCancel');
+const characterCancel = document.getElementById('characterCancel');
+if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'flex'; });
+if (characterBtn) characterBtn.addEventListener('click', () => { if (characterModal) { characterModal.style.display = 'flex'; drawCharacterPreviews(); } });
+if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
+if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+if (buyContainer) buyContainer.addEventListener('click', () => {
+    if (coins >= 100) {
+        coins -= 100;
+        openContainer();
+        updateCoinDisplay();
+    } else {
+        alert('Недостаточно монет!');
+    }
+});
+if (buySuperContainer) buySuperContainer.addEventListener('click', () => {
+    if (coins >= 200) {
+        coins -= 200;
+        openSuperContainer();
+        updateCoinDisplay();
+    } else {
+        alert('Недостаточно монет!');
+    }
+});
+
+const selectNormalTank = document.getElementById('selectNormalTank');
+const selectIceTank = document.getElementById('selectIceTank');
+const selectFireTank = document.getElementById('selectFireTank');
+const selectBuratinoTank = document.getElementById('selectBuratinoTank');
+if (selectNormalTank) selectNormalTank.addEventListener('click', () => {
+    tankType = 'normal';
+    tankColor = '#0000FF';
+    tank.color = tankColor;
+    if (characterModal) characterModal.style.display = 'none';
+});
+if (selectIceTank) selectIceTank.addEventListener('click', () => {
+    tankType = 'ice';
+    tankColor = '#0000FF';
+    tank.color = tankColor;
+    if (characterModal) characterModal.style.display = 'none';
+});
+if (selectFireTank) selectFireTank.addEventListener('click', () => {
+    tankType = 'fire';
+    tankColor = '#0000FF';
+    tank.color = tankColor;
+    if (characterModal) characterModal.style.display = 'none';
+});
+if (selectBuratinoTank) selectBuratinoTank.addEventListener('click', () => {
+    tankType = 'buratino';
+    tankColor = '#0000FF';
+    tank.color = tankColor;
+    if (characterModal) characterModal.style.display = 'none';
+});
 
 // По умолчанию показываем главное меню
 if (mainMenu) mainMenu.style.display = 'flex';
@@ -356,7 +691,9 @@ function generateMap() {
             stuckCount: 0,
             fireCooldown: 0,
             team: i+1,
-            dodgeAccuracy: 0.75 + Math.random() * 0.2
+            dodgeAccuracy: 0.75 + Math.random() * 0.2,
+            paralyzed: false,
+            paralyzedTime: 0
         });
     }
 }
@@ -381,7 +718,7 @@ function spawnAllies(numTeams, teamSize) {
             allies.push({
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
-                hp: 3,
+                hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
                 speed: 2.5,
@@ -390,7 +727,9 @@ function spawnAllies(numTeams, teamSize) {
                 team: t,
                 fireCooldown: 0,
                 stuckCount: 0,
-                dodgeAccuracy: 0.75 + Math.random() * 0.2
+                dodgeAccuracy: 0.75 + Math.random() * 0.2,
+                paralyzed: false,
+                paralyzedTime: 0
             });
         }
     }
@@ -423,7 +762,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -431,7 +770,7 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            enemies.push({ x: base.x + k*44, y: base.y + k*28, w:38, h:38, color: enemyColors[(ci-1)%enemyColors.length], hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25 });
+            enemies.push({ x: base.x + k*44, y: base.y + k*28, w:38, h:38, color: enemyColors[(ci-1)%enemyColors.length], hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -473,7 +812,7 @@ function spawnWarMode() {
             const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0 });
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn enemies (team 1) - 10 bots
@@ -481,7 +820,7 @@ function spawnWarMode() {
         const rx = teamSpawns[1].x - 30 - (i % 4) * 80 + (Math.random() - 0.5) * 40;
         const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0 });
+        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn some barrels and boxes in war map
@@ -661,6 +1000,99 @@ function explodeBarrel(obj) {
     const idx = objects.indexOf(obj);
     if (idx >= 0) objects.splice(idx, 1);
     navNeedsRebuild = true;
+}
+
+// Взрыв ракеты: эффекты и урон всем танкам в радиусе
+function explodeRocket(bullet) {
+    // visual explosion circle
+    objects.push({
+        type: 'explosion',
+        x: bullet.x,
+        y: bullet.y,
+        radius: 80,
+        life: 30,
+        color: '#FFA500'
+    });
+    // explosion damage radius
+    const R = 80;
+    function applyDamageToTank(t) {
+        if (!t) return;
+        const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
+        const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
+        if (dist <= R) {
+            const damage = Math.max(1, Math.round((1 - dist / R) * 2));
+            t.hp = (t.hp || 0) - damage;
+            if (t === tank && t.hp <= 0) {
+                for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
+                if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
+                else { gameState = 'lose'; }
+            }
+        }
+    }
+    // apply to player
+    applyDamageToTank(tank);
+    // allies
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const a = allies[i]; applyDamageToTank(a);
+        if (a.hp <= 0) {
+            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+            else { allies.splice(i, 1); for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+        }
+    }
+    // enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; applyDamageToTank(e);
+        if (e.hp <= 0) {
+            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+            else { enemies.splice(i, 1); for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+        }
+    }
+}
+
+// Global helper: apply area damage at point (x,y)
+function applyDamage(x, y, R = 30, coef = 1) {
+    function applyDamageToTank(t) {
+        if (!t) return;
+        const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
+        const dist = Math.hypot(tx - x, ty - y);
+        if (dist <= R) {
+            const damage = Math.max(1, Math.round((1 - dist / R) * coef));
+            t.hp = (t.hp || 0) - damage;
+            if (t === tank && t.hp <= 0) {
+                for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
+                if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
+                else { gameState = 'lose'; }
+            }
+        }
+    }
+    applyDamageToTank(tank);
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const a = allies[i]; applyDamageToTank(a);
+        if (a.hp <= 0) {
+            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+            else { allies.splice(i, 1); for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); }
+        }
+    }
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; applyDamageToTank(e);
+        if (e.hp <= 0) {
+            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+            else { enemies.splice(i, 1); for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+        }
+    }
+}
+
+// Open super container: give rare bonus
+function openSuperContainer() {
+    const bonuses = [
+        () => { tank.hp += 1; alert('Редкий бонус: +1 HP!'); },
+        () => { tank.speed += 0.5; alert('Редкий бонус: +Скорость!'); },
+        () => { tank.color = '#FFD700'; alert('Редкий бонус: золотой цвет танка!'); },
+        () => { tank.color = '#FF1493'; alert('Редкий бонус: розовый цвет танка!'); },
+        () => { tank.color = '#00FFFF'; alert('Редкий бонус: циановый цвет танка!'); }
+    ];
+    const bonus = bonuses[Math.floor(Math.random() * bonuses.length)];
+    bonus();
 }
 
 // Построить навигационную сетку: 1 = блокировано, 0 = свободно
@@ -881,17 +1313,105 @@ function spawnParticle(x, y) {
 }
 
 function shoot() {
-    bullets.push({
-        x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
-        y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
-        w: 4, h: 4,
-        vx: Math.cos(tank.turretAngle) * 5,
-        vy: Math.sin(tank.turretAngle) * 5,
-        life: 100,
-        owner: 'player',
-        team: 0
-    });
-    tank.fireCooldown = FIRE_COOLDOWN;
+    if (tankType === 'fire') {
+        // Flamethrower: emit a short cone of flame projectiles
+        const flameCount = 7;
+        const baseAng = tank.turretAngle;
+        const spread = 0.7; // radians total cone
+        for (let f = 0; f < flameCount; f++) {
+            const t = flameCount <= 1 ? 0.5 : f / (flameCount - 1);
+            const ang = baseAng + (t - 0.5) * spread + (Math.random() - 0.5) * 0.06;
+            const sx = tank.x + tank.w/2 + Math.cos(ang) * 18;
+            const sy = tank.y + tank.h/2 + Math.sin(ang) * 18;
+            const speed = 3.5 + Math.random() * 1.2;
+            flames.push({
+                x: sx,
+                y: sy,
+                vx: Math.cos(ang) * speed,
+                vy: Math.sin(ang) * speed,
+                life: 20 + Math.floor(Math.random() * 8),
+                damage: 0.22,
+                team: 0
+            });
+        }
+    } else if (tankType === 'buratino') {
+        // Target in turret direction
+        const dist = 300;
+        const targetX = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * dist;
+        const targetY = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * dist;
+        const targetCircle = { x: targetX, y: targetY, radius: 100, color: tank.color, timer: 180, type: 'targetCircle' };
+        // precompute planned explosion positions (inner 4 + outer 9) so rockets can target them
+        targetCircle.planned = [];
+        for (let j = 0; j < 4; j++) {
+            const ang = (j / 4) * Math.PI * 2;
+            const distP = targetCircle.radius * 0.3;
+            targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * distP, y: targetCircle.y + Math.sin(ang) * distP, exploded: false });
+        }
+        for (let j = 0; j < 9; j++) {
+            const ang = (j / 9) * Math.PI * 2;
+            const distP = targetCircle.radius * 0.7;
+            targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * distP, y: targetCircle.y + Math.sin(ang) * distP, exploded: false });
+        }
+        objects.push(targetCircle);
+        tank.artilleryMode = true;
+        tank.artilleryTimer = 180; // 3 seconds
+        tank.fireCooldown = FIRE_COOLDOWN * 4; // longer cooldown
+        // Visual rockets: spawn from tube positions but smaller and in a fan
+        const rows = 3;
+        const cols = Math.max(5, Math.floor((Math.min(tank.w, tank.h) * 1.5) / 10));
+        const tSize = Math.min(tank.w, tank.h) * 0.35 * 1.5;
+        const inset = 6;
+        const usableW = tSize - inset * 2;
+        const usableH = tSize - inset * 2;
+        const fanSpread = 0.9; // radians total spread for the fan
+        for (let r = 0; r < rows; r++) {
+            const ry = -tSize/2 + inset + r * (usableH / (rows - 1 || 1));
+            for (let c = 0; c < cols; c++) {
+                const cx = -tSize/2 + inset + c * (usableW / (cols - 1 || 1));
+                const baseAng = tank.turretAngle;
+                // local tube position -> world
+                const lx = cx;
+                const ly = ry;
+                const sx = tank.x + tank.w/2 + Math.cos(baseAng) * lx - Math.sin(baseAng) * ly;
+                const sy = tank.y + tank.h/2 + Math.sin(baseAng) * lx + Math.cos(baseAng) * ly;
+                // compute per-rocket fan angle offset across columns + small row offset
+                const colNorm = cols <= 1 ? 0.5 : c / (cols - 1);
+                const rowNorm = rows <= 1 ? 0.5 : r / (rows - 1);
+                const angOffset = (colNorm - 0.5) * fanSpread + (rowNorm - 0.5) * 0.06;
+                const angRocket = baseAng + angOffset + (Math.random() - 0.5) * 0.03;
+                // assign rocket to one of the planned explosion positions (round-robin)
+                const planned = targetCircle.planned || [];
+                const idx = planned.length ? ((r * cols + c) % planned.length) : 0;
+                const targetPos = planned.length ? planned[idx] : { x: targetX + Math.cos(angRocket) * (targetCircle.radius * 0.5), y: targetY + Math.sin(angRocket) * (targetCircle.radius * 0.5) };
+                const dx = targetPos.x - sx;
+                const dy = targetPos.y - sy;
+                const delay = Math.floor((r * cols + c) * 1 + Math.random() * 2);
+                const travel = Math.max(16, tank.artilleryTimer - delay - 2);
+                const vx = dx / travel;
+                const vy = dy / travel;
+                const life = travel + 6;
+                // smaller rockets targeted to planned explosion position
+                objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos });
+            }
+        }
+    } else {
+        const speed = 5;
+        const life = 100;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 4, h: 4,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: life,
+            owner: 'player',
+            team: 0,
+            type: tankType
+        });
+    }
+    if (tankType !== 'fire') {
+        tank.fireCooldown = FIRE_COOLDOWN;
+    }
 }
 
 function update() {
@@ -907,15 +1427,18 @@ function update() {
     if (navNeedsRebuild) { buildNavGrid(); navNeedsRebuild = false; }
     // player input only when alive
     if (tank.alive !== false) {
+        if (tank.moveCooldown > 0) tank.moveCooldown--;
         let dx = 0, dy = 0;
         if (keys['KeyW']) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
         if (keys['KeyS']) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
         if (keys['KeyA']) { dx -= tank.speed; tank.baseAngle = Math.PI; }
         if (keys['KeyD']) { dx += tank.speed; tank.baseAngle = 0; }
         if (dx !== 0 || dy !== 0) {
-            tank.trackOffset = (tank.trackOffset + 0.2) % 10;
-            moveWithCollision(dx, 0);
-            moveWithCollision(0, dy);
+            if (!tank.artilleryMode) {
+                tank.trackOffset = (tank.trackOffset + 0.2) % 10;
+                moveWithCollision(dx, 0);
+                moveWithCollision(0, dy);
+            }
         }
         // turret rotation with arrow keys (same effect as mouse wheel)
         if (keys['ArrowLeft']) tank.turretAngle -= 0.06;
@@ -925,13 +1448,16 @@ function update() {
         // Стрельба (только если перезарядка закончилась)
         if (keys['Space'] && tank.fireCooldown <= 0) {
             shoot();
-            keys['Space'] = false;
+            if (tankType !== 'fire') {
+                keys['Space'] = false;
+            }
         }
     }
     
     // AI для врагов: выбирать ближайшую цель (игрок или другой враг) и действовать
     for (let enemy of enemies) {
         if (!enemy || !enemy.alive) continue;
+        if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; continue; }
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
         const potentialTargets = [tank, ...allies, ...otherEnemies];
@@ -1083,6 +1609,7 @@ function update() {
     // AI для союзников — действуют как враги, но цель у них — враги
     for (let ally of allies) {
         if (!ally || !ally.alive) continue;
+        if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; continue; }
         const targets = enemies.filter(e => e && e.alive);
         if (targets.length === 0) continue;
         let nearest = targets[0];
@@ -1171,6 +1698,7 @@ function update() {
         b.y += b.vy;
         b.life--;
         if (b.life <= 0) {
+            if (b.type === 'rocket' || b.type === 'smallRocket') explodeRocket(b);
             bullets.splice(i, 1);
             continue;
         }
@@ -1178,25 +1706,31 @@ function update() {
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
         // Check collision with objects
         let hit = false;
-        for (const obj of objects) {
-            if (checkRectCollision(bRect, obj)) {
-                bullets.splice(i, 1);
-                hit = true;
-                if (obj.type === 'box') {
-                    objects.splice(objects.indexOf(obj), 1);
-                    for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
-                    navNeedsRebuild = true;
-                } else if (obj.type === 'barrel') {
-                    // barrel explodes
-                    explodeBarrel(obj);
+        if (b.type !== 'rocket') {
+            for (const obj of objects) {
+                if (checkRectCollision(bRect, obj)) {
+                    bullets.splice(i, 1);
+                    hit = true;
+                    if (obj.type === 'box') {
+                        objects.splice(objects.indexOf(obj), 1);
+                        for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                        navNeedsRebuild = true;
+                    } else if (obj.type === 'barrel') {
+                        // barrel explodes
+                        explodeBarrel(obj);
+                    }
+                    break;
                 }
-                break;
             }
         }
         if (!hit) {
             // Check collision with tank (player team = 0)
             if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
-                tank.hp--;
+                if (b.type === 'rocket' || b.type === 'smallRocket') {
+                    explodeRocket(b);
+                } else {
+                    tank.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                }
                 bullets.splice(i, 1);
                 if (tank.hp <= 0) {
                     for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
@@ -1218,7 +1752,11 @@ function update() {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
                 if (checkRectCollision(bRect, a) && b.team !== a.team) {
-                    a.hp = (a.hp || 3) - 1;
+                    if (b.type === 'rocket' || b.type === 'smallRocket') {
+                        explodeRocket(b);
+                    } else {
+                        a.hp = (a.hp || 100) - (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                    }
                     bullets.splice(i, 1);
                     if (a.hp <= 0) {
                         if (currentMode === 'war') {
@@ -1236,9 +1774,15 @@ function update() {
                 const e = enemies[j];
                 if (!e || !e.alive) continue;
                 if (checkRectCollision(bRect, e) && b.team !== e.team) {
-                    e.hp--;
+                    if (b.type === 'rocket' || b.type === 'smallRocket') {
+                        explodeRocket(b);
+                    } else {
+                        e.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                        if (b.type === 'ice') { e.paralyzed = true; e.paralyzedTime = 180; }
+                    }
                     bullets.splice(i, 1);
                     if (e.hp <= 0) {
+                        coins += 5; // earn coins for killing enemy
                         if (currentMode === 'war') {
                             e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
                         } else {
@@ -1250,6 +1794,186 @@ function update() {
                 }
             }
         }
+    }
+    
+    // Обновление огненных частиц
+    for (let i = flames.length - 1; i >= 0; i--) {
+        const f = flames[i];
+        f.x += f.vx;
+        f.y += f.vy;
+        f.life--;
+        if (f.life <= 0) {
+            flames.splice(i, 1);
+            continue;
+        }
+        // Check collision with objects
+        let hit = false;
+        for (const obj of objects) {
+            if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, obj)) {
+                flames.splice(i, 1);
+                hit = true;
+                if (obj.type === 'box') {
+                    objects.splice(objects.indexOf(obj), 1);
+                    for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                    navNeedsRebuild = true;
+                } else if (obj.type === 'barrel') {
+                    explodeBarrel(obj);
+                }
+                break;
+            }
+        }
+        if (!hit) {
+            // Check collision with tank
+            if (tank.hp > 0 && checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, tank) && f.team !== tank.team) {
+                tank.hp -= f.damage;
+                flames.splice(i, 1);
+                if (tank.hp <= 0) {
+                    for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
+                    if (currentMode === 'war') {
+                        if (tank.respawnCount >= 2) {
+                            gameState = 'lose';
+                        } else {
+                            tank.alive = false;
+                            tank.respawnTimer = 600;
+                        }
+                    } else {
+                        gameState = 'lose';
+                    }
+                }
+                continue;
+            }
+            // Check collision with allies
+            for (let j = allies.length - 1; j >= 0; j--) {
+                const a = allies[j];
+                if (!a || !a.alive) continue;
+                if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, a) && f.team !== a.team) {
+                    a.hp -= f.damage;
+                    flames.splice(i, 1);
+                    if (a.hp <= 0) {
+                        if (currentMode === 'war') {
+                            a.alive = false; a.respawnTimer = 600; for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                        } else {
+                            allies.splice(j, 1);
+                            for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                        }
+                    }
+                    break;
+                }
+            }
+            // Check collision with enemies
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                if (!e || !e.alive) continue;
+                if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, e) && f.team !== e.team) {
+                    e.hp -= f.damage;
+                    flames.splice(i, 1);
+                    if (e.hp <= 0) {
+                        coins += 5;
+                        if (currentMode === 'war') {
+                            e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                        } else {
+                            enemies.splice(j, 1);
+                            for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Обновление target circles
+    for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (obj.type === 'targetCircle') {
+            obj.timer--;
+            if (obj.timer <= 0) {
+                // use global applyDamage(x,y) helper for area damage
+                // If planned positions exist, only spawn explosions for positions not yet exploded.
+                if (obj.planned && obj.planned.length) {
+                    for (let p of obj.planned) {
+                        if (!p.exploded) {
+                            objects.push({ type: 'explosion', x: p.x, y: p.y, radius: 30, life: 30, color: '#FFA500' });
+                            applyDamage(p.x, p.y);
+                        }
+                    }
+                } else {
+                    // fallback: spawn original pattern
+                    for (let j = 0; j < 4; j++) {
+                        const ang = (j / 4) * Math.PI * 2;
+                        const dist = obj.radius * 0.3;
+                        const ex = obj.x + Math.cos(ang) * dist;
+                        const ey = obj.y + Math.sin(ang) * dist;
+                        objects.push({ type: 'explosion', x: ex, y: ey, radius: 30, life: 30, color: '#FFA500' });
+                        applyDamage(ex, ey);
+                    }
+                    for (let j = 0; j < 9; j++) {
+                        const ang = (j / 9) * Math.PI * 2;
+                        const dist = obj.radius * 0.7;
+                        const ex = obj.x + Math.cos(ang) * dist;
+                        const ey = obj.y + Math.sin(ang) * dist;
+                        objects.push({ type: 'explosion', x: ex, y: ey, radius: 30, life: 30, color: '#FFA500' });
+                        applyDamage(ex, ey);
+                    }
+                }
+                objects.splice(i, 1);
+            }
+        } else if (obj.type === 'explosion') {
+            obj.life--;
+            if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'visualRocket') {
+            // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
+            if (obj.delay && obj.delay > 0) {
+                obj.delay--;
+                if (obj.delay === 0) spawnParticle(obj.x, obj.y);
+            } else {
+                obj.x += obj.vx;
+                obj.y += obj.vy;
+                // small smoke trail
+                if (Math.random() < 0.6) {
+                    particles.push({ x: obj.x, y: obj.y, vx: (Math.random() - 0.5) * 0.4 - obj.vx * 0.08, vy: (Math.random() - 0.5) * 0.4 - obj.vy * 0.08, life: 8, size: 2, color: 'rgba(80,80,80,0.6)' });
+                }
+
+                // If rocket has an assigned planned target, detonate precisely at that planned spot
+                let exploded = false;
+                if (obj.target) {
+                    const distToTarget = Math.hypot(obj.x - obj.target.x, obj.y - obj.target.y);
+                    if (distToTarget <= 10) {
+                        // spawn explosion at planned spot and mark it
+                        objects.push({ type: 'explosion', x: obj.target.x, y: obj.target.y, radius: 30, life: 30, color: '#FFA500' });
+                        obj.target.exploded = true;
+                        applyDamage(obj.target.x, obj.target.y);
+                        exploded = true;
+                    }
+                } else {
+                    // fallback: if no assigned target, explode when entering any targetCircle
+                    for (let j = 0; j < objects.length; j++) {
+                        const o = objects[j];
+                        if (o.type === 'targetCircle') {
+                            const dist = Math.hypot(obj.x - o.x, obj.y - o.y);
+                            if (dist <= o.radius + 6) {
+                                objects.push({ type: 'explosion', x: obj.x, y: obj.y, radius: 30, life: 30, color: '#FFA500' });
+                                applyDamage(obj.x, obj.y);
+                                exploded = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                obj.life--;
+                if (exploded || obj.life <= 0) {
+                    // remove rocket
+                    objects.splice(i, 1);
+                }
+            }
+        }
+    }
+    
+    // Check artillery mode
+    if (tank.artilleryTimer > 0) {
+        tank.artilleryTimer--;
+        if (tank.artilleryTimer <= 0) tank.artilleryMode = false;
     }
     
     // Обновление частиц
@@ -1309,9 +2033,12 @@ function update() {
         const aliveEnemies = enemies.filter(e => e && e.alive !== false && e.hp > 0);
         if (aliveEnemies.length === 0) {
             gameState = 'win';
+            coins += 50; // reward for war
         }
     } else if (enemies.length === 0) {
         gameState = 'win';
+        if (currentMode === 'single') coins += 25;
+        else if (currentMode === 'team') coins += 40;
     }
 }
 
@@ -1391,7 +2118,7 @@ function draw() {
 
     // 2. Частицы пыли
     particles.forEach(p => {
-        ctx.fillStyle = `rgba(139, 69, 19, ${p.life})`;
+        ctx.fillStyle = p.color || `rgba(139, 69, 19, ${p.life})`;
         ctx.fillRect(p.x, p.y, p.size, p.size);
     });
 
@@ -1469,6 +2196,28 @@ function draw() {
             ctx.ellipse(cx, obj.y + obj.h - ry * 0.35, rx * 0.9, ry * 0.6, 0, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(0,0,0,0.22)';
             ctx.fill();
+        } else if (obj.type === 'targetCircle') {
+            ctx.strokeStyle = obj.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (obj.type === 'explosion') {
+            ctx.globalAlpha = obj.life / 30;
+            ctx.fillStyle = obj.color;
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, obj.radius * (1 - obj.life / 30), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        } else if (obj.type === 'visualRocket') {
+            // draw visual rocket as small black rectangle oriented by velocity
+            ctx.save();
+            ctx.translate(obj.x, obj.y);
+            const ang = Math.atan2(obj.vy, obj.vx);
+            ctx.rotate(ang);
+            ctx.fillStyle = obj.color || '#000';
+            ctx.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h);
+            ctx.restore();
         } else {
             // Ящик
             ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
@@ -1485,8 +2234,29 @@ function draw() {
 
     // 3.5. Пули
     bullets.forEach(b => {
-        ctx.fillStyle = '#ffff00';
-        ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        if (b.type === 'fire') {
+            ctx.strokeStyle = '#FF4500';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x - b.vx * 5, b.y - b.vy * 5);
+            ctx.stroke();
+        } else if (b.type === 'rocket') {
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        } else if (b.type === 'smallRocket') {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        } else {
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+        }
+    });
+
+    // 3.6. Огненные частицы
+    flames.forEach(f => {
+        ctx.fillStyle = '#FF4500';
+        ctx.fillRect(f.x - 2, f.y - 2, 4, 4);
     });
 
     // reset any drawing state that object rendering might have changed
@@ -1507,7 +2277,7 @@ function draw() {
         ctx.fillStyle = '#222';
         ctx.fillRect(-a.w/2, -a.h/2 - 4, a.w, 8);
         ctx.fillRect(-a.w/2, a.h/2 - 4, a.w, 8);
-        ctx.fillStyle = a.color || '#888';
+        ctx.fillStyle = a.paralyzed ? '#00FFFF' : (a.color || '#888');
         ctx.fillRect(-a.w/2 + 4, -a.h/2 + 2, a.w - 8, a.h - 4);
         ctx.rotate(a.turretAngle || 0);
         ctx.fillStyle = '#5c7041'; ctx.fillRect(-12, -12, 24, 24);
@@ -1527,7 +2297,7 @@ function draw() {
         ctx.fillRect(-enemy.w/2, -enemy.h/2 - 4, enemy.w, 8);
         ctx.fillRect(-enemy.w/2, enemy.h/2 - 4, enemy.w, 8);
         // Корпус
-        ctx.fillStyle = enemy.color;
+        ctx.fillStyle = enemy.paralyzed ? '#00FFFF' : enemy.color;
         ctx.fillRect(-enemy.w/2 + 4, -enemy.h/2 + 2, enemy.w - 8, enemy.h - 4);
         // Башня
         ctx.rotate(enemy.turretAngle);
@@ -1548,28 +2318,7 @@ function draw() {
     if (tank.alive !== false) {
         ctx.save();
         ctx.translate(tank.x + tank.w/2, tank.y + tank.h/2);
-    
-    // Гусеницы (верх/низ)
-    ctx.fillStyle = '#222';
-    ctx.fillRect(-tank.w/2, -tank.h/2 - 4, tank.w, 8);
-    ctx.fillRect(-tank.w/2, tank.h/2 - 4, tank.w, 8);
-
-    // Корпус
-    ctx.fillStyle = tank.color;
-    ctx.fillRect(-tank.w/2 + 4, -tank.h/2 + 2, tank.w - 8, tank.h - 4);
-    
-    // Люк и детали
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.strokeRect(-10, -10, 20, 20);
-
-    // Башня (поворачивается колесиком)
-    ctx.rotate(tank.turretAngle);
-    ctx.fillStyle = '#5c7041';
-    ctx.fillRect(-12, -12, 24, 24); // Основание башни
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, -3, 35, 6);   // Пушка
-    ctx.fillRect(32, -4, 5, 8);   // Набалдашник
-    
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
         ctx.restore();
         // HP bar для игрока
         ctx.fillStyle = 'red';
@@ -1615,7 +2364,16 @@ function draw() {
     // draw preview inside menu DOM as well
     drawPreview();
 
+    updateCoinDisplay();
+
     requestAnimationFrame(draw);
+}
+
+// Update coin display
+function updateCoinDisplay() {
+    const coinDisplay = document.getElementById('coinDisplay');
+    if (coinDisplay) coinDisplay.textContent = coins;
+    localStorage.setItem('tankCoins', coins);
 }
 
 // Make draw globally available (ensure load handler can call it)
@@ -1643,6 +2401,9 @@ window.addEventListener('load', () => {
         console.error('Init error', err);
     }
 });
+
+// Draw character previews on load
+drawCharacterPreviews();
 
 </script>
 </body>
