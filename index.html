@@ -123,6 +123,16 @@
     </div>
 </div>
 
+<!-- Version Modal -->
+<div id="versionModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:14; background: rgba(0,0,0,0.7);">
+    <div style="background: #2c3e50; border: 4px solid #3498db; border-radius: 12px; padding: 30px; text-align: center; color: white; font-family: 'Courier New', monospace;">
+        <h2 style="margin: 0 0 20px 0; color: #3498db;">MEGARE</h2>
+        <p style="margin: 10px 0; font-size: 18px;">Версия: <span id="versionText" style="color: #2ecc71; font-weight: bold;">0.5.0</span></p>
+        <p style="margin: 10px 0; font-size: 14px; color: #bdc3c7;">Retro Tanks with Procedural Walls</p>
+        <button id="versionClose" style="padding:10px 25px; font-size:14px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:20px;">Закрыть</button>
+    </div>
+</div>
+
 <script>
 /**
  * КЛАССИЧЕСКИЕ ТАНКИ С ПРОЦЕДУРНЫМИ СТЕНАМИ
@@ -193,7 +203,20 @@ const tank = {
 };
 
 // Слушатели событий
-window.onkeydown = (e) => keys[e.code] = true;
+window.onkeydown = (e) => {
+    // Не регистрировать клавишу если зажаты модификаторы (Ctrl, Cmd)
+    if (e.ctrlKey || e.metaKey) {
+        return;
+    }
+    keys[e.code] = true;
+    // V + Alt для открытия информации о версии
+    if ((e.code === 'KeyV' || e.code === 'keyV') && e.altKey) {
+        const versionModal = document.getElementById('versionModal');
+        if (versionModal) {
+            versionModal.style.display = 'flex';
+        }
+    }
+};
 window.onkeyup = (e) => keys[e.code] = false;
 window.addEventListener('wheel', (e) => {
     tank.turretAngle += e.deltaY * 0.0015;
@@ -483,7 +506,7 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = 3; tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
 
     if (mode === 'single') {
@@ -505,7 +528,7 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         // coarser nav grid for performance
         navCell = 48;
         generateMap();
@@ -565,6 +588,20 @@ if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.
 if (characterBtn) characterBtn.addEventListener('click', () => { if (characterModal) { characterModal.style.display = 'flex'; drawCharacterPreviews(); } });
 if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
 if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+
+// Version modal
+const versionModal = document.getElementById('versionModal');
+const versionClose = document.getElementById('versionClose');
+if (versionClose) versionClose.addEventListener('click', () => { if (versionModal) versionModal.style.display = 'none'; });
+// Закрытие модалки при клике на фон
+if (versionModal) {
+    versionModal.addEventListener('click', (e) => {
+        if (e.target === versionModal) {
+            versionModal.style.display = 'none';
+        }
+    });
+}
+
 if (buyContainer) buyContainer.addEventListener('click', () => {
     if (coins >= 100) {
         coins -= 100;
@@ -605,6 +642,7 @@ if (selectFireTank) selectFireTank.addEventListener('click', () => {
     tankType = 'fire';
     tankColor = '#0000FF';
     tank.color = tankColor;
+    tank.hp = 6;
     if (characterModal) characterModal.style.display = 'none';
 });
 if (selectBuratinoTank) selectBuratinoTank.addEventListener('click', () => {
@@ -788,7 +826,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: tankType === 'fire' ? 6 : 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -831,14 +869,14 @@ function spawnWarMode() {
 
     // place player near team 0 spawn
     const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
-    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0;
+    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
 
     // spawn allies (team 0) - 9 bots + player = 10
     for (let i = 0; i < 9; i++) {
             const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp: tankType === 'fire' ? 6 : 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn enemies (team 1) - 10 bots
@@ -2280,7 +2318,7 @@ function update() {
                     // respawn near team spawn
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
-                    tank.x = p.x; tank.y = p.y; tank.hp = 3; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                    tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                 }
             }
         }
@@ -2618,7 +2656,8 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'green';
-        ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / 3), 5);
+        const maxTankHp = tankType === 'fire' ? 6 : 3;
+        ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / maxTankHp), 5);
     }
     // restore camera transform before drawing UI/modal overlays
     if (cameraTranslated) ctx.restore();
