@@ -118,6 +118,10 @@
                     <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #00ff9da0; border-radius:8px;"></canvas>
                     <button id="selectToxicTank" style="padding:10px 20px; font-size:16px; background:#00ff9da0; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Отравляющий</button>
                 </div>
+                <div style="text-align:center; width:180px;">
+                    <canvas id="biotankPreview" width="150" height="150" style="border:2px solid #6B4423; border-radius:8px;"></canvas>
+                    <button id="selectBiotank" style="padding:10px 20px; font-size:16px; background:#6B4423; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Биотанк</button>
+                </div>
         </div>
         <button id="characterCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:20px;">Закрыть</button>
     </div>
@@ -199,7 +203,9 @@ const tank = {
     hp: 3,
     maxHp: 3,
     team: 0,
-    fireCooldown: 0
+    fireCooldown: 0,
+    eggLayCount: 0,
+    legAnimOffset: 0
 };
 
 // Слушатели событий
@@ -236,6 +242,96 @@ const buratinoTankPreview = document.getElementById('buratinoTankPreview');
 const buratinoTankCtx = buratinoTankPreview && buratinoTankPreview.getContext ? buratinoTankPreview.getContext('2d') : null;
 const toxicTankPreview = document.getElementById('toxicTankPreview');
 const toxicTankCtx = toxicTankPreview && toxicTankPreview.getContext ? toxicTankPreview.getContext('2d') : null;
+const biotankPreview = document.getElementById('biotankPreview');
+const biotankCtx = biotankPreview && biotankPreview.getContext ? biotankPreview.getContext('2d') : null;
+
+// Draw biotank for preview (tank with biomass growing on it)
+function drawBiotankPreview(ctx, cx, cy, size) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    
+    // Tank hull base
+    ctx.fillStyle = '#5a7c5a';
+    ctx.fillRect(-size*0.4, -size*0.35, size*0.8, size*0.7);
+    
+    // Biomass - organic growths on tank
+    ctx.fillStyle = '#6B4423';
+    // Front growth
+    ctx.beginPath();
+    ctx.ellipse(0, -size*0.35, size*0.25, size*0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Side growths
+    ctx.beginPath();
+    ctx.ellipse(-size*0.35, 0, size*0.18, size*0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(size*0.35, 0, size*0.18, size*0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Turret
+    ctx.fillStyle = '#3D2817';
+    ctx.beginPath();
+    ctx.arc(0, 0, size*0.2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Barrel
+    ctx.fillStyle = '#222';
+    ctx.fillRect(size*0.15, -size*0.08, size*0.25, size*0.16);
+    
+    ctx.restore();
+}
+
+// Draw biotank in game (tank with biomass)
+function drawBiotank(ctx, cx, cy, W, H, color, legAnimOffset) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    
+    // Tank hull base
+    ctx.fillStyle = '#5a7c5a';
+    ctx.fillRect(-W*0.4, -H*0.35, W*0.8, H*0.7);
+    
+    // Biomass growths - organic pulsating shapes
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    
+    // Front growth (pulsates with movement)
+    const pulse = Math.sin(legAnimOffset) * 0.1;
+    ctx.beginPath();
+    ctx.ellipse(0, -H*0.4 + pulse*5, W*0.3, H*0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Left side growth
+    ctx.beginPath();
+    ctx.ellipse(-W*0.4, -H*0.1, W*0.22, H*0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Right side growth
+    ctx.beginPath();
+    ctx.ellipse(W*0.4, -H*0.1, W*0.22, H*0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Back growth
+    ctx.beginPath();
+    ctx.ellipse(0, H*0.35, W*0.28, H*0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.globalAlpha = 1;
+    
+    // Turret
+    ctx.fillStyle = '#3D2817';
+    ctx.beginPath();
+    ctx.arc(0, 0, W*0.22, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Turret shine
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.arc(-W*0.08, -W*0.08, W*0.08, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal') {
     ctx.save();
     ctx.translate(cx, cy);
@@ -489,6 +585,11 @@ function drawCharacterPreviews() {
         const side = Math.min(toxicTankPreview.width, toxicTankPreview.height) / 2;
         drawTankOn(toxicTankCtx, toxicTankPreview.width/2, toxicTankPreview.height/2, side, side, '#0000FF', 0, 1, 'toxic');
     }
+    if (biotankCtx) {
+        biotankCtx.clearRect(0,0,biotankPreview.width, biotankPreview.height);
+        const side = Math.min(biotankPreview.width, biotankPreview.height) / 2;
+        drawBiotankPreview(biotankCtx, biotankPreview.width/2, biotankPreview.height/2, side);
+    }
 }
 
 // Start button handler (open mode selection modal)
@@ -506,7 +607,7 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
 
     if (mode === 'single') {
@@ -528,7 +629,7 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         // coarser nav grid for performance
         navCell = 48;
         generateMap();
@@ -656,6 +757,16 @@ if (selectToxicTank) selectToxicTank.addEventListener('click', () => {
     tankColor = '#0000FF';
     tank.color = tankColor;
     tank.megaGasUsed = false;
+    if (characterModal) characterModal.style.display = 'none';
+});
+
+const selectBiotank = document.getElementById('selectBiotank');
+if (selectBiotank) selectBiotank.addEventListener('click', () => {
+    tankType = 'biotank';
+    tankColor = '#6B4423';
+    tank.color = tankColor;
+    tank.eggLayCount = 0;
+    tank.legAnimOffset = 0;
     if (characterModal) characterModal.style.display = 'none';
 });
 
@@ -826,7 +937,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: tankType === 'fire' ? 6 : 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: (tankType === 'fire' || tankType === 'biotank') ? 6 : 3, turretAngle:0, baseAngle:0, speed: tankType === 'biotank' ? 2.5 * 1.5 : 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -869,14 +980,14 @@ function spawnWarMode() {
 
     // place player near team 0 spawn
     const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
-    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
+    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
 
     // spawn allies (team 0) - 9 bots + player = 10
     for (let i = 0; i < 9; i++) {
             const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp: tankType === 'fire' ? 6 : 3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp: (tankType === 'fire' || tankType === 'biotank') ? 6 : 3, turretAngle:0, baseAngle:0, speed: tankType === 'biotank' ? 2.5 * 1.5 : 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn enemies (team 1) - 10 bots
@@ -1121,6 +1232,17 @@ function explodeGas(bullet, mega = false) {
     const durationTicks = (mega ? 10 : 5) * 60; // seconds -> ticks
     const radius = mega ? 180 : 90;
     objects.push({ type: 'gas', x: bullet.x, y: bullet.y, radius: radius, life: durationTicks, maxLife: durationTicks, color: 'rgba(100,220,100,0.25)', owner: bullet.owner, isMega: mega });
+    // Уничтожение ящиков и бочек в зоне газа
+    for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (obj.type === 'box' || obj.type === 'barrel') {
+            const ox = obj.x + obj.w/2, oy = obj.y + obj.h/2;
+            const dist = Math.hypot(ox - bullet.x, oy - bullet.y);
+            if (dist <= radius) {
+                objects.splice(i, 1);
+            }
+        }
+    }
 }
 
 // Global helper: apply area damage at point (x,y)
@@ -1152,6 +1274,17 @@ function applyDamage(x, y, R = 30, coef = 1) {
         if (e.hp <= 0) {
             if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
             else { enemies.splice(i, 1); for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); }
+        }
+    }
+    // Уничтожение ящиков и бочек в зоне взрыва
+    for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (obj.type === 'box' || obj.type === 'barrel') {
+            const ox = obj.x + obj.w/2, oy = obj.y + obj.h/2;
+            const dist = Math.hypot(ox - x, oy - y);
+            if (dist <= R) {
+                objects.splice(i, 1);
+            }
         }
     }
 }
@@ -1386,6 +1519,72 @@ function spawnParticle(x, y) {
     });
 }
 
+// Biotank melee attack: hits nearby enemies/allies with a claw/limb strike
+function biotankMeleeAttack() {
+    const meleeRange = 50; // pixels - how far the limb reaches
+    const meleeDamage = 2; // damage per target
+    const centerX = tank.x + tank.w/2;
+    const centerY = tank.y + tank.h/2;
+    
+    // Create a temporary visual effect (explosion indicator)
+    objects.push({
+        type: 'explosion',
+        x: centerX + Math.cos(tank.turretAngle) * (meleeRange * 0.6),
+        y: centerY + Math.sin(tank.turretAngle) * (meleeRange * 0.6),
+        radius: meleeRange * 0.8,
+        life: 15, // short duration for visual feedback
+        color: '#8B5A00' // dark brown for biomass color
+    });
+    
+    // Check enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (!e || !e.alive) continue;
+        const ex = e.x + (e.w||0)/2;
+        const ey = e.y + (e.h||0)/2;
+        const dist = Math.hypot(ex - centerX, ey - centerY);
+        if (dist <= meleeRange) {
+            e.hp -= meleeDamage;
+            if (e.hp <= 0) {
+                if (currentMode === 'war') { 
+                    e.alive = false; 
+                    e.respawnTimer = 600; 
+                    for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); 
+                } else { 
+                    enemies.splice(i, 1); 
+                    for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); 
+                }
+            }
+        }
+    }
+    
+    // Check allies (don't hurt own team's allies)
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const a = allies[i];
+        if (!a || !a.alive) continue;
+        if (a.team === tank.team) continue; // don't hurt own team
+        const ax = a.x + (a.w||0)/2;
+        const ay = a.y + (a.h||0)/2;
+        const dist = Math.hypot(ax - centerX, ay - centerY);
+        if (dist <= meleeRange) {
+            a.hp -= meleeDamage;
+            if (a.hp <= 0) {
+                if (currentMode === 'war') { 
+                    a.alive = false; 
+                    a.respawnTimer = 600; 
+                    for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); 
+                } else { 
+                    allies.splice(i, 1); 
+                    for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); 
+                }
+            }
+        }
+    }
+    
+    // Set cooldown
+    tank.fireCooldown = FIRE_COOLDOWN;
+}
+
 function shoot() {
     if (tankType === 'fire') {
         // Flamethrower: emit a short cone of flame projectiles
@@ -1524,16 +1723,24 @@ function update() {
     // player input only when alive
     if (tank.alive !== false) {
         if (tank.moveCooldown > 0) tank.moveCooldown--;
+        
+        // Biotank has faster movement speed
+        const currentSpeed = tankType === 'biotank' ? tank.speed * 1.5 : tank.speed;
+        
         let dx = 0, dy = 0;
-        if (keys['KeyW']) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
-        if (keys['KeyS']) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
-        if (keys['KeyA']) { dx -= tank.speed; tank.baseAngle = Math.PI; }
-        if (keys['KeyD']) { dx += tank.speed; tank.baseAngle = 0; }
+        if (keys['KeyW']) { dy -= currentSpeed; tank.baseAngle = -Math.PI/2; }
+        if (keys['KeyS']) { dy += currentSpeed; tank.baseAngle = Math.PI/2; }
+        if (keys['KeyA']) { dx -= currentSpeed; tank.baseAngle = Math.PI; }
+        if (keys['KeyD']) { dx += currentSpeed; tank.baseAngle = 0; }
         if (dx !== 0 || dy !== 0) {
             if (!tank.artilleryMode) {
                 tank.trackOffset = (tank.trackOffset + 0.2) % 10;
                 moveWithCollision(dx, 0);
                 moveWithCollision(0, dy);
+            }
+            // Animate biotank legs
+            if (tankType === 'biotank') {
+                tank.legAnimOffset += 0.15;
             }
         }
         // turret rotation with arrow keys (same effect as mouse wheel)
@@ -1565,12 +1772,35 @@ function update() {
             }
             keys['KeyE'] = false;
         }
+        // Biotank ability: lay eggs (2 times per battle)
+        if (tankType === 'biotank' && keys['KeyE']) {
+            if (tank.eggLayCount < 2) {
+                // Lay egg at current position
+                const eggX = tank.x + tank.w/2 + (Math.random() - 0.5) * 20;
+                const eggY = tank.y + tank.h/2 + (Math.random() - 0.5) * 20;
+                objects.push({
+                    type: 'egg',
+                    x: eggX,
+                    y: eggY,
+                    w: 10,
+                    h: 12,
+                    hatchTime: 5 * 60, // 5 seconds
+                    owner: 'player'
+                });
+                tank.eggLayCount++;
+            }
+            keys['KeyE'] = false;
+        }
         if (keys['ArrowRight']) tank.turretAngle += 0.06;
         // Перезарядка игрока
         if (tank.fireCooldown > 0) tank.fireCooldown--;
-        // Стрельба (только если перезарядка закончилась)
+        // Стрельба/атака (только если перезарядка закончилась)
         if (keys['Space'] && tank.fireCooldown <= 0) {
-            shoot();
+            if (tankType === 'biotank') {
+                biotankMeleeAttack();
+            } else {
+                shoot();
+            }
             if (tankType !== 'fire') {
                 keys['Space'] = false;
             }
@@ -2150,6 +2380,93 @@ function update() {
             // gas cloud visual fades over time
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'egg') {
+            // Egg hatches into spiders after time
+            obj.hatchTime--;
+            if (obj.hatchTime <= 0) {
+                // Spawn 2-3 spiders from egg
+                const spiderCount = 2 + Math.floor(Math.random() * 2);
+                for (let j = 0; j < spiderCount; j++) {
+                    const angle = (j / spiderCount) * Math.PI * 2;
+                    objects.push({
+                        type: 'spider',
+                        x: obj.x,
+                        y: obj.y,
+                        w: 8,
+                        h: 8,
+                        vx: Math.cos(angle) * 3,
+                        vy: Math.sin(angle) * 3,
+                        speed: 3.5,
+                        life: 300, // 5 seconds lifespan
+                        owner: obj.owner,
+                        damage: 2,
+                        attackCooldown: 0
+                    });
+                }
+                objects.splice(i, 1);
+            }
+        } else if (obj.type === 'spider') {
+            // Spider moves and attacks
+            obj.life--;
+            if (obj.life <= 0) {
+                objects.splice(i, 1);
+                continue;
+            }
+            
+            // Find nearest enemy
+            let nearestEnemy = null;
+            let nearestDist = 200;
+            for (const e of enemies) {
+                if (!e || !e.alive) continue;
+                const dist = Math.hypot(e.x - obj.x, e.y - obj.y);
+                if (dist < nearestDist) {
+                    nearestEnemy = e;
+                    nearestDist = dist;
+                }
+            }
+            
+            // Move towards nearest enemy
+            if (nearestEnemy) {
+                const dx = nearestEnemy.x - obj.x;
+                const dy = nearestEnemy.y - obj.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 0) {
+                    obj.vx = (dx / dist) * obj.speed;
+                    obj.vy = (dy / dist) * obj.speed;
+                }
+                
+                // Attack if close enough
+                if (dist < 15 && obj.attackCooldown <= 0) {
+                    nearestEnemy.hp -= obj.damage;
+                    obj.attackCooldown = 30;
+                    if (nearestEnemy.hp <= 0) {
+                        nearestEnemy.alive = false;
+                        nearestEnemy.respawnTimer = 600;
+                        for (let k = 0; k < 6; k++) spawnParticle(nearestEnemy.x + nearestEnemy.w/2, nearestEnemy.y + nearestEnemy.h/2);
+                    }
+                }
+            } else {
+                // Random walk if no enemy found
+                obj.vx += (Math.random() - 0.5) * 0.5;
+                obj.vy += (Math.random() - 0.5) * 0.5;
+                const speed = Math.hypot(obj.vx, obj.vy);
+                if (speed > obj.speed) {
+                    obj.vx = (obj.vx / speed) * obj.speed;
+                    obj.vy = (obj.vy / speed) * obj.speed;
+                }
+            }
+            
+            // Move spider
+            obj.x += obj.vx;
+            obj.y += obj.vy;
+            
+            // Keep in bounds
+            if (obj.x < 0) obj.x = 0;
+            if (obj.y < 0) obj.y = 0;
+            if (obj.x > worldWidth) obj.x = worldWidth;
+            if (obj.y > worldHeight) obj.y = worldHeight;
+            
+            if (obj.attackCooldown > 0) obj.attackCooldown--;
         } else if (obj.type === 'visualRocket') {
             // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
             if (obj.delay && obj.delay > 0) {
@@ -2318,7 +2635,7 @@ function update() {
                     // respawn near team spawn
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
-                    tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                    tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                 }
             }
         }
@@ -2550,6 +2867,44 @@ function draw() {
             // subtle inner glow
             ctx.fillStyle = `rgba(120,240,120,${alpha * 0.25})`;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.6, 0, Math.PI * 2); ctx.fill();
+        } else if (obj.type === 'egg') {
+            // Draw egg (oval brown shape)
+            ctx.fillStyle = '#CD853F';
+            ctx.beginPath();
+            ctx.ellipse(obj.x + obj.w/2, obj.y + obj.h/2, obj.w/2, obj.h/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Add highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.beginPath();
+            ctx.ellipse(obj.x + obj.w/2 - 2, obj.y + obj.h/2 - 2, obj.w/4, obj.h/4, 0, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (obj.type === 'spider') {
+            // Draw spider
+            ctx.fillStyle = '#1a1a1a';
+            // Body
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.w/2, obj.y + obj.h/2, obj.w/2.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.w/2 - 2, obj.y + obj.h/2 - 1, 1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.w/2 + 2, obj.y + obj.h/2 - 1, 1, 0, Math.PI * 2);
+            ctx.fill();
+            // Legs
+            ctx.strokeStyle = '#1a1a1a';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
+                const legX = obj.x + obj.w/2 + Math.cos(angle) * obj.w * 0.8;
+                const legY = obj.y + obj.h/2 + Math.sin(angle) * obj.h * 0.8;
+                ctx.beginPath();
+                ctx.moveTo(obj.x + obj.w/2, obj.y + obj.h/2);
+                ctx.lineTo(legX, legY);
+                ctx.stroke();
+            }
         } else {
             // Ящик
             ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
@@ -2650,13 +3005,17 @@ function draw() {
     if (tank.alive !== false) {
         ctx.save();
         ctx.translate(tank.x + tank.w/2, tank.y + tank.h/2);
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
+        if (tankType === 'biotank') {
+            drawBiotank(ctx, 0, 0, tank.w, tank.h, tank.color, tank.legAnimOffset);
+        } else {
+            drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
+        }
         ctx.restore();
         // HP bar для игрока
         ctx.fillStyle = 'red';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'green';
-        const maxTankHp = tankType === 'fire' ? 6 : 3;
+        const maxTankHp = (tankType === 'fire' || tankType === 'biotank') ? 6 : 3;
         ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / maxTankHp), 5);
     }
     // restore camera transform before drawing UI/modal overlays
