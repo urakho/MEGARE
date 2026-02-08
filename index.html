@@ -119,8 +119,8 @@
                     <button id="selectToxicTank" style="padding:10px 20px; font-size:16px; background:#00ff9da0; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Отравляющий</button>
                 </div>
                 <div style="text-align:center; width:180px;">
-                    <canvas id="biotankPreview" width="150" height="150" style="border:2px solid #6B4423; border-radius:8px;"></canvas>
-                    <button id="selectBiotank" style="padding:10px 20px; font-size:16px; background:#6B4423; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Биотанк</button>
+                    <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8e44ad; border-radius:8px;"></canvas>
+                    <button id="selectPlasmaTank" style="padding:10px 20px; font-size:16px; background:#8e44ad; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Плазменный</button>
                 </div>
         </div>
         <button id="characterCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:20px;">Закрыть</button>
@@ -169,7 +169,7 @@ const SHOW_AI_DEBUG = false;
 
 // Навигационная сетка для A* (перестраивается при перемещении ящиков)
 let navGrid = null;
-let navCols = 0, navRows = 0, navCell = 24;
+let navCols = 0, navRows = 0, navCell = 25;
 // Размер агента, используемый при построении безопасных ячеек
 let navAgentW = 38, navAgentH = 38;
 let navNeedsRebuild = true;
@@ -203,9 +203,7 @@ const tank = {
     hp: 3,
     maxHp: 3,
     team: 0,
-    fireCooldown: 0,
-    eggLayCount: 0,
-    legAnimOffset: 0
+    fireCooldown: 0
 };
 
 // Слушатели событий
@@ -242,95 +240,8 @@ const buratinoTankPreview = document.getElementById('buratinoTankPreview');
 const buratinoTankCtx = buratinoTankPreview && buratinoTankPreview.getContext ? buratinoTankPreview.getContext('2d') : null;
 const toxicTankPreview = document.getElementById('toxicTankPreview');
 const toxicTankCtx = toxicTankPreview && toxicTankPreview.getContext ? toxicTankPreview.getContext('2d') : null;
-const biotankPreview = document.getElementById('biotankPreview');
-const biotankCtx = biotankPreview && biotankPreview.getContext ? biotankPreview.getContext('2d') : null;
-
-// Draw biotank for preview (tank with biomass growing on it)
-function drawBiotankPreview(ctx, cx, cy, size) {
-    ctx.save();
-    ctx.translate(cx, cy);
-    
-    // Tank hull base
-    ctx.fillStyle = '#5a7c5a';
-    ctx.fillRect(-size*0.4, -size*0.35, size*0.8, size*0.7);
-    
-    // Biomass - organic growths on tank
-    ctx.fillStyle = '#6B4423';
-    // Front growth
-    ctx.beginPath();
-    ctx.ellipse(0, -size*0.35, size*0.25, size*0.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Side growths
-    ctx.beginPath();
-    ctx.ellipse(-size*0.35, 0, size*0.18, size*0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(size*0.35, 0, size*0.18, size*0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Turret
-    ctx.fillStyle = '#3D2817';
-    ctx.beginPath();
-    ctx.arc(0, 0, size*0.2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Barrel
-    ctx.fillStyle = '#222';
-    ctx.fillRect(size*0.15, -size*0.08, size*0.25, size*0.16);
-    
-    ctx.restore();
-}
-
-// Draw biotank in game (tank with biomass)
-function drawBiotank(ctx, cx, cy, W, H, color, legAnimOffset) {
-    ctx.save();
-    ctx.translate(cx, cy);
-    
-    // Tank hull base
-    ctx.fillStyle = '#5a7c5a';
-    ctx.fillRect(-W*0.4, -H*0.35, W*0.8, H*0.7);
-    
-    // Biomass growths - organic pulsating shapes
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.85;
-    
-    // Front growth (pulsates with movement)
-    const pulse = Math.sin(legAnimOffset) * 0.1;
-    ctx.beginPath();
-    ctx.ellipse(0, -H*0.4 + pulse*5, W*0.3, H*0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Left side growth
-    ctx.beginPath();
-    ctx.ellipse(-W*0.4, -H*0.1, W*0.22, H*0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Right side growth
-    ctx.beginPath();
-    ctx.ellipse(W*0.4, -H*0.1, W*0.22, H*0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Back growth
-    ctx.beginPath();
-    ctx.ellipse(0, H*0.35, W*0.28, H*0.22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.globalAlpha = 1;
-    
-    // Turret
-    ctx.fillStyle = '#3D2817';
-    ctx.beginPath();
-    ctx.arc(0, 0, W*0.22, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Turret shine
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.beginPath();
-    ctx.arc(-W*0.08, -W*0.08, W*0.08, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
-}
+const plasmaTankPreview = document.getElementById('plasmaTankPreview');
+const plasmaTankCtx = plasmaTankPreview && plasmaTankPreview.getContext ? plasmaTankPreview.getContext('2d') : null;
 
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal') {
     ctx.save();
@@ -361,102 +272,242 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         }
     }
     // body (between tracks)
-    ctx.fillStyle = color;
-    ctx.fillRect(-W/2 + 2, -H/2 + trackThick/2 + 2, W - 4, H - trackThick - 4);
-    if (type === 'fire') {
-        // fuel tanks (horizontal on top and bottom)
-        ctx.fillStyle = '#CCC';
-        const tankWidth = W * 0.8 * (turretScale === 1 ? 0.8 : 1);
-        const tankRadius = 4 * (turretScale === 1 ? 0.8 : 1);
-        // top tank
+    const bodyW = W - 4;
+    const bodyH = H - trackThick - 4;
+
+    if (type === 'normal') {
+        // Modern Military Tank
+        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+        grad.addColorStop(0, '#556B2F'); grad.addColorStop(1, '#6B8E23');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        // Armor plates
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(-bodyW/2 + 4, -bodyH/2 + 4, bodyW/2 - 4, bodyH/2 - 4);
+        ctx.fillRect(0, 0, bodyW/2 - 4, bodyH/2 - 4);
+    } else if (type === 'ice') {
+        // Deep Glacial Body
+        const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+        grad.addColorStop(0, '#2980b9'); // Darker blue start
+        grad.addColorStop(0.5, '#6dd5fa');
+        grad.addColorStop(1, '#ffffff'); // Icy white end
+        ctx.fillStyle = grad;
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        
+        // Ice Shards / Cracks pattern
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.beginPath();
-        ctx.ellipse(0, -H/2 + 3, tankWidth/2, tankRadius, 0, 0, 2 * Math.PI);
+        ctx.moveTo(-bodyW/2, -bodyH/2); ctx.lineTo(-bodyW/2 + 10, 0); ctx.lineTo(0, -bodyH/2 + 5);
         ctx.fill();
-        ctx.fillRect(-tankWidth/2, -H/2 + 3 - tankRadius, tankWidth, tankRadius*2);
         ctx.beginPath();
-        ctx.ellipse(0, -H/2 + 3, tankWidth/2, tankRadius, 0, Math.PI, 2 * Math.PI);
+        ctx.moveTo(bodyW/2, bodyH/2); ctx.lineTo(bodyW/2 - 15, 0); ctx.lineTo(0, bodyH/2 - 5);
         ctx.fill();
-        // bottom tank
-        ctx.beginPath();
-        ctx.ellipse(0, H/2 - 3, tankWidth/2, tankRadius, 0, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.fillRect(-tankWidth/2, H/2 - 3 - tankRadius, tankWidth, tankRadius*2);
-        ctx.beginPath();
-        ctx.ellipse(0, H/2 - 3, tankWidth/2, tankRadius, 0, Math.PI, 2 * Math.PI);
-        ctx.fill();
-    }
-    if (type === 'ice') {
-        // ice crystals
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        // crystal 1
-        ctx.beginPath();
-        ctx.moveTo(-W/3, -H/3);
-        ctx.lineTo(-W/3 + 3, -H/3 - 6);
-        ctx.lineTo(-W/3 + 6, -H/3);
-        ctx.closePath();
-        ctx.fill();
-        // crystal 2
-        ctx.beginPath();
-        ctx.moveTo(W/4, -H/4);
-        ctx.lineTo(W/4 + 3, -H/4 - 6);
-        ctx.lineTo(W/4 + 6, -H/4);
-        ctx.closePath();
-        ctx.fill();
-        // crystal 3
-        ctx.beginPath();
-        ctx.moveTo(-W/4, H/4);
-        ctx.lineTo(-W/4 + 3, H/4 + 6);
-        ctx.lineTo(-W/4 + 6, H/4);
-        ctx.closePath();
-        ctx.fill();
-        // crystal 4
-        ctx.beginPath();
-        ctx.moveTo(W/3, H/3);
-        ctx.lineTo(W/3 + 3, H/3 + 6);
-        ctx.lineTo(W/3 + 6, H/3);
-        ctx.closePath();
-        ctx.fill();
-        // crystal 5
-        ctx.beginPath();
-        ctx.moveTo(0, -H/2 + trackThick/2 + 5);
-        ctx.lineTo(3, -H/2 + trackThick/2 - 1);
-        ctx.lineTo(6, -H/2 + trackThick/2 + 5);
-        ctx.closePath();
-        ctx.fill();
-        // frost lines
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        
+        // Crisp outline
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-W/2 + 5, -H/2 + trackThick/2 + 5);
-        ctx.lineTo(-W/2 + 15, -H/2 + trackThick/2 + 15);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(W/2 - 15, H/2 - trackThick/2 - 5);
-        ctx.lineTo(W/2 - 5, H/2 - trackThick/2 - 15);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-W/2 + 10, H/2 - trackThick/2 - 10);
-        ctx.lineTo(-W/2 + 20, H/2 - trackThick/2 - 20);
-        ctx.stroke();
+        ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+    } else if (type === 'fire') {
+        // Magma Body
+        ctx.fillStyle = '#2c2c2c';
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        // Molten cracks
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-bodyW/4, -bodyH/4); ctx.lineTo(0, 0); ctx.lineTo(bodyW/4, -bodyH/4); ctx.stroke();
+        // Heat vents
+        ctx.fillStyle = '#d35400';
+        ctx.fillRect(-bodyW/2 - 2, -5, 4, 10);
+        ctx.fillRect(bodyW/2 - 2, -5, 4, 10);
+    } else if (type === 'toxic') {
+        // Bio-Hazard Body
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        // Warning stripes
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath(); ctx.moveTo(-bodyW/2+5, -bodyH/2); ctx.lineTo(-bodyW/2+10, -bodyH/2); ctx.lineTo(-bodyW/2+5, bodyH/2); ctx.lineTo(-bodyW/2, bodyH/2); ctx.fill();
+    } else if (type === 'plasma') {
+        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+        grad.addColorStop(0, '#bdc3c7'); grad.addColorStop(1, '#7f8c8d');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        // Tech lines
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-bodyW/2+4, -bodyH/2+4, bodyW-8, bodyH-8);
+    } else if (type === 'buratino') {
+        // Heavy Heavy Flamethrower Hull (Dark Camo)
+        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+        grad.addColorStop(0, '#354a21'); grad.addColorStop(0.5, '#4b6b30'); grad.addColorStop(1, '#354a21');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        
+        // Armor panels
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(-bodyW/2 + 10, -bodyH/2 + 2, bodyW - 20, bodyH - 4);
+        
+        // Rear vents
+        ctx.fillStyle = '#1a2612';
+        for(let i=0; i<3; i++) {
+            ctx.fillRect(-bodyW/2 + 2, -6 + i*5, 5, 3);
+        }
+    } else {
+        // Default
+        ctx.fillStyle = color;
+        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
     }
     // hatch outline
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(-W*0.12, -H*0.12, W*0.24, H*0.24);
     // turret
     ctx.rotate(turretAngle || 0);
     const tSize = Math.min(W, H) * 0.35 * turretScale * ((type === 'normal' && turretScale === 1 ? 1.95 : 1) * (type === 'ice' && turretScale === 1 ? 1.8 : 1) * (type === 'fire' && turretScale === 1 ? 1.6 : 1) * (type === 'buratino' ? 1.5 : 1));
-    // Make hull/turret blue for 'fire' type; barrel stays fire-colored below
-    ctx.fillStyle = type === 'ice' ? '#E0FFFF' : type === 'fire' ? '#2D8C6C' : type === 'buratino' ? '#9370DB' : '#5c7041';
-    ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
-    if (type === 'toxic') {
-        // blue metallic turret for toxic tank
-        ctx.fillStyle = '#2ecc71';
+    if (type === 'normal') {
+        // Reinforced Turret
+        const grad = ctx.createLinearGradient(-tSize/2, 0, tSize/2, 0);
+        grad.addColorStop(0, '#556B2F'); grad.addColorStop(1, '#6B8E23');
+        ctx.fillStyle = grad;
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
-        // simple shine
-        ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(-tSize/2 + 2, -tSize/2 + 2, tSize - 4, tSize/3);
+        // Hatch
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.25, 0, Math.PI*2); ctx.fill();
+        // Bolts
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-tSize/2+2, -tSize/2+2, 3, 3);
+        ctx.fillRect(tSize/2-5, -tSize/2+2, 3, 3);
+        ctx.fillRect(-tSize/2+2, tSize/2-5, 3, 3);
+        ctx.fillRect(tSize/2-5, tSize/2-5, 3, 3);
+    } else if (type === 'fire') {
+        // Furnace Turret
+        ctx.fillStyle = '#e74c3c'; // Lighter Red
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        // Heat coils
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-tSize/2+5, 0); ctx.lineTo(tSize/2-5, 0); ctx.stroke();
+    } else if (type === 'toxic') {
+        // Bio-Turret
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath(); ctx.arc(0, 0, tSize/2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#2ecc71';
+        ctx.beginPath(); ctx.arc(0, 0, tSize/3, 0, Math.PI*2); ctx.fill();
+        // Bio symbol center
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath(); ctx.arc(0, 0, tSize/6, 0, Math.PI*2); ctx.fill();
+    } else if (type === 'ice') {
+        // Crystalline Turret to stand out
+        // Darker base for contrast
+        ctx.fillStyle = '#154360'; 
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        // Lighter top facets
+        ctx.fillStyle = '#5dade2';
+        ctx.beginPath(); ctx.moveTo(-tSize/2, -tSize/2); ctx.lineTo(tSize/2, -tSize/2); ctx.lineTo(0, 0); ctx.fill();
+        // Highlight center
+        const rad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize/2);
+        rad.addColorStop(0, '#ffffff'); rad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = rad;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        // Border
+        ctx.strokeStyle = '#aed6f1';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
+    } else if (type === 'buratino') {
+        // Placeholder, overwritten by detailed drawing below
+        ctx.fillStyle = '#4b6b30';
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+    } else if (type === 'plasma') {
+        // Handled below
+    } else {
+        ctx.fillStyle = '#5c7041';
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
     }
-    if (type === 'buratino') {
+    if (type === 'plasma') {
+        // Unique plasma turret: advanced energy containment system
+        
+        // Base metallic structure
+        const baseGrad = ctx.createLinearGradient(-tSize/2, -tSize/2, tSize/2, tSize/2);
+        baseGrad.addColorStop(0, '#F5F5F5');
+        baseGrad.addColorStop(0.5, '#D3D3D3');
+        baseGrad.addColorStop(1, '#A9A9A9');
+        ctx.fillStyle = baseGrad;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        
+        // Energy containment rings
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#8e44ad';
+        ctx.shadowBlur = 10;
+        for (let r = 1; r <= 3; r++) {
+            const ringRadius = (tSize * 0.15) * r;
+            ctx.beginPath();
+            ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        
+        // Central plasma crystal
+        const crystalGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize * 0.2);
+        crystalGrad.addColorStop(0, '#ffffff');
+        crystalGrad.addColorStop(0.3, '#8e44ad');
+        crystalGrad.addColorStop(0.7, '#5b2c6f');
+        crystalGrad.addColorStop(1, 'rgba(142, 68, 173, 0.5)');
+        ctx.fillStyle = crystalGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Crystal facets (geometric cuts)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * tSize * 0.25, Math.sin(angle) * tSize * 0.25);
+            ctx.stroke();
+        }
+        
+        // Energy conduits (connecting rings to crystal)
+        ctx.strokeStyle = '#e91e63';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#e91e63';
+        ctx.shadowBlur = 5;
+        for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2;
+            const startRadius = tSize * 0.15;
+            const endRadius = tSize * 0.18;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(angle) * startRadius, Math.sin(angle) * startRadius);
+            ctx.lineTo(Math.cos(angle) * endRadius, Math.sin(angle) * endRadius);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        
+        // Pulsing energy field
+        const pulse = Math.sin(Date.now() * 0.01) * 0.5 + 0.5;
+        const fieldGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize * 0.4);
+        fieldGrad.addColorStop(0, `rgba(142, 68, 173, ${0.1 + pulse * 0.2})`);
+        fieldGrad.addColorStop(0.5, `rgba(142, 68, 173, ${0.05 + pulse * 0.1})`);
+        fieldGrad.addColorStop(1, 'rgba(142, 68, 173, 0)');
+        ctx.fillStyle = fieldGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Warning indicators (small red lights)
+        ctx.fillStyle = '#e74c3c';
+        const lightPositions = [
+            [-tSize/2 + 5, -tSize/2 + 5],
+            [tSize/2 - 5, -tSize/2 + 5],
+            [-tSize/2 + 5, tSize/2 - 5],
+            [tSize/2 - 5, tSize/2 - 5]
+        ];
+        lightPositions.forEach(([x, y]) => {
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
     }
+
     if (type === 'ice') {
         // ice crystals on turret
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -475,79 +526,124 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.closePath();
         ctx.fill();
     } else if (type === 'buratino') {
-        // textured purple turret to better match the in-game Buratino appearance
-        // base gradient
+        // Heavy Missile System (TOS-1 Buratino style)
+        
+        // Main Launcher Box
         const grad = ctx.createLinearGradient(-tSize/2, -tSize/2, tSize/2, tSize/2);
-        grad.addColorStop(0, '#B58CEB');
-        grad.addColorStop(0.5, '#8F63D6');
-        grad.addColorStop(1, '#6E38B0');
+        grad.addColorStop(0, '#354a21'); grad.addColorStop(0.5, '#4b6b30'); grad.addColorStop(1, '#2e4033');
         ctx.fillStyle = grad;
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        
+        // Metallic Frame
+        ctx.strokeStyle = '#1a2612';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-tSize/2 + 2, -tSize/2 + 2, tSize - 4, tSize - 4);
+        
+        // 3D Side Panels
+        ctx.fillStyle = '#26331a';
+        ctx.fillRect(-tSize/2, -tSize/2, 4, tSize);
+        ctx.fillRect(tSize/2 - 4, -tSize/2, 4, tSize);
 
-        // subtle vertical sheen stripes
-        ctx.fillStyle = 'rgba(255,255,255,0.04)';
-        const stripeW = Math.max(3, Math.floor(tSize / 12));
-        for (let s = -tSize/2; s < tSize/2; s += stripeW * 3) {
-            ctx.fillRect(s, -tSize/2, stripeW, tSize);
-        }
-
-        // panel seams
-        ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(-tSize/2 + 6, -tSize/4); ctx.lineTo(tSize/2 - 6, -tSize/4); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-tSize/2 + 6, tSize/4); ctx.lineTo(tSize/2 - 6, tSize/4); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-tSize/8, -tSize/2 + 6); ctx.lineTo(-tSize/8, tSize/2 - 6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(tSize/8, -tSize/2 + 6); ctx.lineTo(tSize/8, tSize/2 - 6); ctx.stroke();
-
-        // rivets (small dark dots)
-        ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        const rivetGap = Math.max(12, Math.floor(tSize / 6));
-        for (let rx = -tSize/2 + 8; rx <= tSize/2 - 8; rx += rivetGap) {
-            for (let ry = -tSize/2 + 8; ry <= tSize/2 - 8; ry += rivetGap) {
-                ctx.beginPath(); ctx.arc(rx, ry, 1.3, 0, Math.PI * 2); ctx.fill();
-            }
-        }
-
-        // horizontal rocket tubes across the turret (rows x cols)
-        ctx.fillStyle = '#222';
-        const rows = 3;
-        const cols = Math.max(5, Math.floor(tSize / 8));
-        const tubeH = Math.max(4, Math.floor(tSize / (rows * 3)));
-        const inset = 6;
-        const usableW = tSize - inset * 2;
-        const usableH = tSize - inset * 2;
-
-        for (let r = 0; r < rows; r++) {
-            const ry = -tSize/2 + inset + r * (usableH / (rows - 1 || 1));
-            for (let c = 0; c < cols; c++) {
-                const cx = -tSize/2 + inset + c * (usableW / (cols - 1 || 1));
-                const tw = Math.min(usableW / cols * 0.9, tSize * 0.18);
-                // tube base
+        // Rocket Tubes Array
+        const rows = 4;
+        const cols = 5;
+        // Use relative margins to support small icon sizes without negative dimensions
+        const marginX = tSize * 0.2;
+        const marginY = tSize * 0.15;
+        const availableW = Math.max(1, tSize - marginX * 2);
+        const availableH = Math.max(1, tSize - marginY * 2);
+        
+        const tubeSize = Math.max(0.1, Math.min(availableW / cols, availableH / rows) * 0.85);
+        const gapX = cols > 1 ? (availableW - tubeSize * cols) / (cols - 1) : 0;
+        const gapY = rows > 1 ? (availableH - tubeSize * rows) / (rows - 1) : 0;
+        
+        for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+                const tx = -tSize/2 + marginX + c * (tubeSize + gapX) + tubeSize/2;
+                const ty = -tSize/2 + marginY + r * (tubeSize + gapY) + tubeSize/2;
+                
+                const rOuter = Math.max(0, tubeSize/2);
+                
+                // Tube casing
                 ctx.fillStyle = '#222';
-                ctx.fillRect(cx - tw/2, ry - tubeH/2, tw, tubeH);
-                // tube highlight
-                ctx.fillStyle = 'rgba(255,255,255,0.08)';
-                ctx.fillRect(cx - tw/2 + 1, ry - tubeH/2 + 1, tw - 2, Math.max(1, tubeH - 2));
-                // small inner darkness to suggest depth
-                ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                ctx.fillRect(cx + tw/4, ry - tubeH/4, tw/2, tubeH/2);
+                ctx.beginPath(); ctx.arc(tx, ty, rOuter, 0, Math.PI*2); ctx.fill();
+                
+                // Tube interior (black hole)
+                // Use relative subtraction to stay safe at small scales
+                const rInner = Math.max(0, rOuter * 0.75);
+                ctx.fillStyle = '#000';
+                ctx.beginPath(); ctx.arc(tx, ty, rInner, 0, Math.PI*2); ctx.fill();
+                
+                // Missile Warhead (Red/Orange dangerous look)
+                const rWarhead = Math.max(0, rInner * 0.6);
+                if (rWarhead > 0) {
+                    ctx.fillStyle = '#c0392b';
+                    ctx.beginPath(); ctx.arc(tx, ty, rWarhead, 0, Math.PI*2); ctx.fill();
+                }
+                
+                // Highlight
+                if (rOuter > 1.5) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    ctx.beginPath(); ctx.arc(tx - rOuter*0.3, ty - rOuter*0.3, Math.max(0, rOuter*0.25), 0, Math.PI*2); ctx.fill();
+                }
             }
         }
     }
     // barrel
     if (type !== 'buratino') {
-        ctx.fillStyle = type === 'ice' ? '#B0C4DE' : type === 'fire' ? '#FFA500' : '#111';
         const barrelLen = Math.max(20, W * 0.45) * turretScale * (type === 'normal' && turretScale === 1 ? 1.65 : 1);
         const barrelH = Math.max(4, H * 0.08) * turretScale * (type === 'normal' && turretScale === 1 ? 1.75 : 1);
+
         if (type === 'fire') {
-            // special flamethrower nozzle
+            // Flamethrower
+            ctx.fillStyle = '#666'; // Lighter Grey
+            ctx.fillRect(tSize/2 - 2, -barrelH/2, barrelLen*0.7, barrelH);
+            // Wide Nozzle
+            ctx.fillStyle = '#e67e22'; // Lighter Orange
             ctx.beginPath();
-            ctx.moveTo(tSize/2, 0);
-            ctx.lineTo(tSize/2 + barrelLen, -barrelH);
-            ctx.lineTo(tSize/2 + barrelLen, barrelH);
-            ctx.closePath();
+            ctx.moveTo(tSize/2 + barrelLen*0.7, -barrelH);
+            ctx.lineTo(tSize/2 + barrelLen, -barrelH*1.5);
+            ctx.lineTo(tSize/2 + barrelLen, barrelH*1.5);
+            ctx.lineTo(tSize/2 + barrelLen*0.7, barrelH);
             ctx.fill();
+        } else if (type === 'ice') {
+            // Ice Spire
+            // Darker core for visibility
+            ctx.fillStyle = '#1f618d';
+            ctx.beginPath();
+            ctx.moveTo(tSize/2, -barrelH);
+            ctx.lineTo(tSize/2 + barrelLen, 0);
+            ctx.lineTo(tSize/2, barrelH);
+            ctx.fill();
+            // Lighter overlay
+            const val = ctx.createLinearGradient(tSize/2, 0, tSize/2 + barrelLen, 0);
+            val.addColorStop(0, 'rgba(176, 224, 230, 0.5)'); val.addColorStop(1, '#FFFFFF');
+            ctx.fillStyle = val;
+            ctx.beginPath();
+            ctx.moveTo(tSize/2, -barrelH/2); // slightly smaller overlay
+            ctx.lineTo(tSize/2 + barrelLen, 0);
+            ctx.lineTo(tSize/2, barrelH/2);
+            ctx.fill();
+        } else if (type === 'toxic') {
+            // Dual Toxin Injectors
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(tSize/2, -barrelH - 2, barrelLen, 4);
+            ctx.fillRect(tSize/2, barrelH - 2, barrelLen, 4);
+        } else if (type === 'plasma') {
+            // Railgun rails
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillRect(tSize/2, -barrelH - 4, barrelLen, 3);
+            ctx.fillRect(tSize/2, barrelH + 1, barrelLen, 3);
+            // Energy between rails
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.4)';
+            ctx.fillRect(tSize/2, -barrelH, barrelLen, barrelH * 2);
         } else {
+            // Standard Cannon
+            ctx.fillStyle = '#2F4F4F';
             ctx.fillRect(tSize/2 - 2 * turretScale, -barrelH/2, barrelLen, barrelH);
+            // Muzzle brake
+            ctx.fillStyle = '#111';
+            ctx.fillRect(tSize/2 + barrelLen - 4, -barrelH, 4, barrelH*2);
         }
     }
     ctx.restore();
@@ -558,6 +654,74 @@ function drawPreview() {
     // draw tank smaller and square (half size) with larger turret/barrel for preview
     const side = Math.min(previewCanvas.width, previewCanvas.height) / 2; // половина меньшей стороны
     drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 1, tankType);
+}
+// draw frozen icicles overlay at given tank rect (world coordinates)
+function drawFrozenOverlay(ctx, x, y, w, h, life) {
+    // Draw a frost overlay directly on the tank with icicles attached to the top edge
+    const cx = x + w/2;
+    const cy = y + h/2;
+    const alpha = Math.max(0.12, Math.min(0.95, life / 180));
+    ctx.save();
+    // frost tint over body (soft radial gradient)
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, `rgba(200,230,255,${0.02 * alpha})`);
+    g.addColorStop(0.5, `rgba(180,215,240,${0.06 * alpha})`);
+    g.addColorStop(1, `rgba(220,245,255,${0.03 * alpha})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+
+    // subtle crystalline overlay (diagonal streaks)
+    ctx.globalAlpha = 0.6 * alpha;
+    ctx.strokeStyle = 'rgba(220,240,255,0.6)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * (h * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(x - w * 0.1, y + h * 0.2 + off);
+        ctx.lineTo(x + w * 1.05, y + h * 0.05 + off);
+        ctx.stroke();
+    }
+
+    // animated shimmer across the frost
+    const t = (Date.now() % 1000) / 1000;
+    const shimmerX = x + (t * (w + 40)) - 20;
+    ctx.globalCompositeOperation = 'lighter';
+    const shimmerGrad = ctx.createLinearGradient(shimmerX - 20, y, shimmerX + 20, y + h);
+    shimmerGrad.addColorStop(0, `rgba(255,255,255,${0.0 * alpha})`);
+    shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${0.35 * alpha})`);
+    shimmerGrad.addColorStop(1, `rgba(255,255,255,${0.0 * alpha})`);
+    ctx.fillStyle = shimmerGrad;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Draw icicles attached to the top edge and slightly on sides
+    const icCount = Math.max(3, Math.floor(w / 14));
+    const maxLen = Math.min(h * 0.9, 20);
+    for (let i = 0; i < icCount; i++) {
+        const u = (i + 0.5) / icCount;
+        const px = x + u * w + (Math.sin(i * 2 + Date.now() * 0.002) * 2);
+        const baseY = y + 2;
+        const len = maxLen * (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(i * 3 + Date.now() * 0.003)));
+        ctx.beginPath();
+        ctx.moveTo(px - 6, baseY);
+        ctx.lineTo(px + 6, baseY);
+        ctx.lineTo(px, baseY + len);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(180,220,255,${0.9 * alpha})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(220,240,255,${0.95 * alpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // inner highlight
+        ctx.beginPath();
+        ctx.moveTo(px - 2, baseY + len * 0.4);
+        ctx.lineTo(px, baseY + len * 0.2);
+        ctx.lineTo(px + 2, baseY + len * 0.4);
+        ctx.fillStyle = `rgba(255,255,255,${0.6 * alpha})`;
+        ctx.fill();
+    }
+
+    ctx.restore();
 }
 function drawCharacterPreviews() {
     if (normalTankCtx) {
@@ -585,10 +749,10 @@ function drawCharacterPreviews() {
         const side = Math.min(toxicTankPreview.width, toxicTankPreview.height) / 2;
         drawTankOn(toxicTankCtx, toxicTankPreview.width/2, toxicTankPreview.height/2, side, side, '#0000FF', 0, 1, 'toxic');
     }
-    if (biotankCtx) {
-        biotankCtx.clearRect(0,0,biotankPreview.width, biotankPreview.height);
-        const side = Math.min(biotankPreview.width, biotankPreview.height) / 2;
-        drawBiotankPreview(biotankCtx, biotankPreview.width/2, biotankPreview.height/2, side);
+    if (plasmaTankCtx) {
+        plasmaTankCtx.clearRect(0,0,plasmaTankPreview.width, plasmaTankPreview.height);
+        const side = Math.min(plasmaTankPreview.width, plasmaTankPreview.height) / 2;
+        drawTankOn(plasmaTankCtx, plasmaTankPreview.width/2, plasmaTankPreview.height/2, side, side, '#0000FF', 0, 1, 'plasma');
     }
 }
 
@@ -607,7 +771,7 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
 
     if (mode === 'single') {
@@ -629,9 +793,9 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
-        // coarser nav grid for performance
-        navCell = 48;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+        // finer nav grid for better obstacle avoidance
+        navCell = 25;
         generateMap();
         spawnWarMode();
         cameraFollow = true;
@@ -727,6 +891,7 @@ const selectIceTank = document.getElementById('selectIceTank');
 const selectFireTank = document.getElementById('selectFireTank');
 const selectBuratinoTank = document.getElementById('selectBuratinoTank');
 const selectToxicTank = document.getElementById('selectToxicTank');
+const selectPlasmaTank = document.getElementById('selectPlasmaTank');
 if (selectNormalTank) selectNormalTank.addEventListener('click', () => {
     tankType = 'normal';
     tankColor = '#0000FF';
@@ -759,14 +924,11 @@ if (selectToxicTank) selectToxicTank.addEventListener('click', () => {
     tank.megaGasUsed = false;
     if (characterModal) characterModal.style.display = 'none';
 });
-
-const selectBiotank = document.getElementById('selectBiotank');
-if (selectBiotank) selectBiotank.addEventListener('click', () => {
-    tankType = 'biotank';
-    tankColor = '#6B4423';
+if (selectPlasmaTank) selectPlasmaTank.addEventListener('click', () => {
+    tankType = 'plasma';
+    tankColor = '#0000FF';
     tank.color = tankColor;
-    tank.eggLayCount = 0;
-    tank.legAnimOffset = 0;
+    tank.plasmaBlastUsed = 0; // counter for plasma blasts used
     if (characterModal) characterModal.style.display = 'none';
 });
 
@@ -786,29 +948,45 @@ requestAnimationFrame(previewLoop);
  */
 function generateMap() {
     objects = [];
-    const step = 100; // Шаг сетки
+    const step = 50; // Шаг сетки (50px cells for tighter, tile-aligned placement)
     
     // Внешние границы (невидимые, чтобы не выезжать)
     // Внутренние стены
     for (let x = step; x < worldWidth - step; x += step) {
         for (let y = step; y < worldHeight - step; y += step) {
             
-            if (Math.random() > 0.65) {
+            // reduce wall density further: spawn less frequently
+            if (Math.random() > 0.92) {
                 const isVertical = Math.random() > 0.5;
                 const length = Math.floor(Math.random() * 2) + 1; // Длина 1-2 блока
                 
+                // Create dense blocks for walls aligned to grid
+                const blockSize = 50;
+                // Center the wall within the 100x100 cell if possible, or just align top-left
+                // Let's align top-left to x,y but maybe center in the transverse direction?
+                // x, y are on 100px grid.
+                // If we want 50px walls centered in 100px grid: offset = 25.
+                
                 if (isVertical) {
-                    objects.push({
-                        x: x + 25, y: y, 
-                        w: 30, h: length * step - 20, 
-                        type: 'wall', color: '#2b2b2b'
-                    });
+                    const blockCount = (length * step) / blockSize;
+                    for (let i = 0; i < blockCount; i++) {
+                       objects.push({
+                           x: x, 
+                           y: y + i * blockSize, 
+                           w: blockSize, h: blockSize, 
+                           type: 'wall', color: '#2b2b2b'
+                       });
+                    }
                 } else {
-                    objects.push({
-                        x: x, y: y + 25, 
-                        w: length * step - 20, h: 30, 
-                        type: 'wall', color: '#2b2b2b'
-                    });
+                    const blockCount = (length * step) / blockSize;
+                    for (let i = 0; i < blockCount; i++) {
+                       objects.push({
+                           x: x + i * blockSize, 
+                           y: y, 
+                           w: blockSize, h: blockSize, 
+                           type: 'wall', color: '#2b2b2b'
+                       });
+                    }
                 }
             }
         }
@@ -817,9 +995,10 @@ function generateMap() {
     // Ящики в случайных местах, проверяя коллизии со стенами
     for (let x = step; x < worldWidth - step; x += step) {
         for (let y = step; y < worldHeight - step; y += step) {
-            if (Math.random() > 0.8) {
+            // reduce box density further: spawn less frequently
+            if (Math.random() > 0.96) {
                 const newBox = {
-                    x: x + 25, y: y + 25, 
+                    x: x, y: y, 
                     w: 50, h: 50, 
                     type: 'box', color: '#7a4a21'
                 };
@@ -854,10 +1033,15 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
+        // Choose a random tank type for this AI
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma'];
+        const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
-            color: ['#8B0000', '#006400', '#FFD700'][i],
-            hp: 3,
+            color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
+            tankType: tt,
+            hp: (tt === 'fire') ? 6 : 3,
             turretAngle: 0,
             baseAngle: 0,
             speed: 2.5,
@@ -868,7 +1052,10 @@ function generateMap() {
             team: i+1,
             dodgeAccuracy: 0.75 + Math.random() * 0.2,
             paralyzed: false,
-            paralyzedTime: 0
+            paralyzedTime: 0,
+            // ability flags
+            megaGasUsed: false,
+            plasmaBlastUsed: 0
         });
     }
 }
@@ -893,6 +1080,8 @@ function spawnAllies(numTeams, teamSize) {
             allies.push({
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
+                // choose random tank type for ally
+                tankType: (['normal','ice','fire','buratino','toxic','plasma'])[Math.floor(Math.random()*6)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -937,7 +1126,9 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, hp: (tankType === 'fire' || tankType === 'biotank') ? 6 : 3, turretAngle:0, baseAngle:0, speed: tankType === 'biotank' ? 2.5 * 1.5 : 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma'];
+            const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -945,7 +1136,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            enemies.push({ x: base.x + k*44, y: base.y + k*28, w:38, h:38, color: enemyColors[(ci-1)%enemyColors.length], hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
+            const tt = ['normal','ice','fire','buratino','toxic','plasma'][Math.floor(Math.random()*6)];
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
+            enemies.push({ x: base.x + k*44, y: base.y + k*28, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -980,14 +1173,15 @@ function spawnWarMode() {
 
     // place player near team 0 spawn
     const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
-    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
+    tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
 
     // spawn allies (team 0) - 9 bots + player = 10
     for (let i = 0; i < 9; i++) {
             const rx = teamSpawns[0].x + 30 + (i % 3) * 80 + (Math.random() - 0.5) * 30;
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', hp: (tankType === 'fire' || tankType === 'biotank') ? 6 : 3, turretAngle:0, baseAngle:0, speed: tankType === 'biotank' ? 2.5 * 1.5 : 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+        const allyT = (['normal','ice','fire','buratino','toxic','plasma'])[Math.floor(Math.random()*6)];
+        allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', tankType: allyT, hp: (allyT === 'fire') ? 6 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn enemies (team 1) - 10 bots
@@ -995,7 +1189,9 @@ function spawnWarMode() {
         const rx = teamSpawns[1].x - 30 - (i % 4) * 80 + (Math.random() - 0.5) * 40;
         const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
-        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:'#B22222', hp:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+        const tt = ['normal','ice','fire','buratino','toxic','plasma'][Math.floor(Math.random()*6)];
+        const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
+        enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:typeColor[tt] || '#B22222', tankType: tt, hp:(tt==='fire')?6:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
     }
 
     // spawn some barrels and boxes in war map
@@ -1246,9 +1442,12 @@ function explodeGas(bullet, mega = false) {
 }
 
 // Global helper: apply area damage at point (x,y)
-function applyDamage(x, y, R = 30, coef = 1) {
+function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     function applyDamageToTank(t) {
         if (!t) return;
+        // if attackerTeam is set, skip damage to same team (friendly fire protection)
+        if (attackerTeam !== undefined && t.team === attackerTeam) return;
+        
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - x, ty - y);
         if (dist <= R) {
@@ -1519,72 +1718,6 @@ function spawnParticle(x, y) {
     });
 }
 
-// Biotank melee attack: hits nearby enemies/allies with a claw/limb strike
-function biotankMeleeAttack() {
-    const meleeRange = 50; // pixels - how far the limb reaches
-    const meleeDamage = 2; // damage per target
-    const centerX = tank.x + tank.w/2;
-    const centerY = tank.y + tank.h/2;
-    
-    // Create a temporary visual effect (explosion indicator)
-    objects.push({
-        type: 'explosion',
-        x: centerX + Math.cos(tank.turretAngle) * (meleeRange * 0.6),
-        y: centerY + Math.sin(tank.turretAngle) * (meleeRange * 0.6),
-        radius: meleeRange * 0.8,
-        life: 15, // short duration for visual feedback
-        color: '#8B5A00' // dark brown for biomass color
-    });
-    
-    // Check enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i];
-        if (!e || !e.alive) continue;
-        const ex = e.x + (e.w||0)/2;
-        const ey = e.y + (e.h||0)/2;
-        const dist = Math.hypot(ex - centerX, ey - centerY);
-        if (dist <= meleeRange) {
-            e.hp -= meleeDamage;
-            if (e.hp <= 0) {
-                if (currentMode === 'war') { 
-                    e.alive = false; 
-                    e.respawnTimer = 600; 
-                    for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); 
-                } else { 
-                    enemies.splice(i, 1); 
-                    for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2); 
-                }
-            }
-        }
-    }
-    
-    // Check allies (don't hurt own team's allies)
-    for (let i = allies.length - 1; i >= 0; i--) {
-        const a = allies[i];
-        if (!a || !a.alive) continue;
-        if (a.team === tank.team) continue; // don't hurt own team
-        const ax = a.x + (a.w||0)/2;
-        const ay = a.y + (a.h||0)/2;
-        const dist = Math.hypot(ax - centerX, ay - centerY);
-        if (dist <= meleeRange) {
-            a.hp -= meleeDamage;
-            if (a.hp <= 0) {
-                if (currentMode === 'war') { 
-                    a.alive = false; 
-                    a.respawnTimer = 600; 
-                    for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); 
-                } else { 
-                    allies.splice(i, 1); 
-                    for (let k = 0; k < 8; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2); 
-                }
-            }
-        }
-    }
-    
-    // Set cooldown
-    tank.fireCooldown = FIRE_COOLDOWN;
-}
-
 function shoot() {
     if (tankType === 'fire') {
         // Flamethrower: emit a short cone of flame projectiles
@@ -1689,13 +1822,45 @@ function shoot() {
             spawned: 5 // spawn protection for 5 ticks
         });
         tank.fireCooldown = 35; // moderate cooldown
+    } else if (tankType === 'plasma') {
+        // Plasma tank: fires a single piercing plasma bolt
+        const speed = 8;
+        const life = 200; // long range
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 10, h: 10,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: life,
+            owner: 'player',
+            team: 0,
+            type: 'plasma',
+            damage: 3, // 3 HP damage
+            piercing: true // can hit multiple targets
+        });
+        tank.fireCooldown = 120; // 2 second cooldown
+    } else if (tankType === 'ice') {
+        const speed = 5;
+        const life = 100;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 8, h: 8, // Bigger ice shard
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: life,
+            owner: 'player',
+            team: 0,
+            type: 'ice'
+        });
     } else {
         const speed = 5;
         const life = 100;
         bullets.push({
             x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
             y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
-            w: 4, h: 4,
+            w: 9, h: 9, // Even bigger normal shell (1.5x)
             vx: Math.cos(tank.turretAngle) * speed,
             vy: Math.sin(tank.turretAngle) * speed,
             life: life,
@@ -1723,24 +1888,23 @@ function update() {
     // player input only when alive
     if (tank.alive !== false) {
         if (tank.moveCooldown > 0) tank.moveCooldown--;
-        
-        // Biotank has faster movement speed
-        const currentSpeed = tankType === 'biotank' ? tank.speed * 1.5 : tank.speed;
-        
+        // handle paralyze state for player tank
+        if (tank.paralyzed) {
+            tank.paralyzedTime = (tank.paralyzedTime || 0) - 1;
+            if (tank.paralyzedTime <= 0) tank.paralyzed = false;
+            if (tank.frozenEffect) tank.frozenEffect--;
+        } else {
+
         let dx = 0, dy = 0;
-        if (keys['KeyW']) { dy -= currentSpeed; tank.baseAngle = -Math.PI/2; }
-        if (keys['KeyS']) { dy += currentSpeed; tank.baseAngle = Math.PI/2; }
-        if (keys['KeyA']) { dx -= currentSpeed; tank.baseAngle = Math.PI; }
-        if (keys['KeyD']) { dx += currentSpeed; tank.baseAngle = 0; }
+        if (keys['KeyW']) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
+        if (keys['KeyS']) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
+        if (keys['KeyA']) { dx -= tank.speed; tank.baseAngle = Math.PI; }
+        if (keys['KeyD']) { dx += tank.speed; tank.baseAngle = 0; }
         if (dx !== 0 || dy !== 0) {
             if (!tank.artilleryMode) {
                 tank.trackOffset = (tank.trackOffset + 0.2) % 10;
                 moveWithCollision(dx, 0);
                 moveWithCollision(0, dy);
-            }
-            // Animate biotank legs
-            if (tankType === 'biotank') {
-                tank.legAnimOffset += 0.15;
             }
         }
         // turret rotation with arrow keys (same effect as mouse wheel)
@@ -1772,45 +1936,56 @@ function update() {
             }
             keys['KeyE'] = false;
         }
-        // Biotank ability: lay eggs (2 times per battle)
-        if (tankType === 'biotank' && keys['KeyE']) {
-            if (tank.eggLayCount < 2) {
-                // Lay egg at current position
-                const eggX = tank.x + tank.w/2 + (Math.random() - 0.5) * 20;
-                const eggY = tank.y + tank.h/2 + (Math.random() - 0.5) * 20;
-                objects.push({
-                    type: 'egg',
-                    x: eggX,
-                    y: eggY,
-                    w: 10,
-                    h: 12,
-                    hatchTime: 5 * 60, // 5 seconds
-                    owner: 'player'
+        // Plasma blast ability for plasma tank on E (limited uses per battle)
+        if (tankType === 'plasma' && keys['KeyE']) {
+            if ((tank.plasmaBlastUsed || 0) < 2) {
+                // Fire a powerful plasma blast that destroys walls and damages all in line
+                const ang = tank.turretAngle;
+                const sx = tank.x + tank.w/2 + Math.cos(ang) * 25;
+                const sy = tank.y + tank.h/2 + Math.sin(ang) * 25;
+                const speed = 10;
+                bullets.push({
+                    x: sx,
+                    y: sy,
+                    w: 10, h: 10,
+                    vx: Math.cos(ang) * speed,
+                    vy: Math.sin(ang) * speed,
+                    life: 300,
+                    owner: 'player',
+                    team: 0,
+                    type: 'plasmaBlast',
+                    damage: 5, // high damage
+                    piercing: true,
+                    destroysWalls: true // will destroy walls it hits
                 });
-                tank.eggLayCount++;
+                tank.plasmaBlastUsed = (tank.plasmaBlastUsed || 0) + 1;
+                tank.fireCooldown = 60; // short cooldown after blast
             }
             keys['KeyE'] = false;
         }
         if (keys['ArrowRight']) tank.turretAngle += 0.06;
         // Перезарядка игрока
         if (tank.fireCooldown > 0) tank.fireCooldown--;
-        // Стрельба/атака (только если перезарядка закончилась)
+        // Стрельба (только если перезарядка закончилась)
         if (keys['Space'] && tank.fireCooldown <= 0) {
-            if (tankType === 'biotank') {
-                biotankMeleeAttack();
-            } else {
-                shoot();
-            }
+            shoot();
             if (tankType !== 'fire') {
                 keys['Space'] = false;
             }
+        }
         }
     }
     
     // AI для врагов: выбирать ближайшую цель (игрок или другой враг) и действовать
     for (let enemy of enemies) {
         if (!enemy || !enemy.alive) continue;
-        if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; continue; }
+        if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
+        // If in artillery mode, countdown and skip normal AI movement/actions
+        if (enemy.artilleryMode) {
+            enemy.artilleryTimer = (enemy.artilleryTimer || 0) - 1;
+            if (enemy.artilleryTimer <= 0) enemy.artilleryMode = false;
+            continue;
+        }
         
         // Check if enemy is in poison gas and escape if it's enemy poison
         let inEnemyPoison = false;
@@ -1860,11 +2035,17 @@ function update() {
         const potentialTargets = [tank, ...allies, ...otherEnemies];
         const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
         if (targets.length === 0) continue;
-        let nearest = targets[0];
-        let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
-        for (const t of targets) {
-            const d = Math.hypot((t.x + (t.w||0)/2) - (enemy.x + enemy.w/2), (t.y + (t.h||0)/2) - (enemy.y + enemy.h/2));
-            if (d < nd) { nearest = t; nd = d; }
+        // Prefer player targets in war mode when present
+        let nearest = null;
+        if (targets.includes(tank) && tank.alive) {
+            nearest = tank;
+        } else {
+            nearest = targets[0];
+            let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
+            for (const t of targets) {
+                const d = Math.hypot((t.x + (t.w||0)/2) - (enemy.x + enemy.w/2), (t.y + (t.h||0)/2) - (enemy.y + enemy.h/2));
+                if (d < nd) { nearest = t; nd = d; }
+            }
         }
 
         // Башня смотрит на ближайшую цель
@@ -1989,24 +2170,94 @@ function update() {
         const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
         if (enemy.fireCooldown > 0) enemy.fireCooldown--;
         if (enemy.fireCooldown <= 0 && Math.random() < shootProb) {
-            bullets.push({
-                x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25,
-                y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25,
-                w: 4, h: 4,
-                vx: Math.cos(enemy.turretAngle) * 6,
-                vy: Math.sin(enemy.turretAngle) * 6,
-                life: 100,
-                owner: 'enemy',
-                team: enemy.team
-            });
-            enemy.fireCooldown = FIRE_COOLDOWN;
+            const tt = enemy.tankType || 'normal';
+            let b = null;
+            if (tt === 'plasma') {
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:200, owner:'enemy', team: enemy.team, type:'plasma', damage:3, piercing:true };
+            } else if (tt === 'toxic') {
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:6, h:6, vx:Math.cos(enemy.turretAngle)*7, vy:Math.sin(enemy.turretAngle)*7, life:500, owner:'enemy', team: enemy.team, type:'toxic', explodeTimer:45, spawned:5 };
+            } else if (tt === 'fire') {
+                // Fire-type enemy uses flamethrower cone: spawn multiple flame particles
+                const flameCountE = 11;
+                const baseAngE = enemy.turretAngle;
+                const spreadE = 0.7;
+                for (let f = 0; f < flameCountE; f++) {
+                    const t = flameCountE <= 1 ? 0.5 : f / (flameCountE - 1);
+                    const ang = baseAngE + (t - 0.5) * spreadE + (Math.random() - 0.5) * 0.06;
+                    const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 18;
+                    const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 18;
+                    const speed = 3.5 + Math.random() * 1.2;
+                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 20 + Math.floor(Math.random() * 8), damage: 0.28, team: enemy.team, owner: 'enemy' });
+                }
+            } else if (tt === 'buratino') {
+                // Enemy buratino: enter artillery mode, spawn target circle and visual rockets (like player)
+                const distE = 300;
+                const targetXE = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * distE;
+                const targetYE = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * distE;
+                const targetCircleE = { x: targetXE, y: targetYE, radius: 100, color: enemy.color, timer: 180, type: 'targetCircle' };
+                targetCircleE.planned = [];
+                for (let j = 0; j < 4; j++) {
+                    const ang = (j / 4) * Math.PI * 2;
+                    const distP = targetCircleE.radius * 0.3;
+                    targetCircleE.planned.push({ x: targetCircleE.x + Math.cos(ang) * distP, y: targetCircleE.y + Math.sin(ang) * distP, exploded: false });
+                }
+                for (let j = 0; j < 9; j++) {
+                    const ang = (j / 9) * Math.PI * 2;
+                    const distP = targetCircleE.radius * 0.7;
+                    targetCircleE.planned.push({ x: targetCircleE.x + Math.cos(ang) * distP, y: targetCircleE.y + Math.sin(ang) * distP, exploded: false });
+                }
+                objects.push(targetCircleE);
+                enemy.artilleryMode = true;
+                enemy.artilleryTimer = 180;
+                enemy.fireCooldown = 60;
+                const rowsE = 3;
+                const colsE = Math.max(5, Math.floor((Math.min(enemy.w, enemy.h) * 1.5) / 10));
+                const tSizeE = Math.min(enemy.w, enemy.h) * 0.35 * 1.5;
+                const insetE = 6;
+                const usableWE = tSizeE - insetE * 2;
+                const usableHE = tSizeE - insetE * 2;
+                const fanSpreadE = 0.9;
+                for (let r = 0; r < rowsE; r++) {
+                    const ry = -tSizeE/2 + insetE + r * (usableHE / (rowsE - 1 || 1));
+                    for (let c = 0; c < colsE; c++) {
+                        const cx = -tSizeE/2 + insetE + c * (usableWE / (colsE - 1 || 1));
+                        const baseAng = enemy.turretAngle;
+                        const lx = cx;
+                        const ly = ry;
+                        const sx = enemy.x + enemy.w/2 + Math.cos(baseAng) * lx - Math.sin(baseAng) * ly;
+                        const sy = enemy.y + enemy.h/2 + Math.sin(baseAng) * lx + Math.cos(baseAng) * ly;
+                        const colNorm = colsE <= 1 ? 0.5 : c / (colsE - 1);
+                        const rowNorm = rowsE <= 1 ? 0.5 : r / (rowsE - 1);
+                        const angOffset = (colNorm - 0.5) * fanSpreadE + (rowNorm - 0.5) * 0.06;
+                        const angRocket = baseAng + angOffset + (Math.random() - 0.5) * 0.03;
+                        const planned = targetCircleE.planned || [];
+                        const idx = planned.length ? ((r * colsE + c) % planned.length) : 0;
+                        const targetPos = planned.length ? planned[idx] : { x: targetXE + Math.cos(angRocket) * (targetCircleE.radius * 0.5), y: targetYE + Math.sin(angRocket) * (targetCircleE.radius * 0.5) };
+                        const dx = targetPos.x - sx;
+                        const dy = targetPos.y - sy;
+                        const delay = Math.floor((r * colsE + c) * 1 + Math.random() * 2);
+                        const travel = 180;
+                        const vx = dx / travel;
+                        const vy = dy / travel;
+                        const life = travel + 6;
+                        objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos });
+                    }
+                }
+            } else {
+                // normal or ice and other types default to normal shell
+                const w = (tt === 'ice') ? 8 : 9;
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: w, h: w, vx:Math.cos(enemy.turretAngle)*6, vy:Math.sin(enemy.turretAngle)*6, life:100, owner:'enemy', team: enemy.team, type: (tt === 'ice') ? 'ice' : 'normal' };
+            }
+            if (b) bullets.push(b);
+            // Fire-type enemies should be able to spray flames more often
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : FIRE_COOLDOWN;
         }
     }
 
     // AI для союзников — действуют как враги, но цель у них — враги
     for (let ally of allies) {
         if (!ally || !ally.alive) continue;
-        if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; continue; }
+        if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; if (ally.frozenEffect) ally.frozenEffect--; continue; }
         const targets = enemies.filter(e => e && e.alive);
         if (targets.length === 0) continue;
         let nearest = targets[0];
@@ -2082,8 +2333,33 @@ function update() {
             const shootProb = 0.06;
             if (ally.fireCooldown > 0) ally.fireCooldown--;
             if (ally.fireCooldown <= 0 && Math.random() < shootProb) {
-                bullets.push({ x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:4, h:4, vx:Math.cos(ally.turretAngle)*6, vy:Math.sin(ally.turretAngle)*6, life:100, owner:'ally', team: ally.team });
-                ally.fireCooldown = FIRE_COOLDOWN;
+                const tt = ally.tankType || 'normal';
+                let b = null;
+                if (tt === 'plasma') {
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:200, owner:'ally', team: ally.team, type:'plasma', damage:3, piercing:true };
+                } else if (tt === 'toxic') {
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*7, vy:Math.sin(ally.turretAngle)*7, life:500, owner:'ally', team: ally.team, type:'toxic', explodeTimer:45, spawned:5 };
+                } else if (tt === 'fire') {
+                    // Ally fire-type uses flamethrower: spawn flame particles
+                        const flameCountA = 11;
+                    const baseAngA = ally.turretAngle;
+                    const spreadA = 0.7;
+                    for (let f = 0; f < flameCountA; f++) {
+                        const t = flameCountA <= 1 ? 0.5 : f / (flameCountA - 1);
+                        const ang = baseAngA + (t - 0.5) * spreadA + (Math.random() - 0.5) * 0.06;
+                        const sx = ally.x + ally.w/2 + Math.cos(ang) * 18;
+                        const sy = ally.y + ally.h/2 + Math.sin(ang) * 18;
+                        const speed = 3.5 + Math.random() * 1.2;
+                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 20 + Math.floor(Math.random() * 8), damage: 0.28, team: ally.team, owner: 'ally' });
+                    }
+                } else if (tt === 'buratino') {
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*5, vy:Math.sin(ally.turretAngle)*5, life:120, owner:'ally', team: ally.team, type:'rocket' };
+                } else {
+                    const w = (tt === 'ice') ? 8 : 9;
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w: w, h: w, vx:Math.cos(ally.turretAngle)*6, vy:Math.sin(ally.turretAngle)*6, life:100, owner:'ally', team: ally.team, type: (tt === 'ice') ? 'ice' : 'normal' };
+                }
+                if (b) bullets.push(b);
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : FIRE_COOLDOWN;
             }
         }
     }
@@ -2135,9 +2411,9 @@ function update() {
         }
         // normalize bullet rect (bullets stored by center)
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
-        // Check collision with objects (but toxic/megabomb pass through everything)
+        // Check collision with objects (but toxic/megabomb/plasmaBlast pass through everything except walls for plasmaBlast)
         let hit = false;
-        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb') {
+        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast') {
             for (const obj of objects) {
                 if (checkRectCollision(bRect, obj)) {
                     // Toxic/mega bombs pass through walls but explode on other objects
@@ -2163,6 +2439,19 @@ function update() {
                 }
             }
         }
+        // Special handling for plasmaBlast: destroys walls
+        if (b.type === 'plasmaBlast') {
+            for (let j = objects.length - 1; j >= 0; j--) {
+                const obj = objects[j];
+                if (checkRectCollision(bRect, obj) && obj.type === 'wall') {
+                    // Destroy wall permanently
+                    objects.splice(j, 1);
+                    navNeedsRebuild = true;
+                    for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                    // Continue flying, don't remove bullet
+                }
+            }
+        }
         if (!hit) {
             // Check collision with tank (player team = 0) - toxic/megabomb only damage, don't stop
             if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
@@ -2173,10 +2462,19 @@ function update() {
                     // Toxic bombs only damage, don't stop or explode on contact
                     tank.hp -= 5;
                     // continue flying, don't remove bullet
-                } else {
-                    tank.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
-                    bullets.splice(i, 1);
-                }
+                } else if (b.type === 'plasma') {
+                    // Plasma bolt pierces through tank
+                    tank.hp -= b.damage || 3;
+                    // continue flying, don't remove bullet
+                } else if (b.type === 'plasmaBlast') {
+                    // Plasma blast pierces through tank
+                    tank.hp -= b.damage || 5;
+                    // continue flying, don't remove bullet
+                    } else {
+                        tank.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                        if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
+                        bullets.splice(i, 1);
+                    }
                 if (tank.hp <= 0) {
                     for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
                     if (currentMode === 'war') {
@@ -2204,8 +2502,17 @@ function update() {
                         // Toxic bombs only damage, don't stop or explode on contact
                         a.hp = (a.hp || 100) - 5;
                         // continue flying, don't remove bullet
+                    } else if (b.type === 'plasma') {
+                        // Plasma bolt pierces through allies
+                        a.hp = (a.hp || 100) - (b.damage || 3);
+                        // continue flying, don't remove bullet
+                    } else if (b.type === 'plasmaBlast') {
+                        // Plasma blast pierces and damages all in line
+                        a.hp = (a.hp || 100) - (b.damage || 5);
+                        // continue flying, don't remove bullet
                     } else {
                         a.hp = (a.hp || 100) - (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                        if (b.type === 'ice' && a.tankType !== 'ice') { a.paralyzed = true; a.paralyzedTime = 180; a.frozenEffect = 180; }
                         bullets.splice(i, 1);
                     }
                     if (a.hp <= 0) {
@@ -2231,9 +2538,17 @@ function update() {
                         // Toxic bombs only damage, don't stop or explode on contact
                         e.hp -= 5;
                         // continue flying, don't remove bullet
+                    } else if (b.type === 'plasma') {
+                        // Plasma bolt pierces through enemies
+                        e.hp -= b.damage || 3;
+                        // continue flying, don't remove bullet
+                    } else if (b.type === 'plasmaBlast') {
+                        // Plasma blast pierces and damages all in line
+                        e.hp -= b.damage || 5;
+                        // continue flying, don't remove bullet
                     } else {
                         e.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
-                        if (b.type === 'ice') { e.paralyzed = true; e.paralyzedTime = 180; }
+                        if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         bullets.splice(i, 1);
                     }
                     if (e.hp <= 0) {
@@ -2380,93 +2695,6 @@ function update() {
             // gas cloud visual fades over time
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
-        } else if (obj.type === 'egg') {
-            // Egg hatches into spiders after time
-            obj.hatchTime--;
-            if (obj.hatchTime <= 0) {
-                // Spawn 2-3 spiders from egg
-                const spiderCount = 2 + Math.floor(Math.random() * 2);
-                for (let j = 0; j < spiderCount; j++) {
-                    const angle = (j / spiderCount) * Math.PI * 2;
-                    objects.push({
-                        type: 'spider',
-                        x: obj.x,
-                        y: obj.y,
-                        w: 8,
-                        h: 8,
-                        vx: Math.cos(angle) * 3,
-                        vy: Math.sin(angle) * 3,
-                        speed: 3.5,
-                        life: 300, // 5 seconds lifespan
-                        owner: obj.owner,
-                        damage: 2,
-                        attackCooldown: 0
-                    });
-                }
-                objects.splice(i, 1);
-            }
-        } else if (obj.type === 'spider') {
-            // Spider moves and attacks
-            obj.life--;
-            if (obj.life <= 0) {
-                objects.splice(i, 1);
-                continue;
-            }
-            
-            // Find nearest enemy
-            let nearestEnemy = null;
-            let nearestDist = 200;
-            for (const e of enemies) {
-                if (!e || !e.alive) continue;
-                const dist = Math.hypot(e.x - obj.x, e.y - obj.y);
-                if (dist < nearestDist) {
-                    nearestEnemy = e;
-                    nearestDist = dist;
-                }
-            }
-            
-            // Move towards nearest enemy
-            if (nearestEnemy) {
-                const dx = nearestEnemy.x - obj.x;
-                const dy = nearestEnemy.y - obj.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist > 0) {
-                    obj.vx = (dx / dist) * obj.speed;
-                    obj.vy = (dy / dist) * obj.speed;
-                }
-                
-                // Attack if close enough
-                if (dist < 15 && obj.attackCooldown <= 0) {
-                    nearestEnemy.hp -= obj.damage;
-                    obj.attackCooldown = 30;
-                    if (nearestEnemy.hp <= 0) {
-                        nearestEnemy.alive = false;
-                        nearestEnemy.respawnTimer = 600;
-                        for (let k = 0; k < 6; k++) spawnParticle(nearestEnemy.x + nearestEnemy.w/2, nearestEnemy.y + nearestEnemy.h/2);
-                    }
-                }
-            } else {
-                // Random walk if no enemy found
-                obj.vx += (Math.random() - 0.5) * 0.5;
-                obj.vy += (Math.random() - 0.5) * 0.5;
-                const speed = Math.hypot(obj.vx, obj.vy);
-                if (speed > obj.speed) {
-                    obj.vx = (obj.vx / speed) * obj.speed;
-                    obj.vy = (obj.vy / speed) * obj.speed;
-                }
-            }
-            
-            // Move spider
-            obj.x += obj.vx;
-            obj.y += obj.vy;
-            
-            // Keep in bounds
-            if (obj.x < 0) obj.x = 0;
-            if (obj.y < 0) obj.y = 0;
-            if (obj.x > worldWidth) obj.x = worldWidth;
-            if (obj.y > worldHeight) obj.y = worldHeight;
-            
-            if (obj.attackCooldown > 0) obj.attackCooldown--;
         } else if (obj.type === 'visualRocket') {
             // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
             if (obj.delay && obj.delay > 0) {
@@ -2488,7 +2716,7 @@ function update() {
                         // spawn explosion at planned spot and mark it
                         objects.push({ type: 'explosion', x: obj.target.x, y: obj.target.y, radius: 30, life: 30, color: '#FFA500' });
                         obj.target.exploded = true;
-                        applyDamage(obj.target.x, obj.target.y);
+                        applyDamage(obj.target.x, obj.target.y, 30, 1, obj.team);
                         exploded = true;
                     }
                 } else {
@@ -2499,7 +2727,7 @@ function update() {
                             const dist = Math.hypot(obj.x - o.x, obj.y - o.y);
                             if (dist <= o.radius + 6) {
                                 objects.push({ type: 'explosion', x: obj.x, y: obj.y, radius: 30, life: 30, color: '#FFA500' });
-                                applyDamage(obj.x, obj.y);
+                                applyDamage(obj.x, obj.y, 30, 1, obj.team);
                                 exploded = true;
                                 break;
                             }
@@ -2635,7 +2863,7 @@ function update() {
                     // respawn near team spawn
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
-                    tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' || tankType === 'biotank' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                    tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                 }
             }
         }
@@ -2757,10 +2985,15 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(minX, y); ctx.lineTo(maxX, y); ctx.stroke();
     }
 
-    // 2. Частицы пыли
+    // 2. Частицы пыли (Dust Particles)
     particles.forEach(p => {
-        ctx.fillStyle = p.color || `rgba(139, 69, 19, ${p.life})`;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
+        // Soft fading circle instead of square
+        const alpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color || `rgba(139, 69, 19, ${alpha})`;
+        ctx.beginPath();
+        // Use p.size as diameter? Code uses rect(size, size). So radius = size/2
+        ctx.arc(p.x + p.size/2, p.y + p.size/2, p.size/2, 0, Math.PI * 2);
+        ctx.fill();
     });
 
     // 3. Объекты
@@ -2768,12 +3001,38 @@ function draw() {
         ctx.save();
         ctx.fillStyle = obj.color;
         if (obj.type === 'wall') {
-            ctx.shadowBlur = 5; ctx.shadowColor = 'black';
-            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-            ctx.shadowBlur = 0;
-            // Кирпичный узор
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-            ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+            const wx = obj.x, wy = obj.y, ww = obj.w, wh = obj.h;
+            // Metallic/Industrial Block
+            const grad = ctx.createLinearGradient(wx, wy, wx + ww, wy + wh);
+            grad.addColorStop(0, '#555');
+            grad.addColorStop(0.5, '#333');
+            grad.addColorStop(1, '#222');
+            ctx.fillStyle = grad;
+            ctx.fillRect(wx, wy, ww, wh);
+            
+            // Inner bevel
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#666'; 
+            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.stroke();
+            ctx.strokeStyle = '#111';
+            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx+ww, wy+wh); ctx.lineTo(wx, wy+wh); ctx.stroke();
+            
+            // Rivets on corners
+            ctx.fillStyle = '#111';
+            const m = 4;
+            ctx.fillRect(wx+m, wy+m, 2, 2);
+            ctx.fillRect(wx+ww-m-2, wy+m, 2, 2);
+            ctx.fillRect(wx+m, wy+wh-m-2, 2, 2);
+            ctx.fillRect(wx+ww-m-2, wy+wh-m-2, 2, 2);
+            
+            // Simple X brace pattern in center for industrial feel
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(wx + 4, wy + 4); ctx.lineTo(wx + ww - 4, wy + wh - 4);
+            ctx.moveTo(wx + ww - 4, wy + 4); ctx.lineTo(wx + 4, wy + wh - 4);
+            ctx.stroke();
+
         } else if (obj.type === 'barrel') {
             // brown metallic barrel: cylindrical body, steel bands and highlights
             const cx = obj.x + obj.w/2;
@@ -2851,13 +3110,37 @@ function draw() {
             ctx.fill();
             ctx.globalAlpha = 1;
         } else if (obj.type === 'visualRocket') {
-            // draw visual rocket as small black rectangle oriented by velocity
+            // Realistic Buratino Rocket (Barrage Missile)
             ctx.save();
             ctx.translate(obj.x, obj.y);
+            // Align with velocity
             const ang = Math.atan2(obj.vy, obj.vx);
             ctx.rotate(ang);
-            ctx.fillStyle = obj.color || '#000';
-            ctx.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h);
+            
+            // Missile Body (Dark Military Green)
+            ctx.fillStyle = '#3a4a2a'; // darker olive
+            // Slightly longer than regular rocket proportional to width
+            const mw = obj.w; 
+            const mh = obj.h;
+            ctx.fillRect(-mw/2, -mh/2, mw, mh);
+            
+            // Warhead (Red Tip)
+            ctx.fillStyle = '#8b0000';
+            ctx.beginPath();
+            ctx.moveTo(mw/2, -mh/2);
+            ctx.lineTo(mw/2 + mh, 0);
+            ctx.lineTo(mw/2, mh/2);
+            ctx.fill();
+            
+            // Fins
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath(); ctx.moveTo(-mw/2, -mh/2); ctx.lineTo(-mw/2 - 2, -mh/2 - 2); ctx.lineTo(-mw/2 + 2, -mh/2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-mw/2, mh/2); ctx.lineTo(-mw/2 - 2, mh/2 + 2); ctx.lineTo(-mw/2 + 2, mh/2); ctx.fill();
+            
+            // Engine Glow
+            ctx.fillStyle = '#ffaa00';
+            ctx.beginPath(); ctx.arc(-mw/2, 0, 1.5, 0, Math.PI*2); ctx.fill();
+            
             ctx.restore();
         } else if (obj.type === 'gas') {
             // draw gas as soft green circle with alpha based on remaining life
@@ -2867,54 +3150,31 @@ function draw() {
             // subtle inner glow
             ctx.fillStyle = `rgba(120,240,120,${alpha * 0.25})`;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.6, 0, Math.PI * 2); ctx.fill();
-        } else if (obj.type === 'egg') {
-            // Draw egg (oval brown shape)
-            ctx.fillStyle = '#CD853F';
-            ctx.beginPath();
-            ctx.ellipse(obj.x + obj.w/2, obj.y + obj.h/2, obj.w/2, obj.h/2, 0, 0, Math.PI * 2);
-            ctx.fill();
-            // Add highlight
-            ctx.fillStyle = 'rgba(255,255,255,0.4)';
-            ctx.beginPath();
-            ctx.ellipse(obj.x + obj.w/2 - 2, obj.y + obj.h/2 - 2, obj.w/4, obj.h/4, 0, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (obj.type === 'spider') {
-            // Draw spider
-            ctx.fillStyle = '#1a1a1a';
-            // Body
-            ctx.beginPath();
-            ctx.arc(obj.x + obj.w/2, obj.y + obj.h/2, obj.w/2.5, 0, Math.PI * 2);
-            ctx.fill();
-            // Eyes
-            ctx.fillStyle = '#FF0000';
-            ctx.beginPath();
-            ctx.arc(obj.x + obj.w/2 - 2, obj.y + obj.h/2 - 1, 1, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(obj.x + obj.w/2 + 2, obj.y + obj.h/2 - 1, 1, 0, Math.PI * 2);
-            ctx.fill();
-            // Legs
-            ctx.strokeStyle = '#1a1a1a';
-            ctx.lineWidth = 1;
-            for (let i = 0; i < 8; i++) {
-                const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
-                const legX = obj.x + obj.w/2 + Math.cos(angle) * obj.w * 0.8;
-                const legY = obj.y + obj.h/2 + Math.sin(angle) * obj.h * 0.8;
-                ctx.beginPath();
-                ctx.moveTo(obj.x + obj.w/2, obj.y + obj.h/2);
-                ctx.lineTo(legX, legY);
-                ctx.stroke();
-            }
         } else {
-            // Ящик
-            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-            ctx.strokeStyle = '#5a361a';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(obj.x + 5, obj.y + 5, obj.w - 10, obj.h - 10);
+            // Classic Wooden Box
+            const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
+            
+            // 1. Wood Base
+            ctx.fillStyle = '#cd853f'; // Peru
+            ctx.fillRect(bx, by, bw, bh);
+            
+            // 2. Frame (darker border)
+            const border = 4;
+            ctx.strokeStyle = '#8b4513'; // SaddleBrown
+            ctx.lineWidth = border;
+            ctx.strokeRect(bx + border/2, by + border/2, bw - border, bh - border);
+            
+            // 3. Diagonal Cross (Darker)
             ctx.beginPath();
-            ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x+obj.w, obj.y+obj.h);
-            ctx.moveTo(obj.x+obj.w, obj.y); ctx.lineTo(obj.x, obj.y+obj.h);
+            ctx.moveTo(bx + border, by + border);
+            ctx.lineTo(bx + bw - border, by + bh - border);
+            ctx.moveTo(bx + bw - border, by + border);
+            ctx.lineTo(bx + border, by + bh - border);
             ctx.stroke();
+            
+            // 4. Inner grain/details
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(bx + border, by + bh/2 - 1, bw - border*2, 2); // Horizontal center line
         }
         ctx.restore();
     });
@@ -2922,28 +3182,288 @@ function draw() {
     // 3.5. Пули
     bullets.forEach(b => {
         if (b.type === 'fire') {
-            ctx.strokeStyle = '#FF4500';
-            ctx.lineWidth = 6;
+            // Updated Fire: fast moving fireball
+            const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.w/2 + 4);
+            grad.addColorStop(0, 'rgba(255, 255, 100, 0.9)');
+            grad.addColorStop(0.4, 'rgba(255, 100, 0, 0.6)');
+            grad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+            ctx.fillStyle = grad;
             ctx.beginPath();
-            ctx.moveTo(b.x, b.y);
-            ctx.lineTo(b.x - b.vx * 5, b.y - b.vy * 5);
-            ctx.stroke();
+            ctx.arc(b.x, b.y, b.w/2 + 2, 0, Math.PI * 2);
+            ctx.fill();
         } else if (b.type === 'rocket') {
-            ctx.fillStyle = '#FF0000';
-            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+            // Realistic Missile
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            const ang = Math.atan2(b.vy, b.vx);
+            ctx.rotate(ang);
+            // Body
+            ctx.fillStyle = '#556b2f'; // Olive drab
+            ctx.fillRect(-b.w/2, -b.h/2, b.w, b.h);
+            // Nose cone
+            ctx.fillStyle = '#8b0000';
+            ctx.beginPath(); 
+            ctx.moveTo(b.w/2, -b.h/2); 
+            ctx.lineTo(b.w/2 + b.h, 0); 
+            ctx.lineTo(b.w/2, b.h/2); 
+            ctx.fill();
+            // Fins
+            ctx.fillStyle = '#2f4f4f';
+            ctx.beginPath(); ctx.moveTo(-b.w/2, -b.h/2); ctx.lineTo(-b.w/2 - 4, -b.h/2 - 4); ctx.lineTo(-b.w/2 + 4, -b.h/2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-b.w/2, b.h/2); ctx.lineTo(-b.w/2 - 4, b.h/2 + 4); ctx.lineTo(-b.w/2 + 4, b.h/2); ctx.fill();
+            // Trail
+            if (Math.random() > 0.3) {
+                ctx.fillStyle = 'rgba(255, 140, 0, 0.6)';
+                ctx.beginPath(); ctx.arc(-b.w/2 - 2, 0, 3, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
         } else if (b.type === 'smallRocket') {
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+            // Small dark missile
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(Math.atan2(b.vy, b.vx));
+            ctx.fillStyle = '#111';
+            ctx.fillRect(-b.w/2, -b.h/2, b.w, b.h);
+            // Silver tip
+            ctx.fillStyle = '#ccc';
+            ctx.beginPath(); ctx.moveTo(b.w/2, -b.h/2); ctx.lineTo(b.w, 0); ctx.lineTo(b.w/2, b.h/2); ctx.fill();
+            ctx.restore();
+        } else if (b.type === 'plasma') {
+            // Enhanced plasma bolt: larger glowing energy sphere with dynamic effects
+            const radius = b.w / 2;
+            const pulse = Math.sin(Date.now() * 0.02 + b.x * 0.1) * 0.2 + 0.8; // pulsing effect
+            
+            // Outer energy field
+            const outerGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius * pulse);
+            outerGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+            outerGrad.addColorStop(0.2, 'rgba(142, 68, 173, 0.8)');
+            outerGrad.addColorStop(0.6, 'rgba(91, 44, 111, 0.6)');
+            outerGrad.addColorStop(1, 'rgba(142, 68, 173, 0)');
+            ctx.fillStyle = outerGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Inner bright core
+            const coreGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius * 0.6);
+            coreGrad.addColorStop(0, '#ffffff');
+            coreGrad.addColorStop(0.5, '#e8f5e8');
+            coreGrad.addColorStop(1, 'rgba(232, 245, 232, 0)');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Dynamic electric tendrils
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#8e44ad';
+            ctx.shadowBlur = 8;
+            for (let i = 0; i < 4; i++) {
+                const angle = (i / 4) * Math.PI * 2 + (Date.now() * 0.015 + b.x * 0.05) % (Math.PI * 2);
+                const startDist = radius * 0.7;
+                const endDist = radius * 1.3;
+                ctx.beginPath();
+                ctx.moveTo(b.x + Math.cos(angle) * startDist, b.y + Math.sin(angle) * startDist);
+                ctx.quadraticCurveTo(
+                    b.x + Math.cos(angle + 0.3) * radius,
+                    b.y + Math.sin(angle + 0.3) * radius,
+                    b.x + Math.cos(angle + 0.6) * endDist,
+                    b.y + Math.sin(angle + 0.6) * endDist
+                );
+                ctx.stroke();
+            }
+            
+            // Energy particles orbiting the bolt
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + (Date.now() * 0.01) % (Math.PI * 2);
+                const dist = radius * 0.9;
+                const px = b.x + Math.cos(angle) * dist;
+                const py = b.y + Math.sin(angle) * dist;
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.shadowBlur = 0;
+        } else if (b.type === 'plasmaBlast') {
+            // Powerful plasma blast: larger energy sphere with intense effects
+            const radius = b.w / 2;
+            const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.2, '#e91e63');
+            grad.addColorStop(0.5, '#c2185b');
+            grad.addColorStop(0.8, '#880e4f');
+            grad.addColorStop(1, 'rgba(233, 30, 99, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Multiple energy layers
+            const layerGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius * 0.7);
+            layerGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            layerGrad.addColorStop(0.5, 'rgba(233, 30, 99, 0.6)');
+            layerGrad.addColorStop(1, 'rgba(233, 30, 99, 0)');
+            ctx.fillStyle = layerGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius * 0.7, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Intense electric arcs
+            ctx.strokeStyle = '#e91e63';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#e91e63';
+            ctx.shadowBlur = 15;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + (Date.now() * 0.02) % (Math.PI * 2);
+                ctx.beginPath();
+                ctx.moveTo(b.x, b.y);
+                ctx.quadraticCurveTo(
+                    b.x + Math.cos(angle) * radius * 1.5,
+                    b.y + Math.sin(angle) * radius * 1.5,
+                    b.x + Math.cos(angle + 0.5) * radius * 2,
+                    b.y + Math.sin(angle + 0.5) * radius * 2
+                );
+                ctx.stroke();
+            }
+            
+            // Energy particles
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const dist = radius * 0.8;
+                const px = b.x + Math.cos(angle) * dist;
+                const py = b.y + Math.sin(angle) * dist;
+                ctx.beginPath();
+                ctx.arc(px, py, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+        } else if (b.type === 'toxic') {
+            // Bio-Acid Globule
+            const r = Math.max(3, b.w / 2);
+            // Dynamic wobble
+            const wobble = Math.sin(Date.now() * 0.02 + b.x) * 2;
+            
+            // Slime Body
+            const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r + 2);
+            grad.addColorStop(0, '#ccff90');
+            grad.addColorStop(0.6, '#76ff03');
+            grad.addColorStop(1, 'rgba(51, 105, 30, 0.5)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); 
+            // Imperfect circle
+            ctx.ellipse(b.x, b.y, r + wobble*0.2, r - wobble*0.2, Date.now()*0.005, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Bubbles inside
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath(); ctx.arc(b.x - r*0.3, b.y - r*0.3, r*0.25, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(b.x + r*0.4, b.y + r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
+            
+            // Trail drips (particles)
+            if (Math.random() > 0.6) {
+                particles.push({
+                   x: b.x, y: b.y, size: 2, color: '#76ff03', life: 0.5, vx: (Math.random()-0.5), vy: (Math.random()-0.5)
+                });
+            }
+
+        } else if (b.type === 'megabomb') {
+            // High-Tech Kinetic Bomb
+            const r = Math.max(5, b.w / 2);
+            
+            // Casing
+            const grad = ctx.createRadialGradient(b.x - 2, b.y - 2, 0, b.x, b.y, r);
+            grad.addColorStop(0, '#555');
+            grad.addColorStop(1, '#000');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.fill();
+            
+            // Rim light
+            ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke();
+            
+            // Red blinking core
+            const blink = Math.abs(Math.sin(Date.now() * 0.01)); // slow blink
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + blink * 0.5})`;
+            ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.4, 0, Math.PI*2); ctx.fill();
+            
+            // Glint
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.beginPath(); ctx.arc(b.x - r*0.4, b.y - r*0.4, r*0.2, 0, Math.PI*2); ctx.fill();
+            
+        } else if (b.type === 'ice') {
+            // ICE SHARD: Jagged crystal
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            // Spin the shard
+            ctx.rotate(Date.now() * 0.01 + b.x * 0.1);
+            
+            const size = Math.max(b.w, b.h);
+            
+            // Crystal Gradient
+            const grad = ctx.createLinearGradient(-size/2, -size/2, size/2, size/2);
+            grad.addColorStop(0, '#E0F7FA'); // white-cyan
+            grad.addColorStop(0.5, '#4DD0E1'); // cyan
+            grad.addColorStop(1, '#006064'); // dark cyan
+            ctx.fillStyle = grad;
+            
+            // Draw diamond/shard shape
+            ctx.beginPath();
+            ctx.moveTo(0, -size/2 - 2); // top tip
+            ctx.lineTo(size/2, 0);
+            ctx.lineTo(0, size/2 + 2); // bottom tip
+            ctx.lineTo(-size/2, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Inner facet highlights
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(0, -size/2);
+            ctx.lineTo(size/4, -size/4);
+            ctx.lineTo(0, 0);
+            ctx.lineTo(-size/4, -size/4);
+            ctx.fill();
+            
+            // Snow trail steps
+            if (Math.random() > 0.5) {
+                const px = (Math.random() - 0.5) * size;
+                const py = (Math.random() - 0.5) * size;
+                particles.push({
+                   x: b.x + px, y: b.y + py, size: 1.5, color: '#FFFFFF', life: 0.4, vx: 0, vy: 0
+                });
+            }
+            ctx.restore();
+
         } else {
-            ctx.fillStyle = '#ffff00';
+            // Normal Shell: Metallic heavy casing (square but detailed)
+            // Outer casing
+            ctx.fillStyle = '#5c4033'; // Dark bronze
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+            // Inner core
+            ctx.fillStyle = '#fdb813'; // Gold
+            const m = 2;
+            if (b.w > m*2) {
+                ctx.fillRect(b.x - b.w/2 + m, b.y - b.h/2 + m, b.w - m*2, b.h - m*2);
+            }
+            // Shine
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillRect(b.x - b.w/2 + 1, b.y - b.h/2 + 1, b.w/3, b.h/3);
         }
     });
 
     // 3.6. Огненные частицы
     flames.forEach(f => {
-        ctx.fillStyle = '#FF4500';
-        ctx.fillRect(f.x - 2, f.y - 2, 4, 4);
+        // Soft flame particles
+        const r = 4;
+        const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+        grad.addColorStop(0, 'rgba(255, 230, 100, 1)');
+        grad.addColorStop(0.5, 'rgba(255, 100, 0, 0.7)');
+        grad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI*2); ctx.fill();
     });
 
     // reset any drawing state that object rendering might have changed
@@ -2961,15 +3481,9 @@ function draw() {
         if (!a || !a.alive) return;
         ctx.save();
         ctx.translate(a.x + a.w/2, a.y + a.h/2);
-        ctx.fillStyle = '#222';
-        ctx.fillRect(-a.w/2, -a.h/2 - 4, a.w, 8);
-        ctx.fillRect(-a.w/2, a.h/2 - 4, a.w, 8);
-        ctx.fillStyle = a.paralyzed ? '#00FFFF' : (a.color || '#888');
-        ctx.fillRect(-a.w/2 + 4, -a.h/2 + 2, a.w - 8, a.h - 4);
-        ctx.rotate(a.turretAngle || 0);
-        ctx.fillStyle = '#5c7041'; ctx.fillRect(-12, -12, 24, 24);
-        ctx.fillStyle = '#111'; ctx.fillRect(0, -3, 35, 6);
+        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal');
         ctx.restore();
+        if (a.frozenEffect && a.frozenEffect > 0) drawFrozenOverlay(ctx, a.x, a.y, a.w, a.h, a.frozenEffect);
         // small ally tag
         ctx.fillStyle = 'white'; ctx.font = '10px Arial'; ctx.textAlign = 'center';
         ctx.fillText('ALLY', a.x + a.w/2, a.y - 14);
@@ -2979,43 +3493,29 @@ function draw() {
         if (!enemy || !enemy.alive) return;
         ctx.save();
         ctx.translate(enemy.x + enemy.w/2, enemy.y + enemy.h/2);
-        // Гусеницы (верх/низ)
-        ctx.fillStyle = '#222';
-        ctx.fillRect(-enemy.w/2, -enemy.h/2 - 4, enemy.w, 8);
-        ctx.fillRect(-enemy.w/2, enemy.h/2 - 4, enemy.w, 8);
-        // Корпус
-        ctx.fillStyle = enemy.paralyzed ? '#00FFFF' : enemy.color;
-        ctx.fillRect(-enemy.w/2 + 4, -enemy.h/2 + 2, enemy.w - 8, enemy.h - 4);
-        // Башня
-        ctx.rotate(enemy.turretAngle);
-        ctx.fillStyle = '#5c7041';
-        ctx.fillRect(-12, -12, 24, 24);
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, -3, 35, 6);
-        ctx.fillRect(32, -4, 5, 8);
+        drawTankOn(ctx, 0, 0, enemy.w, enemy.h, enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222'), enemy.turretAngle || 0, 1, enemy.tankType || 'normal');
         ctx.restore();
+        if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
         // HP bar
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'green';
-        ctx.fillRect(enemy.x, enemy.y - 10, enemy.w * (enemy.hp / 3), 5);
+        const maxHp = (enemy.tankType === 'fire') ? 6 : 3;
+        ctx.fillRect(enemy.x, enemy.y - 10, enemy.w * (enemy.hp / maxHp), 5);
     });
 
     // 5. Танк
     if (tank.alive !== false) {
         ctx.save();
         ctx.translate(tank.x + tank.w/2, tank.y + tank.h/2);
-        if (tankType === 'biotank') {
-            drawBiotank(ctx, 0, 0, tank.w, tank.h, tank.color, tank.legAnimOffset);
-        } else {
-            drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
-        }
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
         ctx.restore();
+        if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
         // HP bar для игрока
         ctx.fillStyle = 'red';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'green';
-        const maxTankHp = (tankType === 'fire' || tankType === 'biotank') ? 6 : 3;
+        const maxTankHp = (tankType === 'fire') ? 6 : 3;
         ctx.fillRect(tank.x, tank.y - 10, tank.w * (tank.hp / maxTankHp), 5);
     }
     // restore camera transform before drawing UI/modal overlays
