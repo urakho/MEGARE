@@ -12,106 +12,119 @@
     <b>WHEEL</b> — Вращение башни<br>
     <b>SPACE</b> — Выстрел<br>
     <b>F5</b> — Перегенерировать мир<br>
-    <b>Coins: <span id="coinDisplay">0</span></b><br>
+    <b>Coins: <span id="coinDisplay" class="currency-coin">0</span></b><br>
+    <b>Gems: <span id="gemDisplay" class="currency-gem">0</span></b><br>
     <hr>
     <small>Стены создаются сегментами,<br>проезд всегда свободен.</small>
 </div>
 <canvas id="gameCanvas"></canvas>
 
 <!-- Main menu overlay -->
-<div id="mainMenu" style="position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; z-index:10;">
-    <div style="background: rgba(0,0,0,0.88); padding: 28px; border: 2px solid #666; text-align:center; color:#fff; width:440px; border-radius:8px;">
-        <h1 style="margin:6px 0 14px 0; font-size:28px;">Главное меню</h1>
+<div id="mainMenu" class="modal-overlay" style="display:flex;">
+    <div class="modal-box" style="width:440px;">
+        <h1 class="modal-title">Главное меню</h1>
+        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
+            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
+            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
+        </div>
         <div id="previewWrap" style="display:flex;flex-direction:column;align-items:center;">
-            <canvas id="previewCanvas" width="200" height="150" style="background:#2b5a2b; border:2px solid #444; border-radius:4px;"></canvas>
+            <canvas id="previewCanvas" width="200" height="150"></canvas>
             <div id="previewLabel" style="margin-top:10px; font-size:16px; font-weight:600;">Ваш танк</div>
         </div>
-        <button id="startBtn" style="margin-top:16px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">START</button>
-        <button id="shopBtn" style="margin-top:8px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">Магазин</button>
-        <button id="characterBtn" style="margin-top:8px; padding:12px 22px; font-size:18px; cursor:pointer; border-radius:6px;">Персонажи</button>
+        <button id="startBtn" class="btn btn-primary" style="margin-top:16px;">START</button>
+        <button id="shopBtn" class="btn btn-shop" style="margin-top:8px;">Магазин</button>
+        <button id="characterBtn" class="btn btn-char" style="margin-top:8px;">Персонажи</button>
     </div>
 </div>
 
 <!-- Mode selection modal (hidden by default) -->
-<div id="modeModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:11;">
-    <div style="background: rgba(0,0,0,0.95); padding: 22px; border: 2px solid #666; text-align:center; color:#fff; width:520px; border-radius:8px;">
-        <h2 style="margin:6px 0 12px 0; font-size:22px;">Выберите режим</h2>
+<div id="modeModal" class="modal-overlay">
+    <div class="modal-box" style="width:520px;">
+        <h2 class="modal-title">Выберите режим</h2>
         <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
-            <button id="modeSingle" style="padding:10px 18px; width:80%; font-size:16px;">Одиночный режим</button>
-            <button id="modeTeam" style="padding:10px 18px; width:80%; font-size:16px;">Командный режим (4 команды по 2)</button>
-            <button id="modeCancel" style="padding:10px 18px; width:80%; font-size:16px;">Отмена</button>
+            <button id="modeSingle" class="btn btn-mode" style="width:80%;">Одиночный режим</button>
+            <button id="modeTeam" class="btn btn-mode" style="width:80%;">Командный режим (4 команды по 2)</button>
+            <button id="modeCancel" class="btn btn-secondary" style="width:80%;">Отмена</button>
         </div>
     </div>
 </div>
 
 <!-- Shop modal (hidden by default) -->
-<div id="shopModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:12;">
-    <div style="background: linear-gradient(135deg, #2c3e50, #34495e); padding: 30px; border: 4px solid #f39c12; text-align:center; color:#fff; width:600px; border-radius:15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
-        <h2 style="margin:0 0 20px 0; font-size:28px; color:#f39c12;">🛒 Магазин</h2>
+<div id="shopModal" class="modal-overlay">
+    <div class="modal-box" style="width:600px;">
+        <h2 class="modal-title">🛒 Магазин</h2>
+        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
+            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
+            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
+        </div>
         <div style="display:flex; flex-direction:column; gap:15px; align-items:center;">
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
                 <img src="png/cont1.png" alt="Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px;">Контейнер с случайным цветом танка</p>
-                <button id="buyContainer" style="padding:10px 20px; font-size:16px; background:#e74c3c; color:white; border:none; border-radius:8px; cursor:pointer;">Купить (100 монет)</button>
+                <button id="buyContainer" class="btn btn-primary">Купить (100 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
                 <img src="png/super-cont.png" alt="Супер Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px;">Супер Контейнер с редкими бонусами</p>
-                <button id="buySuperContainer" style="padding:10px 20px; font-size:16px; background:#9b59b6; color:white; border:none; border-radius:8px; cursor:pointer;">Купить (200 монет)</button>
+                <button id="buySuperContainer" class="btn btn-char">Купить (500 монет)</button>
             </div>
-            <button id="shopCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Закрыть</button>
+            <button id="shopCancel" class="btn btn-secondary">Закрыть</button>
         </div>
     </div>
 </div>
 
 <!-- Character modal (hidden by default) -->
-<div id="characterModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:13;">
-    <div style="background: linear-gradient(135deg, #34495e, #2c3e50); padding: 30px; border: 4px solid #f39c12; text-align:center; color:#fff; width:600px; border-radius:15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
-        <h2 style="margin:0 0 20px 0; font-size:28px; color:#f39c12;">👤 Персонажи</h2>
+<div id="characterModal" class="modal-overlay">
+    <div class="modal-box" style="width:700px;">
+        <h2 class="modal-title">👤 Персонажи</h2>
+        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
+            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
+            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
+        </div>
         <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center;">
             <div style="text-align:center; width:180px;">
                 <canvas id="normalTankPreview" width="150" height="150" style="border:2px solid #e74c3c; border-radius:8px;"></canvas>
-                <button id="selectNormalTank" style="padding:10px 20px; font-size:16px; background:#e74c3c; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Обычный танк</button>
+                <button id="selectNormalTank" class="btn btn-primary">Обычный</button>
             </div>
             <div style="text-align:center; width:180px;">
                 <canvas id="iceTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
-                <button id="selectIceTank" style="padding:10px 20px; font-size:16px; background:#3498db; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Ледяной танк</button>
+                <button id="selectIceTank" class="btn btn-shop">Ледяной</button>
             </div>
             <div style="text-align:center; width:180px;">
                 <canvas id="fireTankPreview" width="150" height="150" style="border:2px solid #e67e22; border-radius:8px;"></canvas>
-                <button id="selectFireTank" style="padding:10px 20px; font-size:16px; background:#e67e22; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Огнемётчик</button>
+                <button id="selectFireTank" class="btn btn-gold">Огнемётчик</button>
             </div>
             <div style="text-align:center; width:180px;">
                 <canvas id="buratinoTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
-                <button id="selectBuratinoTank" style="padding:10px 20px; font-size:16px; background:#9b59b6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Буратино</button>
+                <button id="selectBuratinoTank" class="btn btn-char">Буратино</button>
             </div>
-                <div style="text-align:center; width:180px;">
-                    <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #00ff9da0; border-radius:8px;"></canvas>
-                    <button id="selectToxicTank" style="padding:10px 20px; font-size:16px; background:#00ff9da0; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Отравляющий</button>
-                </div>
-                <div style="text-align:center; width:180px;">
-                    <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8e44ad; border-radius:8px;"></canvas>
-                    <button id="selectPlasmaTank" style="padding:10px 20px; font-size:16px; background:#8e44ad; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:10px;">Плазменный</button>
-                </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #00ff9da0; border-radius:8px;"></canvas>
+                <button id="selectToxicTank" class="btn btn-primary" style="background:#27ae60">Отравляющий</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8e44ad; border-radius:8px;"></canvas>
+                <button id="selectPlasmaTank" class="btn btn-char">Плазменный</button>
+            </div>
         </div>
-        <button id="characterCancel" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer; margin-top:20px;">Закрыть</button>
+        <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
     </div>
 </div>
 
 <!-- Version Modal -->
-<div id="versionModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:14; background: rgba(0,0,0,0.7);">
-    <div style="background: #2c3e50; border: 4px solid #3498db; border-radius: 12px; padding: 30px; text-align: center; color: white; font-family: 'Courier New', monospace;">
-        <h2 style="margin: 0 0 20px 0; color: #3498db;">MEGARE</h2>
+<div id="versionModal" class="modal-overlay">
+    <div class="modal-box">
+        <h2 class="modal-title">MEGARE</h2>
         <p style="margin: 10px 0; font-size: 18px;">Версия: <span id="versionText" style="color: #2ecc71; font-weight: bold;">0.5.0</span></p>
         <p style="margin: 10px 0; font-size: 14px; color: #bdc3c7;">Retro Tanks with Procedural Walls</p>
-        <button id="versionClose" style="padding:10px 25px; font-size:14px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:20px;">Закрыть</button>
+        <button id="versionClose" class="btn btn-shop" style="margin-top:20px;">Закрыть</button>
     </div>
 </div>
 
 <!-- Tank Detail Modal (hidden by default) -->
-<div id="tankDetailModal" style="position: absolute; inset: 0; display:none; align-items:center; justify-content:center; z-index:15; background: rgba(0,0,0,0.8);">
-    <div style="background: linear-gradient(135deg, #34495e, #2c3e50); padding: 30px; border: 4px solid #f39c12; text-align:center; color:#fff; width:500px; border-radius:15px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
-        <h2 id="tankDetailTitle" style="margin:0 0 20px 0; font-size:28px; color:#f39c12;">Танк</h2>
+<div id="tankDetailModal" class="modal-overlay">
+    <div class="modal-box" style="width:500px;">
+        <h2 id="tankDetailTitle" class="modal-title">Танк</h2>
         <p id="tankDetailRarity" style="margin:0 0 10px 0; font-size:20px; color:#f1c40f;">Редкость</p>
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
             <canvas id="tankDetailCanvas" width="200" height="200" style="border:2px solid #444; border-radius:8px;"></canvas>
@@ -120,8 +133,34 @@
             </div>
         </div>
         <div style="display:flex; gap:20px; justify-content:center;">
-            <button id="tankDetailClose" style="padding:12px 25px; font-size:16px; background:#95a5a6; color:white; border:none; border-radius:8px; cursor:pointer;">Закрыть</button>
-            <button id="tankDetailSelect" style="padding:12px 25px; font-size:16px; background:#e74c3c; color:white; border:none; border-radius:8px; cursor:pointer;">Выбрать</button>
+            <button id="tankDetailClose" class="btn btn-secondary">Закрыть</button>
+            <button id="tankDetailSelect" class="btn btn-primary">Выбрать</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reward Modal -->
+<div id="rewardModal" class="reward-overlay">
+    <div class="reward-box">
+        <div class="reward-title" id="rewardTitle">YOU GOT!</div>
+        <div id="rewardIconContainer">
+            <div class="reward-icon" id="rewardIcon">🏆</div>
+        </div>
+        <div class="reward-amount" id="rewardAmount">+100 Coins</div>
+        <div class="reward-desc" id="rewardDesc">Basic reward</div>
+        <button class="reward-btn" id="rewardClaimBtn">CLAIM</button>
+    </div>
+</div>
+
+<!-- Command modal (hidden by default) -->
+<div id="commandModal" class="modal-overlay">
+    <div class="modal-box" style="width:400px;">
+        <h2 class="modal-title">Командная строка</h2>
+        <p style="text-align:center; margin-bottom:15px;">Введите команду, начинающуюся с /</p>
+        <input type="text" id="commandInput" placeholder="/coins 100" style="width:100%; padding:10px; margin-bottom:15px; background:rgba(0,0,0,0.8); color:white; border:1px solid #fff; border-radius:4px; font-size:16px;">
+        <div style="display:flex; justify-content:space-between;">
+            <button id="commandExecute" class="btn btn-primary">Выполнить</button>
+            <button id="commandCancel" class="btn btn-secondary">Отмена</button>
         </div>
     </div>
 </div>

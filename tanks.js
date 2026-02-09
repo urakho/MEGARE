@@ -30,10 +30,13 @@ const tankDescriptions = {
     },
     buratino: {
         name: "Буратино",
-        description: "Эпический танк с уникальной атакой: запускает серию ракет в направлении башни. Обычные характеристики: 3 HP.",
-        rarity: "Эпический"
+        description: "Тяжелая огнеметная система. Запускает залп из 6 зажигательных ракет. Очень мощный, но медленный.",
+        rarity: "Экзотический"
     }
 };
+
+// Make available globally
+window.tankDescriptions = tankDescriptions;
 
 // Preview canvas global access (defined in main.js, used here)
 
@@ -513,96 +516,62 @@ function drawFrozenOverlay(ctx, x, y, w, h, life) {
 }
 
 function drawCharacterPreviews() {
-    if (normalTankCtx) {
-        normalTankCtx.clearRect(0,0,normalTankPreview.width, normalTankPreview.height);
-        const grad = normalTankCtx.createLinearGradient(0, 0, 0, normalTankPreview.height);
-        grad.addColorStop(0, 'white');
-        grad.addColorStop(1, 'lightgray');
-        normalTankCtx.fillStyle = grad;
-        normalTankCtx.fillRect(0, 0, normalTankPreview.width, normalTankPreview.height);
-        const side = Math.min(normalTankPreview.width, normalTankPreview.height) / 2;
-        drawTankOn(normalTankCtx, normalTankPreview.width/2, normalTankPreview.height/2, side, side, '#0000FF', 0, 1, 'normal');
-        if (window.getCurrentTankType() === 'normal') {
-            normalTankCtx.strokeStyle = 'gold';
-            normalTankCtx.lineWidth = 4;
-            normalTankCtx.strokeRect(2, 2, normalTankPreview.width - 4, normalTankPreview.height - 4);
+    const drawItem = (ctx, canvas, type, baseColor, bgGrad) => {
+        if (!ctx) return;
+        // Проверка на разблокированность (unlockedTanks глобальный массив из main.js)
+        const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes(type);
+        
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        
+        if (isUnlocked) {
+            grad.addColorStop(0, bgGrad[0]);
+            grad.addColorStop(1, bgGrad[1]);
+        } else {
+            // Темный фон для заблокированных
+            grad.addColorStop(0, '#444');
+            grad.addColorStop(1, '#222');
         }
-    }
-    if (iceTankCtx) {
-        iceTankCtx.clearRect(0,0,iceTankPreview.width, iceTankPreview.height);
-        const grad = iceTankCtx.createLinearGradient(0, 0, 0, iceTankPreview.height);
-        grad.addColorStop(0, 'green');
-        grad.addColorStop(1, 'lightgreen');
-        iceTankCtx.fillStyle = grad;
-        iceTankCtx.fillRect(0, 0, iceTankPreview.width, iceTankPreview.height);
-        const side = Math.min(iceTankPreview.width, iceTankPreview.height) / 2;
-        drawTankOn(iceTankCtx, iceTankPreview.width/2, iceTankPreview.height/2, side, side, '#54d1e8', 0, 1, 'ice');
-        if (window.getCurrentTankType() === 'ice') {
-            iceTankCtx.strokeStyle = 'gold';
-            iceTankCtx.lineWidth = 4;
-            iceTankCtx.strokeRect(2, 2, iceTankPreview.width - 4, iceTankPreview.height - 4);
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const side = Math.min(canvas.width, canvas.height) / 2;
+        
+        ctx.save();
+        if (!isUnlocked) {
+            // Делаем черно-белым
+            ctx.filter = 'grayscale(100%) contrast(0.8)';
         }
-    }
-    if (fireTankCtx) {
-        fireTankCtx.clearRect(0,0,fireTankPreview.width, fireTankPreview.height);
-        const grad = fireTankCtx.createLinearGradient(0, 0, 0, fireTankPreview.height);
-        grad.addColorStop(0, 'blue');
-        grad.addColorStop(1, 'lightblue');
-        fireTankCtx.fillStyle = grad;
-        fireTankCtx.fillRect(0, 0, fireTankPreview.width, fireTankPreview.height);
-        const side = Math.min(fireTankPreview.width, fireTankPreview.height) / 2;
-        drawTankOn(fireTankCtx, fireTankPreview.width/2, fireTankPreview.height/2, side, side, '#4c00ff', 0, 1, 'fire');
-        if (window.getCurrentTankType() === 'fire') {
-            fireTankCtx.strokeStyle = 'gold';
-            fireTankCtx.lineWidth = 4;
-            fireTankCtx.strokeRect(2, 2, fireTankPreview.width - 4, fireTankPreview.height - 4);
+        drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, baseColor, 0, 1, type);
+        ctx.restore();
+        
+        if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === type) {
+            ctx.strokeStyle = 'gold';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+        } else if (!isUnlocked) {
+             // Рисуем замок
+             ctx.fillStyle = 'rgba(0,0,0,0.5)';
+             ctx.fillRect(0, 0, canvas.width, canvas.height);
+             
+             ctx.font = '40px Arial';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.fillStyle = '#fff';
+             ctx.shadowColor = 'black';
+             ctx.shadowBlur = 4;
+             ctx.fillText('🔒', canvas.width/2, canvas.height/2);
+             ctx.shadowBlur = 0;
         }
-    }
-    if (buratinoTankCtx) {
-        buratinoTankCtx.clearRect(0,0,buratinoTankPreview.width, buratinoTankPreview.height);
-        const grad = buratinoTankCtx.createLinearGradient(0, 0, 0, buratinoTankPreview.height);
-        grad.addColorStop(0, 'purple');
-        grad.addColorStop(1, 'magenta');
-        buratinoTankCtx.fillStyle = grad;
-        buratinoTankCtx.fillRect(0, 0, buratinoTankPreview.width, buratinoTankPreview.height);
-        const side = Math.min(buratinoTankPreview.width, buratinoTankPreview.height) / 2;
-        drawTankOn(buratinoTankCtx, buratinoTankPreview.width/2, buratinoTankPreview.height/2, side, side, '#0000FF', 0, 1, 'buratino');
-        if (window.getCurrentTankType() === 'buratino') {
-            buratinoTankCtx.strokeStyle = 'gold';
-            buratinoTankCtx.lineWidth = 4;
-            buratinoTankCtx.strokeRect(2, 2, buratinoTankPreview.width - 4, buratinoTankPreview.height - 4);
-        }
-    }
-    if (toxicTankCtx) {
-        toxicTankCtx.clearRect(0,0,toxicTankPreview.width, toxicTankPreview.height);
-        const grad = toxicTankCtx.createLinearGradient(0, 0, 0, toxicTankPreview.height);
-        grad.addColorStop(0, 'yellow');
-        grad.addColorStop(1, 'lightyellow');
-        toxicTankCtx.fillStyle = grad;
-        toxicTankCtx.fillRect(0, 0, toxicTankPreview.width, toxicTankPreview.height);
-        const side = Math.min(toxicTankPreview.width, toxicTankPreview.height) / 2;
-        drawTankOn(toxicTankCtx, toxicTankPreview.width/2, toxicTankPreview.height/2, side, side, '#0000FF', 0, 1, 'toxic');
-        if (window.getCurrentTankType() === 'toxic') {
-            toxicTankCtx.strokeStyle = 'gold';
-            toxicTankCtx.lineWidth = 4;
-            toxicTankCtx.strokeRect(2, 2, toxicTankPreview.width - 4, toxicTankPreview.height - 4);
-        }
-    }
-    if (plasmaTankCtx) {
-        plasmaTankCtx.clearRect(0,0,plasmaTankPreview.width, plasmaTankPreview.height);
-        const grad = plasmaTankCtx.createLinearGradient(0, 0, 0, plasmaTankPreview.height);
-        grad.addColorStop(0, 'red');
-        grad.addColorStop(1, 'lightcoral');
-        plasmaTankCtx.fillStyle = grad;
-        plasmaTankCtx.fillRect(0, 0, plasmaTankPreview.width, plasmaTankPreview.height);
-        const side = Math.min(plasmaTankPreview.width, plasmaTankPreview.height) / 2;
-        drawTankOn(plasmaTankCtx, plasmaTankPreview.width/2, plasmaTankPreview.height/2, side, side, '#0000FF', 0, 1, 'plasma');
-        if (window.getCurrentTankType() === 'plasma') {
-            plasmaTankCtx.strokeStyle = 'gold';
-            plasmaTankCtx.lineWidth = 4;
-            plasmaTankCtx.strokeRect(2, 2, plasmaTankPreview.width - 4, plasmaTankPreview.height - 4);
-        }
-    }
+    };
+
+    drawItem(normalTankCtx, normalTankPreview, 'normal', '#0000FF', ['white', 'lightgray']);
+    drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', ['green', 'lightgreen']);
+    drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', ['blue', 'lightblue']);
+    drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', ['purple', 'magenta']);
+    drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', ['yellow', 'lightyellow']);
+    drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', ['red', 'lightcoral']);
 }
 
 function draw() {

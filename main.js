@@ -12,6 +12,9 @@ canvas.height = DISPLAY_H;
 // World size (can be larger than display for big maps like War)
 let worldWidth = DISPLAY_W, worldHeight = DISPLAY_H;
 
+// Command input element
+const commandInput = document.getElementById('commandInput');
+
 // Глобальное состояние
 const keys = {};
 let objects = [];
@@ -43,12 +46,21 @@ const DODGE_BASE_ACCURACY = 0.8;
 
 // Глобальная валюта
 let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
+let gems = parseInt(localStorage.getItem('tankGems')) || 0;
+// Unlocked tanks list
+let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
+
+function saveProgress() {
+    localStorage.setItem('tankCoins', coins);
+    localStorage.setItem('tankGems', gems);
+    localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
+}
 
 // Camera follow flag
 let cameraFollow = false;
 
 // Тип танка игрока
-let tankType = 'normal';
+let tankType = localStorage.getItem('tankSelected') || 'normal';
 
 const tank = {
     x: 50,
@@ -66,10 +78,13 @@ const tank = {
     fireCooldown: 0
 };
 
+// Apply saved tank type properties immediately if needed
+if (tankType === 'fire') tank.hp = 6;
+
 // Слушатели событий
 window.onkeydown = (e) => {
-    // Не регистрировать клавишу если зажаты модификаторы (Ctrl, Cmd)
-    if (e.ctrlKey || e.metaKey) {
+    // Не регистрировать клавишу если зажаты модификаторы (Ctrl, Cmd) или если фокус на командном вводе
+    if (e.ctrlKey || e.metaKey || document.activeElement === commandInput) {
         return;
     }
     keys[e.code] = true;
@@ -80,11 +95,46 @@ window.onkeydown = (e) => {
             versionModal.style.display = 'flex';
         }
     }
+    // Command input toggle with /
+    if (e.code === 'Slash' && !e.shiftKey && gameState === 'menu') {
+        e.preventDefault();
+        const commandModal = document.getElementById('commandModal');
+        if (commandModal) {
+            commandModal.style.display = 'flex';
+            commandInput.value = '/';
+            commandInput.focus();
+        }
+    }
 };
 window.onkeyup = (e) => keys[e.code] = false;
 window.addEventListener('wheel', (e) => {
     tank.turretAngle += e.deltaY * 0.0015;
 });
+
+// Command input handling
+if (commandInput) {
+    commandInput.addEventListener('keydown', (e) => {
+        if (e.code === 'Enter') {
+            const command = commandInput.value.trim();
+            if (command.startsWith('/coins ')) {
+                const amount = parseInt(command.substring(7));
+                if (!isNaN(amount) && amount > 0) {
+                    coins += amount;
+                    updateCoinDisplay();
+                    localStorage.setItem('tankCoins', coins);
+                    console.log(`Added ${amount} coins. Total: ${coins}`);
+                }
+            }
+            commandInput.value = '';
+            commandInput.style.display = 'none';
+            commandInput.blur();
+        } else if (e.code === 'Escape') {
+            commandInput.value = '';
+            commandInput.style.display = 'none';
+            commandInput.blur();
+        }
+    });
+}
 
 // Preview canvas drawing
 const previewCanvas = document.getElementById('previewCanvas');
@@ -165,24 +215,21 @@ function startGame(mode) {
                 canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
 if (modeTeam) modeTeam.addEventListener('click', () => startGame('team'));
 if (modeSingle) modeSingle.addEventListener('click', () => startGame('single'));
-// War mode button (added dynamically to modal) — insert above Cancel for consistent spacing
+// War mode button (added dynamically to modal)
 const modeWarBtn = document.createElement('button');
 modeWarBtn.id = 'modeWar';
 modeWarBtn.textContent = 'Война (2x10)';
-modeWarBtn.style.padding = '10px 18px';
+modeWarBtn.className = 'btn btn-mode';
 modeWarBtn.style.width = '80%';
-modeWarBtn.style.fontSize = '16px';
 if (modeModal) {
     // find the inner button group (the second div inside the modal container)
-    const container = modeModal.querySelector('div');
+    const container = modeModal.querySelector('div.modal-box');
     const btnGroup = container ? container.querySelector('div') : null;
     if (btnGroup) {
-        // insert the War button before the Cancel button so it appears above
+        // insert the War button before the Cancel button
         const cancelBtn = btnGroup.querySelector('#modeCancel');
         if (cancelBtn) btnGroup.insertBefore(modeWarBtn, cancelBtn);
         else btnGroup.appendChild(modeWarBtn);
-    } else {
-        container.appendChild(modeWarBtn);
     }
 }
 if (modeWarBtn) modeWarBtn.addEventListener('click', () => startGame('war'));
@@ -201,6 +248,71 @@ if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.
 if (characterBtn) characterBtn.addEventListener('click', () => { if (characterModal) { characterModal.style.display = 'flex'; drawCharacterPreviews(); } });
 if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
 if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+
+// Command modal handlers
+const commandModal = document.getElementById('commandModal');
+const commandExecute = document.getElementById('commandExecute');
+const commandCancel = document.getElementById('commandCancel');
+if (commandExecute) commandExecute.addEventListener('click', () => {
+    const command = commandInput.value.trim();
+    if (command.startsWith('/coins ')) {
+        const amount = parseInt(command.substring(7));
+        if (!isNaN(amount) && amount > 0) {
+            coins += amount;
+            updateCoinDisplay();
+            localStorage.setItem('tankCoins', coins);
+            console.log(`Added ${amount} coins. Total: ${coins}`);
+        }
+    } else if (command === '/clear t') {
+        unlockedTanks = ['normal'];
+        localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
+        console.log('All tanks except normal are locked.');
+        // Update UI if character modal is open
+        if (characterModal && characterModal.style.display === 'flex') {
+            drawCharacterPreviews();
+        }
+    }
+    commandInput.value = '';
+    if (commandModal) commandModal.style.display = 'none';
+});
+if (commandCancel) commandCancel.addEventListener('click', () => { commandInput.value = ''; if (commandModal) commandModal.style.display = 'none'; });
+if (commandModal) {
+    commandModal.addEventListener('click', (e) => {
+        if (e.target === commandModal) {
+            commandInput.value = '';
+            commandModal.style.display = 'none';
+        }
+    });
+}
+if (commandInput) {
+    commandInput.addEventListener('keydown', (e) => {
+        if (e.code === 'Enter') {
+            const command = commandInput.value.trim();
+            if (command.startsWith('/coins ')) {
+                const amount = parseInt(command.substring(7));
+                if (!isNaN(amount) && amount > 0) {
+                    coins += amount;
+                    updateCoinDisplay();
+                    localStorage.setItem('tankCoins', coins);
+                    console.log(`Added ${amount} coins. Total: ${coins}`);
+                }
+            } else if (command === '/clear t') {
+                unlockedTanks = ['normal'];
+                localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
+                console.log('All tanks except normal are locked.');
+                // Update UI if character modal is open
+                if (characterModal && characterModal.style.display === 'flex') {
+                    drawCharacterPreviews();
+                }
+            }
+            commandInput.value = '';
+            if (commandModal) commandModal.style.display = 'none';
+        } else if (e.code === 'Escape') {
+            commandInput.value = '';
+            if (commandModal) commandModal.style.display = 'none';
+        }
+    });
+}
 
 // Version modal
 const versionModal = document.getElementById('versionModal');
@@ -225,8 +337,8 @@ if (buyContainer) buyContainer.addEventListener('click', () => {
     }
 });
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => {
-    if (coins >= 200) {
-        coins -= 200;
+    if (coins >= 500) {
+        coins -= 500;
         openSuperContainer();
         updateCoinDisplay();
     } else {
@@ -832,17 +944,152 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     }
 }
 
-// Open super container: give rare bonus
+// Helper for RNG
+function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+const allTanksList = ['normal', 'ice', 'fire', 'buratino', 'toxic', 'plasma'];
+
+// Show reward modal
+function showReward(type, amount, desc, tankType = null) {
+    const modal = document.getElementById('rewardModal');
+    const title = document.getElementById('rewardTitle');
+    const iconContainer = document.getElementById('rewardIconContainer');
+    const amountText = document.getElementById('rewardAmount');
+    const descText = document.getElementById('rewardDesc');
+    const btn = document.getElementById('rewardClaimBtn');
+
+    if (!modal) return;
+
+    modal.classList.add('visible');
+    modal.style.display = 'flex';
+    
+    // Reset icon container
+    iconContainer.innerHTML = '<div class="reward-icon" id="rewardIcon"></div>';
+    const icon = document.getElementById('rewardIcon');
+    icon.style.display = 'block';
+
+    // Default button action
+    btn.onclick = () => {
+        modal.classList.remove('visible');
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+    };
+
+    if (type === 'coins') {
+        title.textContent = 'COINS!';
+        title.style.color = '#f1c40f';
+        icon.textContent = '💰';
+        amountText.textContent = '+' + amount;
+        amountText.style.color = '#f1c40f';
+        descText.textContent = desc || 'Shiny gold coins!';
+    } else if (type === 'gems') {
+        title.textContent = 'GEMS!';
+        title.style.color = '#2ecc71';
+        icon.textContent = '💎';
+        amountText.textContent = '+' + amount;
+        amountText.style.color = '#2ecc71';
+        descText.textContent = desc || 'Rare currency!';
+    } else if (type === 'tank') {
+        title.textContent = 'NEW TANK!';
+        title.style.color = '#e74c3c';
+        const tName = (window.tankDescriptions && window.tankDescriptions[tankType]) ? window.tankDescriptions[tankType].name : tankType.toUpperCase();
+        amountText.textContent = tName;
+        amountText.style.color = '#e74c3c';
+        descText.textContent = desc || 'A powerful new vehicle!';
+        
+        // Draw tank
+        iconContainer.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'new-tank-card';
+        const glow = document.createElement('div');
+        glow.className = 'rarity-glow';
+        const canvas = document.createElement('canvas');
+        canvas.width = 150;
+        canvas.height = 150;
+        canvas.className = 'tank-display';
+        
+        card.appendChild(glow);
+        card.appendChild(canvas);
+        iconContainer.appendChild(card);
+        
+        const ctx = canvas.getContext('2d');
+        if (typeof drawTankOn === 'function') {
+            drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+        }
+    }
+}
+
+const tankPrices = {
+    buratino: 75,
+    toxic: 100,
+    plasma: 150
+};
+
+function unlockRandomTank(fromSuper = false) {
+    const t = allTanksList[Math.floor(Math.random() * allTanksList.length)];
+    if (!unlockedTanks.includes(t)) {
+        unlockedTanks.push(t);
+        saveProgress();
+        showReward('tank', 1, 'Unlocked permanently!', t);
+        updateTankDetailButton(t);
+    } else {
+        const price = tankPrices[t] || 0;
+        const comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
+        gems += comp;
+        saveProgress();
+        showReward('gems', comp, `Duplicate tank ${t.toUpperCase()} converted to Gems!`);
+    }
+}
+
+// Open normal container
+function openContainer() {
+    const r = Math.random() * 100;
+    if (r < 50) { // 50% 20-50 coins
+        const val = getRandomInt(20, 50);
+        coins += val;
+        showReward('coins', val, 'Small stash of gold.');
+    } else if (r < 80) { // 30% 1-3 gems
+        const val = getRandomInt(1, 3);
+        gems += val;
+        showReward('gems', val, 'A few precious stones.');
+    } else if (r < 95) { // 15% 50-100 coins
+        const val = getRandomInt(50, 100);
+        coins += val;
+        showReward('coins', val, 'Big bag of coins!');
+    } else if (r < 99) { // 4% 3-5 gems
+        const val = getRandomInt(3, 5);
+        gems += val;
+        showReward('gems', val, 'Handful of gems!');
+    } else { // 1% Tank
+        unlockRandomTank(false);
+    }
+    updateCoinDisplay();
+}
+
+// Open super container
 function openSuperContainer() {
-    const bonuses = [
-        () => { tank.hp += 1; alert('Редкий бонус: +1 HP!'); },
-        () => { tank.speed += 0.5; alert('Редкий бонус: +Скорость!'); },
-        () => { tank.color = '#FFD700'; alert('Редкий бонус: золотой цвет танка!'); },
-        () => { tank.color = '#FF1493'; alert('Редкий бонус: розовый цвет танка!'); },
-        () => { tank.color = '#00FFFF'; alert('Редкий бонус: циановый цвет танка!'); }
-    ];
-    const bonus = bonuses[Math.floor(Math.random() * bonuses.length)];
-    bonus();
+    const r = Math.random() * 100;
+    if (r < 40) { // 40% 100-200 coins
+        const val = getRandomInt(100, 200);
+        coins += val;
+        showReward('coins', val, 'Super Coin Box!');
+    } else if (r < 70) { // 30% 5-10 gems
+        const val = getRandomInt(5, 10);
+        gems += val;
+        showReward('gems', val, 'Pile of Gems!');
+    } else if (r < 90) { // 20% 200-400 coins
+        const val = getRandomInt(200, 400);
+        coins += val;
+        showReward('coins', val, 'MOUND OF GOLD!');
+    } else if (r < 99) { // 9% 10-20 gems
+        const val = getRandomInt(10, 20);
+        gems += val;
+        showReward('gems', val, 'Treasure chest of Gems!');
+    } else { // 1% Tank
+        unlockRandomTank(true);
+    }
+    updateCoinDisplay();
 }
 
 // Построить навигационную сетку: 1 = блокировано, 0 = свободно
@@ -2141,6 +2388,9 @@ function update() {
     }
     
     // Обновление частиц
+    if (particles.length > 200) {
+        particles.splice(0, particles.length - 200);
+    }
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx; p.y += p.vy;
@@ -2347,9 +2597,20 @@ function moveWithCollision(dx, dy) {
 }
 
 function updateCoinDisplay() {
+    // Game HUD
     const coinDisplay = document.getElementById('coinDisplay');
     if (coinDisplay) coinDisplay.textContent = coins;
-    localStorage.setItem('tankCoins', coins);
+    const gemDisplay = document.getElementById('gemDisplay');
+    if (gemDisplay) gemDisplay.textContent = gems;
+
+    // Menu Displays (IDs: menuCoinDisplay, menuGemDisplay, shopCoinDisplay, etc)
+    const elementsToUpdate = document.querySelectorAll('.currency-coin');
+    elementsToUpdate.forEach(el => el.textContent = coins);
+    
+    const gemElements = document.querySelectorAll('.currency-gem');
+    gemElements.forEach(el => el.textContent = gems);
+
+    saveProgress();
 }
 
 
@@ -2382,13 +2643,18 @@ window.addEventListener('load', () => {
 window.setSelectedTank = function(selectedType) {
     console.log('Setting selected tank to: ' + selectedType);
     tankType = selectedType;
+    localStorage.setItem('tankSelected', selectedType);
     tankColor = '#0000FF';
     tank.color = tankColor;
 
     // Special properties for specific tanks
     if (selectedType === 'fire') {
         tank.hp = 6;
-    } else if (selectedType === 'toxic') {
+    } else {
+        tank.hp = 3; // Reset HP for others
+    }
+    
+    if (selectedType === 'toxic') {
         tank.megaGasUsed = false;
     } else if (selectedType === 'plasma') {
         tank.plasmaBlastUsed = 0; // counter for plasma blasts used
@@ -2403,21 +2669,68 @@ const tankDetailClose = document.getElementById('tankDetailClose');
 const tankDetailSelect = document.getElementById('tankDetailSelect');
 let currentTankType = 'normal'; // To remember which tank is being viewed
 
+const tankGemPrices = {
+    'normal': 0,
+    'ice': 30,
+    'fire': 50,
+    'toxic': 75,
+    'plasma': 100,
+    'buratino': 150
+};
+
+function updateTankDetailButton(type) {
+    const btn = document.getElementById('tankDetailSelect');
+    if (!btn) return;
+    
+    if (unlockedTanks.includes(type)) {
+        btn.textContent = 'Выбрать';
+        btn.style.background = '#e74c3c';
+    } else {
+        const price = tankGemPrices[type] || 9999;
+        btn.textContent = `Купить (${price} 💎)`;
+        if (gems >= price) {
+            btn.style.background = '#27ae60'; // Green for buyable
+        } else {
+            btn.style.background = '#95a5a6'; // Gray for too expensive
+        }
+    }
+}
+
 if (tankDetailClose) tankDetailClose.addEventListener('click', () => {
     hideTankDetail();
 });
 
 if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
-    console.log('Selecting tank, currentTankType: ' + currentTankType);
-    selectTank(currentTankType);
+    if (unlockedTanks.includes(currentTankType)) {
+        selectTank(currentTankType);
+        // Close modal after selection
+        if (document.getElementById('tankDetailModal')) {
+            document.getElementById('tankDetailModal').style.display = 'none';
+        }
+    } else {
+        // Try to buy
+        const price = tankGemPrices[currentTankType];
+        if (gems >= price) {
+            if (confirm(`Купить танк за ${price} гемов?`)) {
+                gems -= price;
+                unlockedTanks.push(currentTankType);
+                saveProgress();
+                updateCoinDisplay();
+                updateTankDetailButton(currentTankType);
+                alert('Танк успешно приобретен!');
+            }
+        } else {
+            alert(`Недостаточно гемов! У вас: ${gems}, нужно: ${price}`);
+        }
+    }
 });
 
 // Override showTankDetail after tanks.js loads
 window.addEventListener('load', () => {
     const originalShowTankDetail = window.showTankDetail;
     window.showTankDetail = function(tankType) {
-        console.log('Overriding showTankDetail for: ' + tankType);
         currentTankType = tankType;
-        originalShowTankDetail(tankType);
+        if (originalShowTankDetail) originalShowTankDetail(tankType);
+        updateTankDetailButton(tankType);
     };
 });
