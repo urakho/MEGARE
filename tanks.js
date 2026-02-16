@@ -40,7 +40,7 @@ const tankDescriptions = {
     },
     illuminat: {
         name: "👁 Иллюминат",
-        description: "Мистическая сущность. Атакует непрерывным лучом, который мгновенно уничтожает препятствия. Способен создавать иллюзии-обманки.",
+        description: "Мистическая сущность. Атакует непрерывным лучом. Способность 'Инверсия Управления' (E) заставляет врагов двигаться в обратную сторону в течение 2 секунд.",
         rarity: "Мифический"
     },
     mirror: {
@@ -1010,10 +1010,16 @@ function draw() {
             ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
             ctx.stroke();
         } else if (obj.type === 'explosion') {
-            ctx.globalAlpha = obj.life / 30;
+            const maxLife = obj.maxLife || 30;
+            const progress = 1 - (obj.life / maxLife);
+            // Ensure radius is positive and alpha valid
+            const r = Math.max(0, obj.radius * progress);
+            const alpha = Math.min(1, Math.max(0, obj.life / maxLife));
+            
+            ctx.globalAlpha = alpha;
             ctx.fillStyle = obj.color;
             ctx.beginPath();
-            ctx.arc(obj.x, obj.y, obj.radius * (1 - obj.life / 30), 0, Math.PI * 2);
+            ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
             ctx.fill();
             ctx.globalAlpha = 1;
         } else if (obj.type === 'visualRocket') {

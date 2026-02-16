@@ -1688,12 +1688,26 @@ function update() {
             if (tank.paralyzedTime <= 0) tank.paralyzed = false;
             if (tank.frozenEffect) tank.frozenEffect--;
         } else {
+        
+        if (tank.invertedControls > 0) {
+            tank.invertedControls--;
+            // Visual confusion
+            if (Math.random() > 0.8) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#8e44ad');
+        }
 
         let dx = 0, dy = 0;
-        if (keys['KeyW']) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
-        if (keys['KeyS']) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
-        if (keys['KeyA']) { dx -= tank.speed; tank.baseAngle = Math.PI; }
-        if (keys['KeyD']) { dx += tank.speed; tank.baseAngle = 0; }
+        let isW = keys['KeyW'], isS = keys['KeyS'], isA = keys['KeyA'], isD = keys['KeyD'];
+        
+        // Handle Control Inversion (Swap inputs)
+        if (tank.invertedControls > 0) {
+            [isW, isS] = [isS, isW];
+            [isA, isD] = [isD, isA];
+        }
+
+        if (isW) { dy -= tank.speed; tank.baseAngle = -Math.PI/2; }
+        if (isS) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
+        if (isA) { dx -= tank.speed; tank.baseAngle = Math.PI; }
+        if (isD) { dx += tank.speed; tank.baseAngle = 0; }
         if (dx !== 0 || dy !== 0) {
             if (!tank.artilleryMode) {
                 tank.trackOffset = (tank.trackOffset + 0.2) % 10;
@@ -1757,40 +1771,43 @@ function update() {
             }
             keys['KeyE'] = false;
         }
-        // Illusions ability for illuminat tank on E (limited uses per battle)
+        // Inversion of Control ability for illuminat tank on E
         if (tankType === 'illuminat' && keys['KeyE']) {
-            if ((tank.illusionsUsed || 0) < 2) {
-                // Create 2 illusion copies
-                for (let i = 0; i < 2; i++) {
-                    const angleOffset = (i === 0 ? -Math.PI/4 : Math.PI/4);
-                    const dist = 50;
-                    let ix = tank.x + Math.cos(tank.turretAngle + angleOffset) * dist;
-                    let iy = tank.y + Math.sin(tank.turretAngle + angleOffset) * dist;
-                    
-                    // Basic check to avoid spawning inside walls - try to pull closer if blocked
-                    if (!canPlaceAt({ x: ix, y: iy, w: tank.w, h: tank.h }, ix, iy)) {
-                        // try closer
-                        ix = tank.x + Math.cos(tank.turretAngle + angleOffset) * 20;
-                        iy = tank.y + Math.sin(tank.turretAngle + angleOffset) * 20;
-                        if (!canPlaceAt({ x: ix, y: iy, w: tank.w, h: tank.h }, ix, iy)) {
-                            // if still blocked, just spawn at player pos (ghosts out)
-                            ix = tank.x; 
-                            iy = tank.y;
-                        }
-                    }
-
-                    illusions.push({
-                        x: ix,
-                        y: iy,
-                        turretAngle: tank.turretAngle,
-                        baseAngle: tank.baseAngle,
-                        life: 360, // 6 seconds
-                        team: 0,
-                        color: tank.color,
-                        tankType: 'illuminat'
-                    });
+            if ((tank.inversionUsed || 0) < 2) {
+                // Inversion of Control: All nearby enemies move in opposite direction
+                const range = 350;
+                const cx = tank.x + tank.w/2;
+                const cy = tank.y + tank.h/2;
+                
+                // Visual Effect Ring
+                objects.push({
+                     type: 'explosion', 
+                     x: cx, y: cy, 
+                     radius: range, 
+                     life: 45, 
+                     maxLife: 45,
+                     color: 'rgba(155, 89, 182, 0.2)' 
+                });
+                 // Visual Particles
+                for (let k=0; k<20; k++) {
+                    const a = Math.random() * Math.PI*2;
+                    const r = range * Math.sqrt(Math.random());
+                    spawnParticle(cx + Math.cos(a)*r, cy + Math.sin(a)*r, '#8e44ad');
                 }
-                tank.illusionsUsed = (tank.illusionsUsed || 0) + 1;
+
+                // Affect Enemies
+                for (const e of enemies) {
+                    const ex = e.x + e.w/2;
+                    const ey = e.y + e.h/2;
+                    if (Math.hypot(ex-cx, ey-cy) <= range) {
+                        e.invertedControls = 120; // 2 seconds
+                        e.confused = 120; // Add confusion for turret spinning too
+                    }
+                }
+                
+                // Affect Allies (if friendly fire/confusion enabled? No, usually beneficial only)
+                
+                tank.inversionUsed = (tank.inversionUsed || 0) + 1;
             }
             keys['KeyE'] = false;
         }
@@ -1833,6 +1850,16 @@ function update() {
       try {
         if (!enemy || !enemy.alive) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
+        
+        // Handle Inverted Controls (AI)
+        let invertAI = false;
+        if (enemy.invertedControls > 0) {
+            enemy.invertedControls--;
+            invertAI = true;
+            // Visual
+            if (Math.random() > 0.9) spawnParticle(enemy.x+enemy.w/2, enemy.y+enemy.h/2, '#8e44ad');
+        }
+
         // If in artillery mode, countdown and skip normal AI movement/actions
         if (enemy.artilleryMode) {
             enemy.artilleryTimer = (enemy.artilleryTimer || 0) - 1;
@@ -1949,11 +1976,16 @@ function update() {
                 const cx = enemy.x + enemy.w/2, cy = enemy.y + enemy.h/2;
                 const toWpX = wp.x - cx, toWpY = wp.y - cy;
                 const distToWp = Math.hypot(toWpX, toWpY);
-                const ang = Math.atan2(toWpY, toWpX);
+                let ang = Math.atan2(toWpY, toWpX);
+                
+                // --- INVERTED CONTROLS - PATH ---
+                // If inverted, enemy tries to move AWAY from waypoint
+                if (invertAI) ang += Math.PI;
+
                 // Дистанция шага — не больше, чем расстояние до точки
                 const moveDist = Math.min(tryDist, distToWp);
                 // If direct path to waypoint is blocked, attempt local sidestep avoidance
-                if (!pathClearFor(enemy, ang, moveDist)) {
+                if (!pathClearFor(enemy, ang, moveDist) && !invertAI) { // Don't block inversion escape if pathblocked (actually inversion just goes backwards so it might go into wall)
                     const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
                     let avoided = false;
                     for (const a of sideAngles) {
@@ -1976,7 +2008,7 @@ function update() {
                 }
                 if (movedAlongPath) {
                     if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) {
-                        enemy.pathIndex++;
+                         if (!invertAI) enemy.pathIndex++; // Only advance path if moving towards it
                     }
                 } else {
                     enemy.stuckCount = (enemy.stuckCount || 0) + 1;
@@ -1986,6 +2018,8 @@ function update() {
             } else {
                 // fallback: старая эвристика (локальные сэмплы углов)
                 enemy.baseAngle = Math.atan2(mdy, mdx);
+                if (invertAI) enemy.baseAngle += Math.PI; // Invert fallback
+
                 const desiredAng = enemy.baseAngle;
                 // Попытка сделать малые шаги в желаемом направлении
                 let moved = false;
