@@ -5,33 +5,48 @@
 const tankDescriptions = {
     normal: {
         name: "Стандартный танк",
-        description: "Базовый танк с обычными снарядами. Имеет стандартные характеристики: 3 HP, обычная стрельба с перезарядкой.",
+        description: "Классическая боевая машина. Сбалансированные характеристики, стандартная 120мм пушка. Идеален для новичков.",
         rarity: "Обычный"
     },
     ice: {
         name: "Ледяной танк",
-        description: "Стреляет ледяными снарядами, которые замораживают врагов. Обычные характеристики: 3 HP, замораживающая стрельба.",
+        description: "Стреляет криогенными осколками, замедляющими врагов. Замораживание делает противников легкой мишенью.",
         rarity: "Редкий"
     },
     fire: {
         name: "Огненный танк",
-        description: "Усиленный танк с 6 HP. Стреляет обычными снарядами, но имеет повышенную живучесть.",
+        description: "Оснащен мощным огнеметом вместо пушки. Сжигает врагов в ближнем бою. Имеет повышенный запас прочности (6 HP).",
         rarity: "Сверхредкий"
     },
     toxic: {
         name: "Токсичный танк",
-        description: "Имеет специальную способность Mega Gas (клавиша E) - бросает мощную бомбу один раз за бой. Обычные характеристики: 3 HP.",
-        rarity: "Легендарный"
+        description: "Запускает канистры с ядовитым газом, создающие опасные зоны. Газ наносит урон всем, кто в нем находится.",
+        rarity: "Эпический"
     },
     plasma: {
         name: "Плазменный танк",
-        description: "Имеет специальную способность Plasma Blast (клавиша E) - мощный выстрел, пробивающий стены, до 2 раз за бой. Обычные характеристики: 3 HP.",
-        rarity: "Мифический"
+        description: "Стреляет высокоэнергетическими плазменными болтами, пробивающими врагов насквозь. Огромный урон, но долгая перезарядка.",
+        rarity: "Легендарный"
     },
     buratino: {
-        name: "Буратино",
-        description: "Тяжелая огнеметная система. Запускает залп из 6 зажигательных ракет. Очень мощный, но медленный.",
+        name: "Буратино (ТОС)",
+        description: "Тяжелая огнеметная система. Запускает залп из 6 неуправляемых ракет по площадям. Медленный, но разрушительный.",
         rarity: "Экзотический"
+    },
+    musical: {
+        name: "Музыкальный танк",
+        description: "Использует звуковые волны, которые рикошетят от стен и дезориентируют врагов. Волна расширяется с расстоянием.",
+        rarity: "Эпический"
+    },
+    illuminat: {
+        name: "👁 Иллюминат",
+        description: "Мистическая сущность. Атакует непрерывным лучом, который мгновенно уничтожает препятствия. Способен создавать иллюзии-обманки.",
+        rarity: "Мифический"
+    },
+    mirror: {
+        name: "🪞 Зеркальный",
+        description: "Мастер адаптации. Копирует тип снарядов противника при получении урона. Способность 'Зеркальный щит' (клавиша E) отражает любые атаки обратно во врага.",
+        rarity: "Легендарный"
     }
 };
 
@@ -43,120 +58,183 @@ window.tankDescriptions = tankDescriptions;
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal') {
     ctx.save();
     ctx.translate(cx, cy);
-    if (type === 'fire') {
-        W *= 1.2; // make wider
-    } else if (type === 'buratino') {
-        W *= 1.1; // make longer
-    }
-    // tracks (top/bottom)
-    const trackThick = Math.max(6, W * 0.12);
-    ctx.fillStyle = type === 'ice' ? '#F0F8FF' : '#222';
-    ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
-    ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
-    if (type === 'buratino') {
-        // track segments
-        ctx.strokeStyle = '#444';
-        ctx.lineWidth = 1;
-        for (let x = -W/2 + 5; x < W/2; x += 10) {
-            ctx.beginPath();
-            ctx.moveTo(x, -H/2 - trackThick/2);
-            ctx.lineTo(x, -H/2 + trackThick/2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, H/2 - trackThick/2);
-            ctx.lineTo(x, H/2 + trackThick/2);
-            ctx.stroke();
-        }
-    }
-    // body (between tracks)
-    const bodyW = W - 4;
-    const bodyH = H - trackThick - 4;
 
-    if (type === 'normal') {
-        // Modern Military Tank
-        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
-        grad.addColorStop(0, '#556B2F'); grad.addColorStop(1, '#6B8E23');
-        ctx.fillStyle = grad;
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        // Armor plates
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(-bodyW/2 + 4, -bodyH/2 + 4, bodyW/2 - 4, bodyH/2 - 4);
-        ctx.fillRect(0, 0, bodyW/2 - 4, bodyH/2 - 4);
-    } else if (type === 'ice') {
-        // Deep Glacial Body
-        const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
-        grad.addColorStop(0, '#2980b9'); // Darker blue start
-        grad.addColorStop(0.5, '#6dd5fa');
-        grad.addColorStop(1, '#ffffff'); // Icy white end
-        ctx.fillStyle = grad;
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        
-        // Ice Shards / Cracks pattern
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.beginPath();
-        ctx.moveTo(-bodyW/2, -bodyH/2); ctx.lineTo(-bodyW/2 + 10, 0); ctx.lineTo(0, -bodyH/2 + 5);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(bodyW/2, bodyH/2); ctx.lineTo(bodyW/2 - 15, 0); ctx.lineTo(0, bodyH/2 - 5);
-        ctx.fill();
-        
-        // Crisp outline
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-    } else if (type === 'fire') {
-        // Magma Body
-        ctx.fillStyle = '#2c2c2c';
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        // Molten cracks
-        ctx.strokeStyle = '#e74c3c';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(-bodyW/4, -bodyH/4); ctx.lineTo(0, 0); ctx.lineTo(bodyW/4, -bodyH/4); ctx.stroke();
-        // Heat vents
-        ctx.fillStyle = '#d35400';
-        ctx.fillRect(-bodyW/2 - 2, -5, 4, 10);
-        ctx.fillRect(bodyW/2 - 2, -5, 4, 10);
-    } else if (type === 'toxic') {
-        // Bio-Hazard Body
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        // Warning stripes
-        ctx.fillStyle = '#f1c40f';
-        ctx.beginPath(); ctx.moveTo(-bodyW/2+5, -bodyH/2); ctx.lineTo(-bodyW/2+10, -bodyH/2); ctx.lineTo(-bodyW/2+5, bodyH/2); ctx.lineTo(-bodyW/2, bodyH/2); ctx.fill();
-    } else if (type === 'plasma') {
-        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
-        grad.addColorStop(0, '#bdc3c7'); grad.addColorStop(1, '#7f8c8d');
-        ctx.fillStyle = grad;
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        // Tech lines
-        ctx.strokeStyle = '#8e44ad';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-bodyW/2+4, -bodyH/2+4, bodyW-8, bodyH-8);
-    } else if (type === 'buratino') {
-        // Heavy Heavy Flamethrower Hull (Dark Camo)
-        const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
-        grad.addColorStop(0, '#354a21'); grad.addColorStop(0.5, '#4b6b30'); grad.addColorStop(1, '#354a21');
-        ctx.fillStyle = grad;
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        
-        // Armor panels
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(-bodyW/2 + 10, -bodyH/2 + 2, bodyW - 20, bodyH - 4);
-        
-        // Rear vents
-        ctx.fillStyle = '#1a2612';
-        for(let i=0; i<3; i++) {
-            ctx.fillRect(-bodyW/2 + 2, -6 + i*5, 5, 3);
-        }
+    // Special Case: Illuminat (Floating Pyramid - No Tracks/Chassis)
+    if (type === 'illuminat') {
+         // See turret section for actual drawing
+         // We do nothing here for body/tracks because the pyramid IS the body and turret united.
     } else {
-        // Default
-        ctx.fillStyle = color;
-        ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        if (type === 'fire') {
+            W *= 1.2; // make wider
+        } else if (type === 'buratino') {
+            W *= 1.1; // make longer
+        }
+        // tracks (top/bottom)
+        const trackThick = Math.max(6, W * 0.12);
+        ctx.fillStyle = type === 'ice' ? '#F0F8FF' : '#222';
+        ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
+        ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
+        if (type === 'buratino') {
+            // track segments
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            for (let x = -W/2 + 5; x < W/2; x += 10) {
+                ctx.beginPath();
+                ctx.moveTo(x, -H/2 - trackThick/2);
+                ctx.lineTo(x, -H/2 + trackThick/2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, H/2 - trackThick/2);
+                ctx.lineTo(x, H/2 + trackThick/2);
+                ctx.stroke();
+            }
+        }
+        // body (between tracks)
+        const bodyW = W - 4;
+        const bodyH = H - trackThick - 4;
+
+        if (type === 'normal') {
+            // Modern Military Tank
+            const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+            grad.addColorStop(0, '#556B2F'); grad.addColorStop(1, '#6B8E23');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Armor plates
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(-bodyW/2 + 4, -bodyH/2 + 4, bodyW/2 - 4, bodyH/2 - 4);
+            ctx.fillRect(0, 0, bodyW/2 - 4, bodyH/2 - 4);
+        } else if (type === 'ice') {
+            // Deep Glacial Body
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#2980b9'); // Darker blue start
+            grad.addColorStop(0.5, '#6dd5fa');
+            grad.addColorStop(1, '#ffffff'); // Icy white end
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            
+            // Ice Shards / Cracks pattern
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2, -bodyH/2); ctx.lineTo(-bodyW/2 + 10, 0); ctx.lineTo(0, -bodyH/2 + 5);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(bodyW/2, bodyH/2); ctx.lineTo(bodyW/2 - 15, 0); ctx.lineTo(0, bodyH/2 - 5);
+            ctx.fill();
+            
+            // Crisp outline
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'fire') {
+            // Magma Body
+            ctx.fillStyle = '#2c2c2c';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Molten cracks
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-bodyW/4, -bodyH/4); ctx.lineTo(0, 0); ctx.lineTo(bodyW/4, -bodyH/4); ctx.stroke();
+            // Heat vents
+            ctx.fillStyle = '#d35400';
+            ctx.fillRect(-bodyW/2 - 2, -5, 4, 10);
+            ctx.fillRect(bodyW/2 - 2, -5, 4, 10);
+        } else if (type === 'toxic') {
+            // Bio-Hazard Body
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Warning stripes
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.moveTo(-bodyW/2+5, -bodyH/2); ctx.lineTo(-bodyW/2+10, -bodyH/2); ctx.lineTo(-bodyW/2+5, bodyH/2); ctx.lineTo(-bodyW/2, bodyH/2); ctx.fill();
+        } else if (type === 'plasma') {
+            const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+            grad.addColorStop(0, '#bdc3c7'); grad.addColorStop(1, '#7f8c8d');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Tech lines
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2+4, -bodyH/2+4, bodyW-8, bodyH-8);
+        } else if (type === 'buratino') {
+            // Heavy Heavy Flamethrower Hull (Dark Camo)
+            const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+            grad.addColorStop(0, '#354a21'); grad.addColorStop(0.5, '#4b6b30'); grad.addColorStop(1, '#354a21');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            
+            // Armor panels
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(-bodyW/2 + 10, -bodyH/2 + 2, bodyW - 20, bodyH - 4);
+            
+            // Rear vents
+            ctx.fillStyle = '#1a2612';
+            for(let i=0; i<3; i++) {
+                ctx.fillRect(-bodyW/2 + 2, -6 + i*5, 5, 3);
+            }
+        } else if (type === 'musical') {
+            // Musical Tank Body (Vibrant and Sound-themed)
+            const grad = ctx.createLinearGradient(-bodyW/2, 0, bodyW/2, 0);
+            grad.addColorStop(0, '#8e44ad'); grad.addColorStop(0.5, '#e91e63'); grad.addColorStop(1, '#8e44ad');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            
+            // Speaker grilles
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(-bodyW/2 + 5, -bodyH/2 + 5, bodyW/2 - 10, bodyH - 10);
+            ctx.fillRect(5, -bodyH/2 + 5, bodyW/2 - 10, bodyH - 10);
+            
+            // Musical notes
+            ctx.fillStyle = '#f1c40f';
+            // Note 1
+            ctx.beginPath();
+            ctx.arc(-bodyW/4, -bodyH/4, 3, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillRect(-bodyW/4 - 1, -bodyH/4 - 8, 2, 6);
+            // Note 2
+            ctx.beginPath();
+            ctx.arc(bodyW/4, bodyH/4, 3, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillRect(bodyW/4 - 1, bodyH/4 - 8, 2, 6);
+        } else if (type === 'illuminat') {
+             // Intentionally empty - body is handled by turret section
+        } else if (type === 'mirror') {
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#bdc3c7'); grad.addColorStop(0.5, '#ecf0f1'); grad.addColorStop(1, '#95a5a6');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Reflection stripes
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2, -bodyH/2); ctx.lineTo(-bodyW/2 + 10, -bodyH/2); ctx.lineTo(bodyW/2, bodyH/2 - 10); ctx.lineTo(bodyW/2, bodyH/2);
+            ctx.fill();
+
+            // Border
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else {
+            // Default
+            ctx.fillStyle = color;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        }
+        // hatch outline
+        if (type !== 'illuminat') {
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(-W*0.12, -H*0.12, W*0.24, H*0.24);
+        }
     }
-    // hatch outline
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(-W*0.12, -H*0.12, W*0.24, H*0.24);
     // turret
-    ctx.rotate(turretAngle || 0);
+    // For Illuminat, we want the body to rotate with turretAngle too (as it's a floating pyramid looking at target)
+    // The previous loop drew body which rotates with baseAngle (implicitly 0 offset in drawTankOn, assuming caller rotated ctx)
+    // Wait, drawTankOn rotates for turret at the end.
+    // So for Illuminat, we just do everything in the turret block.
+
+    if (type === 'illuminat') {
+        // We need to rotate for the pyramid "body" which is actually the turret
+        ctx.rotate(turretAngle || 0);
+    } else {
+        ctx.rotate(turretAngle || 0);
+    }
+    
+    // ... rest of turret drawing ...
     const tSize = Math.min(W, H) * 0.35 * turretScale * ((type === 'normal' && turretScale === 1 ? 1.95 : 1) * (type === 'ice' && turretScale === 1 ? 1.8 : 1) * (type === 'fire' && turretScale === 1 ? 1.6 : 1) * (type === 'buratino' ? 1.5 : 1));
     if (type === 'normal') {
         // Reinforced Turret
@@ -211,6 +289,160 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         // Placeholder, overwritten by detailed drawing below
         ctx.fillStyle = '#4b6b30';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+    } else if (type === 'musical') {
+        // Musical Turret (Speaker with Sound Waves)
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        
+        // Speaker grille
+        ctx.fillStyle = '#34495e';
+        for (let i = 0; i < 5; i++) {
+            ctx.fillRect(-tSize/2 + 2 + i*4, -tSize/2 + 2, 2, tSize - 4);
+        }
+        
+        // Sound waves
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            const radius = (i + 1) * 5;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, -Math.PI/4, Math.PI/4);
+            ctx.stroke();
+        }
+    } else if (type === 'illuminat') {
+        const tSize = Math.max(W, H);
+        // Clean "Eye of Providence" Design
+        
+        ctx.save();
+        // Rotate -90 degrees (point LEFT/Opposite relative to standard/previous)
+        // Original tip was UP (0, -Y). Previous edit was +90 (Right). User wants opposite of current.
+        ctx.rotate(-Math.PI / 2);
+
+        // Subtle mystical aura
+        ctx.shadowColor = '#f1c40f';
+        ctx.shadowBlur = 10;
+
+        // --- The Pyramid ---
+        const pSize = tSize * 0.85;
+        
+        // Solid Golden Triangle (No bricks, clean)
+        const goldGrad = ctx.createLinearGradient(0, -pSize/2, 0, pSize/2);
+        goldGrad.addColorStop(0, '#f1c40f');   // Bright Gold
+        goldGrad.addColorStop(1, '#f39c12');   // Darker Gold
+        ctx.fillStyle = goldGrad;
+        
+        ctx.beginPath();
+        // Equilateral-ish triangle
+        ctx.moveTo(0, -pSize * 0.6); 
+        ctx.lineTo(pSize * 0.6, pSize * 0.45);
+        ctx.lineTo(-pSize * 0.6, pSize * 0.45);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Sharp black outline
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // --- The All-Seeing Eye ---
+        // Levitating Capstone seaparated by a gap
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.moveTo(-pSize * 0.6, pSize * 0.45 - pSize * 0.35); // line across
+        ctx.lineTo(pSize * 0.6, pSize * 0.45 - pSize * 0.35);
+        // Wait, cutting a line is hard with destination-out on filled path.
+        // Let's just draw the capstone separate.
+        ctx.globalCompositeOperation = 'source-over';
+        
+        // Draw the capstone triangle (Tip)
+        const capY = -pSize * 0.6;
+        const capBaseY = -pSize * 0.2;
+        
+        // Floating effect
+        const floatOffset = Math.sin(Date.now() * 0.003) * 3;
+        
+        ctx.save();
+        ctx.translate(0, floatOffset);
+        
+        // Capstone Glow
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 15;
+        
+        ctx.fillStyle = '#fff'; // White glowing capstone
+        ctx.beginPath();
+        ctx.moveTo(0, capY - 5);
+        ctx.lineTo(pSize * 0.35, capBaseY - 5);
+        ctx.lineTo(-pSize * 0.35, capBaseY - 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // The Eye itself inside the capstone
+        ctx.fillStyle = '#00ffff'; // Cyan Eye
+        ctx.beginPath();
+        ctx.arc(0, (capY + capBaseY)/2 - 5, pSize * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Pupil
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(0, (capY + capBaseY)/2 - 5, pSize * 0.04, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+
+        // --- Floating Runes ---
+        // Rotating ring of runes
+        ctx.save();
+        ctx.rotate(Date.now() * 0.001);
+        ctx.strokeStyle = 'rgba(241, 196, 15, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 0;
+        const ringR = pSize * 0.7;
+        ctx.beginPath();
+        ctx.arc(0, 0, ringR, 0, Math.PI*2);
+        ctx.stroke();
+        
+        // 3 small dots on ring
+        for(let k=0; k<3; k++) {
+            const ra = (k/3) * Math.PI*2;
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(Math.cos(ra)*ringR, Math.sin(ra)*ringR, 2, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.restore();
+    } else if (type === 'mirror') {
+        // Mirror Turret (Prism/Reflective)
+        const grad = ctx.createLinearGradient(-tSize/2, -tSize/2, tSize/2, tSize/2);
+        grad.addColorStop(0, '#bdc3c7'); 
+        grad.addColorStop(0.5, '#ecf0f1'); 
+        grad.addColorStop(1, '#7f8c8d');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        
+        // Reflective sheen
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.moveTo(-tSize/2, -tSize/2);
+        ctx.lineTo(0, -tSize/2);
+        ctx.lineTo(tSize/2, tSize/2);
+        ctx.lineTo(-tSize/2, tSize/2);
+        ctx.fill();
+        
+        // Crystal core
+        ctx.fillStyle = '#3498db';
+        ctx.beginPath();
+        ctx.moveTo(0, -tSize/4);
+        ctx.lineTo(tSize/4, 0);
+        ctx.lineTo(0, tSize/4);
+        ctx.lineTo(-tSize/4, 0);
+        ctx.fill();
+
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
     } else if (type === 'plasma') {
         // Handled below
     } else {
@@ -434,8 +666,42 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Energy between rails
             ctx.fillStyle = 'rgba(142, 68, 173, 0.4)';
             ctx.fillRect(tSize/2, -barrelH, barrelLen, barrelH * 2);
+        } else if (type === 'musical') {
+            // Sound Horn
+            ctx.fillStyle = '#34495e';
+            ctx.beginPath();
+            ctx.moveTo(tSize/2, -barrelH/2);
+            ctx.lineTo(tSize/2 + barrelLen, -barrelH);
+            ctx.lineTo(tSize/2 + barrelLen, barrelH);
+            ctx.lineTo(tSize/2, barrelH/2);
+            ctx.fill();
+            // Sound waves emanating
+            ctx.strokeStyle = '#f1c40f';
+            ctx.lineWidth = 1;
+            for (let i = 1; i <= 3; i++) {
+                const offset = i * 8;
+                ctx.beginPath();
+                ctx.arc(tSize/2 + offset, 0, 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        } else if (type === 'mirror') {
+             // Mirror Turret (Smooth Chrome)
+             const barrelLen = Math.min(W, H) * 0.7 * turretScale;
+             const barrelH = Math.min(W, H) * 0.16 * turretScale;
+             
+             // Rails
+             const grad = ctx.createLinearGradient(0, -barrelH, 0, barrelH);
+             grad.addColorStop(0, '#bdc3c7'); grad.addColorStop(0.5, '#ecf0f1'); grad.addColorStop(1, '#95a5a6');
+             ctx.fillStyle = grad;
+             ctx.fillRect(tSize/2, -barrelH/2, barrelLen, barrelH);
+             
+             // Reflective ring at end
+             ctx.fillStyle = '#fff';
+             ctx.fillRect(tSize/2 + barrelLen - 4, -barrelH/2 - 2, 4, barrelH + 4);
         } else {
             // Standard Cannon
+            const barrelLen = Math.min(W, H) * 0.6 * turretScale;
+            const barrelH = Math.min(W, H) * 0.14 * turretScale;
             ctx.fillStyle = '#2F4F4F';
             ctx.fillRect(tSize/2 - 2 * turretScale, -barrelH/2, barrelLen, barrelH);
             // Muzzle brake
@@ -572,6 +838,9 @@ function drawCharacterPreviews() {
     drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', ['purple', 'magenta']);
     drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', ['yellow', 'lightyellow']);
     drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', ['red', 'lightcoral']);
+    drawItem(musicalTankCtx, musicalTankPreview, 'musical', '#0000FF', ['pink', 'lightpink']);
+    drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', ['gold', 'yellow']);
+    drawItem(mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF', ['silver', 'lightgray']);
 }
 
 function draw() {
@@ -1024,6 +1293,185 @@ function draw() {
             }
             ctx.restore();
 
+        } else if (b.type === 'musical') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            const angle = Math.atan2(b.vy, b.vx);
+            ctx.rotate(angle);
+            
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = '#00ffff';
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            
+            // Draw animated wave arcs
+            const time = Date.now() / 100;
+            const size = b.w || 12;
+            
+            // Main arc
+            ctx.beginPath();
+            ctx.arc(-2, 0, size/2, -Math.PI/2.5, Math.PI/2.5);
+            ctx.stroke();
+            
+            // Inner arc
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(-5, 0, size/3, -Math.PI/3, Math.PI/3);
+            ctx.stroke();
+            
+            // Core
+            ctx.fillStyle = '#e0ffff';
+            ctx.beginPath();
+            ctx.arc(-size/2, 0, 3, 0, Math.PI*2);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Musical notes trail
+            if (Math.random() > 0.8 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+                 particles.push({
+                   x: b.x - b.vx*2 + (Math.random()-0.5)*5, 
+                   y: b.y - b.vy*2 + (Math.random()-0.5)*5, 
+                   size: 2, 
+                   color: '#00ffff', 
+                   life: 0.5, 
+                   vx: (Math.random()-0.5)*0.5, 
+                   vy: (Math.random()-0.5)*0.5
+                });
+            }
+
+        } else if (b.type === 'illuminat') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            const angle = Math.atan2(b.vy, b.vx);
+            ctx.rotate(angle);
+            
+            // "True Beauty" - A mystical Eye of Providence style
+            // Outer golden triangle
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#f39c12';
+            
+            // Triangle path
+            ctx.beginPath();
+            ctx.moveTo(10, 0);       // Tip pointing forward
+            ctx.lineTo(-8, 8);       // Bottom right
+            ctx.lineTo(-8, -8);      // Bottom left
+            ctx.closePath();
+            
+            // Gradient fill for triangle
+            const triGrad = ctx.createLinearGradient(-8, -8, 10, 0);
+            triGrad.addColorStop(0, '#d35400');
+            triGrad.addColorStop(0.5, '#f39c12');
+            triGrad.addColorStop(1, '#f1c40f');
+            ctx.fillStyle = triGrad;
+            ctx.fill();
+            
+            // Golden stroke
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // The All-Seeing Eye in center
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#00ffff'; 
+            
+            // Eye Sclera (White)
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.ellipse(-2, 0, 3, 5, -Math.PI/2, 0, Math.PI*2);
+            ctx.fill();
+
+            // Pupil (Black/Cyan)
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-2, 0, 1.5, 0, Math.PI*2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(-2, 0, 0.8, 0, Math.PI*2);
+            ctx.fill();
+
+            // Radiating rays (Holy light)
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(241, 196, 15, 0.6)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<3; i++) {
+                const r = Date.now() * 0.005 + i * (Math.PI*2/3);
+                ctx.beginPath();
+                ctx.moveTo(-2, 0);
+                ctx.lineTo(-2 + Math.cos(r)*12, Math.sin(r)*12);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+            
+            // Mystical particles
+            if (Math.random() > 0.6 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+                 particles.push({
+                   x: b.x - b.vx*0.5 + (Math.random()-0.5)*4, 
+                   y: b.y - b.vy*0.5 + (Math.random()-0.5)*4, 
+                   size: Math.random() * 2, 
+                   color: Math.random() > 0.5 ? '#f1c40f' : '#00ffff', 
+                   life: 0.5, 
+                   vx: (Math.random()-0.5)*0.3, 
+                   vy: (Math.random()-0.5)*0.3
+                });
+            }
+
+        } else if (b.type === 'mirror') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            // Spin the shard
+            const spin = Date.now() * 0.01 + b.x * 0.1;
+            ctx.rotate(spin);
+             
+            const size = (b.w || 8);
+             
+            // Diamond/Shard shape (Rhombus)
+            ctx.beginPath();
+            ctx.moveTo(0, -size);
+            ctx.lineTo(size/1.5, 0);
+            ctx.lineTo(0, size);
+            ctx.lineTo(-size/1.5, 0);
+            ctx.closePath();
+             
+            // Reflective gradient - giving a metallic/mirror look
+            const grad = ctx.createLinearGradient(-size, -size, size, size);
+            grad.addColorStop(0, '#7f8c8d');
+            grad.addColorStop(0.3, '#bdc3c7'); 
+            grad.addColorStop(0.5, '#ffffff'); // bright shine in middle
+            grad.addColorStop(0.7, '#bdc3c7');
+            grad.addColorStop(1, '#7f8c8d');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            
+            // Bright highlight edge
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Inner "crack" or facet
+            ctx.beginPath();
+            ctx.moveTo(0, -size*0.5);
+            ctx.lineTo(size*0.3, 0);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.stroke();
+
+            ctx.restore();
+             
+            // Trailing glittering shards (particles)
+            if (Math.random() > 0.7 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+                  particles.push({
+                    x: b.x - b.vx*0.5 + (Math.random()-0.5)*2, 
+                    y: b.y - b.vy*0.5 + (Math.random()-0.5)*2, 
+                    life: 0.4, 
+                    size: 1.5,
+                    color: '#ffffff', // white sparkle
+                    vx: 0, vy: 0
+                 });
+            }
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -1035,6 +1483,18 @@ function draw() {
             ctx.fillStyle = 'rgba(255,255,255,0.5)';
             ctx.fillRect(b.x - b.w/2 + 1, b.y - b.h/2 + 1, b.w/3, b.h/3);
         }
+    });
+
+    // 3.5.5. Звуковые волны
+    soundWaves.forEach(sw => {
+        if (!isVisible(sw.x - sw.radius, sw.y - sw.radius, sw.radius * 2, sw.radius * 2)) return;
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
     });
 
     // 3.6. Огненные частицы
@@ -1068,12 +1528,124 @@ function draw() {
         ctx.fillStyle = 'blue';
         ctx.fillRect(a.x, a.y - 10, a.w, 5);
         ctx.fillStyle = 'black';
-        const maxAllyHp = (a.tankType === 'fire') ? 6 : 3;
+        const maxAllyHp = (a.tankType === 'fire') ? 6 : (a.tankType === 'musical') ? 4 : (a.tankType === 'illuminat') ? 3 : 3;
         const missingHp = maxAllyHp - a.hp;
         if (missingHp > 0) {
             ctx.fillRect(a.x + a.w * (a.hp / maxAllyHp), a.y - 10, a.w * (missingHp / maxAllyHp), 5);
         }
     });
+
+    // Helper for beam drawing (applied to all)
+    function drawUnitBeam(unit) {
+        if (!unit || (unit.tankType !== 'illuminat' && unit !== tank)) return;
+        if (unit === tank && tankType !== 'illuminat') return; // player global override
+
+        if (!unit.beamIntensity || unit.beamIntensity <= 0) return;
+        
+        // Intensity check
+        const intensity = unit.beamIntensity; // 0..1
+        
+        const elapsed = (Date.now() - (unit.beamStartTime || unit.beamStart || 0)) / 1000;
+        let color1 = '#ffff00'; // yellow
+        let color2 = '#ffff00';
+        if (elapsed > 2) {
+            color1 = '#ff8000'; // orange
+            color2 = '#ff0000'; // red
+        }
+        if (elapsed > 3) {
+            color1 = '#ff0000';
+            color2 = '#800000'; // dark red
+        }
+        
+        // Use actual beam length calculated by physics if available, otherwise default
+        const maxLen = 300;
+        const beamLength = (typeof unit.actualBeamLength !== 'undefined') ? unit.actualBeamLength : maxLen;
+        
+        const startX = unit.x + unit.w/2;
+        const startY = unit.y + unit.h/2;
+        const angle = unit.turretAngle;
+        const endX = startX + Math.cos(angle) * beamLength;
+        const endY = startY + Math.sin(angle) * beamLength;
+        
+        ctx.save();
+        
+        // Use intensity for opacity
+        ctx.globalAlpha = intensity;
+        
+        // Outer Glow - REPLACED shadowBlur with simpler wide stroke for performance
+        // ctx.shadowBlur = (15 + Math.sin(Date.now()/50)*5) * intensity;
+        // ctx.shadowColor = color1;
+        
+        // Manual Glow (Faster)
+        ctx.strokeStyle = color1;
+        ctx.globalAlpha = 0.3 * intensity;
+        ctx.lineWidth = (15 + Math.sin(Date.now()/50)*5);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        // Restore Alpha
+        ctx.globalAlpha = intensity;
+
+        // Main Beam
+        const grad = ctx.createLinearGradient(startX, startY, endX, endY);
+        grad.addColorStop(0, color1);
+        grad.addColorStop(1, color2);
+        ctx.strokeStyle = grad;
+        // Width grows with intensity
+        ctx.lineWidth = (2 + (6 + Math.sin(Date.now()/50)) * intensity); 
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        // Inner white core suitable for energy beams
+        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
+        ctx.lineWidth = 2 * intensity;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        // Spiral effects winding around the beam - OPTIMIZED
+        if (intensity > 0.3) {
+            const time = Date.now() / 100;
+            ctx.strokeStyle = color1;
+            ctx.lineWidth = 1 * intensity;
+            ctx.beginPath();
+            
+            // Precalculate trigonometry once outside the loop
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            // Perpendicular vector (-sin, cos)
+            const perpX = -sinA;
+            const perpY = cosA;
+            
+            // Increase step size from 4 to 10 to reduce iterations by ~60%
+            const step = 10;
+            for(let i=0; i<Math.min(beamLength, 300); i+=step) {
+                 const bx = startX + cosA * i;
+                 const by = startY + sinA * i;
+                 
+                 const wave = Math.sin(i*0.05 - time) * 8 * intensity;
+                 ctx.lineTo(bx + perpX * wave, by + perpY * wave);
+            }
+            ctx.stroke();
+        }
+        
+        ctx.shadowBlur = 0;
+        ctx.lineCap = 'butt';
+        ctx.restore();
+    }
+
+    // Draw beams for all known entities
+    allies.forEach(a => drawUnitBeam(a));
+    enemies.forEach(e => drawUnitBeam(e));
+    if (tank.alive !== false) drawUnitBeam(tank);
 
     enemies.forEach(enemy => {
         if (!enemy || !enemy.alive || !isVisible(enemy.x, enemy.y, enemy.w, enemy.h)) return;
@@ -1085,29 +1657,76 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = (enemy.tankType === 'fire') ? 6 : 3;
+        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical') ? 4 : (enemy.tankType === 'illuminat') ? 3 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);
         }
     });
 
-    // 5. Танк
+    // 6. Иллюзии
+    illusions.forEach(ill => {
+        ctx.save();
+        ctx.translate(ill.x, ill.y);
+        ctx.globalAlpha = 0.5; // semi-transparent
+        // Add a "glitch" color shift
+        if (Math.random() > 0.8) {
+             ctx.translate((Math.random()-0.5)*4, (Math.random()-0.5)*4);
+        }
+        drawTankOn(ctx, 0, 0, 38, 38, ill.color, ill.turretAngle, 1, ill.tankType || 'normal');
+        ctx.restore();
+    });
+
+    // 7. Танк
     if (tank.alive !== false) {
         ctx.save();
         ctx.translate(tank.x + tank.w/2, tank.y + tank.h/2);
+        
+        // Draw Mirror Shield if active
+        if (tankType === 'mirror' && tank.mirrorShieldActive) {
+            ctx.save();
+            const shieldSize = Math.max(tank.w, tank.h) * 0.8;
+            ctx.beginPath();
+            ctx.arc(0, 0, shieldSize, 0, Math.PI * 2);
+            // Reflective look
+            const grad = ctx.createRadialGradient(0, 0, shieldSize * 0.8, 0, 0, shieldSize);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            grad.addColorStop(0.5, 'rgba(200, 200, 255, 0.4)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0.8)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            
+            ctx.strokeStyle = '#aaddff';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([10, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Rotating shine
+            ctx.rotate(Date.now() * 0.005);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, shieldSize + 5, 0, Math.PI * 1.5);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
         ctx.restore();
         if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'black';
-        const maxTankHp = (tankType === 'fire') ? 6 : 3;
+        const maxTankHp = (tankType === 'fire') ? 6 : (tankType === 'musical') ? 4 : (tankType === 'illuminat') ? 3 : 3;
         const missingHp = maxTankHp - tank.hp;
         if (missingHp > 0) {
             ctx.fillRect(tank.x + tank.w * (tank.hp / maxTankHp), tank.y - 10, tank.w * (missingHp / maxTankHp), 5);
         }
     }
+    
+    // Illuminat beam handled by drawUnitBeam above for all units including player
+    
     if (cameraTranslated) ctx.restore();
 
     if (tank.alive === false && currentMode === 'war' && tank.respawnTimer > 0 && gameState !== 'lose') {

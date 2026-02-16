@@ -21,12 +21,16 @@ let objects = [];
 let particles = [];
 let bullets = [];
 let flames = [];
+let soundWaves = [];
+let illusions = [];
 let enemies = [];
 let allies = [];
 let gameState = 'menu';
 let currentMode = 'menu';
-// Временная отладочная коллекция линий для AI (не сохраняется)
-let debugLines = [];
+// Throttling AI counters
+let globalPathBudget = 0;
+const MAX_PATH_BUDGET = 2; // max A* searches per frame
+const MAX_STEPS_FALLBACK = 8; // was 24, severely reduced for performance
 // Показать отладочные линии AI (true — показать отладочные трассы)
 const SHOW_AI_DEBUG = false;
 
@@ -49,6 +53,18 @@ let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
 // Unlocked tanks list
 let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
+
+const tankGemPrices = {
+    'normal': 0,
+    'ice': 30,
+    'fire': 50,
+    'toxic': 120, // Updated
+    'plasma': 150, // Updated
+    'buratino': 100, // Updated
+    'musical': 100, // New
+    'illuminat': 120, // New
+    'mirror': 150 // New
+};
 
 function saveProgress() {
     localStorage.setItem('tankCoins', coins);
@@ -80,6 +96,7 @@ const tank = {
 
 // Apply saved tank type properties immediately if needed
 if (tankType === 'fire') tank.hp = 6;
+else if (tankType === 'musical') tank.hp = 4;
 
 // Слушатели событий
 window.onkeydown = (e) => {
@@ -152,6 +169,12 @@ const toxicTankPreview = document.getElementById('toxicTankPreview');
 const toxicTankCtx = toxicTankPreview && toxicTankPreview.getContext ? toxicTankPreview.getContext('2d') : null;
 const plasmaTankPreview = document.getElementById('plasmaTankPreview');
 const plasmaTankCtx = plasmaTankPreview && plasmaTankPreview.getContext ? plasmaTankPreview.getContext('2d') : null;
+const musicalTankPreview = document.getElementById('musicalTankPreview');
+const musicalTankCtx = musicalTankPreview && musicalTankPreview.getContext ? musicalTankPreview.getContext('2d') : null;
+const illuminatTankPreview = document.getElementById('illuminatTankPreview');
+const illuminatTankCtx = illuminatTankPreview && illuminatTankPreview.getContext ? illuminatTankPreview.getContext('2d') : null;
+const mirrorTankPreview = document.getElementById('mirrorTankPreview');
+const mirrorTankCtx = mirrorTankPreview && mirrorTankPreview.getContext ? mirrorTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -169,7 +192,7 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
 
     if (mode === 'single') {
@@ -191,7 +214,7 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         // finer nav grid for better obstacle avoidance
         navCell = 25;
         generateMap();
@@ -370,6 +393,18 @@ if (selectToxicTank) selectToxicTank.addEventListener('click', () => {
 if (selectPlasmaTank) selectPlasmaTank.addEventListener('click', () => {
     showTankDetail('plasma');
 });
+const selectMusicalTank = document.getElementById('selectMusicalTank');
+if (selectMusicalTank) selectMusicalTank.addEventListener('click', () => {
+    showTankDetail('musical');
+});
+const selectIlluminatTank = document.getElementById('selectIlluminatTank');
+if (selectIlluminatTank) selectIlluminatTank.addEventListener('click', () => {
+    showTankDetail('illuminat');
+});
+const selectMirrorTank = document.getElementById('selectMirrorTank');
+if (selectMirrorTank) selectMirrorTank.addEventListener('click', () => {
+    showTankDetail('mirror');
+});
 
 // По умолчанию показываем главное меню
 if (mainMenu) mainMenu.style.display = 'flex';
@@ -468,14 +503,14 @@ function generateMap() {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
         // Choose a random tank type for this AI
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
             tankType: tt,
-            hp: (tt === 'fire') ? 6 : 3,
+            hp: (tt === 'fire') ? 6 : (tt === 'musical') ? 4 : (tt === 'illuminat' || tt === 'mirror') ? 3 : 3,
             turretAngle: 0,
             baseAngle: 0,
             speed: 2.5,
@@ -515,7 +550,7 @@ function spawnAllies(numTeams, teamSize) {
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
                 // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma'])[Math.floor(Math.random()*6)],
+                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'])[Math.floor(Math.random()*9)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -560,9 +595,9 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma'];
+            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : (allyType === 'musical') ? 4 : (allyType === 'illuminat' || allyType === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -570,8 +605,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tt = ['normal','ice','fire','buratino','toxic','plasma'][Math.floor(Math.random()*6)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
+            const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -579,7 +615,7 @@ function spawnTeamMode() {
             
             const p = findFreeSpot(sx, sy, 38, 38, 200, 20);
             if (p) {
-                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
+                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:(tt === 'musical')?4:(tt === 'mirror' || tt === 'illuminat')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
             }
         }
     }
@@ -616,10 +652,10 @@ function spawnWarMode() {
     // place player near team 0 spawn
     const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
     if (p0) {
-        tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
+        tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
     } else {
         // Absolute fallback if findFreeSpot returns null for player
-        tank.x = teamSpawns[0].x; tank.y = teamSpawns[0].y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0;
+        tank.x = teamSpawns[0].x; tank.y = teamSpawns[0].y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
     }
 
     // spawn allies (team 0) - 9 bots + player = 10
@@ -628,8 +664,9 @@ function spawnWarMode() {
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
         if (pos) {
-            const allyT = (['normal','ice','fire','buratino','toxic','plasma'])[Math.floor(Math.random()*6)];
-            allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', tankType: allyT, hp: (allyT === 'fire') ? 6 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'];
+            const allyT = allyTypes[Math.floor(Math.random()*allyTypes.length)];
+            allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', tankType: allyT, hp: (allyT === 'fire') ? 6 : (allyT === 'musical') ? 4 : (allyT === 'illuminat' || allyT === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -639,9 +676,10 @@ function spawnWarMode() {
         const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
         if (pos) {
-            const tt = ['normal','ice','fire','buratino','toxic','plasma'][Math.floor(Math.random()*6)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad' };
-            enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:typeColor[tt] || '#B22222', tankType: tt, hp:(tt==='fire')?6:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'];
+            const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
+            enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:typeColor[tt] || '#B22222', tankType: tt, hp:(tt==='fire')?6:(tt==='musical')?4:(tt==='illuminat'||tt==='mirror')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -673,6 +711,64 @@ function teamHasAliveMember(team) {
 function checkRectCollision(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+function getRayRectDistance(x, y, angle, maxDist, rect) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    let minD = maxDist;
+    // 4 segments of rectangle
+    const x1 = rect.x, y1 = rect.y;
+    const x2 = rect.x + rect.w, y2 = rect.y + rect.h;
+    
+    // Check intersection with each wall segment
+    // Left: x1, y1 to x1, y2
+    // Top: x1, y1 to x2, y1
+    // Right: x2, y1 to x2, y2
+    // Bottom: x1, y2 to x2, y2
+    const segs = [
+        [x1, y1, x1, y2], [x1, y1, x2, y1], [x2, y1, x2, y2], [x1, y2, x2, y2]
+    ];
+    
+    // Ray as line segment
+    const rx2 = x + cos*maxDist;
+    const ry2 = y + sin*maxDist;
+
+    for(let i=0; i<4; i++) {
+        const sx1 = segs[i][0], sy1 = segs[i][1], sx2 = segs[i][2], sy2 = segs[i][3];
+        const denom = (x - rx2) * (sy1 - sy2) - (y - ry2) * (sx1 - sx2);
+        if (denom !== 0) {
+            const t = ((x - sx1) * (sy1 - sy2) - (y - sy1) * (sx1 - sx2)) / denom;
+            const u = -((x - rx2) * (y - sy1) - (y - ry2) * (x - sx1)) / denom;
+            if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+                const dist = t * maxDist;
+                if (dist < minD) minD = dist;
+            }
+        }
+    }
+    return minD;
+}
+
+function lineIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh) {
+    // Check if line intersects rectangle
+    const left = rx, right = rx + rw, top = ry, bottom = ry + rh;
+    // Check if either end is inside
+    if (x1 >= left && x1 <= right && y1 >= top && y1 <= bottom) return true;
+    if (x2 >= left && x2 <= right && y2 >= top && y2 <= bottom) return true;
+    // Check intersections with edges
+    if (lineIntersectsLine(x1, y1, x2, y2, left, top, right, top)) return true; // top
+    if (lineIntersectsLine(x1, y1, x2, y2, right, top, right, bottom)) return true; // right
+    if (lineIntersectsLine(x1, y1, x2, y2, right, bottom, left, bottom)) return true; // bottom
+    if (lineIntersectsLine(x1, y1, x2, y2, left, bottom, left, top)) return true; // left
+    return false;
+}
+
+function lineIntersectsLine(x1, y1, x2, y2, x3, y3, x4, y4) {
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (denom === 0) return false;
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 }
 
 // Проверяет, чист ли путь вдоль направления `angle` на расстояние `dist`.
@@ -844,6 +940,9 @@ function explodeRocket(bullet) {
     const R = 80;
     function applyDamageToTank(t) {
         if (!t) return;
+        // Mirror Shield Protection: No splash damage
+        if (t === tank && tankType === 'mirror' && tank.mirrorShieldActive) return;
+
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
         if (dist <= R) {
@@ -901,6 +1000,9 @@ function explodeGas(bullet, mega = false) {
 function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     function applyDamageToTank(t) {
         if (!t) return;
+        // Mirror Shield Protection check
+        if (t === tank && tankType === 'mirror' && tank.mirrorShieldActive) return;
+
         // if attackerTeam is set, skip damage to same team (friendly fire protection)
         if (attackerTeam !== undefined && t.team === attackerTeam) return;
         
@@ -949,7 +1051,7 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const allTanksList = ['normal', 'ice', 'fire', 'buratino', 'toxic', 'plasma'];
+const allTanksList = ['normal', 'ice', 'fire', 'buratino', 'toxic', 'plasma', 'musical', 'illuminat', 'mirror'];
 
 // Show reward modal
 function showReward(type, amount, desc, tankType = null) {
@@ -1020,12 +1122,6 @@ function showReward(type, amount, desc, tankType = null) {
     }
 }
 
-const tankPrices = {
-    buratino: 75,
-    toxic: 100,
-    plasma: 150
-};
-
 function unlockRandomTank(fromSuper = false) {
     const t = allTanksList[Math.floor(Math.random() * allTanksList.length)];
     if (!unlockedTanks.includes(t)) {
@@ -1034,7 +1130,7 @@ function unlockRandomTank(fromSuper = false) {
         showReward('tank', 1, 'Unlocked permanently!', t);
         updateTankDetailButton(t);
     } else {
-        const price = tankPrices[t] || 0;
+        const price = tankGemPrices[t] || 0;
         const comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
         gems += comp;
         saveProgress();
@@ -1062,6 +1158,8 @@ function openContainer() {
         gems += val;
         showReward('gems', val, 'Handful of gems!');
     } else { // 1% Tank
+        // Check probabilities based on rarity tiers
+        // Uniform for now as per user request ("unlocked like toxic")
         unlockRandomTank(false);
     }
     updateCoinDisplay();
@@ -1177,9 +1275,16 @@ function findPath(sx, sy, gx, gy) {
     open.set(startK, { i: start.ci, j: start.rj, f: fScore[startK] });
 
     const neigh = [ [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1] ];
-    const maxIter = navCols * navRows * 4;
+    // Optimization: Limit max A* iterations to prevent long freezes on large maps
+    // Was navCols * navRows * 4 (dangerous!). Cap at 1000 steps.
+    const maxIter = 1000; 
     let iter = 0;
+    const startTime = Date.now();
+    
     while (open.size && iter++ < maxIter) {
+        // Safety Break: Don't spend more than 3ms on a single pathfinding call
+        if (iter % 50 === 0 && (Date.now() - startTime > 3)) return null;
+
         // get node in open with min f
         let curKey = null, curNode = null;
         for (const [k,v] of open) { if (!curNode || v.f < curNode.f) { curNode = v; curKey = k; } }
@@ -1238,44 +1343,69 @@ function getCollidingObject(rect) {
 // Попытаться сдвинуть entity на расстояние dist в направлении angle малыми шагами.
 // Если на пути ящик — предпринять попытку безопасно его толкнуть (только если у ящика есть куда сдвинуться).
 function moveSmallSteps(entity, angle, dist) {
-    const step = 1; // пиксельный шаг
-    const steps = Math.max(1, Math.round(dist / step));
+    // Optimization: Check the full distance first if short, otherwise step by entity size
+    // Walls are grid based (usually > 20px), bullets are small but tanks are huge (38px).
+    // Stepping by 1px is too slow. Stepping by 1/2 tank size is safe enough.
+    const step = Math.min(dist, 10);
+    const steps = Math.ceil(dist / step);
     const dxStep = Math.cos(angle) * step;
     const dyStep = Math.sin(angle) * step;
+    
+    // Optimization: Pre-screen destination to avoid loop if possible
+    // Only if no physics interaction (pushing) is needed, but we need to push boxes.
+    // So we iterate steps.
+
     for (let i = 0; i < steps; i++) {
+        // Correct last step distance if needed, but linear steps are fine for AI movement smoothness
         const nx = entity.x + dxStep;
         const ny = entity.y + dyStep;
 
         // Быстрая проверка на стены/границы
-        if (!canPlaceAt(entity, nx, ny)) {
-            if (SHOW_AI_DEBUG) console.log('move blocked (wall) for', entity.id || entity.color || 'enemy', 'at', nx, ny);
-            return false;
+        // Check map bounds first (cheaper)
+        if (nx < 0 || ny < 0 || nx + entity.w > worldWidth || ny + entity.h > worldHeight) return false;
+
+        let blocked = false;
+        let collider = null;
+
+        // Single loop to find collision
+        for (const obj of objects) {
+            // Check collision with wall or box
+            if (nx < obj.x + obj.w && nx + entity.w > obj.x &&
+                ny < obj.y + obj.h && ny + entity.h > obj.y) {
+                    if (obj.type === 'wall') { blocked = true; break; }
+                    if (obj.type === 'box') { collider = obj; break; } // Hit first box and handle
+            }
         }
+        
+        if (blocked) return false;
 
         // Проверяем, не пересекается ли с ящиком — тогда попробуем его сдвинуть
-        const rect = { x: nx, y: ny, w: entity.w, h: entity.h };
-        const coll = getCollidingObject(rect);
-        if (coll && coll.type === 'box') {
-            const boxNx = coll.x + dxStep;
-            const boxNy = coll.y + dyStep;
-            const boxRect = { x: boxNx, y: boxNy, w: coll.w, h: coll.h };
-
+        if (collider && collider.type === 'box') {
+            const boxNx = collider.x + dxStep;
+            const boxNy = collider.y + dyStep;
+            
             // Проверяем, можно ли сдвинуть ящик (не врезается в стену/другой объект и в пределах канвы)
-            let blocked = false;
-            if (boxRect.x < 0 || boxRect.y < 0 || boxRect.x + boxRect.w > worldWidth || boxRect.y + boxRect.h > worldHeight) blocked = true;
-            for (const o of objects) {
-                if (o === coll) continue;
-                if (checkRectCollision(boxRect, o)) { blocked = true; break; }
+            let boxBlocked = false;
+            // Map bounds for box
+            if (boxNx < 0 || boxNx < 0 || boxNx + collider.w > worldWidth || boxNy + collider.h > worldHeight) boxBlocked = true;
+            else {
+                 for (const o of objects) {
+                    if (o === collider) continue;
+                    if (boxNx < o.x + o.w && boxNx + collider.w > o.x &&
+                        boxNy < o.y + o.h && boxNy + collider.h > o.y) { 
+                        boxBlocked = true; break; 
+                    }
+                }
             }
-            if (blocked) {
-                if (SHOW_AI_DEBUG) console.log('box cannot be pushed for', entity.id || entity.color || 'enemy', 'at', nx, ny);
+            if (boxBlocked) {
+                // if (SHOW_AI_DEBUG) console.log('box cannot be pushed');
                 return false;
             }
 
             // Толкаем ящик на один шаг
-            coll.x = boxNx; coll.y = boxNy;
-            spawnParticle(coll.x + coll.w / 2, coll.y + coll.h / 2);
-            // Нужно перестроить навигационный грид, т.к. объект изменил позицию
+            collider.x = boxNx; collider.y = boxNy;
+            // Only update visuals/grid occasionally or flag it
+            if (Math.random() > 0.5) spawnParticle(collider.x + collider.w / 2, collider.y + collider.h / 2);
             navNeedsRebuild = true;
         }
 
@@ -1431,6 +1561,30 @@ function shoot() {
             piercing: true // can hit multiple targets
         });
         tank.fireCooldown = 120; // 2 second cooldown
+    } else if (tankType === 'musical') {
+        // Musical tank: sound wave projectile that ricochets
+        const speed = 6;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 12, h: 12,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: 180,
+            team: 0,
+            type: 'musical',
+            damage: 2, // 2 HP damage
+            bounces: 0,
+            maxBounces: 3
+        });
+        tank.fireCooldown = 45; // 0.75 seconds
+    } else if (tankType === 'illuminat') {
+        // Illuminat: continuous beam
+        if (!tank.beamActive && (!tank.beamCooldown || tank.beamCooldown <= 0)) {
+            tank.beamActive = true;
+            tank.beamStart = Date.now();
+            tank.fireCooldown = 240;
+        }
     } else if (tankType === 'ice') {
         const speed = 5;
         const life = 100;
@@ -1445,6 +1599,44 @@ function shoot() {
             team: 0,
             type: 'ice'
         });
+    } else if (tankType === 'mirror') {
+        // Mirror tank: check if hit recently
+        let pType = 'mirror';
+        const now = Date.now();
+        if (tank.lastHitType && (now - tank.lastHitTime < 2000)) {
+            pType = tank.lastHitType;
+        }
+
+        const speed = 6;
+        let props = {
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: 100,
+            owner: 'player',
+            team: 0,
+            type: pType
+        };
+
+        // Customize projectile based on copied type
+        if (pType === 'purple' || pType === 'plasma') {
+            props.damage = 3; props.w = 10; props.h = 10; props.piercing = true;
+        } else if (pType === 'fire') {
+            props.damage = 1; props.w = 5; props.h = 5; // flame
+        } else if (pType === 'toxic') {
+            props = { ...props, type:'toxic', explodeTimer: 45, spawned: 5 }; // mini toxic bomb
+        } else if (pType === 'musical') {
+            props.damage = 2; props.w = 12; props.h = 12; props.bounces = 0; props.maxBounces = 3; // musical wave
+        } else if (pType === 'mirror') {
+            // Normal mirror shot
+            props.damage = 1; props.w = 8; props.h = 8; // specialized mirror shard
+        } else {
+            // Fallback for copied normal/other types
+            props.damage = 1; props.w = 6; props.h = 6; 
+        }
+        
+        bullets.push(props);
     } else {
         const speed = 5;
         const life = 100;
@@ -1461,7 +1653,7 @@ function shoot() {
         });
     }
     if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic') {
-        tank.fireCooldown = FIRE_COOLDOWN;
+        tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
 // --- APPEND_POINT_UPDATE ---
@@ -1475,7 +1667,18 @@ function update() {
         }
         return;
     }
-    if (navNeedsRebuild) { buildNavGrid(); navNeedsRebuild = false; }
+    
+    // Reset AI budget for this frame
+    globalPathBudget = MAX_PATH_BUDGET;
+
+    // Throttle nav rebuild - only once every few frames max if needed
+    if (navNeedsRebuild) { 
+        if ((window.frameCount || 0) % 3 === 0) {
+            buildNavGrid(); 
+            navNeedsRebuild = false; 
+        }
+    }
+    
     // player input only when alive
     if (tank.alive !== false) {
         if (tank.moveCooldown > 0) tank.moveCooldown--;
@@ -1554,6 +1757,63 @@ function update() {
             }
             keys['KeyE'] = false;
         }
+        // Illusions ability for illuminat tank on E (limited uses per battle)
+        if (tankType === 'illuminat' && keys['KeyE']) {
+            if ((tank.illusionsUsed || 0) < 2) {
+                // Create 2 illusion copies
+                for (let i = 0; i < 2; i++) {
+                    const angleOffset = (i === 0 ? -Math.PI/4 : Math.PI/4);
+                    const dist = 50;
+                    let ix = tank.x + Math.cos(tank.turretAngle + angleOffset) * dist;
+                    let iy = tank.y + Math.sin(tank.turretAngle + angleOffset) * dist;
+                    
+                    // Basic check to avoid spawning inside walls - try to pull closer if blocked
+                    if (!canPlaceAt({ x: ix, y: iy, w: tank.w, h: tank.h }, ix, iy)) {
+                        // try closer
+                        ix = tank.x + Math.cos(tank.turretAngle + angleOffset) * 20;
+                        iy = tank.y + Math.sin(tank.turretAngle + angleOffset) * 20;
+                        if (!canPlaceAt({ x: ix, y: iy, w: tank.w, h: tank.h }, ix, iy)) {
+                            // if still blocked, just spawn at player pos (ghosts out)
+                            ix = tank.x; 
+                            iy = tank.y;
+                        }
+                    }
+
+                    illusions.push({
+                        x: ix,
+                        y: iy,
+                        turretAngle: tank.turretAngle,
+                        baseAngle: tank.baseAngle,
+                        life: 360, // 6 seconds
+                        team: 0,
+                        color: tank.color,
+                        tankType: 'illuminat'
+                    });
+                }
+                tank.illusionsUsed = (tank.illusionsUsed || 0) + 1;
+            }
+            keys['KeyE'] = false;
+        }
+
+        // Mirror tank ability (E) - Mirror Shield
+        if (tankType === 'mirror') {
+             if (keys['KeyE']) {
+                if (!tank.mirrorShieldActive && (!tank.mirrorShieldCooldown || tank.mirrorShieldCooldown <= 0)) {
+                    tank.mirrorShieldActive = true;
+                    tank.mirrorShieldTimer = 120; // 2 seconds (60fps * 2)
+                    tank.mirrorShieldCooldown = 60 * 18; // 18 seconds
+                }
+                keys['KeyE'] = false;
+            }
+            if (tank.mirrorShieldActive) {
+                tank.mirrorShieldTimer--;
+                if (tank.mirrorShieldTimer <= 0) {
+                    tank.mirrorShieldActive = false;
+                }
+            }
+            if (tank.mirrorShieldCooldown > 0) tank.mirrorShieldCooldown--;
+        }
+
         if (keys['ArrowRight']) tank.turretAngle += 0.06;
         // Перезарядка игрока
         if (tank.fireCooldown > 0) tank.fireCooldown--;
@@ -1570,6 +1830,7 @@ function update() {
     
     // AI для врагов: выбирать ближайшую цель (игрок или другой враг) и действовать
     for (let enemy of enemies) {
+      try {
         if (!enemy || !enemy.alive) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
         // If in artillery mode, countdown and skip normal AI movement/actions
@@ -1624,7 +1885,7 @@ function update() {
         
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
-        const potentialTargets = [tank, ...allies, ...otherEnemies];
+        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0)];
         const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
         if (targets.length === 0) continue;
         // Find nearest target
@@ -1636,7 +1897,15 @@ function update() {
         }
 
         // Башня смотрит на ближайшую цель
-        enemy.turretAngle = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
+        if (enemy.confused > 0) {
+            enemy.turretAngle += (Math.random() - 0.5) * 1.2;
+            enemy.confused--;
+        } else if (enemy.disoriented > 0) {
+            enemy.turretAngle = Math.atan2(enemy.y - nearest.y, enemy.x - nearest.x); // shoot backwards
+            enemy.disoriented--;
+        } else {
+            enemy.turretAngle = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
+        }
 
         // Двигаться к цели с помощью навигационной сетки (A*). Если путь не найден — падаем обратно на прежнюю эвристику.
         const mdx = (nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2);
@@ -1649,17 +1918,23 @@ function update() {
 
             // Построим/обновим путь при необходимости
             if (!enemy.path || !enemy.path.length || (enemy.pathRecalc || 0) <= 0) {
-                const sx = enemy.x + enemy.w/2, sy = enemy.y + enemy.h/2;
-                const newPath = findPath(sx, sy, targetCx, targetCy);
-                if (newPath && newPath.length) {
-                    enemy.path = newPath;
-                    enemy.pathIndex = 0;
-                    enemy.pathRecalc = 20; // тиков до следующего пересчёта
+                // Throttle A* calls
+                if (globalPathBudget > 0) {
+                    globalPathBudget--;
+                    const sx = enemy.x + enemy.w/2, sy = enemy.y + enemy.h/2;
+                    const newPath = findPath(sx, sy, targetCx, targetCy);
+                    if (newPath && newPath.length) {
+                        enemy.path = newPath;
+                        enemy.pathIndex = 0;
+                        enemy.pathRecalc = 30 + Math.floor(Math.random() * 20); // spread out recalcs
+                    } else {
+                        enemy.path = [];
+                        enemy.pathIndex = 0;
+                        enemy.pathRecalc = 15;
+                    }
                 } else {
-                    enemy.path = [];
-                    enemy.pathIndex = 0;
-                    enemy.pathRecalc = 10;
-                    if (SHOW_AI_DEBUG) console.log('no path found for', enemy.color || enemy.id);
+                    // Budget exhausted, try again next frame but delay slightly random amount to prevent stacking
+                    enemy.pathRecalc = 1 + Math.floor(Math.random() * 2);
                 }
             } else {
                 enemy.pathRecalc--;
@@ -1719,8 +1994,8 @@ function update() {
                     enemy.baseAngle = desiredAng;
                     enemy.stuckCount = 0;
                 } else {
-                    const MAX_STEPS = 24;
-                    const ANG_STEP = Math.PI / 24;
+                    const MAX_STEPS = MAX_STEPS_FALLBACK;
+                    const ANG_STEP = (Math.PI * 2) / MAX_STEPS;
                     for (let s = 1; s <= MAX_STEPS && !moved; s++) {
                         const sign = (s % 2 === 0) ? 1 : -1;
                         const mag = Math.ceil(s / 2);
@@ -1830,6 +2105,53 @@ function update() {
                         objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos });
                     }
                 }
+            } else if (tt === 'illuminat') {
+                if (!enemy.beamActive && (!enemy.beamCooldown || enemy.beamCooldown <= 0)) {
+                    enemy.beamActive = true;
+                    enemy.beamStartTime = Date.now();
+                    enemy.fireCooldown = 240;
+                }
+            } else if (tt === 'mirror') {
+                // Mirror Tank (Enemy) - Copycat Logic
+                let pType = 'mirror';
+                const now = Date.now();
+                if (enemy.lastHitType && (now - enemy.lastHitTime < 3000)) { // 3 seconds memory
+                    pType = enemy.lastHitType;
+                }
+                // Create projectile based on copied type
+                // Same logic as player mirror
+                let props = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25,
+                    vx: Math.cos(enemy.turretAngle) * 6,
+                    vy: Math.sin(enemy.turretAngle) * 6,
+                    life: 100,
+                    owner: 'enemy',
+                    team: enemy.team,
+                    type: pType
+                };
+                
+                // Customize projectile based on copied type
+                if (pType === 'purple' || pType === 'plasma') {
+                    props.damage = 3; props.w = 10; props.h = 10; props.piercing = true;
+                } else if (pType === 'fire') {
+                    props.damage = 1; props.w = 5; props.h = 5; 
+                } else if (pType === 'toxic') {
+                    props = { ...props, type:'toxic', explodeTimer: 45, spawned: 5, w:6, h:6 }; 
+                } else if (pType === 'musical') {
+                    props.damage = 2; props.w = 12; props.h = 12; props.bounces = 0; props.maxBounces = 3;
+                } else if (pType === 'mirror') {
+                    props.damage = 1; props.w = 8; props.h = 8;
+                } else if (pType === 'ice') {
+                    props.type = 'ice'; props.w = 8; props.h = 8; props.speed = 5;
+                } else {
+                    props.damage = 1; props.w = 6; props.h = 6;
+                }
+                b = props;
+            } else if (tt === 'musical') {
+                // Enemy musical: sound wave projectile that ricochets
+                const speed = 6;
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 180, team: enemy.team, type: 'musical', damage: 2, bounces: 0, maxBounces: 3 };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1839,11 +2161,15 @@ function update() {
             // Fire-type enemies should be able to spray flames more often
             enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : FIRE_COOLDOWN;
         }
+      } catch (err) {
+        console.error('Enemy AI Error:', err);
+      }
     }
 // --- APPEND_POINT_UPDATE_AI_ALLIES ---
 
     // AI для союзников — действуют как враги, но цель у них — враги
     for (let ally of allies) {
+      try {
         if (!ally || !ally.alive) continue;
         if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; if (ally.frozenEffect) ally.frozenEffect--; continue; }
         // If in artillery mode, countdown and skip normal AI movement/actions
@@ -1852,7 +2178,7 @@ function update() {
             if (ally.artilleryTimer <= 0) ally.artilleryMode = false;
             continue;
         }
-        const targets = enemies.filter(e => e && e.alive);
+        const targets = [...enemies.filter(e => e && e.alive), ...illusions.filter(i => i.life > 0)];
         if (targets.length === 0) continue;
         let nearest = targets[0];
         let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2), (nearest.y + (nearest.h||0)/2) - (ally.y + ally.h/2));
@@ -1861,7 +2187,19 @@ function update() {
             if (d < nd) { nearest = t; nd = d; }
         }
         // Aim turret at nearest enemy
-        ally.turretAngle = Math.atan2(nearest.y - ally.y, nearest.x - ally.x);
+        if (ally.confused > 0) {
+            ally.turretAngle += (Math.random() - 0.5) * 1.2;
+            ally.confused--;
+        } else if (ally.disoriented > 0) {
+            ally.turretAngle = Math.atan2(ally.y - nearest.y, ally.x - nearest.x); // shoot backwards
+            ally.disoriented--;
+        } else {
+            ally.turretAngle = Math.atan2(nearest.y - ally.y, nearest.x - ally.x);
+        }
+        if (ally.confused > 0) {
+            ally.turretAngle += (Math.random() - 0.5) * 0.5;
+            ally.confused--;
+        }
 
         // Movement towards nearest enemy (reuse enemy logic: pathfinding then small-step fallback)
         const mdx = (nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2);
@@ -2002,12 +2340,161 @@ function update() {
                     }
                     const w = (tt === 'ice') ? 8 : 9;
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w: w, h: w, vx:Math.cos(ally.turretAngle)*6, vy:Math.sin(ally.turretAngle)*6, life:100, owner:'ally', team: ally.team, type: (tt === 'ice') ? 'ice' : 'normal' };
+                } else if (tt === 'musical') {
+                    // Ally musical: sound wave projectile that ricochets
+                    const speed = 6;
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 180, team: ally.team, type: 'musical', damage: 2, bounces: 0, maxBounces: 3 };
+                } else if (tt === 'illuminat') {
+                    // Ally illuminat: activate beam
+                    if (!ally.beamActive && (!ally.beamCooldown || ally.beamCooldown <= 0)) {
+                        ally.beamActive = true;
+                        ally.beamStartTime = Date.now();
+                        ally.fireCooldown = 240;
+                    }
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : FIRE_COOLDOWN;
             }
         }
+      } catch (err) { console.error('Ally AI Error:', err); }
     }
+
+    // Generic Helper for beam update (Player, Ally, Enemy)
+    function updateUnitBeam(unit, targets) {
+        if (typeof unit.beamIntensity === 'undefined') unit.beamIntensity = 0;
+
+        // Manage active state & intensity
+        if (unit.beamActive) {
+            const elapsed = (Date.now() - (unit.beamStartTime || unit.beamStart)) / 1000;
+            if (elapsed < 5) {
+                // Fade in
+                unit.beamIntensity = Math.min(1, unit.beamIntensity + 0.05);
+            } else {
+                // Time up
+                unit.beamActive = false;
+                unit.beamCooldown = 180;
+            }
+        } else {
+            // Fade out
+            unit.beamIntensity = Math.max(0, unit.beamIntensity - 0.05);
+        }
+
+        // Apply effect if visible
+        if (unit.beamIntensity > 0) {
+            let beamLength = 300;
+            const beamX = unit.x + unit.w/2;
+            const beamY = unit.y + unit.h/2;
+            
+            // Raycast for obstacles first (walls, boxes) to stop beam
+            // Simple check: iterate objects, find closest intersection
+            let closestDist = beamLength;
+            let closestObj = null;
+            const rayEndX = beamX + Math.cos(unit.turretAngle) * beamLength;
+            const rayEndY = beamY + Math.sin(unit.turretAngle) * beamLength;
+
+            for (const obj of objects) {
+                 // Check if line intersects object rect
+                 // We reuse lineIntersectsRect logic but need point of intersection for distance
+                 // Since lineIntersectsRect is boolean, let's just do a rough check or precise one if needed.
+                 // For now, let's step along the ray to find the blockage point if boolean check hits.
+                 if (lineIntersectsRect(beamX, beamY, rayEndX, rayEndY, obj.x, obj.y, obj.w, obj.h)) {
+                      // Found an obstacle in the path. Find accurate distance.
+                      // Approximating by checking multiple points along the ray or geometric intersection
+                      // Geometric intersection with rectangle:
+                      // Line: P = beam + t*Dir, t in [0, 1]
+                      // Intersect with 4 lines of rect. Find min positive t.
+                      // Simplified: Helper function to get distance
+                      const d = getRayRectDistance(beamX, beamY, unit.turretAngle, beamLength, obj);
+                      if (d < closestDist) {
+                          closestDist = d;
+                          closestObj = obj;
+                      }
+                 }
+            }
+            
+            // Handle destruction of obstacles by beam
+            if (closestObj) { // Found something the beam hit
+                if (closestObj.type === 'box') {
+                    // Instantly destroy box
+                    for(let k=0; k<8; k++) spawnParticle(closestObj.x+closestObj.w/2, closestObj.y+closestObj.h/2);
+                    const idx = objects.indexOf(closestObj);
+                    if (idx !== -1) objects.splice(idx, 1);
+                    navNeedsRebuild = true;
+                } else if (closestObj.type === 'barrel') {
+                    explodeBarrel(closestObj);
+                }
+            }
+            
+            // Update beam length based on obstacles
+            beamLength = closestDist;
+            // Store actual length for renderer to use (attach property to unit so renderer knows where to stop)
+            unit.actualBeamLength = beamLength; 
+            
+            const endX = beamX + Math.cos(unit.turretAngle) * beamLength;
+            const endY = beamY + Math.sin(unit.turretAngle) * beamLength;
+            
+            // Allow checking player as target (wrapped)
+            const checkList = targets; // targets is array
+
+            for (let j = checkList.length - 1; j >= 0; j--) {
+                const e = checkList[j];
+                // Skip invalid, dead, or same team
+                if (!e || (e.alive === false && e !== tank) || (e.team !== undefined && e.team === unit.team)) continue;
+                // Special check for player 'alive' handled elsewhere but safely ignored if hp<=0
+
+                // Mirror Shield Protection from Beams
+                if (e === tank && tankType === 'mirror' && tank.mirrorShieldActive) continue;
+
+                if (lineIntersectsRect(beamX, beamY, endX, endY, e.x, e.y, e.w, e.h)) {
+                    e.hp -= 0.5 * unit.beamIntensity; // Scale damage by intensity
+                    if (e.disoriented !== undefined) e.disoriented = 36;
+                    
+                    if (e.hp <= 0) {
+                        // Handle death
+                        if (e === tank) {
+                            if (currentMode === 'war') { 
+                                tank.alive = false; tank.respawnTimer = 600; 
+                            } else { gameState = 'lose'; }
+                            for(let k=0; k<10; k++) spawnParticle(tank.x+tank.w/2, tank.y+tank.h/2);
+                        } else {
+                            if (currentMode === 'war') { 
+                                e.alive = false; e.respawnTimer = 600; 
+                                for(let k=0; k<10; k++) spawnParticle(e.x+e.w/2, e.y+e.h/2);
+                            } else {
+                                // Check list existence before splicing
+                                const idxE = enemies.indexOf(e);
+                                if (idxE !== -1) { enemies.splice(idxE, 1); coins += 5; }
+                                const idxA = allies.indexOf(e);
+                                if (idxA !== -1) { allies.splice(idxA, 1); }
+                                
+                                for(let k=0; k<10; k++) spawnParticle(e.x+e.w/2, e.y+e.h/2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (unit.beamCooldown > 0) unit.beamCooldown--;
+    }
+
+    // Illuminat beam logic (Player)
+    if (tank.tankType === 'illuminat' || tankType === 'illuminat') { // handle global and obj property
+        // Prepare target list for player (Enemies)
+        updateUnitBeam(tank, enemies);
+    }
+
+    // Illuminat beam logic for allies
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const ally = allies[i];
+        if (ally.tankType === 'illuminat') updateUnitBeam(ally, enemies);
+    }
+
+    // Illuminat beam logic for enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies]);
+    }
+
 // --- APPEND_POINT_UPDATE_REST ---
 
     // Обновление пуль
@@ -2048,9 +2535,9 @@ function update() {
         }
         // normalize bullet rect (bullets stored by center)
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
-        // Check collision with objects (but toxic/megabomb/plasmaBlast pass through everything except walls for plasmaBlast)
+        // Check collision with objects (but toxic/megabomb/plasmaBlast/musical pass through standard logic differently)
         let hit = false;
-        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast') {
+        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical') {
             for (const obj of objects) {
                 if (checkRectCollision(bRect, obj)) {
                     // Toxic/mega bombs pass through walls but explode on other objects
@@ -2076,6 +2563,47 @@ function update() {
                 }
             }
         }
+        // Special handling for musical: ricochet
+        if (b.type === 'musical') {
+            for (let j = objects.length - 1; j >= 0; j--) {
+                const obj = objects[j];
+                if (checkRectCollision(bRect, obj)) {
+                    // Calculate collision normal
+                    const bCenterX = b.x;
+                    const bCenterY = b.y;
+                    const oCenterX = obj.x + obj.w/2;
+                    const oCenterY = obj.y + obj.h/2;
+                    const overlapX = (b.w + obj.w)/2 - Math.abs(bCenterX - oCenterX);
+                    const overlapY = (b.h + obj.h)/2 - Math.abs(bCenterY - oCenterY);
+                    
+                    if (overlapX < overlapY) {
+                        b.vx = -b.vx; // Reflect horizontally
+                        b.x += Math.sign(b.vx) * overlapX * 2; // Anti-stuck push
+                    } else {
+                        b.vy = -b.vy; // Reflect vertically
+                        b.y += Math.sign(b.vy) * overlapY * 2; // Anti-stuck push
+                    }
+                    
+                    b.bounces++;
+                    if (b.bounces > b.maxBounces) {
+                        bullets.splice(i, 1);
+                        hit = true;
+                    } else {
+                        // Spawn some particles on bounce
+                        for (let k = 0; k < 3; k++) spawnParticle(b.x, b.y, b.color || '#00ffff');
+                    }
+                    
+                    if (obj.type === 'box') {
+                        objects.splice(j, 1);
+                        for (let k = 0; k < 5; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                        navNeedsRebuild = true;
+                    } else if (obj.type === 'barrel') {
+                        explodeBarrel(obj);
+                    }
+                    break; // Handle one collision per frame
+                }
+            }
+        }
         // Special handling for plasmaBlast: destroys walls
         if (b.type === 'plasmaBlast') {
             for (let j = objects.length - 1; j >= 0; j--) {
@@ -2092,6 +2620,26 @@ function update() {
         if (!hit) {
             // Check collision with tank (player team = 0) - toxic/megabomb only damage, don't stop
             if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
+                // Mirror tank shield reflection logic
+                if (tankType === 'mirror' && tank.mirrorShieldActive) {
+                    // Reflect bullet!
+                    // Reverse velocity and boost slightly
+                    b.vx = -b.vx * 1.5;
+                    b.vy = -b.vy * 1.5;
+                    b.team = tank.team; // Now belongs to player
+                    b.owner = 'player';
+                    b.life += 60; // Extend life a bit
+                    // Play reflect sound effect (particle burst)
+                    for(let k=0; k<5; k++) spawnParticle(b.x, b.y, '#ffffff');
+                    continue; // Skip damage logic
+                }
+                
+                // Copy hit type logic for Mirror Tank
+                if (tankType === 'mirror') {
+                    tank.lastHitType = b.type;
+                    tank.lastHitTime = Date.now();
+                }
+
                 if (b.type === 'rocket' || b.type === 'smallRocket') {
                     explodeRocket(b);
                     bullets.splice(i, 1);
@@ -2100,18 +2648,37 @@ function update() {
                     tank.hp -= 5;
                     // continue flying, don't remove bullet
                 } else if (b.type === 'plasma') {
-                    // Plasma bolt pierces through tank
-                    tank.hp -= b.damage || 3;
-                    // continue flying, don't remove bullet
-                } else if (b.type === 'plasmaBlast') {
-                    // Plasma blast pierces through tank
-                    tank.hp -= b.damage || 5;
-                    // continue flying, don't remove bullet
+                    // Mirror tank resistance to plasma
+                    if (tankType === 'mirror') {
+                         tank.hp -= 2; // Reduced damage
                     } else {
-                        tank.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
-                        if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
-                        bullets.splice(i, 1);
+                         tank.hp -= b.damage || 3;
                     }
+                    bullets.splice(i, 1); // Remove bullet on hit
+                } else if (b.type === 'plasmaBlast') {
+                    // Plasma blast logic
+                    // Ensure it only hits once per entity by tracking
+                    b.hitEntities = b.hitEntities || [];
+                    if (!b.hitEntities.includes('player')) {
+                        if (tankType === 'mirror') {
+                            tank.hp -= 3; // Reduced damage
+                        } else {
+                            tank.hp -= b.damage || 5;
+                        }
+                        b.hitEntities.push('player');
+                        // Do not remove bullet if it's meant to pierce, but ensure single hit
+                    }
+                } else if (b.type === 'illuminat') {
+                    // Illuminat beam: damage and disorient
+                    tank.hp -= b.damage || 1;
+                    tank.disoriented = b.disorientTime || 36; // 0.6 seconds
+                    bullets.splice(i, 1);
+                } else {
+                     let dmg = (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
+                     tank.hp -= dmg;
+                     if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
+                     bullets.splice(i, 1);
+                }
                 if (tank.hp <= 0) {
                     for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
                     if (currentMode === 'war') {
@@ -2132,6 +2699,10 @@ function update() {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
                 if (checkRectCollision(bRect, a) && b.team !== a.team) {
+                    if (a.tankType === 'mirror') {
+                        a.lastHitType = b.type;
+                        a.lastHitTime = Date.now();
+                    }
                     if (b.type === 'rocket' || b.type === 'smallRocket') {
                         explodeRocket(b);
                         bullets.splice(i, 1);
@@ -2148,7 +2719,7 @@ function update() {
                         a.hp = (a.hp || 100) - (b.damage || 5);
                         // continue flying, don't remove bullet
                     } else {
-                        a.hp = (a.hp || 100) - (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                        a.hp = (a.hp || 100) - (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
                         if (b.type === 'ice' && a.tankType !== 'ice') { a.paralyzed = true; a.paralyzedTime = 180; a.frozenEffect = 180; }
                         bullets.splice(i, 1);
                     }
@@ -2168,6 +2739,10 @@ function update() {
                 const e = enemies[j];
                 if (!e || !e.alive) continue;
                 if (checkRectCollision(bRect, e) && b.team !== e.team) {
+                    if (e.tankType === 'mirror') {
+                        e.lastHitType = b.type;
+                        e.lastHitTime = Date.now();
+                    }
                     if (b.type === 'rocket' || b.type === 'smallRocket') {
                         explodeRocket(b);
                         bullets.splice(i, 1);
@@ -2184,8 +2759,9 @@ function update() {
                         e.hp -= b.damage || 5;
                         // continue flying, don't remove bullet
                     } else {
-                        e.hp -= (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1);
+                        e.hp -= (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
+                        if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         bullets.splice(i, 1);
                     }
                     if (e.hp <= 0) {
@@ -2202,6 +2778,150 @@ function update() {
             }
         }
     }
+    
+    // Обновление звуковых волн
+    for (let i = soundWaves.length - 1; i >= 0; i--) {
+        const sw = soundWaves[i];
+        sw.radius += sw.speed;
+        sw.life--;
+        if (sw.radius >= sw.maxRadius || sw.life <= 0) {
+            soundWaves.splice(i, 1);
+            continue;
+        }
+        // Check wall bounce
+        const checkX = sw.x + Math.cos(sw.angle) * sw.radius;
+        const checkY = sw.y + Math.sin(sw.angle) * sw.radius;
+        if (checkX < 0 || checkX > worldWidth || checkY < 0 || checkY > worldHeight) {
+            if (sw.bounces < sw.maxBounces) {
+                // Reflect angle
+                if (checkX < 0 || checkX > worldWidth) sw.angle = Math.PI - sw.angle;
+                if (checkY < 0 || checkY > worldHeight) sw.angle = -sw.angle;
+                sw.bounces++;
+            } else {
+                soundWaves.splice(i, 1);
+                continue;
+            }
+        }
+        
+        // Check collision with player (if enemy wave)
+        if (sw.team !== tank.team && checkCircleCollision(sw.x, sw.y, sw.radius, tank.x + tank.w/2, tank.y + tank.h/2, Math.max(tank.w, tank.h)/2)) {
+            let shielded = false;
+            if (tankType === 'mirror') {
+                if (tank.mirrorShieldActive) {
+                    sw.team = tank.team; // Reflect to player team
+                    sw.angle += Math.PI; // Reverse direction roughly or bounce off?
+                    // Actually expanding wave... just change team so it hits enemies now?
+                    // Or bounce? Bouncing expanding circle is weird. Just change ownership.
+                    shielded = true;
+                }
+                tank.lastHitType = 'musical';
+                tank.lastHitTime = Date.now();
+            }
+            
+            if (!shielded) {
+                tank.hp -= sw.damage;
+                tank.confused = 30;
+                if (tank.hp <= 0) {
+                     for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
+                     if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                     else { gameState = 'lose'; }
+                }
+            }
+        }
+
+        // Check collision with enemies
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (e.team !== sw.team && checkCircleCollision(sw.x, sw.y, sw.radius, e.x + e.w/2, e.y + e.h/2, Math.max(e.w, e.h)/2)) {
+                if (e.tankType === 'mirror') {
+                    e.lastHitType = 'musical';
+                    e.lastHitTime = Date.now();
+                }
+                e.hp -= sw.damage;
+                e.confused = 30; // 0.5 seconds confusion
+                if (e.hp <= 0) {
+                    enemies.splice(j, 1);
+                    coins += 5;
+                    for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                }
+            }
+        }
+        // Check collision with allies if enemy wave
+        for (let j = allies.length - 1; j >= 0; j--) {
+            const a = allies[j];
+            if (a.team !== sw.team && checkCircleCollision(sw.x, sw.y, sw.radius, a.x + a.w/2, a.y + a.h/2, Math.max(a.w, a.h)/2)) {
+                if (a.tankType === 'mirror') {
+                    a.lastHitType = 'musical';
+                    a.lastHitTime = Date.now();
+                }
+                a.hp -= sw.damage;
+                a.confused = 30;
+                if (a.hp <= 0) {
+                    allies.splice(j, 1);
+                    for (let k = 0; k < 10; k++) spawnParticle(a.x + a.w/2, a.y + a.h/2);
+                }
+            }
+        }
+    }
+    
+    // Обновление иллюзий
+    for (let i = illusions.length - 1; i >= 0; i--) {
+        const ill = illusions[i];
+        ill.life--;
+        if (ill.life <= 0) {
+            illusions.splice(i, 1);
+            continue;
+        }
+        // Move illusion slightly
+        ill.x += Math.cos(ill.baseAngle) * 1.5;
+        ill.y += Math.sin(ill.baseAngle) * 1.5;
+        ill.turretAngle += 0.02; // slight rotation
+        // Check collision with bullets (illusions disappear on hit)
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            const b = bullets[j];
+            if (b.team !== ill.team && checkCircleCollision(ill.x, ill.y, 20, b.x, b.y, Math.max(b.w, b.h)/2)) {
+                illusions.splice(i, 1);
+                // Remove bullet
+                bullets.splice(j, 1);
+                for (let k = 0; k < 5; k++) spawnParticle(ill.x, ill.y);
+                break;
+            }
+        }
+    }
+    
+    // Illuminat beam logic
+    if (tank.beamActive) {
+        const elapsed = (Date.now() - tank.beamStart) / 1000; // seconds
+        if (elapsed >= 5) {
+            // Turn off beam for 3 seconds
+            tank.beamActive = false;
+            tank.beamCooldown = 180; // 3 seconds
+        } else {
+            // Check beam collision
+            const beamLength = 300;
+            const beamX = tank.x + tank.w/2;
+            const beamY = tank.y + tank.h/2;
+            const endX = beamX + Math.cos(tank.beamAngle) * beamLength;
+            const endY = beamY + Math.sin(tank.beamAngle) * beamLength;
+            
+            // Check enemies
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                if (e.team !== tank.team && lineIntersectsRect(beamX, beamY, endX, endY, e.x, e.y, e.w, e.h)) {
+                    e.hp -= 0.5; // continuous damage
+                    e.disoriented = 36; // 0.6 seconds
+                    if (e.hp <= 0) {
+                        enemies.splice(j, 1);
+                        coins += 5;
+                        for (let k = 0; k < 10; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                    }
+                }
+            }
+            // Check allies if enemy beam (but player beam)
+            // For player, only enemies
+        }
+    }
+    if (tank.beamCooldown > 0) tank.beamCooldown--;
     
     // Обновление огненных частиц
     for (let i = flames.length - 1; i >= 0; i--) {
@@ -2232,6 +2952,18 @@ function update() {
         if (!hit) {
             // Check collision with tank
             if (tank.hp > 0 && checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, tank) && f.team !== tank.team) {
+                // Mirror shield reflection logic (for flames it's tricky, just block or reflect back?)
+                if (tankType === 'mirror' && tank.mirrorShieldActive) {
+                    f.vx = -f.vx * 1.5; f.vy = -f.vy * 1.5; f.team = tank.team; f.life = 60; 
+                    continue; 
+                }
+                
+                // Mirror tank copy trait
+                if (tankType === 'mirror') {
+                    tank.lastHitType = 'fire';
+                    tank.lastHitTime = Date.now();
+                }
+
                 tank.hp -= f.damage;
                 flames.splice(i, 1);
                 if (tank.hp <= 0) {
@@ -2394,7 +3126,11 @@ function update() {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx; p.y += p.vy;
-        p.life -= 0.02;
+        p.life -= 0.05; // Was 0.02 - sped up cleanup
+        
+        // Boundaries check optimization
+        if (p.x < -10 || p.x > worldWidth + 10 || p.y < -10 || p.y > worldHeight + 10) p.life = -1;
+        
         if (p.life <= 0) particles.splice(i, 1);
     }
 
@@ -2448,6 +3184,14 @@ function update() {
             const maxHp = ent.maxHp || 3;
             const dmgPerSec = maxHp / 6;
             const dmgPerTick = dmgPerSec / 60;
+
+            // Mirror Tank Logic: Poison counts as hit type 'toxic'
+            if (ent === tank && tankType === 'mirror') {
+                 // Check if actually taking damage
+                 tank.lastHitType = 'toxic';
+                 tank.lastHitTime = Date.now();
+            }
+
             ent.hp = (ent.hp || 0) - dmgPerTick;
             ent.poisonTimer--;
             if (ent.hp <= 0) {
@@ -2507,11 +3251,16 @@ function update() {
                     // respawn near team spawn
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
+                    // Mirror tank check for maxHP
+                    const maxHp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'mirror') ? 4 : 3);
                     if (p) {
-                         tank.x = p.x; tank.y = p.y; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                         tank.x = p.x; tank.y = p.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     } else {
                          // fallback respawn
-                         tank.x = sp.x; tank.y = sp.y; tank.hp = (tankType === 'fire' ? 6 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                         tank.x = sp.x; tank.y = sp.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
+                    }
+                    if (tankType === 'mirror') {
+                         tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0; tank.lastHitType = null;
                     }
                 }
             }
@@ -2615,7 +3364,13 @@ function updateCoinDisplay() {
 
 
 // Постоянный цикл обновления физики
-setInterval(update, 1000/60);
+window.frameCount = 0;
+function gameLoop() {
+    window.frameCount++;
+    update();
+    // draw is called via requestAnimationFrame usually, but here checking existing interval
+}
+setInterval(gameLoop, 1000/60);
 
 // Инициализация после загрузки страницы — защищаем от ранних ошибок
 window.addEventListener('load', () => {
@@ -2650,6 +3405,14 @@ window.setSelectedTank = function(selectedType) {
     // Special properties for specific tanks
     if (selectedType === 'fire') {
         tank.hp = 6;
+    } else if (selectedType === 'musical') {
+        tank.hp = 4;
+    } else if (selectedType === 'mirror') {
+        tank.hp = 4;
+        tank.lastHitType = null;
+        tank.lastHitTime = 0;
+        tank.mirrorShieldActive = false;
+        tank.mirrorShieldTimer = 0;
     } else {
         tank.hp = 3; // Reset HP for others
     }
@@ -2669,14 +3432,8 @@ const tankDetailClose = document.getElementById('tankDetailClose');
 const tankDetailSelect = document.getElementById('tankDetailSelect');
 let currentTankType = 'normal'; // To remember which tank is being viewed
 
-const tankGemPrices = {
-    'normal': 0,
-    'ice': 30,
-    'fire': 50,
-    'toxic': 75,
-    'plasma': 100,
-    'buratino': 150
-};
+// Function to update tank detail button moved up
+
 
 function updateTankDetailButton(type) {
     const btn = document.getElementById('tankDetailSelect');

@@ -60,12 +60,14 @@
         <div style="display:flex; flex-direction:column; gap:15px; align-items:center;">
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
                 <img src="png/cont1.png" alt="Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
-                <p style="margin:5px 0; font-size:16px;">Контейнер с случайным цветом танка</p>
+                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#f1c40f;">Бронзовый Контейнер</p>
+                <p style="margin:5px 0; font-size:14px;">Содержит случайное количество монет (10-100) и шанс на обычного персонажа.</p>
                 <button id="buyContainer" class="btn btn-primary">Купить (100 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%;">
                 <img src="png/super-cont.png" alt="Супер Контейнер" style="width:80px; height:80px; margin-bottom:10px;">
-                <p style="margin:5px 0; font-size:16px;">Супер Контейнер с редкими бонусами</p>
+                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px #ff00de;">Легендарный Контейнер</p>
+                <p style="margin:5px 0; font-size:14px;">Высокий шанс получить Gems, редких персонажей!</p>
                 <button id="buySuperContainer" class="btn btn-char">Купить (500 монет)</button>
             </div>
             <button id="shopCancel" class="btn btn-secondary">Закрыть</button>
@@ -81,7 +83,7 @@
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
         </div>
-        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center;">
+        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center; max-height:400px; overflow-y:auto;">
             <div style="text-align:center; width:180px;">
                 <canvas id="normalTankPreview" width="150" height="150" style="border:2px solid #e74c3c; border-radius:8px;"></canvas>
                 <button id="selectNormalTank" class="btn btn-primary">Обычный</button>
@@ -105,6 +107,18 @@
             <div style="text-align:center; width:180px;">
                 <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8e44ad; border-radius:8px;"></canvas>
                 <button id="selectPlasmaTank" class="btn btn-char">Плазменный</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="musicalTankPreview" width="150" height="150" style="border:2px solid #e91e63; border-radius:8px;"></canvas>
+                <button id="selectMusicalTank" class="btn btn-primary" style="background:#8e44ad">Музыкальный</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="illuminatTankPreview" width="150" height="150" style="border:2px solid #f39c12; border-radius:8px;"></canvas>
+                <button id="selectIlluminatTank" class="btn btn-primary" style="background:#34495e">👁 Иллюминат</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="mirrorTankPreview" width="150" height="150" style="border:2px solid #95a5a6; border-radius:8px;"></canvas>
+                <button id="selectMirrorTank" class="btn btn-primary" style="background:#bdc3c7; color:#2c3e50;">🪞 Зеркальный</button>
             </div>
         </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
