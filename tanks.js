@@ -21,17 +21,17 @@ const tankDescriptions = {
     toxic: {
         name: "Токсичный танк",
         description: "Запускает канистры с ядовитым газом, создающие опасные зоны. Газ наносит урон всем, кто в нем находится.",
-        rarity: "Эпический"
+        rarity: "Легендарный"
     },
     plasma: {
         name: "Плазменный танк",
         description: "Стреляет высокоэнергетическими плазменными болтами, пробивающими врагов насквозь. Огромный урон, но долгая перезарядка.",
-        rarity: "Легендарный"
+        rarity: "Мифический"
     },
     buratino: {
         name: "Буратино (ТОС)",
         description: "Тяжелая огнеметная система. Запускает залп из 6 неуправляемых ракет по площадям. Медленный, но разрушительный.",
-        rarity: "Экзотический"
+        rarity: "Эпический"
     },
     musical: {
         name: "Музыкальный танк",
@@ -47,11 +47,47 @@ const tankDescriptions = {
         name: "🪞 Зеркальный",
         description: "Мастер адаптации. Копирует тип снарядов противника при получении урона. Способность 'Зеркальный щит' (клавиша E) отражает любые атаки обратно во врага.",
         rarity: "Легендарный"
+    },
+    time: {
+        name: "⏳ Временной",
+        description: "Повелитель времени. Способность 'Временная Петля' (E) мгновенно возвращает танк в состояние 5 секунд назад. Кулдаун 8 сек.",
+        rarity: "Хроматическая"
     }
+};
+
+// Background gradients for tank previews (menu & modal)
+// Colors follow user mapping: Обычный=grass, Редкий=green, Сверхредкий=blue,
+// Эпический=purple, Легендарный=yellow, Мифический=red
+const tankBgGradients = {
+    normal: ['#1b5e20', '#1b5e20'],   // Обычный - dark grass green (menu & modal)
+    ice: ['#2ecc71', '#27ae60'],      // Редкий - green
+    fire: ['#3498db', '#5dade2'],     // Сверхредкий - blue
+    buratino: ['#9b59b6', '#8e44ad'], // Эпический - purple
+    toxic: ['#fff9c4', '#fff176'],    // Легендарный - pale yellow
+    plasma: ['#ff6b6b', '#e74c3c'],   // Мифический - red
+    musical: ['#9b59b6', '#8e44ad'],  // Эпический - purple
+    illuminat: ['#ff6b6b', '#e74c3c'],// Мифический - red
+    mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
+    time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'] // Хроматическая - transparent for CSS anim
+};
+
+// Base colors used in preview rendering (keeps menu and modal consistent)
+const tankBaseColors = {
+    normal: '#0000FF',
+    ice: '#54d1e8',
+    fire: '#4c00ff',
+    buratino: '#0000FF',
+    toxic: '#0000FF',
+    plasma: '#0000FF',
+    musical: '#0000FF',
+    illuminat: '#0000FF',
+    mirror: '#0000FF',
+    time: '#FF00FF'
 };
 
 // Make available globally
 window.tankDescriptions = tankDescriptions;
+window.tankBgGradients = tankBgGradients;
 
 // Preview canvas global access (defined in main.js, used here)
 
@@ -210,6 +246,15 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Border
             ctx.strokeStyle = '#7f8c8d';
             ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'time') {
+            // Minimalistic Purple Body
+            ctx.fillStyle = '#9b59b6'; // Purple
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            
+            // Clean border
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else {
             // Default
@@ -443,6 +488,71 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.strokeStyle = '#95a5a6';
         ctx.lineWidth = 1;
         ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
+    } else if (type === 'time') {
+        // Minimalistic White Clock Turret (2.5x larger)
+        const clockSize = tSize * 2.5;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, clockSize/2, 0, Math.PI*2);
+        ctx.fill();
+
+        // Black Border
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Clock Face
+        const now = Date.now();
+        // Custom timing: red (second) hand completes full rotation every 10s;
+        // black (minute) hand completes full rotation every 120s by stepping one of 12 notches every 10s.
+        const sec = (now % 10000) / 1000; // seconds within 10s window (0..10)
+        // min not used; minuteIndex computed from 10s ticks
+
+        ctx.save();
+        // Markers (Black dots)
+        ctx.fillStyle = '#000';
+        for(let i=0; i<12; i++) {
+            const a = (i/12) * Math.PI*2;
+            const r = clockSize/2 - 3;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a)*r, Math.sin(a)*r, 1.5, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // (No hour hand — only minute (black) and second (red) are drawn)
+
+        // Minute Hand (Black) — discrete 12-step hand; advances one notch every 10s (12*10s = 120s full rotation)
+        const handLenM = clockSize * 0.35;
+        const tick10s = Math.floor(now / 10000) % 12; // 10s ticks modulo 12
+        const handAngM = (tick10s / 12) * Math.PI * 2 - Math.PI/2;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(handAngM)*handLenM, Math.sin(handAngM)*handLenM); 
+        ctx.stroke();
+
+        // Second Hand (Red linear) — 1 rotation per 10s
+        const handLenS = clockSize * 0.42;
+        const frac10 = (now % 10000) / 10000; // 0..1 over 10s
+        const handAngS = (frac10) * Math.PI * 2 - Math.PI/2;
+        ctx.strokeStyle = '#e74c3c'; 
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(handAngS)*handLenS, Math.sin(handAngS)*handLenS);
+        ctx.stroke();
+
+        ctx.restore();
+        
+        // Center Pin
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(0,0, 2.5, 0, Math.PI*2);
+        ctx.fill();
+
     } else if (type === 'plasma') {
         // Handled below
     } else {
@@ -813,7 +923,7 @@ function drawCharacterPreviews() {
         ctx.restore();
         
         if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === type) {
-            ctx.strokeStyle = 'gold';
+            ctx.strokeStyle = 'white';
             ctx.lineWidth = 4;
             ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
         } else if (!isUnlocked) {
@@ -832,15 +942,75 @@ function drawCharacterPreviews() {
         }
     };
 
-    drawItem(normalTankCtx, normalTankPreview, 'normal', '#0000FF', ['white', 'lightgray']);
-    drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', ['green', 'lightgreen']);
-    drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', ['blue', 'lightblue']);
-    drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', ['purple', 'magenta']);
-    drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', ['yellow', 'lightyellow']);
-    drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', ['red', 'lightcoral']);
-    drawItem(musicalTankCtx, musicalTankPreview, 'musical', '#0000FF', ['pink', 'lightpink']);
-    drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', ['gold', 'yellow']);
-    drawItem(mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF', ['silver', 'lightgray']);
+    drawItem(normalTankCtx, normalTankPreview, 'normal', '#0000FF', tankBgGradients.normal);
+    drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', tankBgGradients.ice);
+    drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
+    drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', tankBgGradients.buratino);
+    drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', tankBgGradients.toxic);
+    drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', tankBgGradients.plasma);
+    drawItem(musicalTankCtx, musicalTankPreview, 'musical', '#0000FF', tankBgGradients.musical);
+    drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', tankBgGradients.illuminat);
+    drawItem(mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF', tankBgGradients.mirror);
+
+    // Time Tank Animation Logic
+    if (typeof timeTankCtx !== 'undefined' && timeTankCtx && timeTankPreview) {
+        // Stop any existing loop
+        if (window.timeTankAnimId) cancelAnimationFrame(window.timeTankAnimId);
+
+        const animateTimeTank = () => {
+            if (document.getElementById('characterModal').style.display === 'none') return;
+            
+            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('time');
+            const canvas = timeTankPreview;
+            const ctx = timeTankCtx;
+
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            
+            // Pixelated diagonal sweep from top-left: large tiles, bands move diagonally from top-left
+            const time = Date.now() * 0.00012; // sweep speed control (lower == slower)
+            if (isUnlocked) {
+                const pixel = Math.max(18, Math.floor(Math.min(canvas.width, canvas.height) / 12));
+                const shift = (time * 360) % 360; // degrees of shift applied over s = x+y
+                const step = 0.12; // hue step per pixel-distance
+                for (let py = 0; py < canvas.height; py += pixel) {
+                    for (let px = 0; px < canvas.width; px += pixel) {
+                        const s = px + py; // diagonal coordinate from top-left
+                        const hue = (((s * step) - shift) % 360 + 360) % 360;
+                        const light = 48 + 6 * Math.sin((px * 0.02 + py * 0.02) + time * 2.2);
+                        ctx.fillStyle = `hsl(${hue}, 82%, ${light}%)`;
+                        ctx.fillRect(px, py, pixel, pixel);
+                    }
+                }
+            } else {
+                ctx.fillStyle = '#333';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const side = Math.min(canvas.width, canvas.height) / 2;
+            ctx.save();
+            if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
+            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#FF00FF', 0, 1, 'time');
+            ctx.restore();
+
+            // Selection Border or Lock
+             if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'time') {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            } else if (!isUnlocked) {
+                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                 ctx.font = '40px Arial';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillStyle = '#fff';
+                 ctx.fillText('🔒', canvas.width/2, canvas.height/2);
+            }
+            
+            window.timeTankAnimId = requestAnimationFrame(animateTimeTank);
+        };
+        animateTimeTank();
+    }
 }
 
 function draw() {
@@ -1017,6 +1187,22 @@ function draw() {
             const alpha = Math.min(1, Math.max(0, obj.life / maxLife));
             
             ctx.globalAlpha = alpha;
+            ctx.fillStyle = obj.color;
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        } else if (obj.type === 'implosion') {
+            const maxLife = obj.maxLife || 30;
+            const progress = obj.life / maxLife; // Shrinks as life decreases
+            // Ensure radius is positive and alpha valid
+            const r = Math.max(0, obj.radius * progress);
+            const alpha = Math.min(1, Math.max(0, 1 - (obj.life / maxLife))); // Fades in? Or just constant?
+            // Actually implosion should start big and shrink.
+            // life starts high, goes to 0.
+            // progress starts at 1, goes to 0. Radius starts max, goes to 0. Correct.
+            
+            ctx.globalAlpha = 0.7; // Constant alpha or fade out?
             ctx.fillStyle = obj.color;
             ctx.beginPath();
             ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
@@ -1743,25 +1929,12 @@ function draw() {
     if (gameState === 'menu') {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0,0,canvas.width, canvas.height);
-    } else if (gameState === 'win') {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    } else if (gameState === 'win' || gameState === 'lose') {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('YOU WIN!', canvas.width / 2, canvas.height / 2);
-        ctx.font = '24px Arial';
-        ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
-    } else if (gameState === 'lose') {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('YOU LOSE!', canvas.width / 2, canvas.height / 2);
-        ctx.font = '24px Arial';
-        ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
     }
+
+    if (typeof syncResultOverlay === 'function') syncResultOverlay();
 
     drawPreview();
     updateCoinDisplay();
@@ -1798,13 +1971,77 @@ function showTankDetail(tankType) {
     } else if (rarityValue === 'Мифический') {
         rarityColor = '#e91e63'; // pink
         glowStyle = 'text-shadow: 0 0 15px #e91e63, 0 0 30px #e91e63, 0 0 45px #e91e63;';
+    } else if (rarityValue === 'Хроматическая') {
+        rarityColor = '#00ffcc';
+        glowStyle = 'text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc, 0 0 30px #00ffcc;';
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
     description.textContent = tankDescriptions[tankType].description;
 
-    // Clear and draw tank on canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawTankOn(ctx, canvas.width / 2, canvas.height / 2, 150, 100, '#fff', 0, 1, tankType);
+    // Draw background: normal uses single grass color, others use rarity gradient
+    if (tankType === 'normal') {
+        const grass = (tankBgGradients && tankBgGradients.normal && tankBgGradients.normal[1]) ? tankBgGradients.normal[1] : '#228B22';
+        ctx.fillStyle = grass;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (tankType === 'time') {
+        // Animated: pixelated rainbow flowing from top-left; redraw every frame
+        if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
+        modal.style.display = 'flex'; // ensure visible before first frame
+        const pixel = Math.max(16, Math.floor(Math.min(canvas.width, canvas.height) / 14));
+        const drawFrame = () => {
+            // If modal hidden externally, stop anim
+            if (modal.style.display === 'none') {
+                window.tankDetailAnimId = null;
+                return;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const t = Date.now() * 0.00012;
+            const pixel = Math.max(20, Math.floor(Math.min(canvas.width, canvas.height) / 12));
+            const shift = (t * 360) % 360;
+            const step = 0.12;
+            for (let py = 0; py < canvas.height; py += pixel) {
+                for (let px = 0; px < canvas.width; px += pixel) {
+                    const s = px + py;
+                    const hue = (((s * step) - shift) % 360 + 360) % 360;
+                    const light = 48 + 6 * Math.sin((px * 0.015 + py * 0.015) + t * 2.2);
+                    ctx.fillStyle = `hsl(${hue}, 80%, ${light}%)`;
+                    ctx.fillRect(px, py, pixel, pixel);
+                }
+            }
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(canvas.width, canvas.height); ctx.stroke();
+
+            const side = Math.min(canvas.width, canvas.height) / 2;
+            const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
+            drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+        return; // avoid duplicate drawing / display toggle below
+    } else if (tankBgGradients && tankBgGradients[tankType]) {
+        const bg = tankBgGradients[tankType];
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, bg[0]);
+        grad.addColorStop(1, bg[1]);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const side = Math.min(canvas.width, canvas.height) / 2;
+        const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+
+        modal.style.display = 'flex';
+        return;
+    } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    if (tankType !== 'time') {
+        const side = Math.min(canvas.width, canvas.height) / 2;
+        const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+    }
 
     // Show modal
     modal.style.display = 'flex';
@@ -1813,6 +2050,10 @@ function showTankDetail(tankType) {
 // Function to hide tank detail modal
 function hideTankDetail() {
     const modal = document.getElementById('tankDetailModal');
+    if (window.tankDetailAnimId) {
+        cancelAnimationFrame(window.tankDetailAnimId);
+        window.tankDetailAnimId = null;
+    }
     modal.style.display = 'none';
 }
 

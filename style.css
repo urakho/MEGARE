@@ -14,22 +14,6 @@ canvas {
     box-shadow: 0 0 50px rgba(0,0,0,0.8);
     image-rendering: pixelated;
 }
-body { 
-    margin: 0; 
-    overflow: hidden; 
-    background: #1a1a1a; 
-    font-family: 'Courier New', Courier, monospace; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    height: 100vh; 
-}
-canvas { 
-    background: #445522; 
-    border: 8px solid #333; 
-    box-shadow: 0 0 50px rgba(0,0,0,0.8);
-    image-rendering: pixelated;
-}
 .ui { 
     position: absolute; 
     top: 20px; 
@@ -68,6 +52,8 @@ b { color: #ffcc00; }
     box-shadow: 0 0 40px rgba(0,0,0,0.8);
     position: relative;
     max-width: 90%;
+
+    /* Animations removed (confetti and emblem/canvas shake) */
 }
 .modal-title {
     margin: 0 0 20px 0;
@@ -76,31 +62,66 @@ b { color: #ffcc00; }
     text-transform: uppercase;
     text-shadow: 2px 2px 0 #000;
 }
+.modal-box img { border-radius: 0; box-shadow: none; }
+.currency-coin { color: #f1c40f; }
+.currency-gem { color: #2ecc71; }
+
 
 /* Button Styles */
 .btn {
-    padding: 12px 22px;
+    padding: 14px 26px;
     font-size: 18px;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 10px;
     border: none;
     color: white;
     font-family: inherit;
-    transition: all 0.2s;
-    margin: 5px;
-    box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+    transition: transform 0.14s ease, box-shadow 0.14s ease;
+    margin: 8px;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.28);
     text-decoration: none;
     display: inline-block;
 }
-.btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
-.btn:active { transform: translateY(1px); box-shadow: none; }
+.btn:hover { transform: translateY(-3px); filter: brightness(1.05); }
+.btn:active { transform: translateY(1px); box-shadow: 0 4px 0 rgba(0,0,0,0.22); }
 
-.btn-primary { background: #e74c3c; box-shadow: 0 4px 0 #c0392b; }
-.btn-secondary { background: #95a5a6; box-shadow: 0 4px 0 #7f8c8d; }
-.btn-shop { background: #3498db; box-shadow: 0 4px 0 #2980b9; }
-.btn-char { background: #9b59b6; box-shadow: 0 4px 0 #8e44ad; }
-.btn-gold { background: #f1c40f; box-shadow: 0 4px 0 #d35400; color: #333; }
-.btn-mode { background: #2ecc71; box-shadow: 0 4px 0 #27ae60; }
+.btn-primary { background: linear-gradient(180deg,#ff6b5f,#e74c3c); box-shadow: 0 8px 0 rgba(199,48,30,0.9); }
+.btn-secondary { background: linear-gradient(180deg,#b4b8bd,#95a5a6); box-shadow: 0 8px 0 rgba(127,140,141,0.9); }
+.btn-shop { background: linear-gradient(180deg,#5fb3ff,#3498db); box-shadow: 0 8px 0 rgba(41,128,185,0.9); }
+.btn-char { background: linear-gradient(180deg,#c48ce6,#9b59b6); box-shadow: 0 8px 0 rgba(142,68,173,0.9); }
+.btn-gold { background: linear-gradient(180deg,#ffe680,#f1c40f); box-shadow: 0 8px 0 rgba(211,84,0,0.9); color: #222; }
+.btn-mode { background: linear-gradient(180deg,#66e07f,#2ecc71); box-shadow: 0 8px 0 rgba(39,174,96,0.9); }
+
+/* Illuminat special button: dark mystic to gold glow */
+.btn-illuminat { background: linear-gradient(180deg,#2c3e50,#34495e); box-shadow: 0 8px 0 rgba(243,156,18,0.9); color: #fff; }
+
+/* Mirror (silver) button */
+.btn-mirror { background: linear-gradient(180deg,#f5f7fa,#cfd8dc); box-shadow: 0 8px 0 rgba(160,160,160,0.9); color: #2c3e50; }
+
+/* Blood-red button for Plasma / Illuminat */
+.btn-blood { background: linear-gradient(180deg,#8b0000,#550000); box-shadow: 0 8px 0 rgba(75,0,0,0.9); color: #fff; }
+.btn-blood:hover { filter: brightness(1.08); }
+
+/* Compact main menu layout (use standard modal appearance) */
+#mainMenu .modal-box {
+    width: min(640px, 90%);
+    height: auto;
+    border-radius: 15px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #2c3e50, #202c39);
+}
+
+#mainMenu .modal-title { font-size: 28px; margin-bottom: 12px; color: #f39c12; }
+#mainMenu #previewWrap { flex-direction: column; gap: 12px; align-items: center; }
+#mainMenu #previewWrap canvas { width: 200px; height: 150px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+#mainMenu .btn { min-width: 180px; font-size: 18px; }
+
+/* Subtle accent panel for menu controls */
+.ui { background: linear-gradient(90deg, rgba(255,255,255,0.02), transparent); padding: 12px 18px; border-radius: 10px; }
 
 /* Reward Modal Styles */
 .reward-overlay {
@@ -180,6 +201,125 @@ b { color: #ffcc00; }
     background: #ff5e4d;
 }
 
+.container-flow-box {
+    background: linear-gradient(135deg, #1c1c1c, #2b2b2b);
+    border: 4px solid #f39c12;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+    width: min(420px, 90%);
+}
+.container-flow-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+.container-flow-img {
+    width: 150px;
+    height: 150px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 15px rgba(243, 156, 18, 0.7));
+    cursor: pointer;
+    transition: transform 0.2s ease, filter 0.2s ease;
+    animation: containerPulse 2s ease-in-out infinite;
+}
+.container-flow-img:hover {
+    transform: translateY(-4px) scale(1.05);
+    filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.9));
+    animation: none;
+}
+.container-flow-img:active {
+    transform: translateY(0) scale(0.98);
+}
+@keyframes containerPulse {
+    0%, 100% { filter: drop-shadow(0 0 15px rgba(243, 156, 18, 0.7)); }
+    50% { filter: drop-shadow(0 0 25px rgba(243, 156, 18, 1)); }
+}
+.container-flow-text-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.container-flow-text {
+    margin: 0;
+    font-size: 18px;
+    color: #ecf0f1;
+    text-align: center;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+    min-height: 48px;
+}
+.container-flow-hint {
+    margin: 0;
+    font-size: 14px;
+    color: #ffe680;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: bold;
+    animation: hintBlink 1.5s ease-in-out infinite;
+}
+@keyframes hintBlink {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+.container-drop-area {
+    display: flex;
+    gap: 12px;
+    min-height: 100px;
+    justify-content: center;
+    align-items: flex-end;
+    width: 100%;
+    border-radius: 16px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    padding: 12px;
+    background: radial-gradient(circle at top, rgba(241, 196, 15, 0.12), rgba(0, 0, 0, 0.45));
+    position: relative;
+    transition: all 0.3s ease;
+}
+.container-drop-area.active {
+    border-color: rgba(243, 156, 18, 0.6);
+    background: radial-gradient(circle at top, rgba(241, 196, 15, 0.25), rgba(0, 0, 0, 0.35));
+    box-shadow: inset 0 0 20px rgba(243, 156, 18, 0.3);
+}
+.container-drop-item {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: linear-gradient(135deg, #ffe680, #f1c40f);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    opacity: 0;
+    transform: translateY(-30px) scale(0.7);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    position: relative;
+}
+.container-drop-item.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition: transform 0.4s ease, opacity 0.4s ease;
+}
+.container-drop-item::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+.container-flow-cancel {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+}
+
 @keyframes bounce {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-20px); }
@@ -187,9 +327,10 @@ b { color: #ffcc00; }
 
 /* Tank unlock card */
 .new-tank-card {
-    background: rgba(255,255,255,0.1);
+    /* Remove background here to let inline styles control it fully */
+    /* background: rgba(255,255,255,0.1); */
     border: 2px solid #fff;
-    padding: 10px;
+    padding: 0; /* Remove padding to fill the area */
     margin: 10px auto;
     border-radius: 10px;
     width: 200px;
@@ -198,8 +339,48 @@ b { color: #ffcc00; }
     align-items: center;
     justify-content: center;
     position: relative;
-    overflow: hidden;
+    overflow: hidden; /* Ensure content stays inside */
+    box-sizing: border-box; /* Include border in width/height */
 }
+
+/* Chromatic background for card - rainbow pixel effect */
+.new-tank-card.rainbow-pixel-bg {
+    /* Base rainbow gradient handled by inline JS or below */
+    background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff);
+    background-size: 400% 400%;
+    animation: rainbowPixelBg 3s linear infinite;
+    /* Pixelated grid overlay using pseudo-element */
+}
+
+.new-tank-card.rainbow-pixel-bg::after,
+.reward-box.rainbow-pixel-bg::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* Create a grid pattern overlay */
+    background-image: 
+        linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+    background-size: 20px 20px; /* Size of "pixels" or cells */
+    pointer-events: none;
+    z-index: 0; /* Background layer */
+}
+
+/* Ensure content sits above the background overlay */
+.reward-box > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Remove text stroke/shadow if requested */
+.rainbow-text {
+    -webkit-text-stroke: 0;
+    text-shadow: none !important;
+}
+
 .rarity-glow {
     position: absolute;
     inset: -50%;
@@ -244,4 +425,23 @@ canvas.tank-display {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, #ffcc00, #ff5e4d);
+}
+@keyframes chromaticBg {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Pixelated rainbow background animation for chromatic/temporal rarity buttons */
+@keyframes rainbowPixelBg {
+    0% { background-position: 0% 50%; filter: saturate(1.05); }
+    50% { background-position: 100% 50%; filter: saturate(1.2); }
+    100% { background-position: 0% 50%; filter: saturate(1.05); }
+}
+
+/* Helper class could be used elsewhere; inline style on the button references this animation name */
+.rainbow-pixel-btn {
+    background-image: linear-gradient(90deg, #ff0000 0%, #ff7f00 16%, #ffff00 33%, #00ff00 50%, #0000ff 66%, #4b0082 83%, #8b00ff 100%);
+    background-size: 300% 300%;
+    image-rendering: pixelated;
 }

@@ -63,7 +63,8 @@ const tankGemPrices = {
     'buratino': 100, // Updated
     'musical': 100, // New
     'illuminat': 120, // New
-    'mirror': 150 // New
+    'mirror': 150, // New
+    'time': 200 // Временной танк (Temporal / Time Tank)
 };
 
 function saveProgress() {
@@ -175,6 +176,8 @@ const illuminatTankPreview = document.getElementById('illuminatTankPreview');
 const illuminatTankCtx = illuminatTankPreview && illuminatTankPreview.getContext ? illuminatTankPreview.getContext('2d') : null;
 const mirrorTankPreview = document.getElementById('mirrorTankPreview');
 const mirrorTankCtx = mirrorTankPreview && mirrorTankPreview.getContext ? mirrorTankPreview.getContext('2d') : null;
+const timeTankPreview = document.getElementById('timeTankPreview');
+const timeTankCtx = timeTankPreview && timeTankPreview.getContext ? timeTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -194,6 +197,8 @@ function startGame(mode) {
     // reset basic state
     tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
     navNeedsRebuild = true;
+    lastResultState = null;
+    syncResultOverlay('playing');
 
     if (mode === 'single') {
         // normal world
@@ -265,6 +270,7 @@ const shopBtn = document.getElementById('shopBtn');
 const characterBtn = document.getElementById('characterBtn');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
+const buyOmegaContainer = document.getElementById('buyOmegaContainer');
 const shopCancel = document.getElementById('shopCancel');
 const characterCancel = document.getElementById('characterCancel');
 if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'flex'; });
@@ -277,27 +283,68 @@ const commandModal = document.getElementById('commandModal');
 const commandExecute = document.getElementById('commandExecute');
 const commandCancel = document.getElementById('commandCancel');
 if (commandExecute) commandExecute.addEventListener('click', () => {
-    const command = commandInput.value.trim();
-    if (command.startsWith('/coins ')) {
-        const amount = parseInt(command.substring(7));
-        if (!isNaN(amount) && amount > 0) {
-            coins += amount;
-            updateCoinDisplay();
-            localStorage.setItem('tankCoins', coins);
-            console.log(`Added ${amount} coins. Total: ${coins}`);
-        }
-    } else if (command === '/clear t') {
-        unlockedTanks = ['normal'];
-        localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
-        console.log('All tanks except normal are locked.');
-        // Update UI if character modal is open
-        if (characterModal && characterModal.style.display === 'flex') {
-            drawCharacterPreviews();
-        }
-    }
+    processDevCommand(commandInput.value);
     commandInput.value = '';
     if (commandModal) commandModal.style.display = 'none';
 });
+
+function processDevCommand(rawCommand) {
+    const command = rawCommand.trim();
+    if (!command) return;
+
+    if (command.startsWith('/coins')) {
+        const parts = command.substring(6).trim().split(/\s+/);
+        let op = '+'; 
+        let valStr = parts[0];
+        
+        if (['+', '-', '='].includes(parts[0])) {
+            op = parts[0];
+            valStr = parts[1];
+        }
+        
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount >= 0) {
+            if (op === '+') coins += amount;
+            else if (op === '-') coins = Math.max(0, coins - amount);
+            else if (op === '=') coins = amount;
+            
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Coins updated: ${coins}`);
+        }
+    } else if (command.startsWith('/gems')) {
+        const parts = command.substring(5).trim().split(/\s+/);
+        let op = '+'; 
+        let valStr = parts[0];
+        
+        if (['+', '-', '='].includes(parts[0])) {
+            op = parts[0];
+            valStr = parts[1];
+        }
+        
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount >= 0) {
+            if (op === '+') gems += amount;
+            else if (op === '-') gems = Math.max(0, gems - amount);
+            else if (op === '=') gems = amount;
+            
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Gems updated: ${gems}`);
+        }
+    } else if (command === '/clear t') {
+        unlockedTanks = ['normal'];
+        saveProgress();
+        // Force switch to normal tank
+        if (typeof window.setSelectedTank === 'function') window.setSelectedTank('normal');
+        console.log('All tanks except normal are locked.');
+        // Update UI if character modal is open
+        if (typeof drawCharacterPreviews === 'function' && characterModal && characterModal.style.display === 'flex') {
+            drawCharacterPreviews();
+        }
+    }
+}
+
 if (commandCancel) commandCancel.addEventListener('click', () => { commandInput.value = ''; if (commandModal) commandModal.style.display = 'none'; });
 if (commandModal) {
     commandModal.addEventListener('click', (e) => {
@@ -310,24 +357,7 @@ if (commandModal) {
 if (commandInput) {
     commandInput.addEventListener('keydown', (e) => {
         if (e.code === 'Enter') {
-            const command = commandInput.value.trim();
-            if (command.startsWith('/coins ')) {
-                const amount = parseInt(command.substring(7));
-                if (!isNaN(amount) && amount > 0) {
-                    coins += amount;
-                    updateCoinDisplay();
-                    localStorage.setItem('tankCoins', coins);
-                    console.log(`Added ${amount} coins. Total: ${coins}`);
-                }
-            } else if (command === '/clear t') {
-                unlockedTanks = ['normal'];
-                localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
-                console.log('All tanks except normal are locked.');
-                // Update UI if character modal is open
-                if (characterModal && characterModal.style.display === 'flex') {
-                    drawCharacterPreviews();
-                }
-            }
+            processDevCommand(commandInput.value);
             commandInput.value = '';
             if (commandModal) commandModal.style.display = 'none';
         } else if (e.code === 'Escape') {
@@ -336,6 +366,220 @@ if (commandInput) {
         }
     });
 }
+
+// Result overlay elements (win / lose)
+const resultOverlay = document.getElementById('resultOverlay');
+const resultStatus = document.getElementById('resultStatus');
+const resultModeLabel = document.getElementById('resultMode');
+const resultEmblem = document.getElementById('resultEmblem');
+const resultHeadline = document.getElementById('resultHeadline');
+const resultMessage = document.getElementById('resultMessage');
+const resultReward = document.getElementById('resultReward');
+const resultRestart = document.getElementById('resultRestart');
+const resultToMenu = document.getElementById('resultToMenu');
+let lastResultState = null;
+
+function describeMode(mode) {
+    if (mode === 'war') return 'Война 2x10';
+    if (mode === 'team') return 'Командный';
+    if (mode === 'single') return 'Одиночный';
+    return 'Свободный бой';
+}
+
+function syncResultOverlay(state = gameState) {
+    if (!resultOverlay) return;
+    if (state === lastResultState) return;
+
+    if (state === 'win' || state === 'lose') {
+        const isWin = state === 'win';
+        const rewardText = isWin
+            ? (currentMode === 'single' ? '+25 монет'
+                : currentMode === 'team' ? '+40 монет'
+                : currentMode === 'war' ? '+50 монет'
+                : '+0 монет')
+            : 'Попробуй другую тактику';
+
+        resultOverlay.style.display = 'flex';
+        
+        // Update text content
+        if (resultStatus) {
+            resultStatus.textContent = isWin ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
+            resultStatus.style.color = isWin ? '#2ecc71' : '#e74c3c'; // Green or Red
+        }
+        
+        if (resultModeLabel) resultModeLabel.textContent = describeMode(currentMode);
+        
+        if (resultEmblem) {
+            resultEmblem.textContent = isWin ? '🏆' : '☠️';
+        }
+
+        if (resultHeadline) {
+            resultHeadline.textContent = isWin ? 'ЗОНА ОЧИЩЕНА' : 'БОЙ ПРОИГРАН';
+            resultHeadline.style.color = isWin ? '#ffffff' : '#e74c3c';
+        }
+
+        if (resultMessage) {
+            const messagesByMode = {
+                single: {
+                    win: [
+                        "Одиночная зачистка: враги выведены из строя.",
+                        "Ты справился в одиночку — впечатляющая победа.",
+                        "Один против многих — и ты победил.",
+                        "Соло-операция успешна. Награда начислена.",
+                        "Мастер-одиночка: зона под контролем.",
+                        "Ты показал классную индивидуальную игру.",
+                        "Одна цель — одна победа. Отлично.",
+                        "Соло-удар прошёл точно по плану.",
+                        "Ты вырвался вперёд и закрыл бой в одиночку.",
+                        "Жёсткая сессия — и ты с триумфом.",
+                        "Одиночный рейд завершён успешно.",
+                        "Твоя точность решила исход боя.",
+                        "Ты один — и достаточно, чтобы победить.",
+                        "Идеальная реализация соло-плана.",
+                        "Соло: скорость и точность — твои козыри.",
+                        "Один игрок, одна победа. Блестяще.",
+                        "Ты разнес оппонентов поодиночке.",
+                        "Умелая манёвренность принесла результат.",
+                        "Одиночная миссия — выполнена.",
+                        "Победа в одиночку — заслуженный триумф."
+                    ],
+                    lose: [
+                        "Одиночный удар не удался — возвращайся сильнее.",
+                        "Слишком многое взвалил на себя. Попробуй иначе.",
+                        "Один в поле — не воин. Подготовься и вернись.",
+                        "Поражение в соло — ценный опыт.",
+                        "Тебе не хватило огневой мощи. Прокачайся.",
+                        "Одинокая атака промахнулась. Проанализируй.",
+                        "Соло-подход сегодня не прошёл. Будь хитрее.",
+                        "Одинокие рейды требуют риска — риск не оправдался.",
+                        "Твой транспорт повреждён — отремонтируй и возвращайся.",
+                        "Неудача в соло — повод улучшить билд.",
+                        "План одного игрока оказался слабым. Переделай.",
+                        "Один против нескольких — в следующий раз действуй иначе.",
+                        "Используй окружение и повтори попытку.",
+                        "Одинокая ошибка стоила боя. Учти это.",
+                        "Поражение — шанс доработать стратегию.",
+                        "Тебе не хватило поддержки — возьми её в следующий раз.",
+                        "Слишком опрометчиво — в следующий раз осторожнее.",
+                        "Соло-атака прошла неудачно. Подготовься.",
+                        "Одинокий рейд провален, но опыт получен.",
+                        "Твоя машина пострадала — чинь и возвращайся."
+                    ]
+                },
+                team: {
+                    win: [
+                        "Команда сработала чётко — совместная победа!",
+                        "Отличная координация, ребята — фронт очищен.",
+                        "Командный удар разрушил оборону соперника.",
+                        "Слаженные действия привели к успеху.",
+                        "Ваша команда показала высший пилотаж.",
+                        "Командная тактика сработала идеально.",
+                        "Благодаря согласованности — победа.",
+                        "Команда держала строй и победила.",
+                        "Обмен огнём и поддержка — результат налицо.",
+                        "Командная победа: распределение ролей сработало.",
+                        "Все выполнили свою задачу, отличная работа.",
+                        "Грамотная поддержка товарищей принесла успех.",
+                        "Командная синергия — ключ к победе.",
+                        "Ваша группа показала невероятную выдержку.",
+                        "Слаженность действий — и победа ваша.",
+                        "Командный успех. Так держать!",
+                        "Вы объединились и разнесли врага.",
+                        "Тактическая кооперация принесла результат.",
+                        "Коллективная работа — отличная победа.",
+                        "Команда действовала как единый механизм."
+                    ],
+                    lose: [
+                        "Потеряли синхрон — утратили преимущество.",
+                        "Нужно лучше распределять роли в команде.",
+                        "Команда растерялась — проанализируйте тактику.",
+                        "Не хватило взаимной поддержки — обсудите план.",
+                        "Координация подвела. В следующий раз лучше.",
+                        "Разногласия стоили боя. Согласуйте действия.",
+                        "Ошибки в коммуникации привели к поражению.",
+                        "Команда слишком растянулась — держите ближе.",
+                        "Нужно больше фокуса на общую цель.",
+                        "Слабая поддержка в точке прорыва — учесть на будущее.",
+                        "Команда потеряла темп — восстановите строй.",
+                        "Не сработали комбинированные атаки — потренируйтесь.",
+                        "Поражение — повод улучшить взаимодействие.",
+                        "Координация и план — вот что нужно улучшить.",
+                        "Командная тактика дала трещину. Исправьте ошибки.",
+                        "Были шансы, но не использовали их как команда.",
+                        "Команда проиграла из-за плохой коммуникации.",
+                        "Обсудите роли и стратегии — вернётесь сильнее.",
+                        "Поддержка не пришла вовремя — работайте над этим.",
+                        "Поражение — шаг к лучшей командной игре."
+                    ]
+                },
+                war: {
+                    win: [
+                        "Война окончена — наша победа на поле боя.",
+                        "Стратегическое превосходство обеспечило успех.",
+                        "Твои действия помогли захватить ключевые позиции.",
+                        "Массовая атака завершилась триумфом.",
+                        "Война под контролем — отличная работа.",
+                        "Штурм прошёл успешно, трофеи начислены.",
+                        "Ты внёс решающий вклад в общую победу.",
+                        "Боевые операции выполнены, фронт чист.",
+                        "Грамотное командование и решительность — победа.",
+                        "Мы сокрушили их вражеские силы.",
+                        "Тактический прорыв открывает новые возможности.",
+                        "Выдержка и дисциплина дали результат.",
+                        "Коллективный усилие привело к победе в войне.",
+                        "Масштабная операция завершена успешно.",
+                        "Все подразделения справились великолепно.",
+                        "Это был решающий манёвр — молодцы.",
+                        "Твоя роль в операции была ключевой.",
+                        "Фронт удержан — миссия выполнена.",
+                        "Слаженная кампания принесла плоды.",
+                        "Война выиграна — честь и хвала."
+                    ],
+                    lose: [
+                        "Война обернулась не в нашу пользу на этом участке.",
+                        "Широкомасштабная операция провалилась — анализируем.",
+                        "Потери велики — время для перегруппировки.",
+                        "Тактический просчёт стоил нам боя — учтём.",
+                        "Не выдержали натиск. Вернёмся с другим планом.",
+                        "Командные ресурсы были не на должном уровне.",
+                        "Ошибка в логистике повлияла на исход.",
+                        "Нужно усилить поддержку и переформатировать атаку.",
+                        "Масштабный провал — важные уроки для штаба.",
+                        "Поражение в кампании временно — готовим контрмеры.",
+                        "Непродуманная экспансия обернулась против нас.",
+                        "Слишком большие риски — и они окупились не в нашу пользу.",
+                        "Тыл был уязвим — укрепим оборону.",
+                        "Штаб сделает выводы и обновит стратегию.",
+                        "Поражение больно, но сделает нас сильнее.",
+                        "Не хватило резервов — пополним и вернёмся.",
+                        "Они оказались подготовленнее — работаем над ошибками.",
+                        "Поражение — стимул для новой кампании.",
+                        "Тактическая ошибка показала слабые места.",
+                        "Мы проиграли бой, но не войну — готовимся."
+                    ]
+                }
+            };
+
+            const modeSet = messagesByMode[currentMode] || messagesByMode.single;
+            const messages = isWin ? (modeSet.win || []) : (modeSet.lose || []);
+            if (messages.length > 0) {
+                resultMessage.textContent = messages[Math.floor(Math.random() * messages.length)];
+            }
+        }
+
+        if (resultReward) resultReward.textContent = rewardText;
+        
+    } else {
+        resultOverlay.style.display = 'none';
+    }
+
+    lastResultState = state;
+}
+window.syncResultOverlay = syncResultOverlay;
+
+if (resultRestart) resultRestart.addEventListener('click', () => location.reload());
+if (resultToMenu) resultToMenu.addEventListener('click', () => location.reload());
+syncResultOverlay('menu');
 
 // Version modal
 const versionModal = document.getElementById('versionModal');
@@ -350,24 +594,248 @@ if (versionModal) {
     });
 }
 
-if (buyContainer) buyContainer.addEventListener('click', () => {
-    if (coins >= 100) {
-        coins -= 100;
-        openContainer();
-        updateCoinDisplay();
-    } else {
-        alert('Недостаточно монет!');
+if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
+if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
+if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
+
+const containerFlowModal = document.getElementById('containerFlowModal');
+const containerFlowPreview = document.getElementById('containerFlowPreview');
+const containerFlowText = document.getElementById('containerFlowText');
+const containerDropArea = document.getElementById('containerDropArea');
+const containerFlowCancel = document.getElementById('containerFlowCancel');
+
+let containerFlowType = null;
+let containerDropTimers = [];
+let containerDropActive = false;
+
+function clearContainerDropTimers() {
+    containerDropTimers.forEach((id) => clearTimeout(id));
+    containerDropTimers = [];
+    containerDropActive = false;
+    if (containerDropArea) containerDropArea.classList.remove('active');
+}
+
+function closeContainerFlow() {
+    if (containerFlowModal) containerFlowModal.style.display = 'none';
+    clearContainerDropTimers();
+    if (containerDropArea) containerDropArea.innerHTML = '';
+    const hintEl = document.querySelector('.container-flow-hint');
+    if (hintEl) hintEl.style.display = '';
+    containerFlowType = null;
+}
+
+function updateContainerFlowStage(stage) {
+    if (!containerFlowType || !containerFlowText || !containerFlowPreview) return;
+    const isBronze = containerFlowType === 'bronze';
+    const isOmega = containerFlowType === 'omega';
+    
+    // Toggle Cancel button visibility based on stage
+    if (containerFlowCancel) {
+        // If stage is intro, show cancel. If open/animating, hide it.
+        containerFlowCancel.style.display = (stage === 'intro') ? '' : 'none';
+        containerFlowCancel.disabled = (stage !== 'intro');
     }
-});
-if (buySuperContainer) buySuperContainer.addEventListener('click', () => {
-    if (coins >= 500) {
-        coins -= 500;
-        openSuperContainer();
-        updateCoinDisplay();
+
+    // No filter needed as we have specific images
+    containerFlowPreview.style.filter = '';
+
+    if (stage === 'intro') {
+        if (isOmega) {
+            containerFlowPreview.src = 'png/omega-cont.png';
+            containerFlowText.textContent = 'Нажми на ОМЕГА контейнер!';
+        } else {
+            containerFlowPreview.src = isBronze ? 'png/cont1.png' : 'png/super-cont.png';
+            containerFlowText.textContent = isBronze
+                ? 'Нажми на контейнер, чтобы открыть'
+                : 'Нажми на контейнер, чтобы открыть';
+        }
     } else {
-        alert('Недостаточно монет!');
+        if (isOmega) {
+            containerFlowPreview.src = 'png/omega-cont2.png';
+            containerFlowText.textContent = 'ОМЕГА контейнер взрывается наградами!';
+        } else {
+            containerFlowPreview.src = isBronze ? 'png/cont2.png' : 'png/super-cont2.png';
+            containerFlowText.textContent = isBronze
+                ? 'Из контейнера высыпаются награды!'
+                : 'Легендарный контейнер раскрывается!';
+        }
     }
+}
+
+function animateContainerDrops(rewards, done) {
+    if (!containerDropArea) {
+        done();
+        return;
+    }
+    clearContainerDropTimers();
+    containerDropActive = true;
+    containerDropArea.innerHTML = '';
+    containerDropArea.classList.add('active');
+    
+    // Hide hint during animation
+    const hintEl = document.querySelector('.container-flow-hint');
+    if (hintEl) hintEl.style.display = 'none';
+    
+    const dropCount = Math.max(rewards.length, 1);
+    const intervalMs = 360;
+    let dropped = 0;
+
+    const spawn = () => {
+        if (!containerDropActive) return;
+        if (dropped >= dropCount) {
+            const finishTimer = setTimeout(() => {
+                if (!containerDropActive) return;
+                containerDropActive = false;
+                containerDropArea.classList.remove('active');
+                if (hintEl) hintEl.style.display = '';
+                done();
+            }, 900);
+            containerDropTimers.push(finishTimer);
+            return;
+        }
+        const reward = rewards[dropped] || {};
+        const item = document.createElement('div');
+        item.className = 'container-drop-item';
+        const iconText = reward.icon || (reward.type === 'gems' ? '💎' : reward.type === 'tank' ? '�' : '💰');
+        item.textContent = iconText;
+        const label = reward.type === 'tank'
+            ? (reward.tankType ? reward.tankType.toUpperCase() : 'TANK')
+            : reward.amount ? '+' + reward.amount : '';
+        if (label) item.setAttribute('data-label', label);
+        if (reward.desc) item.title = reward.desc;
+        containerDropArea.appendChild(item);
+        requestAnimationFrame(() => item.classList.add('visible'));
+        dropped += 1;
+        const nextTimer = setTimeout(spawn, intervalMs);
+        containerDropTimers.push(nextTimer);
+    };
+
+    spawn();
+}
+
+function showContainerFlow(type) {
+    if (containerFlowType) return;
+    const price = type === 'bronze' ? 100 : (type === 'omega' ? 2000 : 500);
+    if (coins < price) {
+        alert('Недостаточно монет!');
+        return;
+    }
+    containerFlowType = type;
+    updateContainerFlowStage('intro');
+    if (containerDropArea) {
+        containerDropArea.innerHTML = '';
+        containerDropArea.classList.remove('active');
+    }
+    if (containerFlowModal) containerFlowModal.style.display = 'flex';
+}
+
+function showContainerRewards(rewards, index = 0) {
+    if (!rewards || index >= rewards.length) {
+        // All rewards shown
+        return;
+    }
+    
+    const reward = rewards[index];
+    if (!reward) {
+        showContainerRewards(rewards, index + 1);
+        return;
+    }
+    
+    const modal = document.getElementById('rewardModal');
+    const btn = document.getElementById('rewardClaimBtn');
+    
+    if (!modal || !btn) return;
+    
+    // Show current reward
+    const isLast = index === rewards.length - 1;
+    if (reward.type === 'tank') {
+        showReward(reward.type, 1, reward.desc || '', reward.tankType);
+    } else {
+        showReward(reward.type, reward.amount, reward.desc || '');
+    }
+
+    // Update button text to indicate progress if multiple rewards
+    if (rewards.length > 1) {
+        btn.textContent = isLast ? 'FINISH' : `NEXT REWARD (${index + 1}/${rewards.length})`;
+    } else {
+        btn.textContent = 'CLAIM';
+    }
+    
+    // Override button to show next reward
+    const nextHandler = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        // Prevent double clicks
+        btn.onclick = null;
+        
+        if (isLast) {
+            // Close if it's the last one
+            modal.classList.remove('visible');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        } else {
+            // Instantly show next reward without closing modal
+            showContainerRewards(rewards, index + 1);
+        }
+    };
+
+    btn.onclick = nextHandler;
+}
+
+function handleContainerConfirm() {
+    if (!containerFlowType || containerDropActive) return;
+    const currentType = containerFlowType;
+    const price = currentType === 'bronze' ? 100 : (currentType === 'omega' ? 2000 : 500);
+    if (coins < price) {
+        alert('Недостаточно монет!');
+        closeContainerFlow();
+        return;
+    }
+    coins -= price;
+    updateCoinDisplay();
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : 5);
+    const rewards = [];
+    // Ensure we create unique objects for each reward
+    for (let i = 0; i < dropCount; i++) {
+        let reward;
+        if (currentType === 'omega') {
+            reward = openOmegaContainer({ suppressRewardModal: true });
+        } else {
+            reward = currentType === 'bronze'
+                ? openContainer({ suppressRewardModal: true })
+                : openSuperContainer({ suppressRewardModal: true });
+        }
+        
+        // Add unique ID just in case
+        console.log('Generated reward:', reward);
+        rewards.push(reward);
+    }
+    updateContainerFlowStage('open');
+    animateContainerDrops(rewards, () => {
+        closeContainerFlow();
+        updateCoinDisplay();
+        showContainerRewards(rewards);
+    });
+}
+
+if (containerFlowPreview) containerFlowPreview.addEventListener('click', handleContainerConfirm);
+if (containerFlowText) containerFlowText.addEventListener('click', handleContainerConfirm);
+if (containerFlowCancel) containerFlowCancel.addEventListener('click', () => {
+    closeContainerFlow();
 });
+if (containerFlowModal) {
+    containerFlowModal.addEventListener('click', (e) => {
+        if (e.target === containerFlowModal && !containerDropActive) {
+            closeContainerFlow();
+        }
+    });
+}
+
+
 
 const selectNormalTank = document.getElementById('selectNormalTank');
 const selectIceTank = document.getElementById('selectIceTank');
@@ -404,6 +872,10 @@ if (selectIlluminatTank) selectIlluminatTank.addEventListener('click', () => {
 const selectMirrorTank = document.getElementById('selectMirrorTank');
 if (selectMirrorTank) selectMirrorTank.addEventListener('click', () => {
     showTankDetail('mirror');
+});
+const selectTimeTank = document.getElementById('selectTimeTank');
+if (selectTimeTank) selectTimeTank.addEventListener('click', () => {
+    showTankDetail('time');
 });
 
 // По умолчанию показываем главное меню
@@ -783,7 +1255,8 @@ function pathClearFor(entity, angle, dist, samples = 4) {
         const sampleCy = cy + Math.sin(angle) * dist * t;
         const tx = sampleCx - (entity.w || 0) / 2;
         const ty = sampleCy - (entity.h || 0) / 2;
-        const rect = { x: tx, y: ty, w: entity.w, h: entity.h };
+        const inflate = 2;
+        const rect = { x: tx - inflate, y: ty - inflate, w: (entity.w || 0) + inflate * 2, h: (entity.h || 0) + inflate * 2 };
         for (const obj of objects) {
             if (checkRectCollision(rect, obj)) return false;
         }
@@ -795,6 +1268,49 @@ function pathClearFor(entity, angle, dist, samples = 4) {
     const endY = endCy - (entity.h || 0) / 2;
     if (endX < 0 || endY < 0 || endX + entity.w > worldWidth || endY + entity.h > worldHeight) return false;
     return true;
+}
+
+// Быстрая оценка свободного расстояния вперед по траектории
+function clearanceAhead(entity, angle, maxDist, step = 8) {
+    const cx = entity.x + (entity.w || 0) / 2;
+    const cy = entity.y + (entity.h || 0) / 2;
+    const effStep = Math.max(6, Math.min(step, (entity.w || 16) * 0.4));
+    let lastFree = 0;
+    for (let d = effStep; d <= maxDist; d += effStep) {
+        const px = cx + Math.cos(angle) * d;
+        const py = cy + Math.sin(angle) * d;
+        const rect = { x: px - (entity.w || 0) / 2, y: py - (entity.h || 0) / 2, w: entity.w, h: entity.h };
+        // Canvas bounds
+        if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > worldWidth || rect.y + rect.h > worldHeight) return lastFree;
+        let hit = false;
+        for (const obj of objects) {
+            if (checkRectCollision(rect, obj)) { hit = true; break; }
+        }
+        if (hit) return lastFree;
+        lastFree = d;
+    }
+    return Math.min(maxDist, lastFree || maxDist);
+}
+
+// Подруливание: выбираем угол с наибольшей свободной дистанцией рядом с целевым
+function steerAroundObstacles(entity, desiredAngle, dist) {
+    const samples = [0, Math.PI / 8, -Math.PI / 8, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2];
+    let bestAng = desiredAngle;
+    let bestScore = -Infinity;
+    let bestClear = 0;
+    for (const off of samples) {
+        const a = desiredAngle + off;
+        const clear = clearanceAhead(entity, a, dist);
+        const devPenalty = Math.abs(off) * navCell * 0.25;
+        const score = clear - devPenalty;
+        if (score > bestScore) {
+            bestScore = score;
+            bestAng = a;
+            bestClear = clear;
+        }
+    }
+    const trimmedDist = bestClear < dist ? Math.max(bestClear * 0.9, dist * 0.4) : dist;
+    return { angle: bestAng, dist: trimmedDist };
 }
 
 // Найти свободную точку рядом с (x,y) чтобы сущность не появлялась в стене
@@ -940,8 +1456,8 @@ function explodeRocket(bullet) {
     const R = 80;
     function applyDamageToTank(t) {
         if (!t) return;
-        // Mirror Shield Protection: No splash damage
-        if (t === tank && tankType === 'mirror' && tank.mirrorShieldActive) return;
+        // Mirror Shield Protection: No splash damage (works for any tank)
+        if (t.mirrorShieldActive) return;
 
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
@@ -982,7 +1498,7 @@ function explodeGas(bullet, mega = false) {
     // gas cloud
     const durationTicks = (mega ? 10 : 5) * 60; // seconds -> ticks
     const radius = mega ? 180 : 90;
-    objects.push({ type: 'gas', x: bullet.x, y: bullet.y, radius: radius, life: durationTicks, maxLife: durationTicks, color: 'rgba(100,220,100,0.25)', owner: bullet.owner, isMega: mega });
+    objects.push({ type: 'gas', x: bullet.x, y: bullet.y, radius: radius, life: durationTicks, maxLife: durationTicks, color: 'rgba(100,220,100,0.25)', owner: bullet.owner, ownerTeam: bullet.team, isMega: mega });
     // Уничтожение ящиков и бочек в зоне газа
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
@@ -1000,8 +1516,8 @@ function explodeGas(bullet, mega = false) {
 function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     function applyDamageToTank(t) {
         if (!t) return;
-        // Mirror Shield Protection check
-        if (t === tank && tankType === 'mirror' && tank.mirrorShieldActive) return;
+        // Mirror Shield Protection check (works for any tank)
+        if (t.mirrorShieldActive) return;
 
         // if attackerTeam is set, skip damage to same team (friendly fire protection)
         if (attackerTeam !== undefined && t.team === attackerTeam) return;
@@ -1051,10 +1567,48 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const allTanksList = ['normal', 'ice', 'fire', 'buratino', 'toxic', 'plasma', 'musical', 'illuminat', 'mirror'];
+const allTanksList = ['ice', 'fire', 'buratino', 'toxic', 'plasma', 'musical', 'illuminat', 'mirror', 'time'];
+const tankRarityMap = {
+    'ice': 'rare',
+    'fire': 'super_rare',
+    'buratino': 'epic',
+    'musical': 'epic',
+    'toxic': 'legendary',
+    'mirror': 'legendary',
+    'illuminat': 'mythic',
+    'plasma': 'mythic',
+    'time': 'chromatic'
+};
+
+const rarityChances = {
+    'rare': 40,
+    'super_rare': 25,
+    'epic': 15,
+    'legendary': 10,
+    'chromatic': 5,
+    'mythic': 5
+};
+
+// Removed duplicate tankDescriptions declaration to avoid conflict with tanks.js
+// relying on window.tankDescriptions or global scope if tanks.js is loaded
+// If we need English names, we should update tanks.js or use a different variable name here.
+// For now, ensuring we don't crash.
+
+// Helper to pick rarity based on weights
+function getRarity() {
+    const r = Math.random() * 100;
+    let acc = 0;
+    // Iterate in order to ensure correct accumulation
+    const order = ['rare', 'super_rare', 'epic', 'legendary', 'chromatic', 'mythic'];
+    for (const rar of order) {
+        acc += rarityChances[rar];
+        if (r < acc) return rar;
+    }
+    return 'rare';
+}
 
 // Show reward modal
-function showReward(type, amount, desc, tankType = null) {
+function showReward(type, amount, desc, tankType = null, options = {}) {
     const modal = document.getElementById('rewardModal');
     const title = document.getElementById('rewardTitle');
     const iconContainer = document.getElementById('rewardIconContainer');
@@ -1078,38 +1632,118 @@ function showReward(type, amount, desc, tankType = null) {
         setTimeout(() => { modal.style.display = 'none'; }, 300);
     };
 
-    if (type === 'coins') {
-        title.textContent = 'COINS!';
-        title.style.color = '#f1c40f';
-        icon.textContent = '💰';
-        amountText.textContent = '+' + amount;
-        amountText.style.color = '#f1c40f';
-        descText.textContent = desc || 'Shiny gold coins!';
-    } else if (type === 'gems') {
-        title.textContent = 'GEMS!';
-        title.style.color = '#2ecc71';
-        icon.textContent = '💎';
-        amountText.textContent = '+' + amount;
-        amountText.style.color = '#2ecc71';
-        descText.textContent = desc || 'Rare currency!';
-    } else if (type === 'tank') {
-        title.textContent = 'NEW TANK!';
-        title.style.color = '#e74c3c';
-        const tName = (window.tankDescriptions && window.tankDescriptions[tankType]) ? window.tankDescriptions[tankType].name : tankType.toUpperCase();
+    const customTitle = options.title;
+    const customIcon = options.icon;
+    
+    // Determine title color
+    let titleColor = '#e74c3c'; // default red
+    if (type === 'coins') titleColor = '#f1c40f';
+    else if (type === 'gems') titleColor = '#2ecc71';
+    else if (type === 'tank' && tankType && window.tankBgGradients && window.tankBgGradients[tankType]) {
+        // Use the second color of the gradient for text as it's usually solid
+        titleColor = window.tankBgGradients[tankType][1]; 
+    }
+
+    const defaultTitle = type === 'coins' ? 'COINS!' : type === 'gems' ? 'GEMS!' : 'NEW TANK!';
+    const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : '🏆';
+    const resolvedTitle = customTitle || defaultTitle;
+    const resolvedIcon = customIcon || iconTextFallback;
+
+    // Reset box style for every call
+    const rewardBox = document.querySelector('.reward-box');
+    if (rewardBox) {
+        rewardBox.style.background = ''; // clear custom tank/gradient backgrounds
+        rewardBox.className = 'reward-box'; // reset classes
+        // Also reset border/shadow which might have been changed by tank logic
+        rewardBox.style.border = ''; 
+        rewardBox.style.boxShadow = '';
+    }
+
+    title.textContent = resolvedTitle;
+    title.style.color = titleColor;
+    title.style.background = 'none'; 
+    title.style.webkitTextFillColor = 'initial';
+    // Explicitly reset shadow to the CSS default (or clear inline 'none' from previous calls)
+    title.style.textShadow = ''; 
+
+    icon.textContent = resolvedIcon || '';
+
+    if (type === 'tank') {
+        const tName = (window.tankDescriptions && window.tankDescriptions[tankType]) ? window.tankDescriptions[tankType].name : (tankType || 'Tank').toUpperCase();
         amountText.textContent = tName;
-        amountText.style.color = '#e74c3c';
+        // Text color matches rarity by default
+        amountText.style.color = titleColor; 
+        amountText.style.background = 'none'; 
+        amountText.style.webkitTextFillColor = 'initial';
+        amountText.style.textShadow = '';
+        
         descText.textContent = desc || 'A powerful new vehicle!';
         
         // Draw tank
         iconContainer.innerHTML = '';
         const card = document.createElement('div');
         card.className = 'new-tank-card';
+        // Reset card style to default instead of transparent
+        card.style.background = '';
+        card.style.border = '';
+        
+        // Find the reward box container to restore its default look (NOT changing it based on tank)
+        if (rewardBox) {
+            // Restore default reward box style
+            rewardBox.style.background = 'radial-gradient(circle, #2c3e50 0%, #000000 100%)';
+            rewardBox.className = 'reward-box';
+            rewardBox.style.border = ''; // restore default border from CSS
+            rewardBox.style.boxShadow = ''; // restore default shadow from CSS
+            
+            // Only modify the CARD (square) background
+            if (tankType === 'time') {
+               // For Chromatic/Time, we need a CANVAS animation to match the menu exactly
+               // The menu uses JS to draw pixelated rainbow. We can't easily reuse that code 
+               // without refactoring, but we can copy the logic into a new helper or inline.
+               // Let's create a dedicated canvas for the background inside the card
+               card.style.background = 'transparent'; // Canvas will provide bg
+               card.style.border = '2px solid #fff';
+               
+               // Rainbow text for Tank Name
+               amountText.style.background = 'linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)';
+               amountText.style.webkitBackgroundClip = 'text';
+               amountText.style.webkitTextFillColor = 'transparent';
+               amountText.style.backgroundSize = '200% auto';
+               amountText.style.animation = 'rainbowText 2s linear infinite';
+               amountText.style.textShadow = 'none';
+               
+               // Keep Title standard
+               title.style.color = '#f1c40f'; // Default gold for title
+               title.style.textShadow = '2px 2px 0 #000';
+               
+            } else if (window.tankBgGradients && window.tankBgGradients[tankType]) {
+                const [c1, c2] = window.tankBgGradients[tankType];
+                // Apply solid background color matching the menu (second value in array usually)
+                card.style.background = c1; 
+                // Remove border/shadow if user wants it plain? 
+                // User said "remove grey walls around tank". This means border: 2px solid from CSS maybe?
+                card.style.border = 'none'; 
+                card.style.boxShadow = 'none';
+            
+            } else {
+                // Default fallback (grass color)
+                card.style.background = '#1b5e20'; 
+                card.style.border = 'none';
+                card.style.boxShadow = 'none';
+            }
+        }
+        
         const glow = document.createElement('div');
         glow.className = 'rarity-glow';
+        // Adjust glow color to match
+        glow.style.boxShadow = `0 0 30px 10px ${titleColor}`;
+        
         const canvas = document.createElement('canvas');
         canvas.width = 150;
         canvas.height = 150;
         canvas.className = 'tank-display';
+        // Make the canvas background transparent so it shows the card gradient
+        canvas.style.background = 'transparent';
         
         card.appendChild(glow);
         card.appendChild(canvas);
@@ -1117,77 +1751,175 @@ function showReward(type, amount, desc, tankType = null) {
         
         const ctx = canvas.getContext('2d');
         if (typeof drawTankOn === 'function') {
-            drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+            if (tankType === 'time') {
+               // Replicate the exact menu animation for Time tank
+               const drawFrame = () => {
+                 // Check if modal is still open
+                 if (modal.style.display === 'none') return;
+                 
+                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                 const t = Date.now() * 0.05; // Slightly faster for responsiveness
+                 const pixel = 20; // Fixed pixel size matches menu style
+                 const shift = (t * 2) % 360;
+                 const step = 0.5;
+                 
+                 // Draw dynamic background directly on canvas
+                 for (let py = 0; py < canvas.height; py += pixel) {
+                     for (let px = 0; px < canvas.width; px += pixel) {
+                         const s = px + py;
+                         const hue = (((s * step) - shift) % 360 + 360) % 360;
+                         const light = 48 + 6 * Math.sin((px * 0.015 + py * 0.015) + t * 0.02);
+                         ctx.fillStyle = `hsl(${hue}, 80%, ${light}%)`;
+                         ctx.fillRect(px, py, pixel, pixel);
+                     }
+                 }
+                 
+                 // Draw the tank on top
+                 // Need to save/restore context or drawTankOn might be affected by fillStyle
+                 drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+                 requestAnimationFrame(drawFrame);
+               };
+               drawFrame();
+            } else {
+               drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+            }
         }
+    } else {
+        amountText.textContent = (typeof amount === 'number' ? '+' + amount : amount || '');
+        amountText.style.color = titleColor;
+        descText.textContent = desc || (type === 'coins' ? 'Shiny gold coins!' : 'Rare currency!');
     }
 }
 
-function unlockRandomTank(fromSuper = false) {
-    const t = allTanksList[Math.floor(Math.random() * allTanksList.length)];
+function unlockRandomTank(fromSuper = false, options = {}) {
+    const { suppressRewardModal = false } = options;
+    
+    // 1. Pick rarity
+    const rarity = getRarity();
+    const tanksInRarity = allTanksList.filter(t => tankRarityMap[t] === rarity);
+    const t = tanksInRarity.length > 0
+        ? tanksInRarity[Math.floor(Math.random() * tanksInRarity.length)]
+        : allTanksList[Math.floor(Math.random() * allTanksList.length)]; // fallback
+
+    const tDesc = tankDescriptions[t] ? tankDescriptions[t].name : t.toUpperCase();
+    const rarityLabel = rarity.replace('_', ' ').toUpperCase();
+
     if (!unlockedTanks.includes(t)) {
         unlockedTanks.push(t);
         saveProgress();
-        showReward('tank', 1, 'Unlocked permanently!', t);
+        if (!suppressRewardModal) showReward('tank', 1, 'Unlocked permanently!', t);
         updateTankDetailButton(t);
+        return { type: 'tank', tankType: t, desc: 'Unlocked permanently!', icon: '�' };
     } else {
         const price = tankGemPrices[t] || 0;
         const comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
         gems += comp;
         saveProgress();
-        showReward('gems', comp, `Duplicate tank ${t.toUpperCase()} converted to Gems!`);
+        if (!suppressRewardModal) showReward('gems', comp, `Duplicate tank ${t.toUpperCase()} converted to Gems!`);
+        return { type: 'gems', amount: comp, desc: `Duplicate tank ${t.toUpperCase()} converted to Gems!`, icon: '💎' };
     }
 }
 
 // Open normal container
-function openContainer() {
+function openContainer(options = {}) {
+    const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
-    if (r < 50) { // 50% 20-50 coins
-        const val = getRandomInt(20, 50);
+    if (r < 45) { // 45% — coins (20–60)
+        const val = getRandomInt(20, 60);
         coins += val;
-        showReward('coins', val, 'Small stash of gold.');
-    } else if (r < 80) { // 30% 1-3 gems
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (20–60)');
+        return { type: 'coins', amount: val, desc: 'Coins (20–60)', icon: '💰' };
+    } else if (r < 75) { // next 30% — coins (60–120)
+        const val = getRandomInt(60, 120);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (60–120)');
+        return { type: 'coins', amount: val, desc: 'Coins (60–120)', icon: '💰' };
+    } else if (r < 90) { // next 15% — gems (1–3)
         const val = getRandomInt(1, 3);
         gems += val;
-        showReward('gems', val, 'A few precious stones.');
-    } else if (r < 95) { // 15% 50-100 coins
-        const val = getRandomInt(50, 100);
-        coins += val;
-        showReward('coins', val, 'Big bag of coins!');
-    } else if (r < 99) { // 4% 3-5 gems
-        const val = getRandomInt(3, 5);
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (1–3)');
+        return { type: 'gems', amount: val, desc: 'Gems (1–3)', icon: '💎' };
+    } else if (r < 95) { // next 5% — gems (3–6)
+        const val = getRandomInt(3, 6);
         gems += val;
-        showReward('gems', val, 'Handful of gems!');
-    } else { // 1% Tank
-        // Check probabilities based on rarity tiers
-        // Uniform for now as per user request ("unlocked like toxic")
-        unlockRandomTank(false);
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (3–6)');
+        return { type: 'gems', amount: val, desc: 'Gems (3–6)', icon: '💎' };
     }
-    updateCoinDisplay();
+    return unlockRandomTankNew(false, { suppressRewardModal });
 }
 
 // Open super container
-function openSuperContainer() {
+function openSuperContainer(options = {}) {
+    const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
-    if (r < 40) { // 40% 100-200 coins
-        const val = getRandomInt(100, 200);
+    if (r < 35) { // 35% — coins (120–250)
+        const val = getRandomInt(120, 250);
         coins += val;
-        showReward('coins', val, 'Super Coin Box!');
-    } else if (r < 70) { // 30% 5-10 gems
-        const val = getRandomInt(5, 10);
-        gems += val;
-        showReward('gems', val, 'Pile of Gems!');
-    } else if (r < 90) { // 20% 200-400 coins
-        const val = getRandomInt(200, 400);
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (120–250)');
+        return { type: 'coins', amount: val, desc: 'Coins (120–250)', icon: '💰' };
+    } else if (r < 60) { // next 25% — coins (250–450)
+        const val = getRandomInt(250, 450);
         coins += val;
-        showReward('coins', val, 'MOUND OF GOLD!');
-    } else if (r < 99) { // 9% 10-20 gems
-        const val = getRandomInt(10, 20);
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (250–450)');
+        return { type: 'coins', amount: val, desc: 'Coins (250–450)', icon: '💰' };
+    } else if (r < 75) { // next 15% — gems (5–12)
+        const val = getRandomInt(5, 12);
         gems += val;
-        showReward('gems', val, 'Treasure chest of Gems!');
-    } else { // 1% Tank
-        unlockRandomTank(true);
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (5–12)');
+        return { type: 'gems', amount: val, desc: 'Gems (5–12)', icon: '💎' };
+    } else if (r < 90) { // next 15% — gems (12–25)
+        const val = getRandomInt(12, 25);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (12–25)');
+        return { type: 'gems', amount: val, desc: 'Gems (12–25)', icon: '💎' };
     }
-    updateCoinDisplay();
+    return unlockRandomTankNew(true, { suppressRewardModal });
+}
+
+// Open Omega container
+// 20% - Tank
+// 80% - Resources:
+//   30% - Coins 600-1200
+//   20% - Coins 1200-2000
+//   20% - Gems 25-50
+//   10% - Gems 50-80
+function openOmegaContainer(options = {}) {
+    const { suppressRewardModal = false } = options;
+    const r = Math.random() * 100;
+    
+    if (r < 30) { // 30% coins small
+        const val = getRandomInt(600, 1200);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (600–1200)');
+        return { type: 'coins', amount: val, desc: 'Coins (600–1200)', icon: '💰' };
+    
+    } else if (r < 50) { // 20% coins big (30 + 20 = 50)
+        const val = getRandomInt(1200, 2000);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (1200–2000)');
+        return { type: 'coins', amount: val, desc: 'Coins (1200–2000)', icon: '💰' };
+    
+    } else if (r < 70) { // 20% gems small (50 + 20 = 70)
+        const val = getRandomInt(25, 50);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (25–50)');
+        return { type: 'gems', amount: val, desc: 'Gems (25–50)', icon: '💎' };
+    
+    } else if (r < 80) { // 10% gems big (70 + 10 = 80)
+        const val = getRandomInt(50, 80);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (50–80)');
+        return { type: 'gems', amount: val, desc: 'Gems (50–80)', icon: '💎' };
+    
+    } else { // Remaining 20% (80 -> 100) is Tank
+        // Reuse unlockRandomTank but maybe prioritize unlocked ones? 
+        // Logic says "any tank". unlockRandomTank handles duplicate logic.
+        // We pass fromSuper=true to get higher gem refund if duplicate.
+        // Maybe even higher refund for Omega?
+        // Let's modify unlockRandomTank to accept multiplier or specific refund.
+        // For now standard super refund is fine.
+        return unlockRandomTankNew(true, { suppressRewardModal });
+    }
 }
 
 // Построить навигационную сетку: 1 = блокировано, 0 = свободно
@@ -1429,14 +2161,26 @@ function drawDebugLines() {
     debugLines = [];
 }
 
-function spawnParticle(x, y) {
-    particles.push({
-        x, y, 
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2,
-        life: 1,
-        size: Math.random() * 3 + 2
-    });
+function spawnParticle(x, y, color, life) {
+    const lifeValue = (typeof life === 'number') ? life : (20 + Math.random() * 10);
+    if (color && typeof color === 'string') {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            life: lifeValue,
+            size: Math.random() * 3 + 2,
+            color: color
+        });
+    } else {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            life: lifeValue,
+            size: Math.random() * 3 + 2
+        });
+    }
 }
 // --- APPEND_POINT_RESUME ---
 function shoot() {
@@ -1659,10 +2403,12 @@ function shoot() {
 // --- APPEND_POINT_UPDATE ---
 function update() {
     if (gameState !== 'playing') {
+        syncResultOverlay(gameState);
         if (gameState === 'win' || gameState === 'lose') {
-            if (keys['Space']) {
+            // Do not restart on Space — use Enter to restart instead
+            if (keys['Enter']) {
                 location.reload();
-                keys['Space'] = false;
+                keys['Enter'] = false;
             }
         }
         return;
@@ -1831,9 +2577,69 @@ function update() {
             if (tank.mirrorShieldCooldown > 0) tank.mirrorShieldCooldown--;
         }
 
+        // Time Tank Ability (E) - Time Rewind (Back 5 seconds)
+        if (tankType === 'time') {
+            if (keys['KeyE']) {
+                if (!tank.teleportCooldown || tank.teleportCooldown <= 0) {
+                    // Rewind logic
+                    if (tank.history && tank.history.length > 0) {
+                        // Get the oldest state (5 seconds ago, or as far as we have)
+                        const oldState = tank.history[0];
+                        
+                        // FX at current position (vanish - Implosion style)
+                        objects.push({ type: 'implosion', x: tank.x + tank.w/2, y: tank.y + tank.h/2, radius: 45, life: 25, maxLife: 25, color: '#00ffff' }); // Cyan Flash
+                        for(let i=0; i<40; i++) {
+                            spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#00ffff', 6);
+                        }
+
+                        // Teleport back
+                        tank.x = oldState.x;
+                        tank.y = oldState.y;
+                        tank.turretAngle = oldState.turretAngle;
+                        tank.baseAngle = oldState.baseAngle;
+                        // Optional: Restore HP? For now, let's keep it just movement to avoid exploit/confusion
+                        // tank.hp = Math.min(tank.maxHp, Math.max(tank.hp, oldState.hp));
+
+                        // FX at new position (appear - Explosion style)
+                        objects.push({ type: 'explosion', x: tank.x + tank.w/2, y: tank.y + tank.h/2, radius: 60, life: 30, color: '#ff00ff' }); // Magenta Flash
+                        for(let i=0; i<50; i++) {
+                            spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#ff00ff', 6);
+                        }
+                        
+                        // Clear history to prevent jumping back to same spot immediately? 
+                        // Or keep it for continuous rewinding?
+                        // Usually clear history to reset the timeline.
+                        tank.history = []; 
+                        
+                        tank.teleportCooldown = 60 * 8; // 8 seconds standard cooldown
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+            if (tank.teleportCooldown > 0) tank.teleportCooldown--;
+        }
+
         if (keys['ArrowRight']) tank.turretAngle += 0.06;
-        // Перезарядка игрока
-        if (tank.fireCooldown > 0) tank.fireCooldown--;
+
+    // Time Travel Record (for Time Rewind ability)
+    if (tankType === 'time') {
+        if (!tank.history) tank.history = [];
+        // Save current state every frame (at 60fps, 300 frames = 5 seconds)
+        tank.history.push({
+            x: tank.x,
+            y: tank.y,
+            turretAngle: tank.turretAngle,
+            baseAngle: tank.baseAngle,
+            hp: tank.hp
+        });
+        // Limit history to 5 seconds
+        if (tank.history.length > 300) {
+            tank.history.shift();
+        }
+    }
+
+    // Перезарядка игрока
+    if (tank.fireCooldown > 0) tank.fireCooldown--;
         // Стрельба (только если перезарядка закончилась)
         if (keys['Space'] && tank.fireCooldown <= 0) {
             shoot();
@@ -1851,13 +2657,16 @@ function update() {
         if (!enemy || !enemy.alive) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
         
-        // Handle Inverted Controls (AI)
+        // Handle Inverted Controls (AI) and disorientation affecting movement
         let invertAI = false;
         if (enemy.invertedControls > 0) {
             enemy.invertedControls--;
             invertAI = true;
-            // Visual
             if (Math.random() > 0.9) spawnParticle(enemy.x+enemy.w/2, enemy.y+enemy.h/2, '#8e44ad');
+        }
+        // If disoriented, also invert movement (but don't decrement here since turret logic handles disoriented decrement)
+        if (enemy.disoriented > 0) {
+            invertAI = true;
         }
 
         // If in artillery mode, countdown and skip normal AI movement/actions
@@ -1927,12 +2736,74 @@ function update() {
         if (enemy.confused > 0) {
             enemy.turretAngle += (Math.random() - 0.5) * 1.2;
             enemy.confused--;
-        } else if (enemy.disoriented > 0) {
+        } else if (enemy.disoriented > 0 || (enemy.invertedControls && enemy.invertedControls > 0)) {
             enemy.turretAngle = Math.atan2(enemy.y - nearest.y, enemy.x - nearest.x); // shoot backwards
-            enemy.disoriented--;
+            if (enemy.disoriented > 0) enemy.disoriented--;
+            if (enemy.invertedControls && enemy.invertedControls > 0) enemy.invertedControls--;
         } else {
             enemy.turretAngle = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
         }
+
+        // Enemy ability usage heuristics
+        try {
+            // Mirror shield tick/cooldown maintenance
+            if (enemy.mirrorShieldActive) {
+                enemy.mirrorShieldTimer = (enemy.mirrorShieldTimer || 0) - 1;
+                if (enemy.mirrorShieldTimer <= 0) enemy.mirrorShieldActive = false;
+            }
+            if (enemy.mirrorShieldCooldown > 0) enemy.mirrorShieldCooldown--;
+
+            const distToNearest = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
+
+            // Toxic: use mega gas once if close enough
+            if (enemy.tankType === 'toxic' && !enemy.megaGasUsed && distToNearest < 300 && Math.random() < 0.03) {
+                const ang = enemy.turretAngle;
+                const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 20;
+                const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 20;
+                const speed = 8;
+                bullets.push({ x: sx, y: sy, w: 8, h: 8, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 500, owner: 'enemy', team: enemy.team, type: 'megabomb', explodeTimer: 60, spawned: 5 });
+                enemy.megaGasUsed = true;
+                enemy.fireCooldown = 60;
+            }
+
+            // Plasma: fire powerful plasma blast (limited uses)
+            if (enemy.tankType === 'plasma' && ((enemy.plasmaBlastUsed || 0) < 2) && distToNearest < 450 && Math.random() < 0.04) {
+                const ang = enemy.turretAngle;
+                const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 25;
+                const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 25;
+                bullets.push({ x: sx, y: sy, w: 10, h: 10, vx: Math.cos(ang) * 10, vy: Math.sin(ang) * 10, life: 300, owner: 'enemy', team: enemy.team, type: 'plasmaBlast', damage: 5, piercing: true, destroysWalls: true });
+                enemy.plasmaBlastUsed = (enemy.plasmaBlastUsed || 0) + 1;
+                enemy.fireCooldown = 60;
+            }
+
+            // Illuminat: inversion of controls affecting player/allies
+            if (enemy.tankType === 'illuminat' && ((enemy.inversionUsed || 0) < 2) && distToNearest < 380 && Math.random() < 0.03) {
+                const range = 350;
+                const cx = enemy.x + enemy.w/2;
+                const cy = enemy.y + enemy.h/2;
+                objects.push({ type: 'explosion', x: cx, y: cy, radius: range, life: 45, maxLife: 45, color: 'rgba(155, 89, 182, 0.2)' });
+                for (let k = 0; k < 20; k++) { const a = Math.random() * Math.PI * 2; const r = range * Math.sqrt(Math.random()); spawnParticle(cx + Math.cos(a) * r, cy + Math.sin(a) * r, '#8e44ad'); }
+                // Affect player and allies
+                const targetsToInvert = [tank, ...allies];
+                for (const t of targetsToInvert) {
+                    if (!t) continue;
+                    const ex = t.x + (t.w||0)/2, ey = t.y + (t.h||0)/2;
+                    if (Math.hypot(ex - cx, ey - cy) <= range) {
+                        t.invertedControls = 120;
+                        t.confused = 120;
+                    }
+                }
+                enemy.inversionUsed = (enemy.inversionUsed || 0) + 1;
+                enemy.fireCooldown = 60;
+            }
+
+            // Mirror: activate shield defensively
+            if (enemy.tankType === 'mirror' && !enemy.mirrorShieldActive && (!enemy.mirrorShieldCooldown || enemy.mirrorShieldCooldown <= 0) && distToNearest < 320 && Math.random() < 0.025) {
+                enemy.mirrorShieldActive = true;
+                enemy.mirrorShieldTimer = 120;
+                enemy.mirrorShieldCooldown = 60 * 18;
+            }
+        } catch (errAbility) { /* ignore ability errors for AI */ }
 
         // Двигаться к цели с помощью навигационной сетки (A*). Если путь не найден — падаем обратно на прежнюю эвристику.
         const mdx = (nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2);
@@ -1977,19 +2848,22 @@ function update() {
                 const toWpX = wp.x - cx, toWpY = wp.y - cy;
                 const distToWp = Math.hypot(toWpX, toWpY);
                 let ang = Math.atan2(toWpY, toWpX);
-                
-                // --- INVERTED CONTROLS - PATH ---
-                // If inverted, enemy tries to move AWAY from waypoint
+                const originalAng = ang; // Store intended direction
                 if (invertAI) ang += Math.PI;
 
-                // Дистанция шага — не больше, чем расстояние до точки
-                const moveDist = Math.min(tryDist, distToWp);
+                let moveDist = Math.min(tryDist, distToWp);
+                const steering = steerAroundObstacles(enemy, ang, moveDist);
+                ang = steering.angle;
+                moveDist = steering.dist;
                 // If direct path to waypoint is blocked, attempt local sidestep avoidance
                 if (!pathClearFor(enemy, ang, moveDist) && !invertAI) { // Don't block inversion escape if pathblocked (actually inversion just goes backwards so it might go into wall)
                     const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
                     let avoided = false;
                     for (const a of sideAngles) {
-                        if (moveSmallSteps(enemy, a, moveDist * 0.9)) { enemy.baseAngle = a; avoided = true; break; }
+                        if (moveSmallSteps(enemy, a, moveDist * 0.9)) { 
+                            enemy.baseAngle = invertAI ? a - Math.PI : a; 
+                            avoided = true; break; 
+                        }
                     }
                     if (avoided) continue;
                     // unable to sidestep — force path recalculation next tick
@@ -2001,7 +2875,8 @@ function update() {
                 for (const f of fracs) {
                     if (moveSmallSteps(enemy, ang, moveDist * f)) {
                         movedAlongPath = true;
-                        enemy.baseAngle = ang;
+                        // Use original intended angle for baseAngle so it looks like reverse driving
+                        enemy.baseAngle = invertAI ? ang - Math.PI : ang;
                         enemy.stuckCount = 0;
                         break;
                     }
@@ -2017,15 +2892,21 @@ function update() {
                 }
             } else {
                 // fallback: старая эвристика (локальные сэмплы углов)
-                enemy.baseAngle = Math.atan2(mdy, mdx);
-                if (invertAI) enemy.baseAngle += Math.PI; // Invert fallback
+                let faceAng = Math.atan2(mdy, mdx);
+                // initial guess for movement
+                let moveAng = faceAng + (invertAI ? Math.PI : 0);
+                enemy.baseAngle = faceAng; 
 
-                const desiredAng = enemy.baseAngle;
+                let desiredAng = moveAng;
+                let fallbackDist = tryDist;
+                const steer = steerAroundObstacles(enemy, desiredAng, fallbackDist);
+                desiredAng = steer.angle;
+                fallbackDist = steer.dist;
                 // Попытка сделать малые шаги в желаемом направлении
                 let moved = false;
-                if (moveSmallSteps(enemy, desiredAng, tryDist)) {
+                if (moveSmallSteps(enemy, desiredAng, fallbackDist)) {
                     moved = true;
-                    enemy.baseAngle = desiredAng;
+                    enemy.baseAngle = invertAI ? desiredAng - Math.PI : desiredAng; 
                     enemy.stuckCount = 0;
                 } else {
                     const MAX_STEPS = MAX_STEPS_FALLBACK;
@@ -2034,12 +2915,15 @@ function update() {
                         const sign = (s % 2 === 0) ? 1 : -1;
                         const mag = Math.ceil(s / 2);
                         const ang = desiredAng + sign * mag * ANG_STEP;
-                        if (moveSmallSteps(enemy, ang, tryDist)) {
-                            moved = true; enemy.baseAngle = ang; enemy.stuckCount = 0; break;
+                        if (moveSmallSteps(enemy, ang, fallbackDist)) {
+                            moved = true; 
+                            enemy.baseAngle = invertAI ? ang - Math.PI : ang; 
+                            enemy.stuckCount = 0; 
+                            break;
                         } else if (SHOW_AI_DEBUG) {
                             const px1 = enemy.x + enemy.w/2; const py1 = enemy.y + enemy.h/2;
-                            const px2 = px1 + Math.cos(ang) * tryDist * 4;
-                            const py2 = py1 + Math.sin(ang) * tryDist * 4;
+                            const px2 = px1 + Math.cos(ang) * fallbackDist * 4;
+                            const py2 = py1 + Math.sin(ang) * fallbackDist * 4;
                             debugLines.push({ x1: px1, y1: py1, x2: px2, y2: py2, color: 'orange', width: 1 });
                         }
                     }
@@ -2048,14 +2932,28 @@ function update() {
                     enemy.stuckCount = (enemy.stuckCount || 0) + 1;
                     const sidesteps = [desiredAng + Math.PI/2, desiredAng - Math.PI/2, desiredAng + Math.PI*0.6, desiredAng - Math.PI*0.6];
                     for (const ang of sidesteps) {
-                        if (moveSmallSteps(enemy, ang, tryDist)) { moved = true; enemy.baseAngle = ang; enemy.stuckCount = 0; break; }
+                        if (moveSmallSteps(enemy, ang, tryDist)) { 
+                             moved = true; 
+                             enemy.baseAngle = invertAI ? ang - Math.PI : ang; // approximate facing
+                             enemy.stuckCount = 0; 
+                             break; 
+                        }
                         else if (SHOW_AI_DEBUG) { const px1 = enemy.x + enemy.w/2; const py1 = enemy.y + enemy.h/2; const px2 = px1 + Math.cos(ang) * tryDist * 4; const py2 = py1 + Math.sin(ang) * tryDist * 4; debugLines.push({ x1: px1, y1: py1, x2: px2, y2: py2, color: 'aqua', width: 1 }); }
                     }
                     if (!moved && enemy.stuckCount > 4) {
                         const newAng = desiredAng + Math.PI + (Math.random() - 0.5) * Math.PI/2;
-                        if (moveSmallSteps(enemy, newAng, tryDist * 1.2)) { moved = true; enemy.baseAngle = newAng; enemy.stuckCount = 0; }
+                        if (moveSmallSteps(enemy, newAng, tryDist * 1.2)) { 
+                             moved = true; 
+                             enemy.baseAngle = invertAI ? newAng - Math.PI : newAng;
+                             enemy.stuckCount = 0; 
+                        }
                     }
-                    if (!moved) { enemy.x -= Math.cos(enemy.baseAngle) * enemy.speed * 0.25; enemy.y -= Math.sin(enemy.baseAngle) * enemy.speed * 0.25; }
+                    if (!moved) { 
+                        // desperation backup
+                        const retreatAng = enemy.baseAngle; 
+                        enemy.x -= Math.cos(retreatAng) * enemy.speed * 0.25; 
+                        enemy.y -= Math.sin(retreatAng) * enemy.speed * 0.25; 
+                    }
                 }
             }
         }
@@ -2224,9 +3122,10 @@ function update() {
         if (ally.confused > 0) {
             ally.turretAngle += (Math.random() - 0.5) * 1.2;
             ally.confused--;
-        } else if (ally.disoriented > 0) {
+        } else if (ally.disoriented > 0 || (ally.invertedControls && ally.invertedControls > 0)) {
             ally.turretAngle = Math.atan2(ally.y - nearest.y, ally.x - nearest.x); // shoot backwards
-            ally.disoriented--;
+            if (ally.disoriented > 0) ally.disoriented--;
+            if (ally.invertedControls && ally.invertedControls > 0) ally.invertedControls--;
         } else {
             ally.turretAngle = Math.atan2(nearest.y - ally.y, nearest.x - ally.x);
         }
@@ -2236,6 +3135,8 @@ function update() {
         }
 
         // Movement towards nearest enemy (reuse enemy logic: pathfinding then small-step fallback)
+        // If disoriented or inverted, invert movement direction for allies
+        const invertAlly = (ally.disoriented > 0) || (ally.invertedControls && ally.invertedControls > 0);
         const mdx = (nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2);
         const mdy = (nearest.y + (nearest.h||0)/2) - (ally.y + ally.h/2);
         const mdist = Math.hypot(mdx, mdy);
@@ -2260,14 +3161,23 @@ function update() {
                 const cx = ally.x + ally.w/2, cy = ally.y + ally.h/2;
                 const toWpX = wp.x - cx, toWpY = wp.y - cy;
                 const distToWp = Math.hypot(toWpX, toWpY);
-                const ang = Math.atan2(toWpY, toWpX);
-                const moveDist = Math.min(tryDist, distToWp);
+                let faceAng = Math.atan2(toWpY, toWpX);
+                let moveAng = faceAng + (invertAlly ? Math.PI : 0);
+
+                let moveDist = Math.min(tryDist, distToWp);
+                const steering = steerAroundObstacles(ally, moveAng, moveDist);
+                moveAng = steering.angle; 
+                moveDist = steering.dist;
                     // Local avoidance: if blocked, try sidesteps before forcing path recalculation
-                    if (!pathClearFor(ally, ang, moveDist)) {
-                        const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
+                    if (!pathClearFor(ally, moveAng, moveDist)) {
+                        const sideAngles = [moveAng + Math.PI/2, moveAng - Math.PI/2, moveAng + Math.PI/3, moveAng - Math.PI/3];
                         let avoided = false;
                         for (const a of sideAngles) {
-                            if (moveSmallSteps(ally, a, moveDist * 0.9)) { ally.baseAngle = a; avoided = true; break; }
+                            if (moveSmallSteps(ally, a, moveDist * 0.9)) { 
+                                ally.baseAngle = invertAlly ? a - Math.PI : a; 
+                                avoided = true; 
+                                break; 
+                            }
                         }
                         if (avoided) continue;
                         ally.pathRecalc = 0;
@@ -2275,24 +3185,60 @@ function update() {
                 let movedAlongPath = false;
                 const fracs = [1, 0.8, 0.5];
                 for (const f of fracs) {
-                    if (moveSmallSteps(ally, ang, moveDist * f)) { movedAlongPath = true; ally.baseAngle = ang; ally.stuckCount = 0; break; }
+                    if (moveSmallSteps(ally, moveAng, moveDist * f)) { 
+                        movedAlongPath = true; 
+                        ally.baseAngle = invertAlly ? moveAng - Math.PI : moveAng; 
+                        ally.stuckCount = 0; 
+                        break; 
+                    }
                 }
                 if (movedAlongPath) {
                     if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) ally.pathIndex++;
                 } else { ally.stuckCount = (ally.stuckCount || 0) + 1; if (ally.stuckCount > 2) ally.pathRecalc = 0; }
             } else {
                 // fallback local sampling
-                ally.baseAngle = Math.atan2(mdy, mdx);
-                const desiredAng = ally.baseAngle; let moved = false;
-                if (moveSmallSteps(ally, desiredAng, tryDist)) { moved = true; ally.baseAngle = desiredAng; ally.stuckCount = 0; }
+                let faceAng = Math.atan2(mdy, mdx);
+                let desiredAng = faceAng + (invertAlly ? Math.PI : 0);
+                
+                ally.baseAngle = faceAng; 
+                let moved = false;
+                let fallbackDist = tryDist;
+                const steer = steerAroundObstacles(ally, desiredAng, fallbackDist);
+                desiredAng = steer.angle;
+                fallbackDist = steer.dist;
+                
+                if (moveSmallSteps(ally, desiredAng, fallbackDist)) { 
+                    moved = true; 
+                    ally.baseAngle = invertAlly ? desiredAng - Math.PI : desiredAng; 
+                    ally.stuckCount = 0; 
+                }
                 else {
                     const MAX_STEPS = 24; const ANG_STEP = Math.PI/24;
                     for (let s=1; s<=MAX_STEPS && !moved; s++) {
                         const sign = (s%2===0)?1:-1; const mag = Math.ceil(s/2); const ang = desiredAng + sign*mag*ANG_STEP;
-                        if (moveSmallSteps(ally, ang, tryDist)) { moved = true; ally.baseAngle = ang; ally.stuckCount = 0; break; }
+                        if (moveSmallSteps(ally, ang, fallbackDist)) { 
+                            moved = true; 
+                            ally.baseAngle = invertAlly ? ang - Math.PI : ang; 
+                            ally.stuckCount = 0; 
+                            break; 
+                        }
                     }
                 }
-                if (!moved) { ally.stuckCount = (ally.stuckCount||0) + 1; if (ally.stuckCount > 4) { const newAng = desiredAng + Math.PI + (Math.random()-0.5)*Math.PI/2; if (moveSmallSteps(ally, newAng, tryDist*1.2)) { ally.baseAngle = newAng; ally.stuckCount = 0; } } if (!moved) { ally.x -= Math.cos(ally.baseAngle)*ally.speed*0.25; ally.y -= Math.sin(ally.baseAngle)*ally.speed*0.25; } }
+                if (!moved) { 
+                    ally.stuckCount = (ally.stuckCount||0) + 1; 
+                    if (ally.stuckCount > 4) { 
+                        const newAng = desiredAng + Math.PI + (Math.random()-0.5)*Math.PI/2; 
+                        if (moveSmallSteps(ally, newAng, tryDist*1.2)) { 
+                            ally.baseAngle = invertAlly ? newAng - Math.PI : newAng; 
+                            ally.stuckCount = 0; 
+                        } 
+                    } 
+                    if (!moved) { 
+                        const retreatAng = ally.baseAngle; 
+                        ally.x -= Math.cos(retreatAng)*ally.speed*0.25; 
+                        ally.y -= Math.sin(retreatAng)*ally.speed*0.25; 
+                    } 
+                }
             }
 
             // Shoot at target occasionally with cooldown
@@ -2470,19 +3416,41 @@ function update() {
             // Allow checking player as target (wrapped)
             const checkList = targets; // targets is array
 
+            // helper: distance from point to beam segment
+            const distToSegment = (px, py, x1, y1, x2, y2) => {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const lenSq = dx*dx + dy*dy || 1;
+                const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+                const projX = x1 + t * dx;
+                const projY = y1 + t * dy;
+                return Math.hypot(px - projX, py - projY);
+            };
+
             for (let j = checkList.length - 1; j >= 0; j--) {
                 const e = checkList[j];
                 // Skip invalid, dead, or same team
                 if (!e || (e.alive === false && e !== tank) || (e.team !== undefined && e.team === unit.team)) continue;
-                // Special check for player 'alive' handled elsewhere but safely ignored if hp<=0
 
-                // Mirror Shield Protection from Beams
-                if (e === tank && tankType === 'mirror' && tank.mirrorShieldActive) continue;
+                // Mirror Shield Protection from Beams (works for any tank)
+                if (e.mirrorShieldActive) continue;
 
-                if (lineIntersectsRect(beamX, beamY, endX, endY, e.x, e.y, e.w, e.h)) {
-                    e.hp -= 0.5 * unit.beamIntensity; // Scale damage by intensity
-                    if (e.disoriented !== undefined) e.disoriented = 36;
-                    
+                // Hit check by distance to beam segment (more reliable than rect intersection)
+                const cx = e.x + (e.w||0)/2;
+                const cy = e.y + (e.h||0)/2;
+                const hitRadius = Math.max(e.w||0, e.h||0) * 0.55 + 4; // small padding
+                const dist = distToSegment(cx, cy, beamX, beamY, endX, endY);
+                if (dist <= hitRadius) {
+                    // Damage scaled by beam intensity (slightly stronger)
+                    const dmg = 0.8 * unit.beamIntensity;
+                    e.hp -= dmg;
+                    // Apply strong disorientation/inversion + confusion so AI reacts
+                    e.disoriented = Math.max(e.disoriented || 0, 60);
+                    e.invertedControls = Math.max(e.invertedControls || 0, 120);
+                    e.confused = Math.max(e.confused || 0, 90);
+                    // small visual feedback
+                    for (let p = 0; p < 6; p++) spawnParticle(cx + (Math.random()-0.5)*10, cy + (Math.random()-0.5)*10, '#8e44ad');
+
                     if (e.hp <= 0) {
                         // Handle death
                         if (e === tank) {
@@ -2526,7 +3494,7 @@ function update() {
     // Illuminat beam logic for enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
-        if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies]);
+        if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies, ...enemies]);
     }
 
 // --- APPEND_POINT_UPDATE_REST ---
@@ -3094,6 +4062,9 @@ function update() {
         } else if (obj.type === 'explosion') {
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'implosion') {
+            obj.life--;
+            if (obj.life <= 0) objects.splice(i, 1);
         } else if (obj.type === 'gas') {
             // gas cloud visual fades over time
             obj.life--;
@@ -3172,38 +4143,58 @@ function update() {
     const GAS_DEBUFF_TICKS = 3 * 60; // 3 seconds
     for (const obj of objects) {
         if (obj.type !== 'gas') continue;
-        // Only poison enemies if gas was created by player
-        if (obj.owner === 'player') {
-            // enemies
+        const ownerTeam = typeof obj.ownerTeam !== 'undefined' ? obj.ownerTeam : null;
+
+        // If ownerTeam is set, poison entities whose team differs from ownerTeam
+        if (ownerTeam !== null) {
+            // Poison enemies (team !== ownerTeam)
             for (const e of enemies) {
                 if (!e || !e.alive) continue;
+                if (e.team === ownerTeam) continue;
                 const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
                 }
             }
-        } else if (obj.owner === 'ally') {
-            // Only poison enemies if gas was created by an ally
-            for (const e of enemies) {
-                if (!e || !e.alive) continue;
-                const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
-                if (dist <= obj.radius) {
-                    if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
-                }
-            }
-        } else if (obj.owner === 'enemy') {
-            // Only poison player and allies if gas was created by an enemy
-            if (tank.alive !== false) {
+            // Poison player if not on same team
+            if (tank && tank.alive !== false && tank.team !== ownerTeam) {
                 const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
                 }
             }
+            // Poison allies not on ownerTeam
             for (const a of allies) {
                 if (!a || !a.alive) continue;
+                if (a.team === ownerTeam) continue;
                 const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
+                }
+            }
+        } else {
+            // Fallback for older gas objects using owner string: keep previous semantics
+            if (obj.owner === 'player' || obj.owner === 'ally') {
+                for (const e of enemies) {
+                    if (!e || !e.alive) continue;
+                    const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
+                    if (dist <= obj.radius) {
+                        if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
+                    }
+                }
+            } else if (obj.owner === 'enemy') {
+                if (tank.alive !== false) {
+                    const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
+                    if (dist <= obj.radius) {
+                        if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
+                    }
+                }
+                for (const a of allies) {
+                    if (!a || !a.alive) continue;
+                    const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
+                    if (dist <= obj.radius) {
+                        if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
+                    }
                 }
             }
         }
@@ -3219,12 +4210,11 @@ function update() {
             const dmgPerSec = maxHp / 6;
             const dmgPerTick = dmgPerSec / 60;
 
-            // Mirror Tank Logic: Poison counts as hit type 'toxic'
-            if (ent === tank && tankType === 'mirror') {
-                 // Check if actually taking damage
-                 tank.lastHitType = 'toxic';
-                 tank.lastHitTime = Date.now();
-            }
+              // Mirror Tank Logic: Poison counts as hit type 'toxic' (for any mirror tank)
+              if (ent.tankType === 'mirror') {
+                  ent.lastHitType = 'toxic';
+                  ent.lastHitTime = Date.now();
+              }
 
             ent.hp = (ent.hp || 0) - dmgPerTick;
             ent.poisonTimer--;
@@ -3335,13 +4325,16 @@ function update() {
         if (aliveEnemies.length === 0) {
             gameState = 'win';
             coins += 50; // reward for war
+            syncResultOverlay('win');
         } else if (!teamHasAliveMember(0)) {
             gameState = 'lose';
+            syncResultOverlay('lose');
         }
     } else if (enemies.length === 0) {
         gameState = 'win';
         if (currentMode === 'single') coins += 25;
         else if (currentMode === 'team') coins += 40;
+        syncResultOverlay('win');
     }
 }
 
@@ -3499,19 +4492,42 @@ if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
             document.getElementById('tankDetailModal').style.display = 'none';
         }
     } else {
-        // Try to buy
+        // Try to buy (use styled modal instead of alert/confirm)
         const price = tankGemPrices[currentTankType];
-        if (gems >= price) {
-            if (confirm(`Купить танк за ${price} гемов?`)) {
+        const showBuyModal = (title, message, canBuy) => {
+            const modal = document.getElementById('buyConfirmModal');
+            if (!modal) return;
+            const tEl = document.getElementById('buyConfirmTitle');
+            const mEl = document.getElementById('buyConfirmMessage');
+            const buyBtn = document.getElementById('buyConfirmBtn');
+            const cancelBtn = document.getElementById('buyCancelBtn');
+            tEl.textContent = title;
+            mEl.textContent = message;
+            buyBtn.style.display = canBuy ? 'inline-block' : 'none';
+            modal.style.display = 'flex';
+
+            const cleanup = () => { buyBtn.onclick = null; cancelBtn.onclick = null; modal.style.display = 'none'; };
+
+            buyBtn.onclick = () => {
+                // perform purchase
                 gems -= price;
                 unlockedTanks.push(currentTankType);
                 saveProgress();
                 updateCoinDisplay();
                 updateTankDetailButton(currentTankType);
-                alert('Танк успешно приобретен!');
-            }
+                // Refresh character previews so the unlocked state is visible immediately
+                if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
+                cleanup();
+                // show success reward: display the new tank card
+                if (typeof showReward === 'function') showReward('tank', 1, 'Танк успешно приобретен!', currentTankType);
+            };
+            cancelBtn.onclick = () => { cleanup(); };
+        };
+
+        if (gems >= price) {
+            showBuyModal('Подтвердите покупку', `Купить ${tankDescriptions[currentTankType].name} за ${price} гемов?`, true);
         } else {
-            alert(`Недостаточно гемов! У вас: ${gems}, нужно: ${price}`);
+            showBuyModal('Недостаточно гемов', `У вас: ${gems}, нужно: ${price}`, false);
         }
     }
 });
@@ -3525,3 +4541,38 @@ window.addEventListener('load', () => {
         updateTankDetailButton(tankType);
     };
 });
+function unlockRandomTankNew(fromSuper = false, options = {}) {
+    const { suppressRewardModal = false } = options;
+    
+    // 1. Pick rarity
+    const rarity = getRarity();
+    
+    // 2. Pick tank from that rarity
+    const tanksInRarity = allTanksList.filter(t => tankRarityMap[t] === rarity);
+    const t = tanksInRarity.length > 0 
+        ? tanksInRarity[Math.floor(Math.random() * tanksInRarity.length)]
+        : allTanksList[Math.floor(Math.random() * allTanksList.length)]; // fallback
+
+    const tDesc = tankDescriptions[t] ? tankDescriptions[t].name : t.toUpperCase();
+    const rarityLabel = rarity.replace('_', ' ').toUpperCase();
+
+    if (!unlockedTanks.includes(t)) {
+        unlockedTanks.push(t);
+        saveProgress();
+        if (!suppressRewardModal) showReward('tank', 1, `Unlocked ${rarityLabel} tank!`, t);
+        updateTankDetailButton(t);
+        return { type: 'tank', tankType: t, desc: `${rarityLabel} Tank Unlocked!`, icon: '🚜', rarity: rarity };
+    } else {
+        const price = tankGemPrices[t] || 0;
+        let comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
+        if (rarity === 'legendary') comp = Math.max(comp, 100);
+        if (rarity === 'chromatic') comp = Math.max(comp, 150);
+        if (rarity === 'mythic') comp = Math.max(comp, 200);
+
+        gems += comp;
+        saveProgress();
+        if (!suppressRewardModal) showReward('gems', comp, `Duplicate ${rarityLabel} tank ${tDesc} converted to Gems!`);
+        return { type: 'gems', amount: comp, desc: `Duplicate ${rarityLabel} tank converted to Gems!`, icon: '💎', rarity: rarity };
+    }
+}
+
