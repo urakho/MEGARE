@@ -27,6 +27,7 @@ let enemies = [];
 let allies = [];
 let gameState = 'menu';
 let currentMode = 'menu';
+let duelState = null;
 // Throttling AI counters
 let globalPathBudget = 0;
 const MAX_PATH_BUDGET = 2; // max A* searches per frame
@@ -51,8 +52,39 @@ const DODGE_BASE_ACCURACY = 0.8;
 // Глобальная валюта
 let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
+let trophies = parseInt(localStorage.getItem('tankTrophies')) || 0;
+let claimedRewards = JSON.parse(localStorage.getItem('tankClaimedRewards')) || [];
+
+// Trophy Road Rewards
+const trophyRoadRewards = [
+    { trophies: 0, type: 'start', reward: 'Старт', claimed: false },
+    { trophies: 10, type: 'coins', amount: 200, reward: '200 монет', claimed: false },
+    { trophies: 20, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 30, type: 'gems', amount: 10, reward: '10 гемов', claimed: false },
+    { trophies: 40, type: 'coins', amount: 300, reward: '300 монет', claimed: false },
+    { trophies: 50, type: 'containers', level: 'normal', amount: 2, reward: '2 обычных контейнера', claimed: false },
+    { trophies: 75, type: 'gems', amount: 20, reward: '20 гемов', claimed: false },
+    { trophies: 100, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
+    { trophies: 125, type: 'choice', options: ['ice', 'machinegun'], reward: 'Ледяной или Пулеметный', claimed: false },
+    { trophies: 150, type: 'coins', amount: 400, reward: '400 монет', claimed: false },
+    { trophies: 180, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 210, type: 'gems', amount: 25, reward: '25 гемов', claimed: false },
+    { trophies: 240, type: 'containers', level: 'normal', amount: 2, reward: '2 обычных контейнера', claimed: false },
+    { trophies: 270, type: 'coins', amount: 500, reward: '500 монет', claimed: false },
+    { trophies: 300, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
+    { trophies: 350, type: 'coins', amount: 600, reward: '600 монет', claimed: false },
+    { trophies: 400, type: 'tank', tank: 'fire', compensation: 30, reward: 'Огнеметчик', claimed: false },
+    { trophies: 450, type: 'gems', amount: 40, reward: '40 гемов', claimed: false },
+    { trophies: 500, type: 'container', level: 'omega', reward: 'Омега-контейнер', claimed: false }
+];
 // Unlocked tanks list
 let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
+
+// Initialize claimed rewards on game load
+function initializeTrophySystem() {
+    claimedRewards = JSON.parse(localStorage.getItem('tankClaimedRewards')) || [];
+    checkTrophyRewards();
+}
 
 const tankGemPrices = {
     'normal': 0,
@@ -64,17 +96,45 @@ const tankGemPrices = {
     'musical': 100, // New
     'illuminat': 120, // New
     'mirror': 150, // New
-    'time': 200 // Временной танк (Temporal / Time Tank)
+    'time': 200, // Временной танк (Temporal / Time Tank)
+    'machinegun': 70, // Пулемётчик (Machine Gunner)
+    'waterjet': 85   // Водомётчик (Water Cannon)
 };
+
+// Функция для определения минимального уровня трофеев (последняя полученная награда)
+function getMinimumTrophyLevel() {
+    let maxClaimedLevel = 0;
+    for (const rewardIndex of claimedRewards) {
+        const reward = trophyRoadRewards[rewardIndex];
+        if (reward && reward.trophies > maxClaimedLevel) {
+            maxClaimedLevel = reward.trophies;
+        }
+    }
+    return maxClaimedLevel;
+}
+
+// Функция для безопасного снятия трофеев (с защитой от опускания ниже полученных наград)
+function loseTrophies(amount = 1) {
+    const minLevel = getMinimumTrophyLevel();
+    const newTrophyCount = Math.max(minLevel, trophies - amount);
+    
+    if (newTrophyCount < trophies) {
+        trophies = newTrophyCount;
+        saveProgress();
+        console.log(`Трофеи снижены до ${trophies} (минимум: ${minLevel})`);
+    }
+}
 
 function saveProgress() {
     localStorage.setItem('tankCoins', coins);
     localStorage.setItem('tankGems', gems);
+    localStorage.setItem('tankTrophies', trophies);
+    localStorage.setItem('tankClaimedRewards', JSON.stringify(claimedRewards));
     localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
 }
 
-// Camera follow flag
-let cameraFollow = false;
+// Camera follow flag — always on so player sees their tank
+let cameraFollow = true;
 
 // Тип танка игрока
 let tankType = localStorage.getItem('tankSelected') || 'normal';
@@ -97,7 +157,7 @@ const tank = {
 
 // Apply saved tank type properties immediately if needed
 if (tankType === 'fire') tank.hp = 6;
-else if (tankType === 'musical') tank.hp = 4;
+else if (tankType === 'musical' || tankType === 'waterjet') tank.hp = 4;
 
 // Слушатели событий
 window.onkeydown = (e) => {
@@ -125,6 +185,287 @@ window.onkeydown = (e) => {
     }
 };
 window.onkeyup = (e) => keys[e.code] = false;
+
+// ========================
+// SETTINGS
+// ========================
+window.effectsEnabled = localStorage.getItem('settingEffects') !== 'false';
+window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
+
+(function initSettings() {
+    const btn   = document.getElementById('settingsBtn');
+    const cmdBtn = document.getElementById('cmdBtn');
+
+    // Show/hide cmdBtn based on mobile mode setting
+    function updateCmdBtnVisibility() {
+        if (!cmdBtn) return;
+        // Use setProperty with !important to override display:flex !important from .btn-settings class
+        if (window.deviceModeMobile) {
+            cmdBtn.style.setProperty('display', 'flex', 'important');
+        } else {
+            cmdBtn.style.setProperty('display', 'none', 'important');
+        }
+    }
+    updateCmdBtnVisibility();
+
+    // Open command modal on tap
+    if (cmdBtn) {
+        cmdBtn.addEventListener('click', () => {
+            const commandModal = document.getElementById('commandModal');
+            if (commandModal) {
+                commandModal.style.display = 'flex';
+                const ci = document.getElementById('commandInput');
+                if (ci) { ci.value = '/'; ci.focus(); }
+            }
+        });
+    }
+    const modal = document.getElementById('settingsModal');
+    const closeBtn = document.getElementById('settingsClose');
+    const chkEffects = document.getElementById('settingEffects');
+    const chkMobile  = document.getElementById('settingMobile');
+    if (!btn || !modal) return;
+
+    // Apply saved values
+    chkEffects.checked = window.effectsEnabled;
+    chkMobile.checked  = window.deviceModeMobile;
+
+    btn.addEventListener('click', () => { modal.style.display = 'flex'; });
+    closeBtn.addEventListener('click', () => {
+        window.effectsEnabled   = chkEffects.checked;
+        window.deviceModeMobile = chkMobile.checked;
+        localStorage.setItem('settingEffects', chkEffects.checked);
+        localStorage.setItem('settingMobile',  chkMobile.checked);
+        updateCmdBtnVisibility();
+        modal.style.display = 'none';
+    });
+})();
+
+// ========================
+// MOBILE CONTROLS
+// ========================
+(function() {
+    const JOYSTICK_RADIUS = 60;
+    const ATTACK_RADIUS   = 55;
+    const DEAD_ZONE = 10;
+
+    let joystickTouchId = null;
+    let joystickBaseX = 0, joystickBaseY = 0;
+    let attackTouchId = null;
+    let attackBaseX = 0, attackBaseY = 0;
+
+    const mobileControls = document.getElementById('mobileControls');
+    const joystickZone   = document.getElementById('joystickZone');
+    const joystickBase   = document.getElementById('joystickBase');
+    const joystickKnob   = document.getElementById('joystickKnob');
+    const attackZone     = document.getElementById('attackZone');
+    const attackBase     = document.getElementById('attackBase');
+    const attackKnob     = document.getElementById('attackKnob');
+
+    // Use manual setting if set, otherwise auto-detect
+    let IS_MOBILE = typeof window.deviceModeMobile !== 'undefined'
+        ? window.deviceModeMobile
+        : (navigator.maxTouchPoints > 0 || ('ontouchstart' in window));
+    // Re-read from settings each interval tick so toggling takes effect live
+    window.addEventListener('touchstart', () => {}, { once: true, passive: true });
+
+    // ---- Move joystick ----
+    function clearMoveKeys() {
+        keys['KeyW'] = false; keys['KeyS'] = false;
+        keys['KeyA'] = false; keys['KeyD'] = false;
+    }
+
+    function applyJoystickVector(dx, dy) {
+        const mag = Math.sqrt(dx*dx + dy*dy);
+        if (mag < DEAD_ZONE) { clearMoveKeys(); return; }
+        const nx = dx / mag, ny = dy / mag;
+        keys['KeyW'] = ny < -0.3;
+        keys['KeyS'] = ny >  0.3;
+        keys['KeyA'] = nx < -0.3;
+        keys['KeyD'] = nx >  0.3;
+    }
+
+    function moveKnob(knob, base, radius, dx, dy) {
+        const mag = Math.sqrt(dx*dx + dy*dy);
+        const r   = Math.min(mag, radius);
+        const ratio = mag > 0 ? r / mag : 0;
+        const cx = dx * ratio, cy = dy * ratio;
+        const half = base.offsetWidth / 2;
+        const kh   = knob.offsetWidth  / 2;
+        knob.style.left = (half + cx - kh) + 'px';
+        knob.style.top  = (half + cy - kh) + 'px';
+    }
+
+    function resetKnob(knob) {
+        knob.style.left = '';
+        knob.style.top  = '';
+    }
+
+    function getCenter(el) {
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+
+    joystickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (joystickTouchId !== null) return;
+        const t = e.changedTouches[0];
+        joystickTouchId = t.identifier;
+        const c = getCenter(joystickBase);
+        joystickBaseX = c.x; joystickBaseY = c.y;
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+            if (t.identifier !== joystickTouchId) continue;
+            const dx = t.clientX - joystickBaseX;
+            const dy = t.clientY - joystickBaseY;
+            moveKnob(joystickKnob, joystickBase, JOYSTICK_RADIUS, dx, dy);
+            applyJoystickVector(dx, dy);
+        }
+    }, { passive: false });
+
+    function endJoystick(e) {
+        e.preventDefault && e.preventDefault();
+        for (const t of (e.changedTouches || [])) {
+            if (t.identifier !== joystickTouchId) continue;
+            joystickTouchId = null;
+            resetKnob(joystickKnob);
+            clearMoveKeys();
+        }
+    }
+    joystickZone.addEventListener('touchend',    endJoystick, { passive: false });
+    joystickZone.addEventListener('touchcancel', () => { joystickTouchId = null; resetKnob(joystickKnob); clearMoveKeys(); });
+
+    // ---- Attack joystick mode: 'attack' | 'ult' ----
+    // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time'];
+    let attackMode = 'attack';
+    let attackTapStartTime = 0;
+    let attackTapStartX = 0, attackTapStartY = 0;
+    let attackMoved = false;
+    const attackLabel = document.getElementById('attackLabel');
+
+    function setAttackMode(mode) {
+        attackMode = mode;
+        if (mode === 'ult') {
+            attackBase.style.background    = 'rgba(243,156,18,0.18)';
+            attackBase.style.borderColor   = 'rgba(243,200,50,0.55)';
+            attackBase.style.boxShadow     = '0 0 22px rgba(243,156,18,0.45)';
+            attackKnob.style.background    = 'radial-gradient(circle at 35% 35%, #ffe060, #d35400)';
+            attackKnob.style.border        = '2px solid rgba(255,220,80,0.8)';
+            attackKnob.style.boxShadow     = '0 3px 8px rgba(0,0,0,0.6), 0 0 14px rgba(243,156,18,0.65)';
+            attackKnob.textContent         = '⚡';
+            attackKnob.style.fontSize      = '20px';
+            attackKnob.style.color         = '#fff';
+            if (attackLabel) { attackLabel.textContent = 'УЛТ'; attackLabel.style.color = 'rgba(243,190,50,0.75)'; }
+        } else {
+            attackBase.style.background    = '';
+            attackBase.style.borderColor   = '';
+            attackBase.style.boxShadow     = '';
+            attackKnob.style.background    = '';
+            attackKnob.style.border        = '';
+            attackKnob.style.boxShadow     = '';
+            attackKnob.textContent         = '';
+            attackKnob.style.fontSize      = '';
+            attackKnob.style.color         = '';
+            if (attackLabel) { attackLabel.textContent = 'АТАКА'; attackLabel.style.color = ''; }
+        }
+    }
+
+    attackZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (typeof gameState !== 'undefined' && gameState !== 'playing') return;
+        if (attackTouchId !== null) return;
+        const t = e.changedTouches[0];
+        attackTouchId     = t.identifier;
+        attackTapStartTime = Date.now();
+        attackTapStartX   = t.clientX;
+        attackTapStartY   = t.clientY;
+        attackMoved       = false;
+        const c = getCenter(attackBase);
+        attackBaseX = c.x; attackBaseY = c.y;
+        attackBase.style.borderColor = attackMode === 'ult'
+            ? 'rgba(255,220,60,0.85)'
+            : 'rgba(255,200,0,0.8)';
+    }, { passive: false });
+
+    attackZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (const t of e.changedTouches) {
+            if (t.identifier !== attackTouchId) continue;
+            const dx = t.clientX - attackBaseX;
+            const dy = t.clientY - attackBaseY;
+            const mag = Math.sqrt(dx*dx + dy*dy);
+            if (mag >= DEAD_ZONE) {
+                attackMoved = true;
+                tank.turretAngle = Math.atan2(dy, dx);
+                if (attackMode === 'ult') {
+                    // Только прицеливание, ульта стреляет при отпускании
+                    keys['Space'] = false;
+                    keys['KeyE']  = false;
+                } else {
+                    keys['Space']  = true;
+                    keys['KeyE']   = false;
+                }
+            } else {
+                keys['Space'] = false;
+                keys['KeyE']  = false;
+            }
+            moveKnob(attackKnob, attackBase, ATTACK_RADIUS, dx, dy);
+        }
+    }, { passive: false });
+
+    function endAttack(e) {
+        e.preventDefault && e.preventDefault();
+        for (const t of (e.changedTouches || [])) {
+            if (t.identifier !== attackTouchId) continue;
+            attackTouchId = null;
+            // Quick tap — toggle attack / ult mode (only for tanks with ult)
+            const tapDuration = Date.now() - attackTapStartTime;
+            const ddx = t.clientX - attackTapStartX;
+            const ddy = t.clientY - attackTapStartY;
+            if (!attackMoved && tapDuration < 250 && Math.sqrt(ddx*ddx + ddy*ddy) < 18) {
+                const tt = typeof tankType !== 'undefined' ? tankType : '';
+                if (TANKS_WITH_ULT.includes(tt)) {
+                    setAttackMode(attackMode === 'attack' ? 'ult' : 'attack');
+                }
+            }
+            resetKnob(attackKnob);
+            keys['Space'] = false;
+            keys['KeyE']  = false;
+            // Если был тащить в режиме УЛТ — выстрел ульты при отпускании
+            if (attackMoved && attackMode === 'ult') {
+                keys['KeyE'] = true;
+                setTimeout(() => { keys['KeyE'] = false; }, 80);
+            }
+            // Restore border to mode-appropriate idle colour
+            attackBase.style.borderColor = attackMode === 'ult' ? 'rgba(243,200,50,0.55)' : '';
+        }
+    }
+    attackZone.addEventListener('touchend',    endAttack, { passive: false });
+    attackZone.addEventListener('touchcancel', () => {
+        attackTouchId = null;
+        resetKnob(attackKnob);
+        keys['Space'] = false;
+        keys['KeyE']  = false;
+        attackBase.style.borderColor = attackMode === 'ult' ? 'rgba(243,200,50,0.55)' : '';
+    });
+
+    // ---- Show/hide: only on mobile, only when playing ----
+    setInterval(() => {
+        if (!mobileControls) return;
+        const isMob = window.deviceModeMobile;
+        const playing = typeof gameState !== 'undefined' && gameState === 'playing';
+        mobileControls.style.display = (isMob && playing) ? 'block' : 'none';
+        // Reset to attack mode if game not playing (e.g. back in menu)
+        if (!playing && attackMode !== 'attack') setAttackMode('attack');
+        // If current tank has no ult and we're in ult mode — reset
+        const tt = typeof tankType !== 'undefined' ? tankType : '';
+        if (playing && attackMode === 'ult' && !TANKS_WITH_ULT.includes(tt)) setAttackMode('attack');
+    }, 80);
+})();
+
 window.addEventListener('wheel', (e) => {
     tank.turretAngle += e.deltaY * 0.0015;
 });
@@ -178,6 +519,10 @@ const mirrorTankPreview = document.getElementById('mirrorTankPreview');
 const mirrorTankCtx = mirrorTankPreview && mirrorTankPreview.getContext ? mirrorTankPreview.getContext('2d') : null;
 const timeTankPreview = document.getElementById('timeTankPreview');
 const timeTankCtx = timeTankPreview && timeTankPreview.getContext ? timeTankPreview.getContext('2d') : null;
+const machinegunTankPreview = document.getElementById('machinegunTankPreview');
+const machinegunTankCtx = machinegunTankPreview && machinegunTankPreview.getContext ? machinegunTankPreview.getContext('2d') : null;
+const waterjetTankPreview = document.getElementById('waterjetTankPreview');
+const waterjetTankCtx = waterjetTankPreview && waterjetTankPreview.getContext ? waterjetTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -195,7 +540,40 @@ const modeCancel = document.getElementById('modeCancel');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = [];
+    
+    // Reset all effects
+    tank.paralyzed = false;
+    tank.paralyzedTime = 0;
+    tank.frozenEffect = 0;
+    tank.confused = 0;
+    tank.mirrorShieldActive = false;
+    tank.mirrorShieldTimer = 0;
+    tank.lastHitType = null;
+    tank.lastHitTime = 0;
+    tank.alive = true;
+    
+    // Reset illuminat beam effects
+    tank.beamActive = false;
+    tank.beamStart = 0;
+    tank.beamCooldown = 0;
+    tank.beamAngle = 0;
+    tank.inversionUsed = 0;
+    // Reset waterjet
+    tank.waterjetActive = false;
+    tank.waterjetBeamLen = 0;
+    
+    // Reset toxic gas ability
+    tank.megaGasUsed = false;
+    
+    // Reset plasma blast ability
+    tank.plasmaBlastUsed = 0;
+    
+    // Reset poison and control effects
+    tank.poisonTimer = 0;
+    tank.invertedControls = 0;
+    tank.disoriented = 0;
+    
     navNeedsRebuild = true;
     lastResultState = null;
     syncResultOverlay('playing');
@@ -206,6 +584,7 @@ function startGame(mode) {
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         tank.x = 50; tank.y = 50;
         generateMap();
+        cameraFollow = true;
     } else if (mode === 'team') {
         // larger world map
         worldWidth = 1400; worldHeight = 1000;
@@ -219,16 +598,46 @@ function startGame(mode) {
         worldWidth = 900 * 3; worldHeight = 700 * 3;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         // place player and spawn war layout
-        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+        tank.x = 120; tank.y = 120; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3); tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         // finer nav grid for better obstacle avoidance
         navCell = 25;
         generateMap();
         spawnWarMode();
         cameraFollow = true;
+    } else if (mode === 'duel') {
+        // Duel mode (1vs1, shrinking map)
+        worldWidth = 900 * 2; worldHeight = 700 * 2;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        tank.x = 100; tank.y = 100;
+        tank.team = 0;
+        
+        // Initialize duel state (Rectangular / Grid-based shrinking)
+        // navCell = 25. Let's align to grid.
+        // Bounds in pixels
+        duelState = {
+            // Initial safe zone (full map)
+            minX: 0,
+            minY: 0,
+            maxX: worldWidth,
+            maxY: worldHeight,
+            
+            // Shrink config
+            // User requested: "Shrinks gradually by cells"
+            // Let's make it shrink every 2 seconds by 1 cell
+            shrinkTimer: 0,
+            shrinkInterval: 120, // frames (2 seconds per step)
+            stepSize: 25, // 1 cell size
+            minSize: 300 // Don't shrink to 0, leave a small arena
+        };
+        
+        generateMap();
+        spawnDuelMode();
+        cameraFollow = true;
     }
-
+    
     // set current mode for runtime logic
     currentMode = mode;
+    if (mode !== 'duel') duelState = null;
 
     if (modeModal) modeModal.style.display = 'none';
     if (mainMenu) mainMenu.style.display = 'none';
@@ -273,10 +682,15 @@ const buySuperContainer = document.getElementById('buySuperContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
 const shopCancel = document.getElementById('shopCancel');
 const characterCancel = document.getElementById('characterCancel');
+const trophyRoadBtn = document.getElementById('trophyRoadBtn');
+const trophyRoadModal = document.getElementById('trophyRoadModal');
+const closeTrophyRoad = document.getElementById('closeTrophyRoad');
 if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'flex'; });
 if (characterBtn) characterBtn.addEventListener('click', () => { if (characterModal) { characterModal.style.display = 'flex'; drawCharacterPreviews(); } });
+if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
 if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
 if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+if (closeTrophyRoad) closeTrophyRoad.addEventListener('click', () => { if (trophyRoadModal) trophyRoadModal.style.display = 'none'; });
 
 // Command modal handlers
 const commandModal = document.getElementById('commandModal');
@@ -287,6 +701,10 @@ if (commandExecute) commandExecute.addEventListener('click', () => {
     commandInput.value = '';
     if (commandModal) commandModal.style.display = 'none';
 });
+
+// Duel mode handler
+const modeDuel = document.getElementById('modeDuel');
+if (modeDuel) modeDuel.addEventListener('click', () => startGame('duel'));
 
 function processDevCommand(rawCommand) {
     const command = rawCommand.trim();
@@ -332,6 +750,36 @@ function processDevCommand(rawCommand) {
             saveProgress();
             console.log(`Gems updated: ${gems}`);
         }
+    } else if (command.startsWith('/trophy')) {
+        const parts = command.substring(7).trim().split(/\s+/);
+        let op = '='; 
+        let valStr = parts[0];
+        
+        if (['+', '-', '='].includes(parts[0])) {
+            op = parts[0];
+            valStr = parts[1];
+        }
+        
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount >= 0) {
+            if (op === '+') trophies += amount;
+            else if (op === '-') trophies = Math.max(0, trophies - amount);
+            else if (op === '=') {
+                trophies = amount;
+                // Reset claimed rewards when setting trophies
+                claimedRewards = [];
+                console.log('Trophy rewards reset!');
+            }
+            
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Trophies updated: ${trophies}`);
+            
+            // Refresh trophy road if it's open
+            if (trophyRoadModal && trophyRoadModal.style.display === 'flex') {
+                generateTrophyRoad();
+            }
+        }
     } else if (command === '/clear t') {
         unlockedTanks = ['normal'];
         saveProgress();
@@ -342,6 +790,14 @@ function processDevCommand(rawCommand) {
         if (typeof drawCharacterPreviews === 'function' && characterModal && characterModal.style.display === 'flex') {
             drawCharacterPreviews();
         }
+    } else if (command === '/help' || command === '/commands') {
+        console.log('=== ДОСТУПНЫЕ КОМАНДЫ ===');
+        console.log('/coins [+/-/=] [число] - управление монетами (по умолчанию +)');
+        console.log('/gems [+/-/=] [число] - управление гемами (по умолчанию +)');
+        console.log('/trophy [+/-/=] [число] - управление трофеями, = сбрасывает награды');
+        console.log('/clear t - сбросить все танки кроме обычного');
+        console.log('/help или /commands - показать этот список');
+        console.log('========================');
     }
 }
 
@@ -393,11 +849,12 @@ function syncResultOverlay(state = gameState) {
     if (state === 'win' || state === 'lose') {
         const isWin = state === 'win';
         const rewardText = isWin
-            ? (currentMode === 'single' ? '+25 монет'
-                : currentMode === 'team' ? '+40 монет'
-                : currentMode === 'war' ? '+50 монет'
+            ? (currentMode === 'single' ? '+25 монет, +2 трофея'
+                : currentMode === 'team' ? '+40 монет, +3 трофея'
+                : currentMode === 'war' ? '+50 монет, +2 трофея'
+                : currentMode === 'duel' ? '+25 монет, +3 трофея'
                 : '+0 монет')
-            : 'Попробуй другую тактику';
+            : (getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей');
 
         resultOverlay.style.display = 'flex';
         
@@ -552,10 +1009,56 @@ function syncResultOverlay(state = gameState) {
                         "Штаб сделает выводы и обновит стратегию.",
                         "Поражение больно, но сделает нас сильнее.",
                         "Не хватило резервов — пополним и вернёмся.",
-                        "Они оказались подготовленнее — работаем над ошибками.",
+                        "Они оказались подготовленнee — работаем над ошибками.",
                         "Поражение — стимул для новой кампании.",
                         "Тактическая ошибка показала слабые места.",
                         "Мы проиграли бой, но не войну — готовимся."
+                    ]
+                },
+                duel: {
+                    win: [
+                        "Дуэль выиграна — твоя точность решила исход.",
+                        "Один на один — ты показал превосходство.",
+                        "Идеальная дуэль: быстро, точно, эффектно.",
+                        "Твой противник повержен в честном поединке.",
+                        "Дуэль окончена в твою пользу — молодец.",
+                        "Поединок мастеров — победа за тобой.",
+                        "Точный расчёт в дуэли принёс триумф.",
+                        "Ты перехитрил соперника в личном поединке.",
+                        "Дуэльная победа — результат мастерства.",
+                        "Противник сражался храбро, но ты был лучше.",
+                        "Честная дуэль, честная победа — браво.",
+                        "Твоя тактика в поединке оказалась верной.",
+                        "Дуэль завершена — ты доказал своё превосходство.",
+                        "Один удачный выстрел решил исход дуэли.",
+                        "Поединок был напряжённым, но ты выстоял.",
+                        "Дуэльная арена видела твою блестящую игру.",
+                        "Противник был силён, но твоё мастерство сильнее.",
+                        "Классическая дуэль — классическая победа.",
+                        "Ты сохранил хладнокровие и выиграл дуэль.",
+                        "Поединок окончен — награда заслужена."
+                    ],
+                    lose: [
+                        "Дуэль проиграна — соперник оказался точнее.",
+                        "В поединке один на один тебе не хватило скорости.",
+                        "Твой противник превзошёл тебя в дуэли.",
+                        "Поражение в дуэли — повод улучшить навыки.",
+                        "Дуэльная арена не прощает ошибок — учись.",
+                        "Соперник читал твои движения лучше.",
+                        "В честном поединке победил сильнейший.",
+                        "Дуэль показала твои слабые стороны.",
+                        "Противник был готов к бою лучше тебя.",
+                        "Поражение в дуэли — ценный урок мастерства.",
+                        "Твоя тактика в поединке дала сбой.",
+                        "Дуэль требует максимальной концентрации.",
+                        "Соперник опередил тебя на доли секунды.",
+                        "В поединке каждое движение критично.",
+                        "Дуэльное поражение — стимул к совершенству.",
+                        "Твой противник оказался хитрее в дуэли.",
+                        "Поединок показал, над чем нужно работать.",
+                        "В дуэли побеждает тот, кто готов лучше.",
+                        "Поражение болезненно, но делает сильнее.",
+                        "Дуэль окончена не в твою пользу — реванш?"
                     ]
                 }
             };
@@ -577,7 +1080,7 @@ function syncResultOverlay(state = gameState) {
 }
 window.syncResultOverlay = syncResultOverlay;
 
-if (resultRestart) resultRestart.addEventListener('click', () => location.reload());
+if (resultRestart) resultRestart.addEventListener('click', () => startGame(currentMode));
 if (resultToMenu) resultToMenu.addEventListener('click', () => location.reload());
 syncResultOverlay('menu');
 
@@ -607,6 +1110,18 @@ const containerFlowCancel = document.getElementById('containerFlowCancel');
 let containerFlowType = null;
 let containerDropTimers = [];
 let containerDropActive = false;
+let containerQueue = []; // Queue for multiple containers
+let isFromTrophyRoad = false; // Track if container is from trophy road
+
+// Process next container in queue
+function processNextContainer() {
+    if (containerQueue.length > 0) {
+        const nextType = containerQueue.shift();
+        setTimeout(() => {
+            showFreeContainerFlow(nextType);
+        }, 500); // Small delay for better UX
+    }
+}
 
 function clearContainerDropTimers() {
     containerDropTimers.forEach((id) => clearTimeout(id));
@@ -622,6 +1137,7 @@ function closeContainerFlow() {
     const hintEl = document.querySelector('.container-flow-hint');
     if (hintEl) hintEl.style.display = '';
     containerFlowType = null;
+    // Don't reset isFromTrophyRoad here - it will be reset after rewards are shown
 }
 
 function updateContainerFlowStage(stage) {
@@ -715,7 +1231,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
-    const price = type === 'bronze' ? 100 : (type === 'omega' ? 2000 : 500);
+    const price = type === 'bronze' ? 100 : (type === 'omega' ? 4000 : 1000);
     if (coins < price) {
         alert('Недостаточно монет!');
         return;
@@ -727,6 +1243,49 @@ function showContainerFlow(type) {
         containerDropArea.classList.remove('active');
     }
     if (containerFlowModal) containerFlowModal.style.display = 'flex';
+}
+
+// Free version for trophy road rewards
+function showFreeContainerFlow(type) {
+    if (containerFlowType) {
+        // If busy, add to queue
+        containerQueue.push(type);
+        return;
+    }
+    isFromTrophyRoad = true;
+    containerFlowType = type;
+    updateContainerFlowStage('intro');
+    if (containerDropArea) {
+        containerDropArea.innerHTML = '';
+        containerDropArea.classList.remove('active');
+    }
+    if (containerFlowModal) containerFlowModal.style.display = 'flex';
+}
+
+// Free container confirm handler
+function handleFreeContainerConfirm() {
+    if (!containerFlowType || containerDropActive) return;
+    const currentType = containerFlowType;
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : 5);
+    const rewards = [];
+    // Generate rewards without payment
+    for (let i = 0; i < dropCount; i++) {
+        let reward;
+        if (currentType === 'omega') {
+            reward = openOmegaContainer({ suppressRewardModal: true });
+        } else {
+            reward = currentType === 'bronze'
+                ? openContainer({ suppressRewardModal: true })
+                : openSuperContainer({ suppressRewardModal: true });
+        }
+        rewards.push(reward);
+    }
+    updateContainerFlowStage('open');
+    animateContainerDrops(rewards, () => {
+        closeContainerFlow();
+        updateCoinDisplay();
+        showContainerRewards(rewards);
+    });
 }
 
 function showContainerRewards(rewards, index = 0) {
@@ -776,6 +1335,11 @@ function showContainerRewards(rewards, index = 0) {
             modal.classList.remove('visible');
             setTimeout(() => {
                 modal.style.display = 'none';
+                // If this was from trophy road, process next container in queue
+                if (isFromTrophyRoad) {
+                    isFromTrophyRoad = false; // Reset the flag
+                    processNextContainer();
+                }
             }, 300);
         } else {
             // Instantly show next reward without closing modal
@@ -789,7 +1353,7 @@ function showContainerRewards(rewards, index = 0) {
 function handleContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'omega' ? 2000 : 500);
+    const price = currentType === 'bronze' ? 100 : (currentType === 'omega' ? 4000 : 1000);
     if (coins < price) {
         alert('Недостаточно монет!');
         closeContainerFlow();
@@ -822,8 +1386,17 @@ function handleContainerConfirm() {
     });
 }
 
-if (containerFlowPreview) containerFlowPreview.addEventListener('click', handleContainerConfirm);
-if (containerFlowText) containerFlowText.addEventListener('click', handleContainerConfirm);
+// Dynamic click handler that chooses between paid and free containers
+function handleContainerClick() {
+    if (isFromTrophyRoad) {
+        handleFreeContainerConfirm();
+    } else {
+        handleContainerConfirm();
+    }
+}
+
+if (containerFlowPreview) containerFlowPreview.addEventListener('click', handleContainerClick);
+if (containerFlowText) containerFlowText.addEventListener('click', handleContainerClick);
 if (containerFlowCancel) containerFlowCancel.addEventListener('click', () => {
     closeContainerFlow();
 });
@@ -876,6 +1449,14 @@ if (selectMirrorTank) selectMirrorTank.addEventListener('click', () => {
 const selectTimeTank = document.getElementById('selectTimeTank');
 if (selectTimeTank) selectTimeTank.addEventListener('click', () => {
     showTankDetail('time');
+});
+const selectMachinegunTank = document.getElementById('selectMachinegunTank');
+if (selectMachinegunTank) selectMachinegunTank.addEventListener('click', () => {
+    showTankDetail('machinegun');
+});
+const selectWaterjetTank = document.getElementById('selectWaterjetTank');
+if (selectWaterjetTank) selectWaterjetTank.addEventListener('click', () => {
+    showTankDetail('waterjet');
 });
 
 // По умолчанию показываем главное меню
@@ -937,7 +1518,7 @@ function generateMap() {
     for (let x = step; x < worldWidth - step; x += step) {
         for (let y = step; y < worldHeight - step; y += step) {
             // reduce box density further: spawn less frequently
-            if (Math.random() > 0.96) {
+                if (Math.random() > 0.92) {
                 const newBox = {
                     x: x, y: y, 
                     w: 50, h: 50, 
@@ -975,14 +1556,14 @@ function generateMap() {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
         // Choose a random tank type for this AI
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
             tankType: tt,
-            hp: (tt === 'fire') ? 6 : (tt === 'musical') ? 4 : (tt === 'illuminat' || tt === 'mirror') ? 3 : 3,
+            hp: (tt === 'fire') ? 6 : (tt === 'musical' || tt === 'waterjet') ? 4 : (tt === 'illuminat' || tt === 'mirror') ? 3 : 3,
             turretAngle: 0,
             baseAngle: 0,
             speed: 2.5,
@@ -1022,7 +1603,7 @@ function spawnAllies(numTeams, teamSize) {
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
                 // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'])[Math.floor(Math.random()*9)],
+                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet'])[Math.floor(Math.random()*11)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -1067,9 +1648,9 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
+                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : (allyType === 'musical') ? 4 : (allyType === 'illuminat' || allyType === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : (allyType === 'musical' || allyType === 'waterjet') ? 4 : (allyType === 'illuminat' || allyType === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -1077,9 +1658,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -1087,7 +1668,7 @@ function spawnTeamMode() {
             
             const p = findFreeSpot(sx, sy, 38, 38, 200, 20);
             if (p) {
-                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:(tt === 'musical')?4:(tt === 'mirror' || tt === 'illuminat')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
+                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:(tt === 'musical' || tt === 'waterjet')?4:(tt === 'mirror' || tt === 'illuminat')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
             }
         }
     }
@@ -1124,10 +1705,10 @@ function spawnWarMode() {
     // place player near team 0 spawn
     const p0 = findFreeSpot(teamSpawns[0].x - 19, teamSpawns[0].y - 19, tank.w, tank.h, 600, 40);
     if (p0) {
-        tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
+        tank.x = p0.x; tank.y = p0.y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
     } else {
         // Absolute fallback if findFreeSpot returns null for player
-        tank.x = teamSpawns[0].x; tank.y = teamSpawns[0].y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : tankType === 'musical' ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
+        tank.x = teamSpawns[0].x; tank.y = teamSpawns[0].y; tank.team = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3); tank.alive = true; tank.respawnTimer = 0;
     }
 
     // spawn allies (team 0) - 9 bots + player = 10
@@ -1136,9 +1717,9 @@ function spawnWarMode() {
             const ry = teamSpawns[0].y + 30 + Math.floor(i/3) * 80 + (Math.random() - 0.5) * 30;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
         if (pos) {
-            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'];
+            const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet'];
             const allyT = allyTypes[Math.floor(Math.random()*allyTypes.length)];
-            allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', tankType: allyT, hp: (allyT === 'fire') ? 6 : (allyT === 'musical') ? 4 : (allyT === 'illuminat' || allyT === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: pos.x, y: pos.y, w:38, h:38, color: tank.color || '#00BFFF', tankType: allyT, hp: (allyT === 'fire') ? 6 : (allyT === 'musical' || allyT === 'waterjet') ? 4 : (allyT === 'illuminat' || allyT === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.75 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -1148,10 +1729,10 @@ function spawnWarMode() {
         const ry = teamSpawns[1].y - 30 - Math.floor(i/4) * 80 + (Math.random() - 0.5) * 40;
         const pos = findFreeSpot(rx, ry, 38, 38, 600, 24);
         if (pos) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7' };
-            enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:typeColor[tt] || '#B22222', tankType: tt, hp:(tt==='fire')?6:(tt==='musical')?4:(tt==='illuminat'||tt==='mirror')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1' };
+            enemies.push({ x: pos.x, y: pos.y, w:38, h:38, color:typeColor[tt] || '#B22222', tankType: tt, hp:(tt==='fire')?6:(tt==='musical'||tt==='waterjet')?4:(tt==='illuminat'||tt==='mirror')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:1, fireCooldown:0, stuckCount:0, dodgeAccuracy:0.7 + Math.random()*0.2, respawnCount:0, paralyzed: false, paralyzedTime: 0 });
         }
     }
 
@@ -1161,6 +1742,54 @@ function spawnWarMode() {
         const ry = 200 + Math.random() * (worldHeight - 400);
         const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
         objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
+    }
+
+    navNeedsRebuild = true;
+}
+
+function spawnDuelMode() {
+    enemies = [];
+    allies = [];
+    objects = objects || [];
+
+    // Player in top-left corner
+    tank.x = 100; tank.y = 100;
+    tank.alive = true;
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3);
+    
+    // 1 Bot in bottom-right corner
+    const ex = worldWidth - 100;
+    const ey = worldHeight - 100;
+    
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun'];
+    const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D' };
+    
+    enemies.push({ 
+        x: ex, y: ey, w:38, h:38, 
+        color: typeColor[tt] || '#B22222', 
+        tankType: tt, 
+        hp:(tt==='fire')?6:(tt==='musical')?4:(tt==='illuminat'||tt==='mirror')?3:3, 
+        turretAngle: Math.PI, 
+        baseAngle: Math.PI, 
+        speed: 2.5, 
+        trackOffset: 0, 
+        alive: true, 
+        team: 1, 
+        fireCooldown: 0, 
+        stuckCount: 0, 
+        dodgeAccuracy: 0.85, 
+        respawnCount: 0, 
+        paralyzed: false, 
+        paralyzedTime: 0 
+    });
+
+    // spawn some barrels
+    for (let b = 0; b < 8; b++) {
+        const rx = 200 + Math.random() * (worldWidth - 400);
+        const ry = 200 + Math.random() * (worldHeight - 400);
+        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
+        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
     }
 
     navNeedsRebuild = true;
@@ -1396,10 +2025,12 @@ function tryDodgeIncoming(entity) {
 // Взрыв бочки: эффекты и урон всем танкам в радиусе
 function explodeBarrel(obj) {
     // visual particles
+    if (window.effectsEnabled !== false) {
     for (let i = 0; i < 40; i++) {
         const ang = Math.random() * Math.PI * 2;
         const sp = Math.random() * 6 + 2;
         particles.push({ x: obj.x + obj.w/2, y: obj.y + obj.h/2, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 1, size: 2 + Math.random() * 3 });
+    }
     }
     // explosion damage radius
     const R = 120;
@@ -1413,7 +2044,11 @@ function explodeBarrel(obj) {
             if (t === tank && t.hp <= 0) {
                 for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
-                else { gameState = 'lose'; }
+                else { 
+                    gameState = 'lose'; 
+                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    syncResultOverlay('lose');
+                }
             }
         }
     }
@@ -1467,7 +2102,11 @@ function explodeRocket(bullet) {
             if (t === tank && t.hp <= 0) {
                 for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
-                else { gameState = 'lose'; }
+                else { 
+                    gameState = 'lose'; 
+                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    syncResultOverlay('lose');
+                }
             }
         }
     }
@@ -1530,7 +2169,11 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
             if (t === tank && t.hp <= 0) {
                 for (let k = 0; k < 30; k++) spawnParticle(t.x + t.w/2, t.y + t.h/2);
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
-                else { gameState = 'lose'; }
+                else { 
+                    gameState = 'lose'; 
+                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    syncResultOverlay('lose');
+                }
             }
         }
     }
@@ -1567,7 +2210,7 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const allTanksList = ['ice', 'fire', 'buratino', 'toxic', 'plasma', 'musical', 'illuminat', 'mirror', 'time'];
+const allTanksList = ['ice', 'fire', 'buratino', 'toxic', 'plasma', 'musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet'];
 const tankRarityMap = {
     'ice': 'rare',
     'fire': 'super_rare',
@@ -1577,7 +2220,9 @@ const tankRarityMap = {
     'mirror': 'legendary',
     'illuminat': 'mythic',
     'plasma': 'mythic',
-    'time': 'chromatic'
+    'time': 'chromatic',
+    'machinegun': 'rare',
+    'waterjet': 'super_rare'
 };
 
 const rarityChances = {
@@ -1629,7 +2274,9 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     // Default button action
     btn.onclick = () => {
         modal.classList.remove('visible');
-        setTimeout(() => { modal.style.display = 'none'; }, 300);
+        setTimeout(() => { 
+            modal.style.display = 'none';
+        }, 300);
     };
 
     const customTitle = options.title;
@@ -2162,6 +2809,7 @@ function drawDebugLines() {
 }
 
 function spawnParticle(x, y, color, life) {
+    if (!window.effectsEnabled) return;
     const lifeValue = (typeof life === 'number') ? life : (20 + Math.random() * 10);
     if (color && typeof color === 'string') {
         particles.push({
@@ -2189,6 +2837,8 @@ function shoot() {
         const flameCount = 7;
         const baseAng = tank.turretAngle;
         const spread = 0.7; // radians total cone
+        const tvx = tank._vx || 0; // inherit tank velocity so flames track with movement
+        const tvy = tank._vy || 0;
         for (let f = 0; f < flameCount; f++) {
             const t = flameCount <= 1 ? 0.5 : f / (flameCount - 1);
             const ang = baseAng + (t - 0.5) * spread + (Math.random() - 0.5) * 0.06;
@@ -2198,8 +2848,8 @@ function shoot() {
             flames.push({
                 x: sx,
                 y: sy,
-                vx: Math.cos(ang) * speed,
-                vy: Math.sin(ang) * speed,
+                vx: Math.cos(ang) * speed + tvx,
+                vy: Math.sin(ang) * speed + tvy,
                 life: 20 + Math.floor(Math.random() * 8),
                 damage: 0.22,
                 team: 0
@@ -2210,7 +2860,7 @@ function shoot() {
         const dist = 300;
         const targetX = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * dist;
         const targetY = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * dist;
-        const targetCircle = { x: targetX, y: targetY, radius: 100, color: tank.color, timer: 180, type: 'targetCircle' };
+        const targetCircle = { x: targetX, y: targetY, radius: 100, color: tank.color, timer: 180, type: 'targetCircle', team: tank.team };
         // precompute planned explosion positions (inner 4 + outer 9) so rockets can target them
         targetCircle.planned = [];
         for (let j = 0; j < 4; j++) {
@@ -2322,6 +2972,10 @@ function shoot() {
             maxBounces: 3
         });
         tank.fireCooldown = 45; // 0.75 seconds
+    } else if (tankType === 'waterjet') {
+        // Waterjet: continuous stream while Space held
+        tank.waterjetActive = true;
+        tank.fireCooldown = 3;
     } else if (tankType === 'illuminat') {
         // Illuminat: continuous beam
         if (!tank.beamActive && (!tank.beamCooldown || tank.beamCooldown <= 0)) {
@@ -2381,6 +3035,24 @@ function shoot() {
         }
         
         bullets.push(props);
+    } else if (tankType === 'machinegun') {
+        const speed = 7;
+        const life = 80;
+        // Slightly randomized exit point for realism
+        const ang = tank.turretAngle + (Math.random() - 0.5) * 0.05;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 35,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 35,
+            w: 7, h: 7, // Slightly smaller than normal (9x9)
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: life,
+            owner: 'player',
+            team: 0,
+            type: 'machinegun',
+            damage: 0.2 // Very low damage per bullet
+        });
+        tank.fireCooldown = 5; // Fast rate (approx 12 shots/sec)
     } else {
         const speed = 5;
         const life = 100;
@@ -2396,7 +3068,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -2414,6 +3086,61 @@ function update() {
         return;
     }
     
+    // DUEL MODE: Shrinking Zone Logic (Grid Based)
+    if (currentMode === 'duel' && duelState) {
+        // Shrink timer
+        duelState.shrinkTimer++;
+        if (duelState.shrinkTimer >= duelState.shrinkInterval) {
+            duelState.shrinkTimer = 0;
+            // Shrink sides if larger than minSize
+            if (duelState.maxX - duelState.minX > duelState.minSize) {
+                duelState.minX += duelState.stepSize;
+                duelState.maxX -= duelState.stepSize;
+            }
+            if (duelState.maxY - duelState.minY > duelState.minSize) {
+                duelState.minY += duelState.stepSize;
+                duelState.maxY -= duelState.stepSize;
+            }
+        }
+        
+        // Helper: is entity inside safe zone?
+        function isSafe(ent) {
+            const cx = ent.x + ent.w/2;
+            const cy = ent.y + ent.h/2;
+            return (cx >= duelState.minX && cx <= duelState.maxX && 
+                    cy >= duelState.minY && cy <= duelState.maxY);
+        }
+
+        // Damage Check Player
+        if (!isSafe(tank) && tank.alive !== false) {
+            if ((Date.now() % 1000) < 16) tank.hp -= 1; // 1 dmg/sec
+            if (Math.random() > 0.8) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#FF0000');
+            if (tank.hp <= 0) {
+                tank.alive = false;
+                gameState = 'lose';
+                loseTrophies(1); // Снимаем 1 трофей за поражение
+                syncResultOverlay('lose');
+                for(let k=0; k<12; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
+            }
+        }
+        
+        // Damage Check Enemies
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            if (!e || !e.alive) continue;
+            
+            if (!isSafe(e)) {
+                if ((Date.now() % 1000) < 16) e.hp -= 1;
+                if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
+                if (e.hp <= 0) {
+                    coins += 5;
+                    enemies.splice(i, 1);
+                    for(let k=0; k<12; k++) spawnParticle(e.x + e.w/2, e.y + e.h/2);
+                }
+            }
+        }
+    }
+
     // Reset AI budget for this frame
     globalPathBudget = MAX_PATH_BUDGET;
 
@@ -2454,6 +3181,8 @@ function update() {
         if (isS) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
         if (isA) { dx -= tank.speed; tank.baseAngle = Math.PI; }
         if (isD) { dx += tank.speed; tank.baseAngle = 0; }
+        // Store velocity so flames inherit it (bug fix: flames don't drift back when moving)
+        tank._vx = dx; tank._vy = dy;
         if (dx !== 0 || dy !== 0) {
             if (!tank.artilleryMode) {
                 tank.trackOffset = (tank.trackOffset + 0.2) % 10;
@@ -2640,10 +3369,46 @@ function update() {
 
     // Перезарядка игрока
     if (tank.fireCooldown > 0) tank.fireCooldown--;
-        // Стрельба (только если перезарядка закончилась)
-        if (keys['Space'] && tank.fireCooldown <= 0) {
+
+    // Logic for Machinegun Overheating
+    if (tankType === 'machinegun') {
+        tank.heat = tank.heat || 0;
+        const HEAT_MAX = 240; // 4 seconds at 60fps
+        const COOL_RATE = 2; // Cools down in 2 seconds (240/2 = 120 ticks)
+        
+        if (tank.overheated) {
+            // Overheated: Cool down, cannot shoot
+            tank.heat -= COOL_RATE;
+            if (tank.heat <= 0) {
+                tank.heat = 0;
+                tank.overheated = false;
+            }
+            // Add smoke effect when overheated
+             if (Math.random() > 0.5) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#555', 0.5);
+        } else {
+             if (keys['Space']) {
+                // Shooting heats up
+                tank.heat++;
+                if (tank.heat >= HEAT_MAX) {
+                    tank.heat = HEAT_MAX;
+                    tank.overheated = true;
+                    // Steam effect
+                    for(let i=0; i<10; i++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#fff', 1);
+                }
+             } else {
+                 // Not shooting cools down
+                 if (tank.heat > 0) tank.heat -= COOL_RATE;
+             }
+        }
+    } else {
+        tank.heat = 0;
+        tank.overheated = false;
+    }
+
+        // Стрельба (только если перезарядка закончилась и нет перегрева)
+        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated) {
             shoot();
-            if (tankType !== 'fire') {
+            if (tankType !== 'fire' && tankType !== 'machinegun' && tankType !== 'waterjet') {
                 keys['Space'] = false;
             }
         }
@@ -2962,9 +3727,35 @@ function update() {
 
         // Стрелять по ближайшей цели; если цель враждебна (другая команда), стрелять чаще
         const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
+        
+        // --- AI MACHINEGUN HEAT LOGIC (exact same as player) ---
+        const tt = enemy.tankType || 'normal';
+        if (tt === 'machinegun') {
+            enemy.heat = enemy.heat || 0;
+            const HEAT_MAX = 240; // 4 seconds at 60fps
+            const COOL_RATE = 2;  // 2 seconds to cool down
+            if (enemy.overheated) {
+                // Overheated: cool down, can't shoot
+                enemy.heat -= COOL_RATE;
+                if (enemy.heat <= 0) { enemy.heat = 0; enemy.overheated = false; }
+                if (Math.random() > 0.5) spawnParticle(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#555', 0.5);
+            } else {
+                // heat++ every frame — identical to player holding Space
+                enemy.heat++;
+                if (enemy.heat >= HEAT_MAX) {
+                    enemy.heat = HEAT_MAX;
+                    enemy.overheated = true;
+                    for(let i=0; i<10; i++) spawnParticle(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#fff', 1);
+                }
+            }
+        } else { enemy.heat = 0; enemy.overheated = false; }
+        // --------------------------------
+
+        const mgShootProb = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
         if (enemy.fireCooldown > 0) enemy.fireCooldown--;
-        if (enemy.fireCooldown <= 0 && Math.random() < shootProb) {
-            const tt = enemy.tankType || 'normal';
+        if (enemy.fireCooldown <= 0 && Math.random() < mgShootProb && !enemy.overheated) {
+            // No extra heat here — heat is managed per-frame above based on fireCooldown state
+
             let b = null;
             if (tt === 'plasma') {
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:200, owner:'enemy', team: enemy.team, type:'plasma', damage:3, piercing:true };
@@ -2972,7 +3763,7 @@ function update() {
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:6, h:6, vx:Math.cos(enemy.turretAngle)*7, vy:Math.sin(enemy.turretAngle)*7, life:500, owner:'enemy', team: enemy.team, type:'toxic', explodeTimer:45, spawned:5 };
             } else if (tt === 'fire') {
                 // Fire-type enemy uses flamethrower cone: spawn multiple flame particles
-                const flameCountE = 11;
+                const flameCountE = 14;
                 const baseAngE = enemy.turretAngle;
                 const spreadE = 0.7;
                 for (let f = 0; f < flameCountE; f++) {
@@ -2981,14 +3772,14 @@ function update() {
                     const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 18;
                     const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 18;
                     const speed = 3.5 + Math.random() * 1.2;
-                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 20 + Math.floor(Math.random() * 8), damage: 0.28, team: enemy.team, owner: 'enemy' });
+                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.28, team: enemy.team, owner: 'enemy' });
                 }
             } else if (tt === 'buratino') {
                 // Enemy buratino: enter artillery mode, spawn target circle and visual rockets (like player)
                 const distE = 300;
                 const targetXE = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * distE;
                 const targetYE = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * distE;
-                const targetCircleE = { x: targetXE, y: targetYE, radius: 100, color: enemy.color, timer: 180, type: 'targetCircle' };
+                const targetCircleE = { x: targetXE, y: targetYE, radius: 100, color: enemy.color, timer: 180, type: 'targetCircle', team: enemy.team };
                 targetCircleE.planned = [];
                 for (let j = 0; j < 4; j++) {
                     const ang = (j / 4) * Math.PI * 2;
@@ -3034,7 +3825,7 @@ function update() {
                         const vx = dx / travel;
                         const vy = dy / travel;
                         const life = travel + 6;
-                        objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos });
+                        objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: enemy.team });
                     }
                 }
             } else if (tt === 'illuminat') {
@@ -3043,6 +3834,10 @@ function update() {
                     enemy.beamStartTime = Date.now();
                     enemy.fireCooldown = 240;
                 }
+            } else if (tt === 'waterjet') {
+                // Water jet: activate continuous stream for ~1s
+                enemy.waterjetActive = true;
+                enemy.waterjetTimer = 60;
             } else if (tt === 'mirror') {
                 // Mirror Tank (Enemy) - Copycat Logic
                 let pType = 'mirror';
@@ -3080,6 +3875,12 @@ function update() {
                     props.damage = 1; props.w = 6; props.h = 6;
                 }
                 b = props;
+            } else if (tt === 'machinegun') {
+                // Machine gun: rapid fire with low damage (match player projectile)
+                const speed = 7;
+                const life = 80;
+                const ang = enemy.turretAngle + (Math.random() - 0.5) * 0.05;
+                b = { x: enemy.x + enemy.w/2 + Math.cos(ang) * 35, y: enemy.y + enemy.h/2 + Math.sin(ang) * 35, w:7, h:7, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, life:life, owner:'enemy', team: enemy.team, type: 'machinegun', damage: 0.2 };
             } else if (tt === 'musical') {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
@@ -3091,7 +3892,7 @@ function update() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -3241,11 +4042,37 @@ function update() {
                 }
             }
 
+
             // Shoot at target occasionally with cooldown
             const shootProb = 0.06;
+            
+            // --- ALLY MACHINEGUN HEAT LOGIC (exact same as player) ---
+            const tt = ally.tankType || 'normal';
+            if (tt === 'machinegun') {
+                ally.heat = ally.heat || 0;
+                const HEAT_MAX = 240; // 4 seconds at 60fps
+                const COOL_RATE = 2;  // 2 seconds to cool down
+                if (ally.overheated) {
+                    ally.heat -= COOL_RATE;
+                    if (ally.heat <= 0) { ally.heat = 0; ally.overheated = false; }
+                    if (Math.random() > 0.5) spawnParticle(ally.x + ally.w/2, ally.y + ally.h/2, '#555', 0.5);
+                } else {
+                    // heat++ every frame — identical to player holding Space
+                    ally.heat++;
+                    if (ally.heat >= HEAT_MAX) {
+                        ally.heat = HEAT_MAX;
+                        ally.overheated = true;
+                        for(let i=0; i<10; i++) spawnParticle(ally.x + ally.w/2, ally.y + ally.h/2, '#fff', 1);
+                    }
+                }
+            } else { ally.heat = 0; ally.overheated = false; }
+            // --------------------------------
+
+        const mgShootProbA = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
             if (ally.fireCooldown > 0) ally.fireCooldown--;
-            if (ally.fireCooldown <= 0 && Math.random() < shootProb) {
-                const tt = ally.tankType || 'normal';
+            if (ally.fireCooldown <= 0 && Math.random() < mgShootProbA && !ally.overheated) {
+                // Heat managed per-frame above
+
                 let b = null;
                 if (tt === 'plasma') {
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:200, owner:'ally', team: ally.team, type:'plasma', damage:3, piercing:true };
@@ -3253,7 +4080,7 @@ function update() {
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*7, vy:Math.sin(ally.turretAngle)*7, life:500, owner:'ally', team: ally.team, type:'toxic', explodeTimer:45, spawned:5 };
                 } else if (tt === 'fire') {
                     // Ally fire-type uses flamethrower: spawn flame particles
-                        const flameCountA = 11;
+                        const flameCountA = 14;
                     const baseAngA = ally.turretAngle;
                     const spreadA = 0.7;
                     for (let f = 0; f < flameCountA; f++) {
@@ -3262,14 +4089,14 @@ function update() {
                         const sx = ally.x + ally.w/2 + Math.cos(ang) * 18;
                         const sy = ally.y + ally.h/2 + Math.sin(ang) * 18;
                         const speed = 3.5 + Math.random() * 1.2;
-                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 20 + Math.floor(Math.random() * 8), damage: 0.28, team: ally.team, owner: 'ally' });
+                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.28, team: ally.team, owner: 'ally' });
                     }
                 } else if (tt === 'buratino') {
                     // Ally buratino: enter artillery mode, spawn target circle and visual rockets (like player and enemy)
                     const distA = 300;
                     const targetXA = ally.x + ally.w/2 + Math.cos(ally.turretAngle) * distA;
                     const targetYA = ally.y + ally.h/2 + Math.sin(ally.turretAngle) * distA;
-                    const targetCircleA = { x: targetXA, y: targetYA, radius: 100, color: ally.color, timer: 180, type: 'targetCircle' };
+                    const targetCircleA = { x: targetXA, y: targetYA, radius: 100, color: ally.color, timer: 180, type: 'targetCircle', team: ally.team };
                     targetCircleA.planned = [];
                     for (let j = 0; j < 4; j++) {
                         const ang = (j / 4) * Math.PI * 2;
@@ -3315,7 +4142,7 @@ function update() {
                             const vx = dx / travel;
                             const vy = dy / travel;
                             const life = travel + 6;
-                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos });
+                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: ally.team });
                         }
                     }
                     const w = (tt === 'ice') ? 8 : 9;
@@ -3331,9 +4158,19 @@ function update() {
                         ally.beamStartTime = Date.now();
                         ally.fireCooldown = 240;
                     }
+                } else if (tt === 'machinegun') {
+                    // Ally machinegun: rapid fire with low damage (match player projectile)
+                    const speedA = 7;
+                    const lifeA = 80;
+                    const angA = ally.turretAngle + (Math.random() - 0.5) * 0.05;
+                    b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: 0.2 };
+                } else if (tt === 'waterjet') {
+                    // Ally waterjet: activate stream for 1s
+                    ally.waterjetActive = true;
+                    ally.waterjetTimer = 60;
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }
@@ -3456,7 +4293,11 @@ function update() {
                         if (e === tank) {
                             if (currentMode === 'war') { 
                                 tank.alive = false; tank.respawnTimer = 600; 
-                            } else { gameState = 'lose'; }
+                            } else { 
+                                gameState = 'lose'; 
+                                loseTrophies(1); // Снимаем 1 трофей за поражение
+                                syncResultOverlay('lose');
+                            }
                             for(let k=0; k<10; k++) spawnParticle(tank.x+tank.w/2, tank.y+tank.h/2);
                         } else {
                             if (currentMode === 'war') { 
@@ -3495,6 +4336,122 @@ function update() {
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
         if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies, ...enemies]);
+    }
+
+    // ── Waterjet stream physics ────────────────────────────────────────
+    function updateUnitWaterjet(unit, targets) {
+        const isPlayer = unit === tank;
+        const activeType = isPlayer ? tankType : (unit.tankType || 'normal');
+        if (activeType !== 'waterjet') return;
+        // Non-player: manage auto shut-off timer
+        if (!isPlayer) {
+            if (unit.waterjetTimer > 0) unit.waterjetTimer--;
+            else unit.waterjetActive = false;
+        }
+        const isActive = isPlayer ? (keys['Space'] && tank.alive !== false) : (unit.waterjetActive === true);
+        if (!isActive) { unit.waterjetBeamLen = 0; unit.waterjetActive = false; return; }
+
+        unit.waterjetActive = true;
+        const maxLen = 260;
+        const startX = unit.x + unit.w / 2;
+        const startY = unit.y + unit.h / 2;
+        const angle = unit.turretAngle;
+        const rayEndX = startX + Math.cos(angle) * maxLen;
+        const rayEndY = startY + Math.sin(angle) * maxLen;
+        // Raycast: stop at walls AND boxes/barrels
+        let beamLen = maxLen;
+        let hitBox = null;
+        for (const obj of objects) {
+            if (obj.type !== 'box' && obj.type !== 'barrel' && obj.type !== 'wall') continue;
+            if (lineIntersectsRect(startX, startY, rayEndX, rayEndY, obj.x, obj.y, obj.w, obj.h)) {
+                const d = getRayRectDistance(startX, startY, angle, maxLen, obj);
+                if (d < beamLen) {
+                    beamLen = d;
+                    hitBox = (obj.type === 'box' || obj.type === 'barrel') ? obj : null;
+                }
+            }
+        }
+        // Destroy box at impact point
+        if (hitBox) {
+            hitBox._waterjetDmg = (hitBox._waterjetDmg || 0) + 1;
+            if (hitBox._waterjetDmg >= 8) { // ~8 ticks = destroy
+                if (hitBox.type === 'barrel') {
+                    explodeBarrel(hitBox);
+                } else {
+                    for (let k = 0; k < 6; k++) spawnParticle(hitBox.x + hitBox.w/2, hitBox.y + hitBox.h/2);
+                    const idxB = objects.indexOf(hitBox);
+                    if (idxB !== -1) objects.splice(idxB, 1);
+                    navNeedsRebuild = true;
+                }
+            }
+        }
+        unit.waterjetBeamLen = beamLen;
+        const endX = startX + Math.cos(angle) * beamLen;
+        const endY = startY + Math.sin(angle) * beamLen;
+
+        const distToSeg = (px, py, x1, y1, x2, y2) => {
+            const dx = x2 - x1, dy = y2 - y1;
+            const lenSq = dx * dx + dy * dy || 1;
+            const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+            return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+        };
+
+        for (let j = targets.length - 1; j >= 0; j--) {
+            const e = targets[j];
+            if (!e || (e.alive === false && e !== tank)) continue;
+            if (e.team === unit.team) continue;
+            if (e.mirrorShieldActive) continue;
+            const cx = e.x + (e.w || 0) / 2;
+            const cy = e.y + (e.h || 0) / 2;
+            const hitRadius = Math.max(e.w || 0, e.h || 0) * 0.5 + 7;
+            if (distToSeg(cx, cy, startX, startY, endX, endY) > hitRadius) continue;
+
+            // Damage per frame (0.11/tick)
+            e.hp -= 0.11;
+            // Slow: brief recurring stun simulates medium slowdown
+            e.paralyzed = true;
+            e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);
+            e.frozenEffect = Math.max(e.frozenEffect || 0, 6);
+            // Knockback along beam direction (medium force)
+            const kx = Math.cos(angle) * 1.3;
+            const ky = Math.sin(angle) * 1.3;
+            e.x = Math.max(0, Math.min((worldWidth || 1800) - (e.w || 20), e.x + kx));
+            e.y = Math.max(0, Math.min((worldHeight || 1400) - (e.h || 20), e.y + ky));
+            // Water splash particles
+            if (window.effectsEnabled !== false) {
+                for (let p = 0; p < 2; p++) {
+                    const sa = angle + (Math.random() - 0.5) * 1.6;
+                    particles.push({ x: cx + (Math.random()-0.5)*10, y: cy + (Math.random()-0.5)*10,
+                        vx: Math.cos(sa)*(1+Math.random()*2.5), vy: Math.sin(sa)*(1+Math.random()*2.5),
+                        life: 0.4+Math.random()*0.4, size: 1.5+Math.random()*2, color: '#3498db' });
+                }
+            }
+            // Death handling
+            if (e.hp <= 0) {
+                if (e === tank) {
+                    if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                    else { gameState = 'lose'; loseTrophies(1); syncResultOverlay('lose'); }
+                    for (let k = 0; k < 10; k++) spawnParticle(tank.x+tank.w/2, tank.y+tank.h/2);
+                } else {
+                    if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; for (let k=0;k<10;k++) spawnParticle(e.x+e.w/2, e.y+e.h/2); }
+                    else {
+                        const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); coins += 5; }
+                        const idxA = allies.indexOf(e); if (idxA !== -1) allies.splice(idxA, 1);
+                        for (let k = 0; k < 10; k++) spawnParticle(e.x+e.w/2, e.y+e.h/2);
+                    }
+                }
+            }
+        }
+    }
+    // Waterjet: Player
+    if (tankType === 'waterjet') updateUnitWaterjet(tank, enemies);
+    // Waterjet: Allies
+    for (let i = allies.length - 1; i >= 0; i--) {
+        if (allies[i].tankType === 'waterjet') updateUnitWaterjet(allies[i], enemies);
+    }
+    // Waterjet: Enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i].tankType === 'waterjet') updateUnitWaterjet(enemies[i], [tank, ...allies]);
     }
 
 // --- APPEND_POINT_UPDATE_REST ---
@@ -3686,12 +4643,16 @@ function update() {
                     if (currentMode === 'war') {
                         if (tank.respawnCount >= 2) {
                             gameState = 'lose';
+                            loseTrophies(1); // Снимаем 1 трофей за поражение в war режиме
+                            syncResultOverlay('lose');
                         } else {
                             tank.alive = false;
                             tank.respawnTimer = 600; // 10s
                         }
                     } else {
                         gameState = 'lose';
+                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        syncResultOverlay('lose');
                     }
                 }
                 continue;
@@ -3826,7 +4787,11 @@ function update() {
                 if (tank.hp <= 0) {
                      for (let k = 0; k < 30; k++) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2);
                      if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
-                     else { gameState = 'lose'; }
+                     else { 
+                         gameState = 'lose'; 
+                         loseTrophies(1); // Снимаем 1 трофей за поражение
+                         syncResultOverlay('lose');
+                     }
                 }
             }
         }
@@ -3931,6 +4896,14 @@ function update() {
         f.x += f.vx;
         f.y += f.vy;
         f.life--;
+        // Fire trail particles — more frequent for enemy/ally flames
+        if (window.effectsEnabled !== false) {
+            const trailChance = (f.owner === 'player' || !f.owner) ? 0.4 : 0.6;
+            if (Math.random() < trailChance) {
+                const colors = ['#ff6600', '#ff3300', '#ffaa00', '#ffff00'];
+                spawnParticle(f.x, f.y, colors[Math.floor(Math.random() * colors.length)], 6 + Math.random() * 6);
+            }
+        }
         if (f.life <= 0) {
             flames.splice(i, 1);
             continue;
@@ -3973,12 +4946,16 @@ function update() {
                     if (currentMode === 'war') {
                         if (tank.respawnCount >= 2) {
                             gameState = 'lose';
+                            loseTrophies(1); // Снимаем 1 трофей за поражение в war режиме
+                            syncResultOverlay('lose');
                         } else {
                             tank.alive = false;
                             tank.respawnTimer = 600;
                         }
                     } else {
                         gameState = 'lose';
+                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        syncResultOverlay('lose');
                     }
                 }
                 continue;
@@ -4035,7 +5012,7 @@ function update() {
                     for (let p of obj.planned) {
                         if (!p.exploded) {
                             objects.push({ type: 'explosion', x: p.x, y: p.y, radius: 30, life: 30, color: '#FFA500' });
-                            applyDamage(p.x, p.y);
+                            applyDamage(p.x, p.y, 30, 1, obj.team);
                         }
                     }
                 } else {
@@ -4046,7 +5023,7 @@ function update() {
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
                         objects.push({ type: 'explosion', x: ex, y: ey, radius: 30, life: 30, color: '#FFA500' });
-                        applyDamage(ex, ey);
+                        applyDamage(ex, ey, 30, 1, obj.team);
                     }
                     for (let j = 0; j < 9; j++) {
                         const ang = (j / 9) * Math.PI * 2;
@@ -4054,7 +5031,7 @@ function update() {
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
                         objects.push({ type: 'explosion', x: ex, y: ey, radius: 30, life: 30, color: '#FFA500' });
-                        applyDamage(ex, ey);
+                        applyDamage(ex, ey, 30, 1, obj.team);
                     }
                 }
                 objects.splice(i, 1);
@@ -4078,7 +5055,7 @@ function update() {
                 obj.x += obj.vx;
                 obj.y += obj.vy;
                 // small smoke trail
-                if (Math.random() < 0.6) {
+                if (window.effectsEnabled !== false && Math.random() < 0.6) {
                     particles.push({ x: obj.x, y: obj.y, vx: (Math.random() - 0.5) * 0.4 - obj.vx * 0.08, vy: (Math.random() - 0.5) * 0.4 - obj.vy * 0.08, life: 8, size: 2, color: 'rgba(80,80,80,0.6)' });
                 }
 
@@ -4223,7 +5200,11 @@ function update() {
                 ent.alive = false;
                 if (ent === tank) {
                     for (let k = 0; k < 30; k++) spawnParticle(ent.x + ent.w/2, ent.y + ent.h/2);
-                    if (currentMode !== 'war') { gameState = 'lose'; }
+                    if (currentMode !== 'war') { 
+                        gameState = 'lose'; 
+                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        syncResultOverlay('lose');
+                    }
                 }
             }
         }
@@ -4283,9 +5264,33 @@ function update() {
                          // fallback respawn
                          tank.x = sp.x; tank.y = sp.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     }
-                    if (tankType === 'mirror') {
-                         tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0; tank.lastHitType = null;
-                    }
+                    // Reset all effects on respawn
+                    tank.paralyzed = false;
+                    tank.paralyzedTime = 0;
+                    tank.frozenEffect = 0;
+                    tank.confused = 0;
+                    tank.mirrorShieldActive = false;
+                    tank.mirrorShieldTimer = 0;
+                    tank.lastHitType = null;
+                    tank.lastHitTime = 0;
+                    
+                    // Reset illuminat beam effects
+                    tank.beamActive = false;
+                    tank.beamStart = 0;
+                    tank.beamCooldown = 0;
+                    tank.beamAngle = 0;
+                    tank.inversionUsed = 0;
+                    
+                    // Reset toxic gas ability
+                    tank.megaGasUsed = false;
+                    
+                    // Reset plasma blast ability
+                    tank.plasmaBlastUsed = 0;
+                    
+                    // Reset poison and control effects
+                    tank.poisonTimer = 0;
+                    tank.invertedControls = 0;
+                    tank.disoriented = 0;
                 }
             }
         }
@@ -4325,15 +5330,25 @@ function update() {
         if (aliveEnemies.length === 0) {
             gameState = 'win';
             coins += 50; // reward for war
+            trophies += 2; // war trophy reward
             syncResultOverlay('win');
         } else if (!teamHasAliveMember(0)) {
             gameState = 'lose';
+            loseTrophies(1); // Снимаем 1 трофей за поражение в war режиме
             syncResultOverlay('lose');
         }
     } else if (enemies.length === 0) {
         gameState = 'win';
-        if (currentMode === 'single') coins += 25;
-        else if (currentMode === 'team') coins += 40;
+        if (currentMode === 'single') {
+            coins += 25;
+            trophies += 2; // single trophy reward
+        } else if (currentMode === 'team') {
+            coins += 40;
+            trophies += 3; // team trophy reward
+        } else if (currentMode === 'duel') {
+            coins += 25;
+            trophies += 3; // duel trophy reward
+        }
         syncResultOverlay('win');
     }
 }
@@ -4378,6 +5393,8 @@ function updateCoinDisplay() {
     if (coinDisplay) coinDisplay.textContent = coins;
     const gemDisplay = document.getElementById('gemDisplay');
     if (gemDisplay) gemDisplay.textContent = gems;
+    const trophyDisplay = document.getElementById('trophyDisplay');
+    if (trophyDisplay) trophyDisplay.textContent = trophies;
 
     // Menu Displays (IDs: menuCoinDisplay, menuGemDisplay, shopCoinDisplay, etc)
     const elementsToUpdate = document.querySelectorAll('.currency-coin');
@@ -4385,8 +5402,186 @@ function updateCoinDisplay() {
     
     const gemElements = document.querySelectorAll('.currency-gem');
     gemElements.forEach(el => el.textContent = gems);
+    
+    const trophyElements = document.querySelectorAll('.currency-trophy');
+    trophyElements.forEach(el => el.textContent = trophies);
+
+    // Check for new available trophy rewards
+    checkTrophyRewards();
 
     saveProgress();
+}
+
+// Check and auto-unlock trophy rewards
+function checkTrophyRewards() {
+    trophyRoadRewards.forEach((reward, index) => {
+        if (trophies >= reward.trophies && !claimedRewards.includes(index)) {
+            // Reward is available but not claimed
+            reward.claimed = false;
+        }
+    });
+}
+
+// Generate trophy road UI
+function generateTrophyRoad() {
+    const container = document.getElementById('trophyRoadContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // Add stage headers
+    let currentStage = '';
+    
+    trophyRoadRewards.forEach((reward, index) => {
+        // Add stage headers
+        if (reward.trophies === 0 && currentStage !== 'start') {
+            currentStage = 'start';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage start';
+            stageDiv.textContent = '🟢 Старт';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 150 && currentStage !== 'middle') {
+            currentStage = 'middle';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage middle';
+            stageDiv.textContent = '🟡 Средний этап';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 350 && currentStage !== 'advanced') {
+            currentStage = 'advanced';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage advanced';
+            stageDiv.textContent = '🟠 Продвинутый этап';
+            container.appendChild(stageDiv);
+        }
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'trophy-item';
+        
+        const isClaimed = claimedRewards.includes(index);
+        const isAvailable = trophies >= reward.trophies && !isClaimed;
+        
+        if (isClaimed) {
+            itemDiv.classList.add('claimed');
+        } else if (isAvailable) {
+            itemDiv.classList.add('available');
+        }
+        
+        itemDiv.innerHTML = `
+            <div class="trophy-milestone">${reward.trophies} 🏆</div>
+            <div class="trophy-reward">${reward.reward}</div>
+            <button class="trophy-claim" ${!isAvailable || isClaimed ? 'disabled' : ''} 
+                onclick="claimTrophyReward(${index})">
+                ${isClaimed ? 'Получено' : isAvailable ? 'Получить' : 'Заблокировано'}
+            </button>
+        `;
+        
+        container.appendChild(itemDiv);
+    });
+}
+
+// Claim trophy reward
+function claimTrophyReward(index) {
+    const reward = trophyRoadRewards[index];
+    if (!reward || claimedRewards.includes(index) || trophies < reward.trophies) return;
+    
+    claimedRewards.push(index);
+    
+    // Process reward
+    switch (reward.type) {
+        case 'coins':
+            coins += reward.amount;
+            showNotification(`+${reward.amount} монет!`, '#f1c40f');
+            break;
+        case 'gems':
+            gems += reward.amount;
+            showNotification(`+${reward.amount} гемов!`, '#2ecc71');
+            break;
+        case 'container':
+            // Show container modal like in shop
+            if (reward.level === 'normal') {
+                showFreeContainerFlow('bronze');
+            } else if (reward.level === 'super') {
+                showFreeContainerFlow('legendary');
+            } else if (reward.level === 'omega') {
+                showFreeContainerFlow('omega');
+            }
+            showNotification(`Получен ${reward.reward}!`, '#9b59b6');
+            break;
+        case 'containers':
+            // Add all containers to queue and start with first one
+            showNotification(`Получено ${reward.amount} контейнеров!`, '#9b59b6');
+            
+            // Clear queue first
+            containerQueue = [];
+            
+            // Add remaining containers to queue (first one will be shown immediately)
+            for (let i = 1; i < reward.amount; i++) {
+                if (reward.level === 'normal') {
+                    containerQueue.push('bronze');
+                } else if (reward.level === 'super') {
+                    containerQueue.push('legendary');
+                } else if (reward.level === 'omega') {
+                    containerQueue.push('omega');
+                }
+            }
+            
+            // Show first container immediately
+            if (reward.level === 'normal') {
+                showFreeContainerFlow('bronze');
+            } else if (reward.level === 'super') {
+                showFreeContainerFlow('legendary');
+            } else if (reward.level === 'omega') {
+                showFreeContainerFlow('omega');
+            }
+            break;
+        case 'choice':
+            // Defer claiming until choice is made. We must remove it from claimedRewards temporarily.
+            claimedRewards.pop(); 
+            openChoiceModal(reward, index);
+            return; // Exit function so we don't save progress yet
+        case 'tank':
+            if (unlockedTanks.includes(reward.tank)) {
+                // Already has tank, give gems as compensation
+                gems += reward.compensation;
+                showNotification(`У вас уже есть этот танк! +${reward.compensation} гемов в качестве компенсации`, '#2ecc71');
+            } else {
+                unlockedTanks.push(reward.tank);
+                // Show tank reward modal like in shop
+                const tankName = (window.tankDescriptions && window.tankDescriptions[reward.tank]) ? window.tankDescriptions[reward.tank].name : reward.tank;
+                showReward('tank', 1, `Новый танк разблокирован!`, reward.tank);
+                showNotification(`Разблокирован ${tankName}!`, '#e74c3c');
+            }
+            break;
+    }
+    
+    updateCoinDisplay();
+    generateTrophyRoad(); // Refresh the display
+}
+
+// Simple notification system
+function showNotification(text, color = '#ffffff') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 50px;
+        right: 20px;
+        background: rgba(0,0,0,0.9);
+        color: ${color};
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        animation: slideIn 0.3s ease;
+    `;
+    notification.textContent = text;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 
@@ -4576,3 +5771,119 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
     }
 }
 
+// Initialize trophy system on game load
+initializeTrophySystem();
+updateCoinDisplay();
+
+
+/* --- TANK CHOICE MODAL LOGIC --- */
+
+let choiceRewardData = null;
+let choiceRewardIndex = null;
+let selectedChoiceIdx = -1;
+
+function openChoiceModal(reward, index) {
+    choiceRewardData = reward;
+    choiceRewardIndex = index;
+    selectedChoiceIdx = -1;
+    
+    const choiceModal = document.getElementById('choiceModal');
+    if (!choiceModal) return;
+    
+    choiceModal.style.display = 'flex';
+    document.getElementById('choiceConfirmation').style.display = 'none';
+    const cancelCont = document.getElementById('choiceCancelContainer');
+    if (cancelCont) cancelCont.style.display = 'block';
+    
+    // Reset styles
+    const opt1El = document.getElementById('choiceOption1');
+    const opt2El = document.getElementById('choiceOption2');
+    if (opt1El) opt1El.style.border = '2px solid transparent';
+    if (opt2El) opt2El.style.border = '2px solid transparent';
+
+    const opt1 = reward.options[0];
+    const opt2 = reward.options[1];
+    
+    // Use descriptions
+    const t1 = (window.tankDescriptions && window.tankDescriptions[opt1]) ? window.tankDescriptions[opt1] : {name: opt1, description: ''};
+    const t2 = (window.tankDescriptions && window.tankDescriptions[opt2]) ? window.tankDescriptions[opt2] : {name: opt2, description: ''};
+    
+    const name1El = document.getElementById('choiceName1');
+    if (name1El) name1El.textContent = t1.name;
+    const name2El = document.getElementById('choiceName2');
+    if (name2El) name2El.textContent = t2.name;
+    
+    // Draw previews
+    const cvs1 = document.getElementById('choiceCanvas1');
+    if (cvs1) {
+        const ctx1 = cvs1.getContext('2d');
+        ctx1.clearRect(0,0,cvs1.width,cvs1.height);
+        if (typeof drawTankOn === 'function') drawTankOn(ctx1, 50, 50, 38, 38, '#3498db', -Math.PI/2, 1, opt1);
+    }
+    
+    const cvs2 = document.getElementById('choiceCanvas2');
+    if (cvs2) {
+        const ctx2 = cvs2.getContext('2d');
+        ctx2.clearRect(0,0,cvs2.width,cvs2.height);
+        if (typeof drawTankOn === 'function') drawTankOn(ctx2, 50, 50, 38, 38, '#3498db', -Math.PI/2, 1, opt2);
+    }
+}
+
+window.selectChoiceOption = function(idx) {
+    if (!choiceRewardData) return;
+    
+    selectedChoiceIdx = idx;
+    
+    // Highlight
+    const opt1El = document.getElementById('choiceOption1');
+    const opt2El = document.getElementById('choiceOption2');
+    if (opt1El) opt1El.style.border = (idx === 0) ? '2px solid #f1c40f' : '2px solid transparent';
+    if (opt2El) opt2El.style.border = (idx === 1) ? '2px solid #f1c40f' : '2px solid transparent';
+    
+    // Show confirmation
+    document.getElementById('choiceConfirmation').style.display = 'block';
+    const cancelCont = document.getElementById('choiceCancelContainer');
+    if (cancelCont) cancelCont.style.display = 'none';
+    
+    const tankId = choiceRewardData.options[idx];
+    const tData = (window.tankDescriptions && window.tankDescriptions[tankId]) ? window.tankDescriptions[tankId] : {name: tankId, description: ''};
+    
+    document.getElementById('choiceConfirmTitle').textContent = 'Вы уверены, что хотите выбрать ' + tData.name + '?'; // Fixed string
+    document.getElementById('choiceConfirmDesc').textContent = tData.description || 'Нет описания';
+}
+
+window.cancelChoiceSelection = function() {
+    selectedChoiceIdx = -1;
+    document.getElementById('choiceOption1').style.border = '2px solid transparent';
+    document.getElementById('choiceOption2').style.border = '2px solid transparent';
+    document.getElementById('choiceConfirmation').style.display = 'none';
+    document.getElementById('choiceCancelContainer').style.display = 'block';
+}
+
+window.confirmChoice = function() {
+    if (selectedChoiceIdx === -1 || !choiceRewardData) return;
+    
+    const chosenTank = choiceRewardData.options[selectedChoiceIdx];
+    
+    // Process reward as if it was a tank reward
+    if (unlockedTanks.includes(chosenTank)) {
+         gems += 50; // Compensation
+         showNotification('У вас уже есть этот танк! +50 гемов', '#f1c40f');
+    } else {
+         unlockedTanks.push(chosenTank);
+         const tData = (window.tankDescriptions && window.tankDescriptions[chosenTank]) ? window.tankDescriptions[chosenTank] : {name: chosenTank};
+         showNotification('Вы получили ' + tData.name + '!', '#2ecc71');
+    }
+    
+    // Mark as claimed
+    if (choiceRewardIndex !== null && choiceRewardIndex !== undefined) {
+        if (!claimedRewards.includes(choiceRewardIndex)) {
+            claimedRewards.push(choiceRewardIndex);
+        }
+        saveProgress();
+    }
+    
+    // Close modal
+    document.getElementById('choiceModal').style.display = 'none';
+    generateTrophyRoad();
+}

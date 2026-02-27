@@ -52,6 +52,16 @@ const tankDescriptions = {
         name: "⏳ Временной",
         description: "Повелитель времени. Способность 'Временная Петля' (E) мгновенно возвращает танк в состояние 5 секунд назад. Кулдаун 8 сек.",
         rarity: "Хроматическая"
+    },
+    machinegun: {
+        name: "Пулемётчик",
+        description: "Быстрострельный танк. Стреляет очередями по 4 пули каждые 3 тика, каждая пуля наносит всего 0.2 урона, но высокая скорострельность компенсирует низкий урон.",
+        rarity: "Редкий"
+    },
+    waterjet: {
+        name: "💧 Водомётчик",
+        description: "Стреляет мощной струёй воды. Наносит 0.11 урона за тик, замедляет и отталкивает врагов. Струя не пробивает стены. Только прямой контакт — только урон.",
+        rarity: "Сверхредкий"
     }
 };
 
@@ -68,7 +78,9 @@ const tankBgGradients = {
     musical: ['#9b59b6', '#8e44ad'],  // Эпический - purple
     illuminat: ['#ff6b6b', '#e74c3c'],// Мифический - red
     mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
-    time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'] // Хроматическая - transparent for CSS anim
+    time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
+    machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
+    waterjet: ['#3498db', '#5dade2']   // Сверхредкий - blue (like fire slot)
 };
 
 // Base colors used in preview rendering (keeps menu and modal consistent)
@@ -82,7 +94,8 @@ const tankBaseColors = {
     musical: '#0000FF',
     illuminat: '#0000FF',
     mirror: '#0000FF',
-    time: '#FF00FF'
+    time: '#FF00FF',
+    machinegun: '#0000FF'
 };
 
 // Make available globally
@@ -91,7 +104,7 @@ window.tankBgGradients = tankBgGradients;
 
 // Preview canvas global access (defined in main.js, used here)
 
-function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal') {
+function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null) {
     ctx.save();
     ctx.translate(cx, cy);
 
@@ -104,6 +117,9 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             W *= 1.2; // make wider
         } else if (type === 'buratino') {
             W *= 1.1; // make longer
+        } else if (type === 'machinegun') {
+            W *= 0.9; // make narrower for agility
+            H *= 1.1; // make slightly longer
         }
         // tracks (top/bottom)
         const trackThick = Math.max(6, W * 0.12);
@@ -256,6 +272,74 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#2c3e50';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'machinegun') {
+            // Machinegun Tank Body - Heavy assault vehicle
+            // Dark Gunmetal / Urban Camo
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#263238');   // Dark Blue Grey
+            grad.addColorStop(0.5, '#37474F'); // Blue Grey
+            grad.addColorStop(1, '#212121');   // Almost Black
+            ctx.fillStyle = grad;
+            
+            // Armored Chassis with angled front
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2, -bodyH/2);
+            ctx.lineTo(bodyW/2 - 10, -bodyH/2); // Front right cut
+            ctx.lineTo(bodyW/2, -bodyH/4);
+            ctx.lineTo(bodyW/2, bodyH/4);
+            ctx.lineTo(bodyW/2 - 10, bodyH/2);  // Front left cut
+            ctx.lineTo(-bodyW/2, bodyH/2);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Side Armor Plates (Reactive Armor)
+            ctx.fillStyle = '#455A64'; // Lighter Grey
+            ctx.fillRect(-bodyW/2 + 5, -bodyH/2 - 2, bodyW - 15, 4); // Top side
+            ctx.fillRect(-bodyW/2 + 5, bodyH/2 - 2, bodyW - 15, 4);  // Bottom side
+            
+            // Engine Vents (Rear)
+            ctx.fillStyle = '#000';
+            for(let i=0; i<3; i++) {
+                ctx.fillRect(-bodyW/2 + 2, -bodyH/4 + i*6, 4, 3);
+            }
+            
+            // Ammo Feed System (Gold Line from body to turret center)
+            ctx.fillStyle = '#FFC107'; 
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/4, -bodyH/4);
+            ctx.lineTo(0, 0); 
+            ctx.lineTo(-bodyW/4, bodyH/4);
+            ctx.stroke(); // Wait, fillStyle set but using stroke? need strokeStyle
+            
+            ctx.strokeStyle = '#FFB300';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Heavy tread look
+            ctx.strokeStyle = '#263238';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'waterjet') {
+            // Deep navy hull with water-pressure markings
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#154360');
+            grad.addColorStop(0.5, '#1a5276');
+            grad.addColorStop(1, '#1b4f72');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Water conduit curves
+            ctx.strokeStyle = '#5dade2';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2+4, -2); ctx.quadraticCurveTo(0, -bodyH/4, bodyW/2-4, -2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2+4, 2); ctx.quadraticCurveTo(0, bodyH/4, bodyW/2-4, 2);
+            ctx.stroke();
+            // Side pressure tanks
+            ctx.fillStyle = '#2980b9';
+            ctx.fillRect(-bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
+            ctx.fillRect(bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
         } else {
             // Default
             ctx.fillStyle = color;
@@ -553,6 +637,56 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0,0, 2.5, 0, Math.PI*2);
         ctx.fill();
 
+    } else if (type === 'machinegun') {
+        // Machinegun Turret - Multiple barrels
+        ctx.fillStyle = '#A0522D';
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        
+        // Multiple small barrels arrangement
+        ctx.fillStyle = '#654321';
+        for(let i = 0; i < 4; i++) {
+            const offset = (i - 1.5) * 3;
+            ctx.fillRect(0, offset, tSize/2, 2);
+        }
+        
+        // Turret center (Pivot) - Larger, darker mount
+        const tGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize/2);
+        tGrad.addColorStop(0, '#607D8B');
+        tGrad.addColorStop(1, '#37474F');
+        ctx.fillStyle = tGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize/2.5, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#263238';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Inner mechanical details (Bolt circle)
+        ctx.fillStyle = '#CFD8DC';
+        for (let i = 0; i < 4; i++) {
+            const rot = (i / 4) * Math.PI * 2 + Math.PI/4;
+            const bx = Math.cos(rot) * tSize/5;
+            const by = Math.sin(rot) * tSize/5;
+            ctx.beginPath();
+            ctx.arc(bx, by, 1.5, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+    } else if (type === 'waterjet') {
+        // Pressurized round turret – concentric blue rings
+        const wjGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize/2);
+        wjGrad.addColorStop(0, '#85c1e9');
+        wjGrad.addColorStop(0.5, '#2e86c1');
+        wjGrad.addColorStop(1, '#1a5276');
+        ctx.fillStyle = wjGrad;
+        ctx.beginPath(); ctx.arc(0, 0, tSize/2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'rgba(174,214,241,0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.25, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.42, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = '#aed6f1';
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.12, 0, Math.PI*2); ctx.fill();
     } else if (type === 'plasma') {
         // Handled below
     } else {
@@ -808,6 +942,99 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
              // Reflective ring at end
              ctx.fillStyle = '#fff';
              ctx.fillRect(tSize/2 + barrelLen - 4, -barrelH/2 - 2, 4, barrelH + 4);
+        } else if (type === 'machinegun') {
+            // Heavy Rotary Cannon
+            const barrelLen = Math.min(W, H) * 0.75 * turretScale; // Longer
+            const barrelH = Math.min(W, H) * 0.22 * turretScale;   // Thicker base
+            
+            // Mounting (connects turret to barrels)
+            ctx.fillStyle = '#455A64';
+            ctx.fillRect(tSize/2 - 4, -barrelH/2 - 2, 8, barrelH + 4);
+            
+            // Main Barrel Assembly (Rotating Cylinder Block)
+            const cylGrad = ctx.createLinearGradient(0, -barrelH/2, 0, barrelH/2);
+            cylGrad.addColorStop(0, '#263238');
+            cylGrad.addColorStop(0.5, '#546E7A');
+            cylGrad.addColorStop(1, '#263238');
+            ctx.fillStyle = cylGrad;
+            
+            ctx.fillRect(tSize/2 + 2, -barrelH/2, barrelLen, barrelH);
+            
+            // Detail: Cooling Rings along the assembly
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            for(let k=1; k<5; k++) {
+                ctx.fillRect(tSize/2 + 2 + k * (barrelLen/5), -barrelH/2, 2, barrelH);
+            }
+            
+            // Individual Barrels (Visible protruding at the end or as lines)
+            // We draw 3 parallel lines to represent the visible sector of the 6-barrel cluster
+            let barrelColor = '#90A4AE'; // Bright Steel
+            let muzzleColor = '#37474F';
+            
+            if (heatState && heatState.heat > 0) {
+                 const t = Math.min(1, heatState.heat / 240); // 240 is max heat
+                 // Interpolate #90A4AE (144,164,174) to #FF0000 (255,0,0)
+                 const r = Math.floor(144 + (255 - 144) * t);
+                 const g = Math.floor(164 * (1 - t));
+                 const b = Math.floor(174 * (1 - t));
+                 barrelColor = `rgb(${r},${g},${b})`;
+                 
+                 if (heatState.overheated) {
+                      muzzleColor = '#FF4500';
+                      // Flashing red
+                      if (Math.floor(Date.now() / 100) % 2 === 0) {
+                          barrelColor = '#FF0000';
+                      } else {
+                          barrelColor = '#8B0000';
+                      }
+                 }
+            }
+
+            ctx.fillStyle = barrelColor;
+            const bH = barrelH / 4;
+            // Top barrel
+            ctx.fillRect(tSize/2 + 2, -barrelH/2 + bH*0.5, barrelLen + 4, bH/2);
+            // Middle barrel
+            ctx.fillRect(tSize/2 + 2, -bH/4, barrelLen + 4, bH/2);
+            // Bottom barrel
+            ctx.fillRect(tSize/2 + 2, barrelH/2 - bH, barrelLen + 4, bH/2);
+            
+            // Muzzle disk (Front plate holding barrels together)
+            const mX = tSize/2 + barrelLen + 2;
+            ctx.fillStyle = muzzleColor;
+            ctx.beginPath();
+            ctx.ellipse(mX, 0, 3, barrelH/2 + 2, 0, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Muzzle Holes (Black dots on the disk)
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(mX, -barrelH/3, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(mX, 0, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(mX, barrelH/3, 1.5, 0, Math.PI*2); ctx.fill();
+
+        } else if (type === 'waterjet') {
+            // High-pressure water hose with contrasted nozzle and highlights
+            // Body of hose (darker, thin)
+            ctx.fillStyle = '#12394a';
+            ctx.fillRect(tSize/2, -barrelH * 0.55, barrelLen * 0.72, barrelH * 1.08);
+            // Pressure collar (slightly metallic)
+            ctx.fillStyle = '#0f3a50';
+            ctx.fillRect(tSize/2 + barrelLen * 0.66, -barrelH * 0.82, barrelLen * 0.12, barrelH * 1.64);
+            // Bright metallic nozzle to stand out from hull
+            const nozzleX = tSize/2 + barrelLen * 0.78;
+            ctx.fillStyle = '#e8f7ff';
+            ctx.fillRect(nozzleX, -barrelH * 0.7, barrelLen * 0.22, barrelH * 1.38);
+            // Nozzle outline
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(nozzleX, -barrelH * 0.7, barrelLen * 0.22, barrelH * 1.38);
+            // Inner spray opening (dark core for contrast)
+            ctx.fillStyle = '#c6eaff';
+            ctx.fillRect(tSize/2 + barrelLen - 3, -barrelH * 0.42, 4, barrelH * 0.86);
+            // Small highlight streak along nozzle
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.moveTo(nozzleX + 2, -barrelH * 0.45); ctx.lineTo(nozzleX + 2, barrelH * 0.45); ctx.stroke();
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -1011,6 +1238,12 @@ function drawCharacterPreviews() {
         };
         animateTimeTank();
     }
+    
+    // Machinegun Tank Rendering
+    drawItem(machinegunTankCtx, machinegunTankPreview, 'machinegun', '#0000FF', tankBgGradients.machinegun);
+    
+    // Waterjet Tank Rendering
+    drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
 }
 
 function draw() {
@@ -1033,6 +1266,12 @@ function draw() {
         
         camX = tank.x + tank.w/2 - canvas.width/2;
         camY = tank.y + tank.h/2 - canvas.height/2;
+        // Expose to mobile controls
+        window._camX = camX;
+        window._camY = camY;
+    } else {
+        window._camX = 0;
+        window._camY = 0;
     }
     
     // Define safe view bounds for culling (viewport + margin)
@@ -1423,7 +1662,7 @@ function draw() {
             
             if (Math.random() > 0.6) {
                 // Optimization: reduced particle spawn rate in war mode or if many particles
-                if (currentMode !== 'war' || particles.length < 150) {
+                if (window.effectsEnabled !== false && (currentMode !== 'war' || particles.length < 150)) {
                     particles.push({
                        x: b.x, y: b.y, size: 2, color: '#76ff03', life: 0.5, vx: (Math.random()-0.5), vy: (Math.random()-0.5)
                     });
@@ -1476,7 +1715,7 @@ function draw() {
             ctx.fill();
             
             // Optimization: limit particle spawning here too
-            if (Math.random() > 0.5 && (currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.5 && (currentMode !== 'war' || particles.length < 150)) {
                 const px = (Math.random() - 0.5) * size;
                 const py = (Math.random() - 0.5) * size;
                 particles.push({
@@ -1520,7 +1759,7 @@ function draw() {
             ctx.restore();
             
             // Musical notes trail
-            if (Math.random() > 0.8 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.8 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
                  particles.push({
                    x: b.x - b.vx*2 + (Math.random()-0.5)*5, 
                    y: b.y - b.vy*2 + (Math.random()-0.5)*5, 
@@ -1599,7 +1838,7 @@ function draw() {
             ctx.restore();
             
             // Mystical particles
-            if (Math.random() > 0.6 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.6 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
                  particles.push({
                    x: b.x - b.vx*0.5 + (Math.random()-0.5)*4, 
                    y: b.y - b.vy*0.5 + (Math.random()-0.5)*4, 
@@ -1653,7 +1892,7 @@ function draw() {
             ctx.restore();
              
             // Trailing glittering shards (particles)
-            if (Math.random() > 0.7 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.7 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
                   particles.push({
                     x: b.x - b.vx*0.5 + (Math.random()-0.5)*2, 
                     y: b.y - b.vy*0.5 + (Math.random()-0.5)*2, 
@@ -1691,11 +1930,14 @@ function draw() {
 
     // 3.6. Огненные частицы
     flames.forEach(f => {
-        if (!isVisible(f.x, f.y, 4, 4)) return;
-        const r = 4;
+        if (!isVisible(f.x, f.y, 8, 8)) return;
+        // Radius is bigger at start of life (fresh flame), shrinks as it dies
+        const maxLife = (f.owner === 'enemy' || f.owner === 'ally') ? 45 : 28;
+        const lifeRatio = Math.min(1, f.life / maxLife);
+        const r = 3 + lifeRatio * 5; // 3..8px
         const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
-        grad.addColorStop(0, 'rgba(255, 230, 100, 1)');
-        grad.addColorStop(0.5, 'rgba(255, 100, 0, 0.7)');
+        grad.addColorStop(0, `rgba(255, 240, 100, ${0.7 + lifeRatio * 0.3})`);
+        grad.addColorStop(0.45, `rgba(255, 100, 0, ${0.5 + lifeRatio * 0.3})`);
         grad.addColorStop(1, 'rgba(255, 0, 0, 0)');
         ctx.fillStyle = grad;
         ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI*2); ctx.fill();
@@ -1714,7 +1956,7 @@ function draw() {
         if (!a || !a.alive || !isVisible(a.x, a.y, a.w, a.h)) return;
         ctx.save();
         ctx.translate(a.x + a.w/2, a.y + a.h/2);
-        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal');
+        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated });
         ctx.restore();
         if (a.frozenEffect && a.frozenEffect > 0) drawFrozenOverlay(ctx, a.x, a.y, a.w, a.h, a.frozenEffect);
         ctx.fillStyle = 'blue';
@@ -1839,17 +2081,113 @@ function draw() {
     enemies.forEach(e => drawUnitBeam(e));
     if (tank.alive !== false) drawUnitBeam(tank);
 
+    // ── Water jet stream renderer ─────────────────────────────────────────
+    function drawUnitWaterjet(unit) {
+        const isPlayer = unit === tank;
+        const activeType = isPlayer ? tankType : (unit.tankType || 'normal');
+        if (activeType !== 'waterjet') return;
+        const beamLen = unit.waterjetBeamLen || 0;
+        const isActive = unit.waterjetActive;
+
+        // Init per-unit droplet array
+        if (!unit.wjDroplets) unit.wjDroplets = [];
+
+        const startX = unit.x + unit.w / 2;
+        const startY = unit.y + unit.h / 2;
+        const angle = unit.turretAngle;
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        const perpX = -sinA, perpY = cosA;
+        const endX = startX + cosA * beamLen;
+        const endY = startY + sinA * beamLen;
+
+        // Emit new droplets while active
+        if (isActive && beamLen > 10) {
+            const count = 9;
+            for (let i = 0; i < count; i++) {
+                // random position along the beam
+                const t = Math.random() * beamLen;
+                const bx = startX + cosA * t;
+                const by = startY + sinA * t;
+                // forward speed + lateral spread + slight backwards drift
+                const fwd = 3.5 + Math.random() * 3;
+                const lat = (Math.random() - 0.5) * 2.2;
+                const backDrift = Math.random() * 0.4; // small back wobble
+                const vx = cosA * fwd + perpX * lat - cosA * backDrift;
+                const vy = sinA * fwd + perpY * lat - sinA * backDrift;
+                const life = 7 + Math.floor(Math.random() * 9);
+                const r = 1.2 + Math.random() * 2.2;
+                // color: white foam, light blue, mid blue
+                const palette = ['rgba(255,255,255,0.9)', 'rgba(174,214,241,0.9)', 'rgba(93,173,226,0.85)', 'rgba(46,134,193,0.8)', 'rgba(133,193,233,0.85)'];
+                const col = palette[Math.floor(Math.random() * palette.length)];
+                unit.wjDroplets.push({ x: bx, y: by, vx, vy, life, maxLife: life, r, col });
+            }
+            // Extra splash droplets at impact point
+            for (let i = 0; i < 4; i++) {
+                const sa = angle + (Math.random() - 0.5) * 2.2;
+                const sp = 1.5 + Math.random() * 3;
+                unit.wjDroplets.push({
+                    x: endX + (Math.random()-0.5)*6, y: endY + (Math.random()-0.5)*6,
+                    vx: Math.cos(sa)*sp, vy: Math.sin(sa)*sp,
+                    life: 6 + Math.floor(Math.random()*8), maxLife: 10, r: 1.5+Math.random()*2,
+                    col: 'rgba(93,173,226,0.75)'
+                });
+            }
+        }
+
+        // Update + draw droplets
+        ctx.save();
+        for (let i = unit.wjDroplets.length - 1; i >= 0; i--) {
+            const d = unit.wjDroplets[i];
+            d.x += d.vx; d.y += d.vy;
+            d.vx *= 0.92; d.vy *= 0.92; // air resistance
+            d.life--;
+            if (d.life <= 0) { unit.wjDroplets.splice(i, 1); continue; }
+            const alpha = d.life / d.maxLife;
+            // Extract base color and apply alpha
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = d.col;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Thin backbone glow (subtle, just for shape reference)
+        if (isActive && beamLen > 10) {
+            ctx.globalAlpha = 0.18;
+            ctx.strokeStyle = '#aed6f1';
+            ctx.lineWidth = 9;
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
+            ctx.globalAlpha = 0.35;
+            ctx.strokeStyle = '#5dade2';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
+
+            // Pulsing nozzle flash
+            const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 40);
+            ctx.globalAlpha = 0.4 + 0.3 * pulse;
+            ctx.fillStyle = '#aed6f1';
+            ctx.beginPath(); ctx.arc(startX + cosA * 22, startY + sinA * 22, 4 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+        }
+
+        ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+        ctx.restore();
+    }
+    allies.forEach(a => drawUnitWaterjet(a));
+    enemies.forEach(e => drawUnitWaterjet(e));
+    if (tank.alive !== false) drawUnitWaterjet(tank);
+
     enemies.forEach(enemy => {
         if (!enemy || !enemy.alive || !isVisible(enemy.x, enemy.y, enemy.w, enemy.h)) return;
         ctx.save();
         ctx.translate(enemy.x + enemy.w/2, enemy.y + enemy.h/2);
-        drawTankOn(ctx, 0, 0, enemy.w, enemy.h, enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222'), enemy.turretAngle || 0, 1, enemy.tankType || 'normal');
+        drawTankOn(ctx, 0, 0, enemy.w, enemy.h, enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222'), enemy.turretAngle || 0, 1, enemy.tankType || 'normal', { heat: enemy.heat, overheated: enemy.overheated });
         ctx.restore();
         if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical') ? 4 : (enemy.tankType === 'illuminat') ? 3 : 3;
+        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat') ? 3 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);
@@ -1904,7 +2242,7 @@ function draw() {
             ctx.restore();
         }
 
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType);
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
         ctx.restore();
         if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
         ctx.fillStyle = 'green';
@@ -1918,6 +2256,38 @@ function draw() {
     }
     
     // Illuminat beam handled by drawUnitBeam above for all units including player
+
+    // DUEL MODE: Draw Shrinking Zone (Grid Based)
+    if (typeof currentMode !== 'undefined' && currentMode === 'duel' && typeof duelState !== 'undefined' && duelState) {
+        ctx.save();
+        
+        // Define Safe Zone Rect
+        const safeX = duelState.minX;
+        const safeY = duelState.minY;
+        const safeW = duelState.maxX - duelState.minX;
+        const safeH = duelState.maxY - duelState.minY;
+        
+        // Border of Safe Zone
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.lineDashOffset = -Date.now() / 20;
+        ctx.strokeRect(safeX, safeY, safeW, safeH);
+        
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+        
+        // 4 Danger Rects around the safe zone (full coverage)
+        // Top Strip
+        ctx.fillRect(0, 0, worldWidth, safeY);
+        // Bottom Strip
+        ctx.fillRect(0, safeY + safeH, worldWidth, worldHeight - (safeY + safeH));
+        // Left Strip (between Ys)
+        ctx.fillRect(0, safeY, safeX, safeH);
+        // Right Strip (between Ys)
+        ctx.fillRect(safeX + safeW, safeY, worldWidth - (safeX + safeW), safeH);
+
+        ctx.restore();
+    }
     
     if (cameraTranslated) ctx.restore();
 
