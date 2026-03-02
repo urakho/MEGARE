@@ -26,6 +26,12 @@ let illusions = [];
 let enemies = [];
 let allies = [];
 let gameState = 'menu';
+let menuMusic = new Audio('music/menu.mp3');
+menuMusic.loop = true;
+menuMusic.volume = 0.5;
+let fightMusic = new Audio('music/fight.mp3');
+fightMusic.loop = true;
+fightMusic.volume = 0.5;
 let currentMode = 'menu';
 let duelState = null;
 // Throttling AI counters
@@ -184,6 +190,12 @@ window.onkeydown = (e) => {
             commandInput.focus();
         }
     }
+    // F5 to return to main menu
+    if (e.code === 'F5') {
+        e.preventDefault();
+        gameState = 'menu';
+        if (mainMenu) mainMenu.style.display = 'flex';
+    }
 };
 window.onkeyup = (e) => keys[e.code] = false;
 
@@ -192,6 +204,16 @@ window.onkeyup = (e) => keys[e.code] = false;
 // ========================
 window.effectsEnabled = localStorage.getItem('settingEffects') !== 'false';
 window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
+// Read saved music volume. Use explicit null/isNaN checks so 0 is preserved.
+{
+    const sv = localStorage.getItem('settingMusicVolume');
+    if (sv === null) {
+        window.musicVolume = 0.5;
+    } else {
+        const v = parseFloat(sv);
+        window.musicVolume = Number.isFinite(v) ? v : 0.5;
+    }
+}
 
 (function initSettings() {
     const btn   = document.getElementById('settingsBtn');
@@ -224,22 +246,63 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
     const closeBtn = document.getElementById('settingsClose');
     const chkEffects = document.getElementById('settingEffects');
     const chkMobile  = document.getElementById('settingMobile');
+    const chkMusicVolume = document.getElementById('settingMusicVolume');
     if (!btn || !modal) return;
 
     // Apply saved values
     chkEffects.checked = window.effectsEnabled;
     chkMobile.checked  = window.deviceModeMobile;
+    chkMusicVolume.value = Math.round(window.musicVolume * 100);
+
+    // Real-time volume change
+    chkMusicVolume.addEventListener('input', () => {
+        const vol = chkMusicVolume.value / 100;
+        menuMusic.volume = vol;
+        fightMusic.volume = vol;
+    });
 
     btn.addEventListener('click', () => { modal.style.display = 'flex'; });
     closeBtn.addEventListener('click', () => {
         window.effectsEnabled   = chkEffects.checked;
         window.deviceModeMobile = chkMobile.checked;
+        window.musicVolume = chkMusicVolume.value / 100;
         localStorage.setItem('settingEffects', chkEffects.checked);
         localStorage.setItem('settingMobile',  chkMobile.checked);
+        localStorage.setItem('settingMusicVolume', window.musicVolume);
+        menuMusic.volume = window.musicVolume;
+        fightMusic.volume = window.musicVolume;
         updateCmdBtnVisibility();
         modal.style.display = 'none';
     });
 })();
+
+// Apply initial music volume
+menuMusic.volume = window.musicVolume;
+fightMusic.volume = window.musicVolume;
+
+// Music management
+function updateMusic() {
+    if (gameState === 'menu') {
+        // Stop fight music; start menu music only if volume > 0
+        if (!fightMusic.paused) fightMusic.pause();
+        if (menuMusic.volume > 0) {
+            if (menuMusic.paused) menuMusic.play().catch(() => {});
+        } else {
+            if (!menuMusic.paused) menuMusic.pause();
+        }
+    } else if (gameState === 'playing') {
+        // Stop menu music; start fight music only if volume > 0
+        if (!menuMusic.paused) menuMusic.pause();
+        if (fightMusic.volume > 0) {
+            if (fightMusic.paused) fightMusic.play().catch(() => {});
+        } else {
+            if (!fightMusic.paused) fightMusic.pause();
+        }
+    } else {
+        if (!menuMusic.paused) menuMusic.pause();
+        if (!fightMusic.paused) fightMusic.pause();
+    }
+}
 
 // ========================
 // MOBILE CONTROLS
@@ -3202,6 +3265,7 @@ function shoot() {
 }
 // --- APPEND_POINT_UPDATE ---
 function update() {
+    updateMusic();
     if (gameState !== 'playing') {
         syncResultOverlay(gameState);
         if (gameState === 'win' || gameState === 'lose') {
