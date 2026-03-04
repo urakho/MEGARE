@@ -58,6 +58,11 @@ const tankDescriptions = {
         description: "Высокоскоростной боец, стреляющий очередями из 4 пуль. Каждая пуля наносит небольшой урон, но частая огневая мощь компенсирует слабость одного выстрела. Идеален для постоянного давления.",
         rarity: "Редкий"
     },
+    buckshot: {
+        name: "🟢 Дробовой танк",
+        description: "Выстреливает 5 дробин вперёд веером, расходящихся под углом. На близкой дистанции может нанести до 7.5 HP урона (5 × 1.5). На дальней дистанции дробь расходится, и урон снижается. Медленная перезарядка для компенсации мощности.",
+        rarity: "Редкий"
+    },
     waterjet: {
         name: "💧 Водомётчик",
         description: "Стреляет мощной струёй воды вперед. Наносит урон при прямом контакте, замедляет и отталкивает врагов. Не пробивает стены — рассеивается при ударе. Идеален для защиты узких проходов.",
@@ -71,6 +76,7 @@ const tankDescriptions = {
 const tankBgGradients = {
     normal: ['#1b5e20', '#1b5e20'],   // Обычный - dark grass green (menu & modal)
     ice: ['#2ecc71', '#27ae60'],      // Редкий - green
+    buckshot: ['#2ecc71', '#27ae60'], // Редкий - green
     fire: ['#3498db', '#5dade2'],     // Сверхредкий - blue
     buratino: ['#9b59b6', '#8e44ad'], // Эпический - purple
     toxic: ['#fff9c4', '#fff176'],    // Легендарный - pale yellow
@@ -87,6 +93,7 @@ const tankBgGradients = {
 const tankBaseColors = {
     normal: '#0000FF',
     ice: '#54d1e8',
+    buckshot: '#455A64',
     fire: '#4c00ff',
     buratino: '#0000FF',
     toxic: '#0000FF',
@@ -319,6 +326,57 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#263238';
             ctx.lineWidth = 1;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'buckshot') {
+            // Buckshot Tank - Tactical Breach Vehicle
+            // Body: Reinforced Composite Armor (Dark Grey/Black)
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#37474F');   // Blue Grey Dark
+            grad.addColorStop(0.5, '#455A64'); // Blue Grey Light
+            grad.addColorStop(1, '#263238');   // Almost Black
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Side grip panels (knurled texture look)
+            const gripW = Math.max(2, bodyW * 0.12);
+            ctx.fillStyle = '#212121'; 
+            ctx.fillRect(-bodyW/2 + 2, -bodyH/2 + 2, gripW, bodyH - 4); 
+            ctx.fillRect(bodyW/2 - gripW - 2, -bodyH/2 + 2, gripW, bodyH - 4);
+
+            // Shell Rack on the back deck - perfectly contained
+            const rackH = Math.max(3, bodyH * 0.18);
+            const rackY = bodyH/2 - rackH - Math.max(1, bodyH*0.05); // relative to bottom
+            const rackW = bodyW * 0.55;
+            
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(-rackW/2, rackY, rackW, rackH);
+            
+            // Individual Shells
+            const shellTotalW = rackW * 0.9;
+            const shellW = shellTotalW / 4; 
+            const shellGap = shellW * 0.2;
+            const finalShellW = shellW - shellGap;
+            const shellH = rackH - 2;
+            const shellY = rackY + 1;
+            
+            for (let i = 0; i < 4; i++) {
+                const shellX = -shellTotalW/2 + i * shellW + shellGap/2;
+                // Red Case
+                ctx.fillStyle = '#c0392b'; // Shell Red
+                ctx.fillRect(shellX, shellY, finalShellW, shellH);
+                // Gold Base
+                ctx.fillStyle = '#f1c40f'; // Brass Head
+                ctx.fillRect(shellX, shellY, finalShellW * 0.4, shellH);
+            }
+
+            // Front Bumper / Ram (Relative size)
+            const bumpSize = Math.max(2, bodyW * 0.08);
+            ctx.fillStyle = '#546E7A';
+            ctx.beginPath();
+            ctx.moveTo(bodyW/2, -bodyH/2);
+            ctx.lineTo(bodyW/2 + bumpSize, -bodyH/4);
+            ctx.lineTo(bodyW/2 + bumpSize, bodyH/4);
+            ctx.lineTo(bodyW/2, bodyH/2);
+            ctx.fill();
         } else if (type === 'waterjet') {
             // Deep navy hull with water-pressure markings
             const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
@@ -671,6 +729,107 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.beginPath();
             ctx.arc(bx, by, 1.5, 0, Math.PI*2);
             ctx.fill();
+        }
+
+    } else if (type === 'buckshot') {
+        // Buckshot Turret — Side-by-side double-barrel shotgun
+        const bLen   = tSize * 1.05;  // total barrel length beyond turret
+        const bR     = tSize * 0.14;  // barrel radius
+        const bSep   = tSize * 0.17;  // barrel centre offset from 0
+        const baseX  = tSize / 2;     // point where barrels leave the turret box
+
+        // ── Turret housing ──
+        const hsGrad = ctx.createLinearGradient(-tSize/2, -tSize/2, tSize/2, tSize/2);
+        hsGrad.addColorStop(0, '#37474F');
+        hsGrad.addColorStop(0.5, '#455A64');
+        hsGrad.addColorStop(1, '#263238');
+        ctx.fillStyle = hsGrad;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+
+        // Housing border
+        ctx.strokeStyle = '#546E7A';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-tSize/2 + 1, -tSize/2 + 1, tSize - 2, tSize - 2);
+
+        // Hatch
+        ctx.fillStyle = '#546E7A';
+        ctx.fillRect(-tSize*0.22, -tSize*0.22, tSize*0.44, tSize*0.44);
+        ctx.fillStyle = '#263238';
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.1, 0, Math.PI*2); ctx.fill();
+
+        // ── Barrels (drawn back→front so front face overlaps) ──
+        for (let s = -1; s <= 1; s += 2) {   // s = -1 (top), +1 (bottom)
+            const cy = s * bSep;
+
+            // Barrel body — gradient to fake cylinder shading
+            const barGrad = ctx.createLinearGradient(baseX, cy - bR, baseX, cy + bR);
+            barGrad.addColorStop(0,   '#5a5a5a');   // lit top edge
+            barGrad.addColorStop(0.3, '#2a2a2a');   // mid barrel
+            barGrad.addColorStop(0.7, '#111');       // shadow groove
+            barGrad.addColorStop(1,   '#3a3a3a');   // lit bottom edge
+            ctx.fillStyle = barGrad;
+            ctx.fillRect(baseX - 4, cy - bR, bLen + 4, bR * 2);
+
+            // Barrel highlight (top glint)
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(baseX - 4, cy - bR, bLen + 4, bR * 0.35);
+
+            // Heat-vent slots (3 slots near muzzle)
+            ctx.fillStyle = '#000';
+            for (let vi = 0; vi < 3; vi++) {
+                ctx.fillRect(baseX + bLen * (0.55 + vi * 0.12), cy - bR * 0.6, bLen * 0.06, bR * 1.2);
+            }
+
+            // ── Muzzle brake / Bell ──
+            // Dark outer circle
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(baseX + bLen, cy, bR * 1.2, 0, Math.PI * 2);
+            ctx.fill();
+            // Inner bore ring
+            ctx.fillStyle = '#2a2a2a';
+            ctx.beginPath();
+            ctx.arc(baseX + bLen, cy, bR * 0.85, 0, Math.PI * 2);
+            ctx.fill();
+            // Bore black hole
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(baseX + bLen, cy, bR * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Rim highlight
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(baseX + bLen, cy, bR * 1.2, -Math.PI*0.7, Math.PI*0.7, true);
+            ctx.stroke();
+        }
+
+        // ── Barrel separator bar ──
+        ctx.fillStyle = '#263238';
+        ctx.fillRect(baseX, -2, bLen * 0.85, 4);
+
+        // ── Fore-stock (grip wrap around barrels) ──
+        const gripX = baseX + bLen * 0.25;
+        const gripW = bLen * 0.35;
+        const gripH = bSep * 2 + bR * 2.6;
+        const rnd   = 4;
+        ctx.fillStyle = '#37474F';
+        ctx.beginPath();
+        ctx.moveTo(gripX + rnd, -gripH/2);
+        ctx.lineTo(gripX + gripW - rnd, -gripH/2);
+        ctx.quadraticCurveTo(gripX + gripW, -gripH/2, gripX + gripW, -gripH/2 + rnd);
+        ctx.lineTo(gripX + gripW, gripH/2 - rnd);
+        ctx.quadraticCurveTo(gripX + gripW, gripH/2, gripX + gripW - rnd, gripH/2);
+        ctx.lineTo(gripX + rnd, gripH/2);
+        ctx.quadraticCurveTo(gripX, gripH/2, gripX, gripH/2 - rnd);
+        ctx.lineTo(gripX, -gripH/2 + rnd);
+        ctx.quadraticCurveTo(gripX, -gripH/2, gripX + rnd, -gripH/2);
+        ctx.closePath();
+        ctx.fill();
+        // Grip ridges
+        ctx.fillStyle = '#263238';
+        for(let ri = 0; ri < 4; ri++) {
+            ctx.fillRect(gripX + 4 + ri * 7, -gripH/2 + 2, 3, gripH - 4);
         }
 
     } else if (type === 'waterjet') {
@@ -1173,6 +1332,7 @@ function drawCharacterPreviews() {
     // RARE
     drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', tankBgGradients.ice);
     drawItem(machinegunTankCtx, machinegunTankPreview, 'machinegun', '#0000FF', tankBgGradients.machinegun);
+    drawItem(buckshotTankCtx, buckshotTankPreview, 'buckshot', '#2ecc71', tankBgGradients.buckshot);
     // SUPER_RARE
     drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
     drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
@@ -2001,6 +2161,55 @@ function draw() {
                  });
             }
 
+        } else if (b.type === 'buckshot') {
+            // Shotgun pellet — brass sphere with motion trail
+            const pr = Math.max(2.5, b.w / 2);
+            const ang = Math.atan2(b.vy, b.vx);
+
+            // Motion trail (fading streak behind pellet)
+            const trailLen = pr * 3.5;
+            const tx = b.x - Math.cos(ang) * trailLen;
+            const ty = b.y - Math.sin(ang) * trailLen;
+            const trailGrad = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            trailGrad.addColorStop(0, 'rgba(180, 100, 20, 0)');
+            trailGrad.addColorStop(1, 'rgba(220, 150, 40, 0.55)');
+            ctx.strokeStyle = trailGrad;
+            ctx.lineWidth = pr * 1.2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+
+            // Outer glow
+            const glowGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pr * 2.2);
+            glowGrad.addColorStop(0, 'rgba(255, 200, 80, 0.45)');
+            glowGrad.addColorStop(1, 'rgba(180, 80, 0, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, pr * 2.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Brass/copper sphere
+            const sphereGrad = ctx.createRadialGradient(
+                b.x - pr * 0.35, b.y - pr * 0.35, pr * 0.05,
+                b.x, b.y, pr
+            );
+            sphereGrad.addColorStop(0,   '#ffe082');  // lit highlight
+            sphereGrad.addColorStop(0.3, '#ffb300');  // warm brass
+            sphereGrad.addColorStop(0.65,'#c17900');  // mid tone
+            sphereGrad.addColorStop(1,   '#6d3b00');  // deep shadow
+            ctx.fillStyle = sphereGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, pr, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Specular glint
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.beginPath();
+            ctx.arc(b.x - pr * 0.3, b.y - pr * 0.3, pr * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -2378,7 +2587,7 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat') ? 3 : 3;
+        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot') ? 3 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);

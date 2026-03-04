@@ -97,6 +97,7 @@ const tankGemPrices = {
     'normal': 0,
     'ice': 100,       // Редкий
     'machinegun': 100,// Редкий
+    'buckshot': 100,  // Редкий
     'fire': 200,      // Сверхредкий
     'waterjet': 200,  // Сверхредкий
     'buratino': 300,  // Эпический
@@ -132,6 +133,11 @@ function loseTrophies(amount = 1) {
     }
 }
 
+// Mode-aware trophy loss: 5 for onevsall, 1 for all other modes
+function loseModeTrophies() {
+    loseTrophies(currentMode === 'onevsall' ? 5 : 1);
+}
+
 function saveProgress() {
     localStorage.setItem('tankCoins', coins);
     localStorage.setItem('tankGems', gems);
@@ -165,6 +171,7 @@ const tank = {
 // Apply saved tank type properties immediately if needed
 if (tankType === 'fire') tank.hp = 6;
 else if (tankType === 'musical' || tankType === 'waterjet') tank.hp = 4;
+else if (tankType === 'buckshot') tank.hp = 3;
 
 // Слушатели событий
 window.onkeydown = (e) => {
@@ -585,6 +592,8 @@ const timeTankPreview = document.getElementById('timeTankPreview');
 const timeTankCtx = timeTankPreview && timeTankPreview.getContext ? timeTankPreview.getContext('2d') : null;
 const machinegunTankPreview = document.getElementById('machinegunTankPreview');
 const machinegunTankCtx = machinegunTankPreview && machinegunTankPreview.getContext ? machinegunTankPreview.getContext('2d') : null;
+const buckshotTankPreview = document.getElementById('buckshotTankPreview');
+const buckshotTankCtx = buckshotTankPreview && buckshotTankPreview.getContext ? buckshotTankPreview.getContext('2d') : null;
 const waterjetTankPreview = document.getElementById('waterjetTankPreview');
 const waterjetTankCtx = waterjetTankPreview && waterjetTankPreview.getContext ? waterjetTankPreview.getContext('2d') : null;
 
@@ -605,7 +614,7 @@ const modeOneVsAll = document.getElementById('modeOneVsAll');
 
 function startGame(mode) {
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'buckshot') ? 3 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = [];
     
     // Reset all effects
     tank.paralyzed = false;
@@ -913,7 +922,7 @@ function syncResultOverlay(state = gameState) {
                 : currentMode === 'trial' ? 'Испытание пройдено! (без наград)'
                 : '+0 монет')
             : (currentMode === 'trial' ? 'Испытание провалено'
-                : currentMode === 'onevsall' ? '-5 трофеев'
+                : currentMode === 'onevsall' ? (getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-5 трофеев')
                 : (getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей'));
 
         resultOverlay.style.display = 'flex';
@@ -1569,6 +1578,10 @@ const selectMachinegunTank = document.getElementById('selectMachinegunTank');
 if (selectMachinegunTank) selectMachinegunTank.addEventListener('click', () => {
     showTankDetail('machinegun');
 });
+const selectBuckshotTank = document.getElementById('selectBuckshotTank');
+if (selectBuckshotTank) selectBuckshotTank.addEventListener('click', () => {
+    showTankDetail('buckshot');
+});
 const selectWaterjetTank = document.getElementById('selectWaterjetTank');
 if (selectWaterjetTank) selectWaterjetTank.addEventListener('click', () => {
     showTankDetail('waterjet');
@@ -1671,9 +1684,9 @@ function generateMap() {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
         // Choose a random tank type for this AI
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -1773,9 +1786,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -1817,9 +1830,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'buckshot'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -1873,8 +1886,8 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1' };
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];
@@ -1919,8 +1932,8 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64' };
     
     for (let i = 0; i < 7; i++) {
         // Spread bots vertically around right side
@@ -2207,7 +2220,7 @@ function explodeBarrel(obj) {
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
                 else { 
                     gameState = 'lose'; 
-                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    loseModeTrophies();
                     syncResultOverlay('lose');
                 }
             }
@@ -2258,7 +2271,7 @@ function explodeRocket(bullet) {
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
                 else { 
                     gameState = 'lose'; 
-                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    loseModeTrophies();
                     syncResultOverlay('lose');
                 }
             }
@@ -2325,7 +2338,7 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
                 else { 
                     gameState = 'lose'; 
-                    loseTrophies(1); // Снимаем 1 трофей за поражение
+                    loseModeTrophies();
                     syncResultOverlay('lose');
                 }
             }
@@ -2365,10 +2378,11 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → chromatic
-const allTanksList = ['ice', 'machinegun', 'fire', 'waterjet', 'buratino', 'musical', 'toxic', 'mirror', 'illuminat', 'plasma', 'time'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'toxic', 'mirror', 'illuminat', 'plasma', 'time'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
+    'buckshot': 'rare',
     'fire': 'super_rare',
     'waterjet': 'super_rare',
     'buratino': 'epic',
@@ -3244,6 +3258,32 @@ function shoot() {
             damage: 0.2 // Very low damage per bullet
         });
         tank.fireCooldown = 5; // Fast rate (approx 12 shots/sec)
+    } else if (tankType === 'buckshot') {
+        // Buckshot: 5 pellets in a spread pattern
+        const speed = 6;
+        const life = 24; // 0.4 second lifetime
+        const baseAng = tank.turretAngle;
+        const spreadAngle = 0.6; // total spread in radians (~34 degrees)
+        const startX = tank.x + tank.w/2 + Math.cos(baseAng) * 20;
+        const startY = tank.y + tank.h/2 + Math.sin(baseAng) * 20;
+        
+        // Fire 5 pellets in a spread
+        for (let i = 0; i < 5; i++) {
+            const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
+            bullets.push({
+                x: startX + Math.cos(pelletAngle) * 2 * i,
+                y: startY + Math.sin(pelletAngle) * 2 * i,
+                w: 6, h: 6,
+                vx: Math.cos(pelletAngle) * speed,
+                vy: Math.sin(pelletAngle) * speed,
+                life: life,
+                owner: 'player',
+                team: 0,
+                type: 'buckshot',
+                damage: 1.5 // Each pellet deals 1.5 damage
+            });
+        }
+        tank.fireCooldown = 40; // ~667ms (2x slower than normal 333ms)
     } else {
         const speed = 5;
         const life = 100;
@@ -3310,7 +3350,7 @@ function update() {
             if (tank.hp <= 0) {
                 tank.alive = false;
                 gameState = 'lose';
-                loseTrophies(1); // Снимаем 1 трофей за поражение
+                loseModeTrophies();
                 syncResultOverlay('lose');
                 spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
             }
@@ -4050,6 +4090,32 @@ function update() {
                 // Water jet: activate continuous stream for ~1.5s
                 enemy.waterjetActive = true;
                 enemy.waterjetTimer = 90;
+            } else if (tt === 'buckshot') {
+                // Buckshot: 5 pellets in a spread pattern
+                const speed = 6;
+                const life = 12; // 0.2 second lifetime
+                const baseAng = enemy.turretAngle;
+                const spreadAngle = 0.6; // total spread in radians (~34 degrees)
+                const startXE = enemy.x + enemy.w/2 + Math.cos(baseAng) * 20;
+                const startYE = enemy.y + enemy.h/2 + Math.sin(baseAng) * 20;
+                
+                // Fire 5 pellets in a spread
+                for (let i = 0; i < 5; i++) {
+                    const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
+                    bullets.push({
+                        x: startXE + Math.cos(pelletAngle) * 2 * i,
+                        y: startYE + Math.sin(pelletAngle) * 2 * i,
+                        w: 6, h: 6,
+                        vx: Math.cos(pelletAngle) * speed,
+                        vy: Math.sin(pelletAngle) * speed,
+                        life: life,
+                        owner: 'enemy',
+                        team: enemy.team,
+                        type: 'buckshot',
+                        damage: 1.5 // Each pellet deals 1.5 damage
+                    });
+                }
+                enemy.fireCooldown = 40; // ~667ms (2x slower than normal 333ms)
             } else if (tt === 'mirror') {
                 // Mirror Tank (Enemy) - Copycat Logic
                 let pType = 'mirror';
@@ -4408,9 +4474,25 @@ function update() {
                     // Ally waterjet: activate stream for 1.5s
                     ally.waterjetActive = true;
                     ally.waterjetTimer = 90;
+                } else if (tt === 'buckshot') {
+                    // Ally buckshot: 5 pellets in a spread pattern
+                    const speed = 6;
+                    const life = 120;
+                    const baseAng = ally.turretAngle;
+                    const spreadAngle = 0.6;
+                    const startXA = ally.x + ally.w/2 + Math.cos(baseAng) * 20;
+                    const startYA = ally.y + ally.h/2 + Math.sin(baseAng) * 20;
+                    
+                    for (let i = 0; i < 5; i++) {
+                        const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
+                        b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: 1.5 };
+                        if (b) bullets.push(b);
+                    }
+                    ally.fireCooldown = 40;
+                    b = null; // prevent double push
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }
@@ -4535,7 +4617,7 @@ function update() {
                                 tank.alive = false; tank.respawnTimer = 600; 
                             } else { 
                                 gameState = 'lose'; 
-                                loseTrophies(1); // Снимаем 1 трофей за поражение
+                                loseModeTrophies();
                                 syncResultOverlay('lose');
                             }
                             spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
@@ -4675,7 +4757,7 @@ function update() {
             if (e.hp <= 0) {
                 if (e === tank) {
                     if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
-                    else { gameState = 'lose'; loseTrophies(1); syncResultOverlay('lose'); }
+                    else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
                 } else {
                     if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65); }
@@ -4896,7 +4978,7 @@ function update() {
                         }
                     } else {
                         gameState = 'lose';
-                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        loseModeTrophies();
                         syncResultOverlay('lose');
                     }
                 }
@@ -5068,7 +5150,7 @@ function update() {
                      if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                      else { 
                          gameState = 'lose'; 
-                         loseTrophies(1); // Снимаем 1 трофей за поражение
+                         loseModeTrophies();
                          syncResultOverlay('lose');
                      }
                 }
@@ -5233,7 +5315,7 @@ function update() {
                         }
                     } else {
                         gameState = 'lose';
-                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        loseModeTrophies();
                         syncResultOverlay('lose');
                     }
                 }
@@ -5485,7 +5567,7 @@ function update() {
                     spawnExplosion(ent.x+ent.w/2, ent.y+ent.h/2, 65);
                     if (currentMode !== 'war') { 
                         gameState = 'lose'; 
-                        loseTrophies(1); // Снимаем 1 трофей за поражение
+                        loseModeTrophies();
                         syncResultOverlay('lose');
                     }
                 }
@@ -5540,7 +5622,7 @@ function update() {
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
                     // Mirror tank check for maxHP
-                    const maxHp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'mirror') ? 4 : 3);
+                    const maxHp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'mirror') ? 4 : (tankType === 'buckshot') ? 3 : 3);
                     if (p) {
                          tank.x = p.x; tank.y = p.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     } else {
@@ -5607,7 +5689,8 @@ function update() {
         }
     }
 
-    // Проверка победы/поражения
+    // Проверка победы/поражения (пропускаем если уже lose/win — чтобы не вычитать трофеи дважды)
+    if (gameState !== 'playing') return;
     if (currentMode === 'trial') {
         const aliveEnemies = enemies.filter(e => e && e.alive !== false && e.hp > 0);
         if (aliveEnemies.length === 0) {
@@ -5985,7 +6068,7 @@ function updateTankDetailButton(type) {
     // Map tank type to rarity class
     const rarityMap = {
         'normal': 'common',
-        'ice': 'rare', 'machinegun': 'rare',
+        'ice': 'rare', 'machinegun': 'rare', 'buckshot': 'rare',
         'fire': 'super', 'waterjet': 'super',
         'buratino': 'epic', 'musical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary',
