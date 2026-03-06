@@ -405,7 +405,10 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillRect(-bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
             ctx.fillRect(bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
         } else if (type === 'chromatic') {
-            // Chromatic Tank — shapeshifter: dark body with prismatic shift panels
+            // Chromatic Tank — original style with elegant animated sheen and pulsing core
+            const t = Date.now() * 0.002;
+
+            // Base dark body
             const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
             grad.addColorStop(0, '#0f0f23');
             grad.addColorStop(0.5, '#1a1a3e');
@@ -430,7 +433,26 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillStyle = prismR;
             ctx.fillRect(bodyW/2 - stripW - 2, -bodyH/2 + 2, stripW, bodyH - 4);
 
-            // Central morphing diamond symbol
+            // Animated sheen sweep (smooth radial highlight)
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            // slow sine-based movement for smoothness
+            const sheenX = Math.sin(t * 0.55) * (bodyW * 0.32);
+            const sheenY = Math.sin(t * 0.33) * (bodyH * 0.08);
+            const sheenRad = Math.max(bodyW, bodyH) * 0.9;
+            const sheenGrad = ctx.createRadialGradient(sheenX, sheenY, 0, sheenX, sheenY, sheenRad);
+            sheenGrad.addColorStop(0, 'rgba(255,255,255,0.16)');
+            sheenGrad.addColorStop(0.25, 'rgba(255,255,255,0.08)');
+            sheenGrad.addColorStop(0.5, 'rgba(255,255,255,0.03)');
+            sheenGrad.addColorStop(1, 'rgba(255,255,255,0)');
+            const prevAlpha = ctx.globalAlpha;
+            ctx.globalAlpha = 0.95;
+            ctx.fillStyle = sheenGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            ctx.globalAlpha = prevAlpha;
+            ctx.restore();
+
+            // Central morphing diamond symbol (original)
             ctx.strokeStyle = 'rgba(220,200,255,0.65)';
             ctx.lineWidth = 1;
             const dS = Math.min(bodyW, bodyH) * 0.2;
@@ -439,6 +461,14 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.lineTo(0, dS); ctx.lineTo(-dS * 0.8, 0);
             ctx.closePath();
             ctx.stroke();
+
+            // Pulsing core glow inside diamond (slower, smooth fade)
+            const pulse = 0.35 + 0.25 * (0.5 + 0.5 * Math.sin(t * 1.5));
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = `rgba(180,150,255,${pulse})`;
+            ctx.beginPath(); ctx.arc(0, 0, dS * 0.25, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
 
             // Outer border
             ctx.strokeStyle = 'rgba(180,100,255,0.45)';

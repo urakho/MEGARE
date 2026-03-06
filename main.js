@@ -32,6 +32,15 @@ menuMusic.volume = 0.5;
 let fightMusic = new Audio('music/fight.mp3');
 fightMusic.loop = true;
 fightMusic.volume = 0.5;
+let duelMusic = new Audio('music/duel.mp3');
+duelMusic.loop = true;
+duelMusic.volume = 0.5;
+let teamMusic = new Audio('music/team.mp3');
+teamMusic.loop = true;
+teamMusic.volume = 0.5;
+let tankMusic = new Audio('music/tank.mp3');
+tankMusic.loop = true;
+tankMusic.volume = 0.5;
 let currentMode = 'menu';
 let duelState = null;
 // Throttling AI counters
@@ -203,6 +212,7 @@ window.onkeydown = (e) => {
     if (e.code === 'F5') {
         e.preventDefault();
         gameState = 'menu';
+        _lastMusicKey = ''; // force music switch on next updateMusic()
         if (mainMenu) mainMenu.style.display = 'flex';
     }
 };
@@ -268,6 +278,9 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         const vol = chkMusicVolume.value / 100;
         menuMusic.volume = vol;
         fightMusic.volume = vol;
+        duelMusic.volume = vol;
+        teamMusic.volume = vol;
+        tankMusic.volume = vol;
     });
 
     btn.addEventListener('click', () => { modal.style.display = 'flex'; });
@@ -280,6 +293,9 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         localStorage.setItem('settingMusicVolume', window.musicVolume);
         menuMusic.volume = window.musicVolume;
         fightMusic.volume = window.musicVolume;
+        duelMusic.volume = window.musicVolume;
+        teamMusic.volume = window.musicVolume;
+        tankMusic.volume = window.musicVolume;
         updateCmdBtnVisibility();
         modal.style.display = 'none';
     });
@@ -290,26 +306,52 @@ menuMusic.volume = window.musicVolume;
 fightMusic.volume = window.musicVolume;
 
 // Music management
+let _lastMusicKey = '';
+
+function _getTargetMusicKey() {
+    if (gameState === 'menu') return 'menu';
+    if (gameState === 'playing') {
+        if (currentMode === 'onevsall' || currentMode === 'trial') return 'fight';
+        if (currentMode === 'duel') return 'duel';
+        if (currentMode === 'team') return 'team';
+        if (currentMode === 'single') return 'tank';
+    }
+    return 'none';
+}
+
+function _getMusicTrack(key) {
+    if (key === 'menu') return menuMusic;
+    if (key === 'fight') return fightMusic;
+    if (key === 'duel') return duelMusic;
+    if (key === 'team') return teamMusic;
+    if (key === 'tank') return tankMusic;
+    return null;
+}
+
 function updateMusic() {
-    if (gameState === 'menu') {
-        // Stop fight music; start menu music only if volume > 0
-        if (!fightMusic.paused) fightMusic.pause();
-        if (menuMusic.volume > 0) {
-            if (menuMusic.paused) menuMusic.play().catch(() => {});
-        } else {
-            if (!menuMusic.paused) menuMusic.pause();
+    const vol = window.musicVolume;
+    const targetKey = (vol > 0) ? _getTargetMusicKey() : 'none';
+    const track = _getMusicTrack(targetKey);
+
+    // If music key changed — stop everything and switch
+    if (targetKey !== _lastMusicKey) {
+        _lastMusicKey = targetKey;
+        menuMusic.pause();
+        fightMusic.pause();
+        duelMusic.pause();
+        teamMusic.pause();
+        tankMusic.pause();
+        if (track) {
+            track.volume = vol;
+            track.play().catch(() => {});
         }
-    } else if (gameState === 'playing') {
-        // Stop menu music; start fight music only if volume > 0
-        if (!menuMusic.paused) menuMusic.pause();
-        if (fightMusic.volume > 0) {
-            if (fightMusic.paused) fightMusic.play().catch(() => {});
-        } else {
-            if (!fightMusic.paused) fightMusic.pause();
-        }
-    } else {
-        if (!menuMusic.paused) menuMusic.pause();
-        if (!fightMusic.paused) fightMusic.pause();
+        return;
+    }
+
+    // Same key: if the track should be playing but got paused (e.g. autoplay blocked, then user clicked)
+    if (track && track.paused) {
+        track.volume = vol;
+        track.play().catch(() => {});
     }
 }
 
@@ -739,6 +781,7 @@ function startGame(mode) {
     if (modeModal) modeModal.style.display = 'none';
     if (mainMenu) mainMenu.style.display = 'none';
     gameState = 'playing';
+    _lastMusicKey = ''; // force music switch on next updateMusic()
     navNeedsRebuild = true;
     try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
 }
@@ -758,6 +801,7 @@ const shopModal = document.getElementById('shopModal');
 const characterModal = document.getElementById('characterModal');
 const shopBtn = document.getElementById('shopBtn');
 const characterBtn = document.getElementById('characterBtn');
+const buyMiniContainer = document.getElementById('buyMiniContainer');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
@@ -1237,6 +1281,7 @@ if (versionModal) {
     });
 }
 
+if (buyMiniContainer) buyMiniContainer.addEventListener('click', () => showContainerFlow('mini'));
 if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
@@ -1284,6 +1329,7 @@ function updateContainerFlowStage(stage) {
     if (!containerFlowType || !containerFlowText || !containerFlowPreview) return;
     const isBronze = containerFlowType === 'bronze';
     const isOmega = containerFlowType === 'omega';
+    const isMini = containerFlowType === 'mini';
     
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
@@ -1299,6 +1345,9 @@ function updateContainerFlowStage(stage) {
         if (isOmega) {
             containerFlowPreview.src = 'cont-png/omega-cont.png';
             containerFlowText.textContent = 'Нажми на ОМЕГА контейнер!';
+        } else if (isMini) {
+            containerFlowPreview.src = 'cont-png/mini-cont.png';
+            containerFlowText.textContent = 'Нажми на мини контейнер!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont1.png' : 'cont-png/super-cont.png';
             containerFlowText.textContent = isBronze
@@ -1309,6 +1358,9 @@ function updateContainerFlowStage(stage) {
         if (isOmega) {
             containerFlowPreview.src = 'cont-png/omega-cont2.png';
             containerFlowText.textContent = 'ОМЕГА контейнер взрывается наградами!';
+        } else if (isMini) {
+            containerFlowPreview.src = 'cont-png/mini-cont2.png';
+            containerFlowText.textContent = 'Мини контейнер раскрывается!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont2.png' : 'cont-png/super-cont2.png';
             containerFlowText.textContent = isBronze
@@ -1372,7 +1424,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
-    const price = type === 'bronze' ? 100 : (type === 'omega' ? 4000 : 1000);
+    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'omega' ? 4000 : 1000));
     if (coins < price) {
         alert('Недостаточно монет!');
         return;
@@ -1407,17 +1459,19 @@ function showFreeContainerFlow(type) {
 function handleFreeContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : 5);
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : (currentType === 'mini' ? 2 : 5));
     const rewards = [];
     // Generate rewards without payment
     for (let i = 0; i < dropCount; i++) {
         let reward;
         if (currentType === 'omega') {
             reward = openOmegaContainer({ suppressRewardModal: true });
+        } else if (currentType === 'bronze') {
+            reward = openContainer({ suppressRewardModal: true });
+        } else if (currentType === 'mini') {
+            reward = openMiniContainer({ suppressRewardModal: true });
         } else {
-            reward = currentType === 'bronze'
-                ? openContainer({ suppressRewardModal: true })
-                : openSuperContainer({ suppressRewardModal: true });
+            reward = openSuperContainer({ suppressRewardModal: true });
         }
         rewards.push(reward);
     }
@@ -1494,7 +1548,7 @@ function showContainerRewards(rewards, index = 0) {
 function handleContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'omega' ? 4000 : 1000);
+    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'omega' ? 4000 : 1000));
     if (coins < price) {
         alert('Недостаточно монет!');
         closeContainerFlow();
@@ -1502,17 +1556,19 @@ function handleContainerConfirm() {
     }
     coins -= price;
     updateCoinDisplay();
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : 5);
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : (currentType === 'mini' ? 2 : 5));
     const rewards = [];
     // Ensure we create unique objects for each reward
     for (let i = 0; i < dropCount; i++) {
         let reward;
         if (currentType === 'omega') {
             reward = openOmegaContainer({ suppressRewardModal: true });
+        } else if (currentType === 'bronze') {
+            reward = openContainer({ suppressRewardModal: true });
+        } else if (currentType === 'mini') {
+            reward = openMiniContainer({ suppressRewardModal: true });
         } else {
-            reward = currentType === 'bronze'
-                ? openContainer({ suppressRewardModal: true })
-                : openSuperContainer({ suppressRewardModal: true });
+            reward = openSuperContainer({ suppressRewardModal: true });
         }
         
         // Add unique ID just in case
@@ -1894,7 +1950,7 @@ function spawnTrialMode() {
     const cx = worldWidth / 2, cy = worldHeight / 2;
     const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
     tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : 3);
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
     tank.alive = true; tank.respawnTimer = 0;
 
     // 7 bots spread around the map, each on its own team
@@ -2657,6 +2713,44 @@ function unlockRandomTank(fromSuper = false, options = {}) {
         if (!suppressRewardModal) showReward('gems', comp, `Duplicate tank ${t.toUpperCase()} converted to Gems!`);
         return { type: 'gems', amount: comp, desc: `Duplicate tank ${t.toUpperCase()} converted to Gems!`, icon: '💎' };
     }
+}
+
+
+// Open mini container
+function openMiniContainer(options = {}) {
+    const { suppressRewardModal = false } = options;
+    const r = Math.random() * 100;
+    if (r < 60) { // 60% — coins (10–20)
+        const val = getRandomInt(10, 20);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (10–20)');
+        return { type: 'coins', amount: val, desc: 'Coins (10–20)', icon: '💰' };
+    } else if (r < 80) { // next 20% — gems (1–2)
+        const val = getRandomInt(1, 2);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (1–2)');
+        return { type: 'gems', amount: val, desc: 'Gems (1–2)', icon: '💎' };
+    } else if (r < 90) { // next 10% — coins (20–40)
+        const val = getRandomInt(20, 40);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (20–40)');
+        return { type: 'coins', amount: val, desc: 'Coins (20–40)', icon: '💰' };
+    } else if (r < 95) { // next 5% — gems (2–3)
+        const val = getRandomInt(2, 3);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Gems (2–3)');
+        return { type: 'gems', amount: val, desc: 'Gems (2–3)', icon: '💎' };
+    } else if (r < 98) { // next 3% — coins (40–60)
+        const val = getRandomInt(40, 60);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (40–60)');
+        return { type: 'coins', amount: val, desc: 'Coins (40–60)', icon: '💰' };
+    }
+    // remaining 2% — gems (3–5)
+    const val = getRandomInt(3, 5);
+    gems += val;
+    if (!suppressRewardModal) showReward('gems', val, 'Gems (3–5)');
+    return { type: 'gems', amount: val, desc: 'Gems (3–5)', icon: '💎' };
 }
 
 // Open normal container
