@@ -67,6 +67,11 @@ const tankDescriptions = {
         name: "💧 Водомётчик",
         description: "Стреляет мощной струёй воды вперед. Наносит урон при прямом контакте, замедляет и отталкивает врагов. Не пробивает стены — рассеивается при ударе. Идеален для защиты узких проходов.",
         rarity: "Сверхредкий"
+    },
+    chromatic: {
+        name: "Оборотень",
+        description: "Стреляет одиничным призматическим снарядом (урон 2). Способность (E): на 6 с копирует ближайшего противника (внешность, снаряды, способность, HP, скорость). Кулдаун 18 с. Базовый HP: 4.",
+        rarity: "Хроматическая"
     }
 };
 
@@ -86,7 +91,8 @@ const tankBgGradients = {
     mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
-    waterjet: ['#3498db', '#5dade2']   // Сверхредкий - blue (like fire slot)
+    waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
+    chromatic: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'] // Хроматическая - animated via code
 };
 
 // Base colors used in preview rendering (keeps menu and modal consistent)
@@ -398,6 +404,46 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillStyle = '#2980b9';
             ctx.fillRect(-bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
             ctx.fillRect(bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
+        } else if (type === 'chromatic') {
+            // Chromatic Tank — shapeshifter: dark body with prismatic shift panels
+            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            grad.addColorStop(0, '#0f0f23');
+            grad.addColorStop(0.5, '#1a1a3e');
+            grad.addColorStop(1, '#0d0d1f');
+            ctx.fillStyle = grad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Left prismatic strip
+            const stripW = bodyW * 0.18;
+            const prismL = ctx.createLinearGradient(-bodyW/2, 0, -bodyW/2 + stripW, 0);
+            prismL.addColorStop(0,   'rgba(255,0,150,0.6)');
+            prismL.addColorStop(0.5, 'rgba(0,200,255,0.55)');
+            prismL.addColorStop(1,   'rgba(120,0,255,0.3)');
+            ctx.fillStyle = prismL;
+            ctx.fillRect(-bodyW/2 + 2, -bodyH/2 + 2, stripW, bodyH - 4);
+
+            // Right prismatic strip
+            const prismR = ctx.createLinearGradient(bodyW/2 - stripW, 0, bodyW/2, 0);
+            prismR.addColorStop(0,   'rgba(80,0,200,0.3)');
+            prismR.addColorStop(0.5, 'rgba(0,255,150,0.55)');
+            prismR.addColorStop(1,   'rgba(255,120,0,0.6)');
+            ctx.fillStyle = prismR;
+            ctx.fillRect(bodyW/2 - stripW - 2, -bodyH/2 + 2, stripW, bodyH - 4);
+
+            // Central morphing diamond symbol
+            ctx.strokeStyle = 'rgba(220,200,255,0.65)';
+            ctx.lineWidth = 1;
+            const dS = Math.min(bodyW, bodyH) * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(0, -dS); ctx.lineTo(dS * 0.8, 0);
+            ctx.lineTo(0, dS); ctx.lineTo(-dS * 0.8, 0);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Outer border
+            ctx.strokeStyle = 'rgba(180,100,255,0.45)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else {
             // Default
             ctx.fillStyle = color;
@@ -695,6 +741,67 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0,0, 2.5, 0, Math.PI*2);
         ctx.fill();
 
+    } else if (type === 'chromatic') {
+        // Chromatic Turret — hexagonal mount with single prismatic barrel
+        const barrelLen = tSize * 1.55;
+        const barrelH   = tSize * 0.27;
+        // Barrel body
+        const barGrad = ctx.createLinearGradient(0, -barrelH/2, 0, barrelH/2);
+        barGrad.addColorStop(0,   '#6c3483');
+        barGrad.addColorStop(0.5, '#a569bd');
+        barGrad.addColorStop(1,   '#4a235a');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(tSize * 0.3, -barrelH/2, barrelLen, barrelH);
+        // Prismatic band near muzzle
+        const bandGrad = ctx.createLinearGradient(0, -barrelH/2, 0, barrelH/2);
+        bandGrad.addColorStop(0,    '#ff0080');
+        bandGrad.addColorStop(0.33, '#00ccff');
+        bandGrad.addColorStop(0.66, '#80ff00');
+        bandGrad.addColorStop(1,    '#ff8000');
+        ctx.fillStyle = bandGrad;
+        ctx.fillRect(tSize * 0.8, -barrelH * 0.75, tSize * 0.18, barrelH * 1.5);
+        // Muzzle end cap
+        ctx.fillStyle = '#1a1a3e';
+        ctx.beginPath();
+        ctx.arc(tSize * 0.3 + barrelLen, 0, barrelH * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(200,150,255,0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Hexagonal turret mount
+        const hexR = tSize * 0.52;
+        ctx.fillStyle = '#1a1a3e';
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+            i === 0 ? ctx.moveTo(Math.cos(a) * hexR, Math.sin(a) * hexR)
+                    : ctx.lineTo(Math.cos(a) * hexR, Math.sin(a) * hexR);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // Hex border glow
+        ctx.strokeStyle = 'rgba(180,100,255,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // Inner crystal orb
+        const orbGrad = ctx.createRadialGradient(-hexR*0.1, -hexR*0.15, 0, 0, 0, hexR * 0.38);
+        orbGrad.addColorStop(0,   'rgba(255,210,255,0.95)');
+        orbGrad.addColorStop(0.5, 'rgba(160,0,255,0.75)');
+        orbGrad.addColorStop(1,   'rgba(50,0,120,0.5)');
+        ctx.fillStyle = orbGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, hexR * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        // Crystal sparkle lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * hexR * 0.12, Math.sin(a) * hexR * 0.12);
+            ctx.lineTo(Math.cos(a) * hexR * 0.36, Math.sin(a) * hexR * 0.36);
+            ctx.stroke();
+        }
     } else if (type === 'machinegun') {
         // Machinegun Turret - Multiple barrels
         ctx.fillStyle = '#A0522D';
@@ -1458,6 +1565,65 @@ function drawCharacterPreviews() {
         };
         animateTimeTank();
     }
+
+    // CHROMATIC Tank Animation Logic — use same pixelated Time background
+    if (typeof chromaticTankCtx !== 'undefined' && chromaticTankCtx && chromaticTankPreview) {
+        if (window.chromaticTankAnimId) cancelAnimationFrame(window.chromaticTankAnimId);
+
+        const animateChromaticTank = () => {
+            if (document.getElementById('characterModal').style.display === 'none') return;
+
+            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('chromatic');
+            const canvas = chromaticTankPreview;
+            const ctx = chromaticTankCtx;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Use the same diagonal pixel sweep as Time (top-left → bottom-right)
+            const time = Date.now() * 0.00012;
+            if (isUnlocked) {
+                const pixel = Math.max(18, Math.floor(Math.min(canvas.width, canvas.height) / 12));
+                const shift = (time * 360) % 360; // degrees
+                const step = 0.12;
+                for (let py = 0; py < canvas.height; py += pixel) {
+                    for (let px = 0; px < canvas.width; px += pixel) {
+                        const s = px + py; // diagonal coordinate
+                        const hue = (((s * step) - shift) % 360 + 360) % 360;
+                        const light = 48 + 6 * Math.sin((px * 0.02 + py * 0.02) + time * 2.2);
+                        ctx.fillStyle = `hsl(${hue}, 82%, ${light}%)`;
+                        ctx.fillRect(px, py, pixel, pixel);
+                    }
+                }
+            } else {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const side = Math.min(canvas.width, canvas.height) / 2;
+            ctx.save();
+            if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
+            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a3e', 0, 1, 'chromatic');
+            ctx.restore();
+
+            // Selection Border or Lock
+            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'chromatic') {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            } else if (!isUnlocked) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#fff';
+                ctx.fillText('🔒', canvas.width/2, canvas.height/2);
+            }
+
+            window.chromaticTankAnimId = requestAnimationFrame(animateChromaticTank);
+        };
+        animateChromaticTank();
+    }
 }
 
 function draw() {
@@ -2161,6 +2327,52 @@ function draw() {
                  });
             }
 
+        } else if (b.type === 'chromatic') {
+            // Chromatic base bullet — prismatic orb with rainbow trail
+            const pr = Math.max(3.5, b.w / 2);
+            const ang = Math.atan2(b.vy, b.vx);
+            // Rainbow trail
+            const trailLen = pr * 4;
+            const tx = b.x - Math.cos(ang) * trailLen;
+            const ty = b.y - Math.sin(ang) * trailLen;
+            const trailGrad = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            trailGrad.addColorStop(0, 'rgba(255,0,200,0)');
+            trailGrad.addColorStop(0.4, 'rgba(0,200,255,0.3)');
+            trailGrad.addColorStop(1, 'rgba(200,100,255,0.6)');
+            ctx.strokeStyle = trailGrad;
+            ctx.lineWidth = pr * 1.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            // Outer glow
+            const glowGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pr * 2.5);
+            glowGrad.addColorStop(0, 'rgba(200,100,255,0.5)');
+            glowGrad.addColorStop(1, 'rgba(100,0,200,0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, pr * 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            // Core orb
+            const coreGrad = ctx.createRadialGradient(
+                b.x - pr * 0.3, b.y - pr * 0.3, pr * 0.05,
+                b.x, b.y, pr
+            );
+            coreGrad.addColorStop(0,   '#ffffff');
+            coreGrad.addColorStop(0.25, '#e8aaff');
+            coreGrad.addColorStop(0.6,  '#9b00ff');
+            coreGrad.addColorStop(1,    '#2d0057');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, pr, 0, Math.PI * 2);
+            ctx.fill();
+            // Specular glint
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.beginPath();
+            ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
         } else if (b.type === 'buckshot') {
             // Shotgun pellet — brass sphere with motion trail
             const pr = Math.max(2.5, b.w / 2);
@@ -2587,7 +2799,7 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot') ? 3 : 3;
+        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot' || enemy.tankType === 'chromatic') ? 4 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);
@@ -2643,12 +2855,28 @@ function draw() {
         }
 
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
+
+        // Rainbow aura when chromatic transformation is active
+        if (tank.chromaticActive) {
+            const auraR = Math.max(tank.w, tank.h) * 0.72;
+            ctx.save();
+            const hue = (Date.now() * 0.36) % 360;
+            for (let i = 0; i < 3; i++) {
+                ctx.strokeStyle = `hsla(${(hue + i * 120) % 360}, 100%, 65%, ${0.55 - i * 0.15})`;
+                ctx.lineWidth = 3 - i;
+                ctx.beginPath();
+                ctx.arc(0, 0, auraR + i * 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
         ctx.restore();
         if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'black';
-        const maxTankHp = (tankType === 'fire') ? 6 : (tankType === 'musical') ? 4 : (tankType === 'illuminat') ? 3 : 3;
+        const maxTankHp = (tankType === 'fire') ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'chromatic') ? 4 : 3;
         const missingHp = maxTankHp - tank.hp;
         if (missingHp > 0) {
             ctx.fillRect(tank.x + tank.w * (tank.hp / maxTankHp), tank.y - 10, tank.w * (missingHp / maxTankHp), 5);
@@ -2753,7 +2981,7 @@ function showTankDetail(tankType) {
         const grass = (tankBgGradients && tankBgGradients.normal && tankBgGradients.normal[1]) ? tankBgGradients.normal[1] : '#228B22';
         ctx.fillStyle = grass;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else if (tankType === 'time') {
+    } else if (tankType === 'time' || tankType === 'chromatic') {
         // Animated: pixelated rainbow flowing from top-left; redraw every frame
         if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
         modal.style.display = 'flex'; // ensure visible before first frame

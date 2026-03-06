@@ -661,6 +661,13 @@ canvas.tank-display {
     100% { background-position: 0% 50%; filter: saturate(1.05); }
 }
 
+/* Rainbow text animation used for reward tank name */
+@keyframes rainbowText {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
 /* Illuminat floating eye animation */
 @keyframes illuminatBob {
     0%, 100% { transform: translateY(0px); }
