@@ -377,6 +377,8 @@ function updateEnemyAI() {
     for (let enemy of enemies) {
       try {
         if (!enemy || !enemy.alive) continue;
+        // Training dummies: skip all AI, just stand still
+        if (enemy.isDummy) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
         
         // Handle Inverted Controls (AI) and disorientation affecting movement
@@ -534,8 +536,25 @@ function updateEnemyAI() {
             if (enemy.originalTankType === undefined) enemy.originalTankType = 'chromatic';
 
             if (!enemy.chromaticActive && Math.random() < 0.004) {
-                const ctypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
-                const picked = ctypes[Math.floor(Math.random() * ctypes.length)];
+                // Find nearest tank (player or other enemy) to copy its type
+                const ex = enemy.x + enemy.w / 2;
+                const ey = enemy.y + enemy.h / 2;
+                let nearestType = null;
+                let nearestDist = Infinity;
+                // Check player
+                if (tank && tank.alive !== false) {
+                    const d = Math.hypot((tank.x + tank.w/2) - ex, (tank.y + tank.h/2) - ey);
+                    if (d < nearestDist) { nearestDist = d; nearestType = tankType || 'normal'; }
+                }
+                // Check other enemies
+                for (const other of enemies) {
+                    if (other === enemy || !other || other.alive === false) continue;
+                    const d = Math.hypot((other.x + other.w/2) - ex, (other.y + other.h/2) - ey);
+                    if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
+                }
+                // Don't copy chromatic or unknown types
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
+                const picked = (nearestType && validTypes.includes(nearestType)) ? nearestType : validTypes[Math.floor(Math.random() * validTypes.length)];
                 enemy.originalTankType = 'chromatic';
                 enemy.chromaticActive = true;
                 enemy.chromaticTimer = 360;
@@ -912,6 +931,9 @@ function updateEnemyAI() {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 180, team: enemy.team, type: 'musical', damage: 2, bounces: 0, maxBounces: 3 };
+            } else if (tt === 'chromatic') {
+                // Chromatic base form: prismatic bullet, damage 2 (same as player)
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'chromatic', damage: 2 };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1379,7 +1401,7 @@ function updateAllyAI() {
                             } else {
                                 // Check list existence before splicing
                                 const idxE = enemies.indexOf(e);
-                                if (idxE !== -1) { enemies.splice(idxE, 1); coins += 5; }
+                                if (idxE !== -1) { enemies.splice(idxE, 1); }
                                 const idxA = allies.indexOf(e);
                                 if (idxA !== -1) { allies.splice(idxA, 1); }
                                 
@@ -1513,7 +1535,7 @@ function updateAllyAI() {
                 } else {
                     if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65); }
                     else {
-                        const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); coins += 5; }
+                        const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); }
                         const idxA = allies.indexOf(e); if (idxA !== -1) allies.splice(idxA, 1);
                         spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                     }
