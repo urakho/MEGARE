@@ -121,7 +121,33 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
     ctx.save();
     ctx.translate(cx, cy);
 
-    // Special Case: Illuminat (Floating Pyramid - No Tracks/Chassis)
+    // Dummy (training target): draw as a target/bullseye on a post
+    if (type === 'dummy') {
+        // Post
+        ctx.fillStyle = '#8B6914';
+        ctx.fillRect(-4, 0, 8, H * 0.5);
+        // Target circles
+        const rings = [
+            { r: W * 0.48, color: '#cc2222' },
+            { r: W * 0.34, color: '#ffffff' },
+            { r: W * 0.20, color: '#cc2222' },
+            { r: W * 0.09, color: '#ffdd00' },
+        ];
+        for (const ring of rings) {
+            ctx.beginPath();
+            ctx.arc(0, -H * 0.1, ring.r, 0, Math.PI * 2);
+            ctx.fillStyle = ring.color;
+            ctx.fill();
+        }
+        // Border
+        ctx.beginPath();
+        ctx.arc(0, -H * 0.1, W * 0.48, 0, Math.PI * 2);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
     if (type === 'illuminat') {
          // See turret section for actual drawing
          // We do nothing here for body/tracks because the pyramid IS the body and turret united.
@@ -474,6 +500,32 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(180,100,255,0.45)';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'boss_dummy') {
+            // Dark body with red accents
+            const _bg = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            _bg.addColorStop(0, '#1c0404');
+            _bg.addColorStop(0.5, '#2a0606');
+            _bg.addColorStop(1, '#1c0404');
+            ctx.fillStyle = _bg;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Red hazard edges (top/bottom strips)
+            ctx.fillStyle = '#aa0000';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, 5);
+            ctx.fillRect(-bodyW/2, bodyH/2 - 5, bodyW, 5);
+            ctx.fillRect(-bodyW/2, -bodyH/2, 5, bodyH);
+            ctx.fillRect(bodyW/2 - 5, -bodyH/2, 5, bodyH);
+            // Simple bold X on body
+            ctx.strokeStyle = '#dd1111';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW*0.25, -bodyH*0.3); ctx.lineTo(bodyW*0.25, bodyH*0.3);
+            ctx.moveTo(bodyW*0.25, -bodyH*0.3); ctx.lineTo(-bodyW*0.25, bodyH*0.3);
+            ctx.stroke();
+            // Corner bolts
+            ctx.fillStyle = '#555';
+            for (const [_rx, _ry] of [[-bodyW/2+5,-bodyH/2+5],[bodyW/2-5,-bodyH/2+5],[-bodyW/2+5,bodyH/2-5],[bodyW/2-5,bodyH/2-5]]) {
+                ctx.beginPath(); ctx.arc(_rx, _ry, 3, 0, Math.PI*2); ctx.fill();
+            }
         } else {
             // Default
             ctx.fillStyle = color;
@@ -1075,6 +1127,16 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.arc(x, y, 3, 0, Math.PI * 2);
             ctx.fill();
         });
+    } else if (type === 'boss_dummy') {
+        // Simple dark square turret with red ring
+        ctx.fillStyle = '#1a0000';
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2;
+        ctx.strokeRect(-tSize/2+1, -tSize/2+1, tSize-2, tSize-2);
+        // Pulsing red dot in center
+        const _p = 0.6 + 0.4 * Math.sin(Date.now() * 0.006);
+        ctx.fillStyle = `rgba(220,0,0,${_p})`;
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.2, 0, Math.PI*2); ctx.fill();
     }
 
     if (type === 'ice') {
@@ -1331,6 +1393,28 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(255,255,255,0.9)';
             ctx.lineWidth = 0.8;
             ctx.beginPath(); ctx.moveTo(nozzleX + 2, -barrelH * 0.45); ctx.lineTo(nozzleX + 2, barrelH * 0.45); ctx.stroke();
+        } else if (type === 'boss_dummy') {
+            // Heavy boss cannon — thick red-black armored barrel
+            const _bLen = Math.min(W, H) * 0.65 * turretScale;
+            const _bH   = Math.min(W, H) * 0.22 * turretScale;
+            const _bGrad = ctx.createLinearGradient(0, -_bH/2, 0, _bH/2);
+            _bGrad.addColorStop(0, '#4a0000');
+            _bGrad.addColorStop(0.4, '#880000');
+            _bGrad.addColorStop(0.6, '#2a0000');
+            _bGrad.addColorStop(1, '#4a0000');
+            ctx.fillStyle = _bGrad;
+            ctx.fillRect(tSize/2, -_bH/2, _bLen, _bH);
+            // Reinforcement rings
+            ctx.fillStyle = '#cc0000';
+            for (let _ri = 0; _ri < 3; _ri++) {
+                ctx.fillRect(tSize/2 + _bLen * (0.22 + _ri * 0.22) - 2, -_bH/2 - 2, 4, _bH + 4);
+            }
+            // Muzzle brake block
+            ctx.fillStyle = '#1a0000';
+            ctx.fillRect(tSize/2 + _bLen - 5, -_bH/2 - 5, 10, _bH + 10);
+            // Muzzle hole
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(tSize/2 + _bLen + 4, 0, _bH * 0.28, 0, Math.PI*2); ctx.fill();
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2829,7 +2913,7 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot' || enemy.tankType === 'chromatic') ? 4 : 3;
+        const maxHp = enemy.isDummy ? (enemy.maxHp || 3) : (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot' || enemy.tankType === 'chromatic') ? 4 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);

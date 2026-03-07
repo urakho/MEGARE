@@ -43,6 +43,13 @@ tankMusic.loop = true;
 tankMusic.volume = 0.5;
 let currentMode = 'menu';
 let duelState = null;
+
+// Battle metrics tracking
+let gameStartTime = null;
+let playerDamageTaken = 0;
+let playerMaxHpAtStart = 0;
+let battleEnemyCount = 0;
+
 // Throttling AI counters
 let globalPathBudget = 0;
 const MAX_PATH_BUDGET = 2; // max A* searches per frame
@@ -143,9 +150,16 @@ function loseTrophies(amount = 1) {
     }
 }
 
-// Mode-aware trophy loss: 5 for onevsall, 1 for all other modes
+// Mode-aware trophy loss: 3 for team, 5 for onevsall, 1 for single and duel
 function loseModeTrophies() {
-    loseTrophies(currentMode === 'onevsall' ? 5 : 1);
+    if (currentMode === 'training') return;
+    if (currentMode === 'team') {
+        loseTrophies(3);
+    } else if (currentMode === 'onevsall') {
+        loseTrophies(5);
+    } else {
+        loseTrophies(1);
+    }
 }
 
 function saveProgress() {
@@ -762,6 +776,16 @@ function startGame(mode) {
         generateMap();
         spawnTrialMode();
         cameraFollow = true;
+    } else if (mode === 'training') {
+        // Training mode: open map, dummy targets that respawn every 10s
+        worldWidth = 1200; worldHeight = 900;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        generateTrainingMap();
+        spawnTrainingMode();
+        cameraFollow = true;
+        // Show exit button
+        const trainingExitBtn = document.getElementById('trainingExitBtn');
+        if (trainingExitBtn) trainingExitBtn.style.display = 'block';
     } else if (mode === 'onevsall') {
         // One vs All: 4x map, player vs 7 allied enemy bots
         worldWidth = 900 * 4; worldHeight = 700 * 4;
@@ -781,6 +805,16 @@ function startGame(mode) {
     if (modeModal) modeModal.style.display = 'none';
     if (mainMenu) mainMenu.style.display = 'none';
     gameState = 'playing';
+    // Hide training exit button (unless training mode)
+    const trainingExitBtn = document.getElementById('trainingExitBtn');
+    if (trainingExitBtn && mode !== 'training') trainingExitBtn.style.display = 'none';
+    
+    // Initialize battle metrics
+    gameStartTime = Date.now();
+    playerDamageTaken = 0;
+    playerMaxHpAtStart = tank.hp;
+    battleEnemyCount = enemies.length;
+    
     _lastMusicKey = ''; // force music switch on next updateMusic()
     navNeedsRebuild = true;
     try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
@@ -1680,6 +1714,122 @@ function spawnTrialMode() {
     navNeedsRebuild = true;
 }
 
+// Training map: open field with decorative elements, no random walls
+function generateTrainingMap() {
+    objects = [];
+    const bw = 50;
+    // ── Border walls ───────────────────────────────────────────────
+    for (let y = 0; y < worldHeight; y += bw) {
+        objects.push({ x: 0, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
+        objects.push({ x: worldWidth - bw, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
+    }
+    for (let x = bw; x < worldWidth - bw; x += bw) {
+        objects.push({ x, y: 0, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
+        objects.push({ x, y: worldHeight - bw, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
+    }
+    // ── Divider wall at x=700 — full height, corridor gap centered at y=375..475 ──
+    for (let y = bw; y < worldHeight - bw; y += bw) {
+        if (y >= 375 && y < 475) continue; // centered corridor entrance
+        objects.push({ x: 700, y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
+    }
+    // ── Symmetric cover pillars inside boss room ──────────────────────
+    // Room occupies x=750..1150, y=50..850. Center = (950, 450).
+    // 4 pillars symmetric around center: (+/-150 x, +/-130 y)
+    const roomPillars = [
+        { x: 800, y: 300 }, { x: 1050, y: 300 },
+        { x: 800, y: 550 }, { x: 1050, y: 550 },
+    ];
+    for (const p of roomPillars) {
+        objects.push({ x: p.x, y: p.y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
+    }
+    // ── Sandbag covers in shooting range (3 rows aligned with targets) ──
+    const sandBagRows = [175, 415, 625];
+    for (const sy of sandBagRows) {
+        objects.push({ x: 280, y: sy, w: bw, h: bw, type: 'wall', color: '#8B7355' });
+        objects.push({ x: 330, y: sy, w: bw, h: bw, type: 'wall', color: '#8B7355' });
+    }
+    // ── Decorative barrels ────────────────────────────────────────────
+    const barrelPos = [
+        { x: 100, y: 100 }, { x: 100, y: 750 },
+        { x: 200, y: 800 }, { x: 580, y: 70 },
+        { x: 580, y: 790 }, { x: 660, y: 240 },
+        { x: 660, y: 620 }, { x: 870, y: 200 },
+        { x: 870, y: 680 }, { x: 1090, y: 200 },
+        { x: 1090, y: 680 },
+    ];
+    for (const p of barrelPos) {
+        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#7a4a21' });
+    }
+    navNeedsRebuild = true;
+}
+
+// Training mode: dummy targets that don't move, respawn every 10 seconds
+let trainingDummies = [];
+let trainingRespawnTimers = [];  // per-dummy countdown
+let trainingShooterDummy = null;
+let trainingShooterTimer = 0;
+
+function spawnTrainingMode() {
+    enemies = [];
+    allies = [];
+    trainingDummies = [];
+    trainingRespawnTimers = [];
+
+    // Player starts center-left
+    tank.x = 150; tank.y = worldHeight / 2 - 19;
+    tank.team = 0;
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
+    tank.alive = true;
+
+    // Dummy positions — shooting range, well inside x=50..800 zone (clear of room wall at x=850)
+    const dummyPositions = [
+        { x: 480, y: 195 }, { x: 570, y: 195 }, { x: 660, y: 195 },
+        { x: 480, y: 415 }, { x: 570, y: 415 }, { x: 660, y: 415 },
+        { x: 480, y: 635 }, { x: 570, y: 635 }, { x: 660, y: 635 },
+    ];
+
+    for (let i = 0; i < dummyPositions.length; i++) {
+        const pos = dummyPositions[i];
+        const dummy = {
+            x: pos.x, y: pos.y, w: 38, h: 38,
+            color: '#888888',
+            tankType: 'dummy',
+            hp: 3, maxHp: 3,
+            turretAngle: 0, baseAngle: 0, speed: 0,
+            alive: true,
+            team: 99, // neutral team
+            fireCooldown: 9999, stuckCount: 0,
+            dodgeAccuracy: 0,
+            isDummy: true,
+            dummyIndex: i,
+            spawnX: pos.x, spawnY: pos.y,
+        };
+        enemies.push(dummy);
+        trainingDummies.push(dummy);
+        trainingRespawnTimers.push(0);
+    }
+
+    // Armed shooter dummy — stationary boss tank, center of boss room (x=750..1150, y=50..850)
+    const shooterDummy = {
+        x: 930, y: 431, w: 38, h: 38,
+        color: '#880000',
+        tankType: 'boss_dummy',
+        hp: 10, maxHp: 10,
+        turretAngle: Math.PI, baseAngle: Math.PI,
+        speed: 0, alive: true,
+        team: 1,
+        fireCooldown: 80,
+        stuckCount: 0, dodgeAccuracy: 0,
+        isDummy: true, isShooterDummy: true,
+        spawnX: 930, spawnY: 431,
+    };
+    enemies.push(shooterDummy);
+    trainingShooterDummy = shooterDummy;
+    trainingShooterTimer = 0;
+
+    navNeedsRebuild = true;
+}
+
 // One vs All mode: Player (team 0) vs 7 allied enemy bots (all team 1)
 function spawnOneVsAllMode() {
     enemies = [];
@@ -2161,11 +2311,76 @@ function update() {
         if (gameState === 'win' || gameState === 'lose') {
             // Do not restart on Space — use Enter to restart instead
             if (keys['Enter']) {
+                saveProgress(); // Save before reload
                 location.reload();
                 keys['Enter'] = false;
             }
         }
         return;
+    }
+
+    // TRAINING MODE: respawn dead dummies every 10 seconds (600 frames)
+    if (currentMode === 'training' && typeof trainingDummies !== 'undefined') {
+        for (let i = 0; i < trainingDummies.length; i++) {
+            const dummy = trainingDummies[i];
+            if (!dummy.alive || dummy.hp <= 0) {
+                // Start or tick respawn timer
+                trainingRespawnTimers[i] = (trainingRespawnTimers[i] || 0) + 1;
+                // Remove from enemies array so it doesn't block
+                const ei = enemies.indexOf(dummy);
+                if (ei !== -1) enemies.splice(ei, 1);
+                dummy.alive = false;
+                if (trainingRespawnTimers[i] >= 600) {
+                    // Respawn: reset dummy and re-add to enemies
+                    dummy.hp = dummy.maxHp || 3;
+                    dummy.alive = true;
+                    dummy.x = dummy.spawnX;
+                    dummy.y = dummy.spawnY;
+                    enemies.push(dummy);
+                    trainingRespawnTimers[i] = 0;
+                    spawnParticle(dummy.x + 19, dummy.y + 19, '#00ff88');
+                }
+            } else {
+                // Alive: keep hp capped and make sure it's in enemies
+                trainingRespawnTimers[i] = 0;
+                dummy.hp = Math.min(dummy.hp, dummy.maxHp || 3);
+                // Dummies don't move at all
+                dummy.speed = 0;
+                dummy.fireCooldown = 9999;
+            }
+        }
+        // SHOOTER DUMMY: stationary armed tank — aims at player, fires, respawns after 15s
+        if (trainingShooterDummy) {
+            const sd = trainingShooterDummy;
+            if (sd.alive && sd.hp > 0) {
+                sd.x = sd.spawnX; sd.y = sd.spawnY; sd.speed = 0;
+                sd.hp = Math.min(sd.hp, sd.maxHp);
+                const dx = (tank.x + 19) - (sd.x + 19);
+                const dy = (tank.y + 19) - (sd.y + 19);
+                sd.turretAngle = Math.atan2(dy, dx);
+                sd.baseAngle = sd.turretAngle;
+                if (sd.fireCooldown > 0) { sd.fireCooldown--; }
+                else {
+                    const ang = sd.turretAngle;
+                    bullets.push({ x: sd.x+19+Math.cos(ang)*25, y: sd.y+19+Math.sin(ang)*25, w:5, h:5, vx:Math.cos(ang)*5, vy:Math.sin(ang)*5, life:130, owner:'enemy', team: sd.team, type:'fire', damage:1 });
+                    sd.fireCooldown = 80;
+                }
+            } else {
+                sd.alive = false;
+                const ei = enemies.indexOf(sd);
+                if (ei !== -1) enemies.splice(ei, 1);
+                trainingShooterTimer++;
+                if (trainingShooterTimer >= 900) {
+                    sd.hp = sd.maxHp; sd.alive = true;
+                    sd.x = sd.spawnX; sd.y = sd.spawnY;
+                    sd.fireCooldown = 80;
+                    enemies.push(sd);
+                    trainingShooterTimer = 0;
+                    spawnParticle(sd.x + 19, sd.y + 19, '#ff4400');
+                    spawnParticle(sd.x + 19, sd.y + 19, '#ff8800');
+                }
+            }
+        }
     }
     
     // DUEL MODE: Shrinking Zone Logic (Grid Based)
@@ -2215,7 +2430,6 @@ function update() {
                 if ((Date.now() % 1000) < 16) e.hp -= 1;
                 if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
                 if (e.hp <= 0) {
-                    coins += 5;
                     enemies.splice(i, 1);
                     spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                 }
@@ -2955,17 +3169,62 @@ window.addEventListener('load', () => {
     if (tankDetailTry) {
         tankDetailTry.addEventListener('click', () => {
             const trialTank = window._currentDetailTankType || 'normal';
-            // Close modals
+            window._preTankType = tankType;
+            tankType = trialTank;
+            // Show try mode selection modal instead of launching directly
+            const tryModeModal = document.getElementById('tryModeModal');
+            if (tryModeModal) tryModeModal.style.display = 'flex';
+        });
+    }
+    // Try mode: Battle button
+    const tryModeBattle = document.getElementById('tryModeBattle');
+    if (tryModeBattle) {
+        tryModeBattle.addEventListener('click', () => {
+            const tryModeModal = document.getElementById('tryModeModal');
+            if (tryModeModal) tryModeModal.style.display = 'none';
             const detailModal = document.getElementById('tankDetailModal');
             const charModal = document.getElementById('characterModal');
             if (detailModal) detailModal.style.display = 'none';
             if (charModal) charModal.style.display = 'none';
-            // Save original tank selection, temporarily switch to trial tank
-            window._preTankType = tankType;
-            tankType = trialTank;
-            // Launch trial
             startGame('trial');
         });
+    }
+    // Try mode: Training button
+    const tryModeTraining = document.getElementById('tryModeTraining');
+    if (tryModeTraining) {
+        tryModeTraining.addEventListener('click', () => {
+            const tryModeModal = document.getElementById('tryModeModal');
+            if (tryModeModal) tryModeModal.style.display = 'none';
+            const detailModal = document.getElementById('tankDetailModal');
+            const charModal = document.getElementById('characterModal');
+            if (detailModal) detailModal.style.display = 'none';
+            if (charModal) charModal.style.display = 'none';
+            startGame('training');
+        });
+    }
+    // Try mode: Cancel button
+    const tryModeCancel = document.getElementById('tryModeCancel');
+    if (tryModeCancel) {
+        tryModeCancel.addEventListener('click', () => {
+            const tryModeModal = document.getElementById('tryModeModal');
+            if (tryModeModal) tryModeModal.style.display = 'none';
+            // Restore tank type if it was changed
+            if (window._preTankType) { tankType = window._preTankType; window._preTankType = null; }
+        });
+    }
+    // Training exit button — both click (desktop) and touchend (mobile)
+    const trainingExitBtn = document.getElementById('trainingExitBtn');
+    if (trainingExitBtn) {
+        function _doTrainingExit(e) {
+            e.preventDefault();
+            trainingExitBtn.style.display = 'none';
+            // Restore tank type
+            if (window._preTankType) { tankType = window._preTankType; window._preTankType = null; }
+            saveProgress();
+            location.reload();
+        }
+        trainingExitBtn.addEventListener('click', _doTrainingExit);
+        trainingExitBtn.addEventListener('touchend', _doTrainingExit, { passive: false });
     }
 });
 function unlockRandomTankNew(fromSuper = false, options = {}) {

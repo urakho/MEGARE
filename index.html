@@ -211,6 +211,18 @@
     </div>
 </div>
 
+<!-- Try Mode Modal (shown when clicking "Испытать") -->
+<div id="tryModeModal" class="modal-overlay">
+    <div class="modal-box" style="width:380px;">
+        <h2 class="modal-title">⚔️ Испытать танк</h2>
+        <div style="display:flex; flex-direction:column; gap:14px; align-items:center; margin-top:10px;">
+            <button id="tryModeBattle" class="btn btn-mode" style="width:80%; font-size:18px; padding:14px;">⚔️ Бой</button>
+            <button id="tryModeTraining" class="btn btn-mode" style="width:80%; font-size:18px; padding:14px; background:linear-gradient(135deg,#27ae60,#2ecc71);">🎯 Тренировка</button>
+            <button id="tryModeCancel" class="btn btn-secondary" style="width:80%; margin-top:4px;">Отмена</button>
+        </div>
+    </div>
+</div>
+
 <!-- Reward Modal -->
 <div id="rewardModal" class="reward-overlay">
         <div class="reward-box">
@@ -274,6 +286,9 @@
         </div>
     </div>
 </div>
+
+<!-- Training exit button (shown during training mode) -->
+<button id="trainingExitBtn" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:600; background:rgba(90,100,110,0.92); color:#dde; border:none; border-radius:10px; padding:12px 32px; font-size:16px; font-weight:bold; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.5);">🚪 Выйти из тренировки</button>
 
 <!-- Buy confirmation modal (styled) -->
 <div id="buyConfirmModal" class="modal-overlay" style="display:none; z-index:160;">

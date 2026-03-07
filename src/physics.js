@@ -910,7 +910,6 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                     }
                     if (e.hp <= 0) {
-                        coins += 5; // earn coins for killing enemy
                         if (currentMode === 'war') {
                             e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                         } else {
@@ -992,7 +991,6 @@ function updatePhysics() {
                 e.confused = 30; // 0.5 seconds confusion
                 if (e.hp <= 0) {
                     enemies.splice(j, 1);
-                    coins += 5;
                     spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                 }
             }
@@ -1063,7 +1061,6 @@ function updatePhysics() {
                     e.disoriented = 36; // 0.6 seconds
                     if (e.hp <= 0) {
                         enemies.splice(j, 1);
-                        coins += 5;
                         spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                     }
                 }
@@ -1170,7 +1167,6 @@ function updatePhysics() {
                     e.hp -= f.damage;
                     flames.splice(i, 1);
                     if (e.hp <= 0) {
-                        coins += 5;
                         if (currentMode === 'war') {
                             e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                         } else {
@@ -1427,7 +1423,6 @@ function updatePhysics() {
                      spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                  }
              } else {
-                 if (currentMode === 'single' || currentMode === 'team') coins += 5; // Reward
                  enemies.splice(i, 1);
                  spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
              }
@@ -1512,6 +1507,16 @@ function updatePhysics() {
         }
     }
 
+    // Training mode: intercept any premature game-over before the gameState guard
+    if (currentMode === 'training') {
+        if (gameState !== 'playing') gameState = 'playing'; // undo premature lose/win
+        if (!tank.alive || tank.hp <= 0) {
+            tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
+            tank.alive = true;
+            tank.x = 150; tank.y = worldHeight / 2 - 19;
+        }
+        return;
+    }
     // Проверка победы/поражения (пропускаем если уже lose/win — чтобы не вычитать трофеи дважды)
     if (gameState !== 'playing') return;
     if (currentMode === 'trial') {
@@ -1528,13 +1533,13 @@ function updatePhysics() {
     } else if (enemies.length === 0) {
         gameState = 'win';
         if (currentMode === 'single') {
-            coins += 20;
+            coins += 30;
             trophies += 3; // single trophy reward
         } else if (currentMode === 'team') {
-            coins += 20;
-            trophies += 3; // team trophy reward
+            coins += 40;
+            trophies += 5; // team trophy reward
         } else if (currentMode === 'duel') {
-            coins += 30;
+            coins += 20;
             trophies += 2; // duel trophy reward
         } else if (currentMode === 'onevsall') {
             coins += 80;
@@ -1546,7 +1551,7 @@ function updatePhysics() {
         if (currentMode === 'single' || currentMode === 'duel') {
             loseTrophies(1); // lose 1 trophy
         } else if (currentMode === 'team') {
-            loseTrophies(1); // lose 1 trophy
+            loseTrophies(3); // lose 3 trophies in team mode
         } else if (currentMode === 'onevsall') {
             loseTrophies(5); // lose 5 trophies in one vs all
         }
