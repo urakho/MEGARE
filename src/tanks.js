@@ -68,10 +68,15 @@ const tankDescriptions = {
         description: "Стреляет мощной струёй воды вперед. Наносит урон при прямом контакте, замедляет и отталкивает врагов. Не пробивает стены — рассеивается при ударе. Идеален для защиты узких проходов.",
         rarity: "Сверхредкий"
     },
-    chromatic: {
-        name: "Оборотень",
+    imitator: {
+        name: "Имитатор",
         description: "Стреляет одиничным призматическим снарядом (урон 2). Способность (E): на 6 с копирует ближайшего противника (внешность, снаряды, способность, HP, скорость). Кулдаун 18 с. Базовый HP: 4.",
         rarity: "Хроматическая"
+    },
+    electric: {
+        name: "Электрический",
+        description: "Мифический боец, управляющий мощной энергосистемой. Стреляет корректируемыми шаровыми молниями, которые преследуют цели и пробивают препятствия. Ульта (E): танк замирает на 1 секунду и выпускает концентрированную вспышку молний по ближайшей области, поражая всех врагов в радиусе. Идеален для контроля пространства и точечных зачисток. Кулдаун: 8 сек. HP: 4.",
+        rarity: "Мифический"
     }
 };
 
@@ -92,7 +97,8 @@ const tankBgGradients = {
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
-    chromatic: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'] // Хроматическая - animated via code
+    imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
+    electric: ['#ff6b6b', '#e74c3c']  // Электрический - red (robot theme)
 };
 
 // Base colors used in preview rendering (keeps menu and modal consistent)
@@ -108,7 +114,8 @@ const tankBaseColors = {
     illuminat: '#0000FF',
     mirror: '#0000FF',
     time: '#FF00FF',
-    machinegun: '#0000FF'
+    machinegun: '#0000FF',
+    electric: '#1a1a2e'  // Dark blue-purple for robot
 };
 
 // Make available globally
@@ -430,8 +437,8 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillStyle = '#2980b9';
             ctx.fillRect(-bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
             ctx.fillRect(bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
-        } else if (type === 'chromatic') {
-            // Chromatic Tank — original style with elegant animated sheen and pulsing core
+        } else if (type === 'imitator') {
+            // imitator Tank — original style with elegant animated sheen and pulsing core
             const t = Date.now() * 0.002;
 
             // Base dark body
@@ -526,6 +533,112 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             for (const [_rx, _ry] of [[-bodyW/2+5,-bodyH/2+5],[bodyW/2-5,-bodyH/2+5],[-bodyW/2+5,bodyH/2-5],[bodyW/2-5,bodyH/2-5]]) {
                 ctx.beginPath(); ctx.arc(_rx, _ry, 3, 0, Math.PI*2); ctx.fill();
             }
+        } else if (type === 'electric') {
+            // ELECTRIC ROBOT - ELEGANT ELECTRIC DESIGN
+            // Dark metallic base
+            ctx.fillStyle = '#0d0d1a';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            
+            // Main body gradient - elegant energy field
+            const energyGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            energyGrad.addColorStop(0, '#1a2a4a');
+            energyGrad.addColorStop(0.5, '#0f1f35');
+            energyGrad.addColorStop(1, '#1a2a4a');
+            ctx.fillStyle = energyGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Subtle pulsing aura (not too bright)
+            const pulse = 0.6 + 0.3 * Math.sin(Date.now() * 0.005);
+            ctx.fillStyle = `rgba(80, 180, 220, ${0.1 * pulse})`;
+            ctx.fillRect(-bodyW/2 - 2, -bodyH/2 - 2, bodyW + 4, bodyH + 4);
+
+            // Top energy strip - elegant cyan
+            ctx.fillStyle = '#4da6ff';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, 4);
+            ctx.fillStyle = 'rgba(100, 180, 220, 0.5)';
+            ctx.fillRect(-bodyW/2, -bodyH/2 + 4, bodyW, 2);
+
+            // Bottom energy strip
+            ctx.fillStyle = '#4da6ff';
+            ctx.fillRect(-bodyW/2, bodyH/2 - 4, bodyW, 4);
+            
+            // Side accent panels (subtle)
+            ctx.fillStyle = 'rgba(100, 180, 220, 0.4)';
+            ctx.fillRect(-bodyW/2, -bodyH/2 + 4, 2, bodyH - 8);
+            ctx.fillRect(bodyW/2 - 2, -bodyH/2 + 4, 2, bodyH - 8);
+
+            // Central power core - soft glow
+            const coreW = bodyW * 0.6;
+            const coreH = bodyH * 0.45;
+            const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreW/2);
+            coreGrad.addColorStop(0, `rgba(100, 200, 255, ${0.25 * pulse})`);
+            coreGrad.addColorStop(0.5, `rgba(80, 160, 220, ${0.1 * pulse})`);
+            coreGrad.addColorStop(1, 'rgba(60, 120, 180, 0)');
+            ctx.fillStyle = coreGrad;
+            ctx.fillRect(-coreW/2, -coreH/2, coreW, coreH);
+
+            // Clean horizontal center line
+            ctx.strokeStyle = 'rgba(100, 180, 220, 0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW*0.35, 0);
+            ctx.lineTo(bodyW*0.35, 0);
+            ctx.stroke();
+            
+            // Vertical energy channels (subtle grid)
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(80, 160, 200, 0.4)';
+            for (let i = -2; i <= 2; i++) {
+                const xPos = i * bodyW * 0.2;
+                ctx.beginPath();
+                ctx.moveTo(xPos, -bodyH*0.2);
+                ctx.lineTo(xPos, bodyH*0.2);
+                ctx.stroke();
+            }
+
+            // Simple diagonal accent (X pattern)
+            ctx.strokeStyle = 'rgba(80, 160, 200, 0.3)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW*0.25, -bodyH*0.2);
+            ctx.lineTo(bodyW*0.25, bodyH*0.2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(bodyW*0.25, -bodyH*0.2);
+            ctx.lineTo(-bodyW*0.25, bodyH*0.2);
+            ctx.stroke();
+
+            // Power junction nodes (small, clean)
+            ctx.fillStyle = '#66ccff';
+            const junctions = [
+                [-bodyW*0.2, 0],
+                [0, -bodyH*0.15],
+                [bodyW*0.2, 0],
+                [0, bodyH*0.15]
+            ];
+            for (const [jx, jy] of junctions) {
+                ctx.beginPath();
+                ctx.arc(jx, jy, 2, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = `rgba(100, 200, 255, ${0.25 * pulse})`;
+                ctx.beginPath();
+                ctx.arc(jx, jy, 3.5, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#66ccff';
+            }
+
+            // Corner accent vents (small)
+            ctx.fillStyle = '#4da6ff';
+            for (const [_rx, _ry] of [[-bodyW/2+3,-bodyH/2+3],[bodyW/2-3,-bodyH/2+3],[-bodyW/2+3,bodyH/2-3],[bodyW/2-3,bodyH/2-3]]) {
+                ctx.beginPath();
+                ctx.arc(_rx, _ry, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Clean outer border
+            ctx.strokeStyle = 'rgba(100, 180, 220, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else {
             // Default
             ctx.fillStyle = color;
@@ -823,8 +936,8 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0,0, 2.5, 0, Math.PI*2);
         ctx.fill();
 
-    } else if (type === 'chromatic') {
-        // Chromatic Turret — hexagonal mount with single prismatic barrel
+    } else if (type === 'imitator') {
+        // imitator Turret — hexagonal mount with single prismatic barrel
         const barrelLen = tSize * 1.55;
         const barrelH   = tSize * 0.27;
         // Barrel body
@@ -884,6 +997,132 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.lineTo(Math.cos(a) * hexR * 0.36, Math.sin(a) * hexR * 0.36);
             ctx.stroke();
         }
+    } else if (type === 'electric') {
+        // ELECTRIC ROBOT Turret - ELEGANT ELECTRIC GENERATOR
+        const turretBase = tSize * 0.65;
+        
+        // Dark base layer
+        ctx.fillStyle = '#0a0a15';
+        ctx.fillRect(-turretBase/2, -turretBase/2, turretBase, turretBase);
+        
+        // Main turret gradient - softer energy
+        const turretGrad = ctx.createLinearGradient(-turretBase/2, -turretBase/2, turretBase/2, turretBase/2);
+        turretGrad.addColorStop(0, '#1a2a50');
+        turretGrad.addColorStop(0.5, '#0f1f40');
+        turretGrad.addColorStop(1, '#1a2a50');
+        ctx.fillStyle = turretGrad;
+        ctx.fillRect(-turretBase/2, -turretBase/2, turretBase, turretBase);
+
+        // Subtle pulsing energy field
+        const turboPulse = 0.5 + 0.3 * Math.sin(Date.now() * 0.006);
+        ctx.fillStyle = `rgba(100, 180, 220, ${0.08 * turboPulse})`;
+        ctx.fillRect(-turretBase/2 - 2, -turretBase/2 - 2, turretBase + 4, turretBase + 4);
+
+        // Clean energy circuit lines
+        ctx.strokeStyle = `rgba(100, 180, 220, ${0.6 * turboPulse})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-turretBase*0.3, -turretBase*0.25);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(turretBase*0.3, turretBase*0.25);
+        ctx.stroke();
+        
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(100, 180, 220, 0.4)';
+        ctx.beginPath();
+        ctx.moveTo(-turretBase*0.2, turretBase*0.3);
+        ctx.lineTo(0, -turretBase*0.15);
+        ctx.lineTo(turretBase*0.2, turretBase*0.3);
+        ctx.stroke();
+
+        // Central elegant core
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, turretBase * 0.18);
+        coreGrad.addColorStop(0, '#66ccff');
+        coreGrad.addColorStop(0.5, `rgba(80, 180, 220, ${turboPulse})`);
+        coreGrad.addColorStop(1, `rgba(60, 140, 200, ${0.2 * turboPulse})`);
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, turretBase * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dark inner core
+        ctx.fillStyle = '#050510';
+        ctx.beginPath();
+        ctx.arc(0, 0, turretBase * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Clean double border
+        ctx.strokeStyle = 'rgba(100, 180, 220, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-turretBase/2, -turretBase/2, turretBase, turretBase);
+        
+        ctx.strokeStyle = 'rgba(80, 160, 200, 0.3)';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-turretBase/2 + 1.5, -turretBase/2 + 1.5, turretBase - 3, turretBase - 3);
+
+        // Energy nodes at corners (small, clean)
+        ctx.fillStyle = '#4da6ff';
+        const corners = [[-turretBase/2+3, -turretBase/2+3], [turretBase/2-3, -turretBase/2+3], 
+                         [-turretBase/2+3, turretBase/2-3], [turretBase/2-3, turretBase/2-3]];
+        for (const [cx, cy] of corners) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // BARREL - Elegant Electric Discharge Cannon
+        const barrelLen = tSize * 1.95;
+        const barrelH = tSize * 0.32;
+        
+        // Barrel gradient - balanced colors
+        const barGrad = ctx.createLinearGradient(tSize * 0.3, -barrelH/2, tSize * 0.3 + barrelLen, barrelH/2);
+        barGrad.addColorStop(0, '#0f1f35');
+        barGrad.addColorStop(0.2, '#4da6ff');
+        barGrad.addColorStop(0.4, '#2d7bb0');
+        barGrad.addColorStop(0.6, '#4da6ff');
+        barGrad.addColorStop(0.8, '#1a2a40');
+        barGrad.addColorStop(1, '#0a0a15');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(tSize * 0.3, -barrelH/2, barrelLen, barrelH);
+
+        // Top bright edge (subtle)
+        ctx.fillStyle = 'rgba(100, 180, 220, 0.5)';
+        ctx.fillRect(tSize * 0.3, -barrelH/2, barrelLen, barrelH * 0.25);
+
+        // Electric coil rings - elegant
+        ctx.strokeStyle = `rgba(100, 180, 220, ${0.6 * turboPulse})`;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 4; i++) {
+            const cx = tSize * 0.3 + barrelLen * (0.25 + i * 0.22);
+            ctx.beginPath();
+            ctx.arc(cx, 0, barrelH * 0.4, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Muzzle - Clean Electric Opening
+        const muzzleX = tSize * 0.3 + barrelLen;
+        const muzzleGrad = ctx.createRadialGradient(muzzleX, 0, barrelH*0.12, muzzleX, 0, barrelH*0.62);
+        muzzleGrad.addColorStop(0, '#66ccff');
+        muzzleGrad.addColorStop(0.35, '#4da6ff');
+        muzzleGrad.addColorStop(0.7, `rgba(80, 160, 200, ${0.4 * turboPulse})`);
+        muzzleGrad.addColorStop(1, 'rgba(60, 120, 180, 0.1)');
+        ctx.fillStyle = muzzleGrad;
+        ctx.beginPath();
+        ctx.arc(muzzleX, 0, barrelH*0.6, 0, Math.PI*2);
+        ctx.fill();
+
+        // Muzzle core
+        ctx.fillStyle = `rgba(80, 160, 200, ${0.5 * turboPulse})`;
+        ctx.beginPath();
+        ctx.arc(muzzleX, 0, barrelH*0.3, 0, Math.PI*2);
+        ctx.fill();
+
+        // Dark muzzle center
+        ctx.fillStyle = '#000a15';
+        ctx.beginPath();
+        ctx.arc(muzzleX, 0, barrelH*0.12, 0, Math.PI*2);
+        ctx.fill();
+
     } else if (type === 'machinegun') {
         // Machinegun Turret - Multiple barrels
         ctx.fillStyle = '#A0522D';
@@ -1393,6 +1632,64 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(255,255,255,0.9)';
             ctx.lineWidth = 0.8;
             ctx.beginPath(); ctx.moveTo(nozzleX + 2, -barrelH * 0.45); ctx.lineTo(nozzleX + 2, barrelH * 0.45); ctx.stroke();
+        } else if (type === 'electric') {
+            // ELECTRIC ROBOT Barrel - Electric discharge cannon
+            const barLen = Math.min(W, H) * 0.7 * turretScale;
+            const barH = Math.min(W, H) * 0.25 * turretScale;
+
+            // Main barrel body - electric blue gradient
+            const barGrad = ctx.createLinearGradient(tSize/2, -barH/2, tSize/2 + barLen, barH/2);
+            barGrad.addColorStop(0, '#1a1a2e');
+            barGrad.addColorStop(0.3, '#00d4ff');
+            barGrad.addColorStop(0.5, '#0080c0');
+            barGrad.addColorStop(0.7, '#00d4ff');
+            barGrad.addColorStop(1, '#0a0a1a');
+            ctx.fillStyle = barGrad;
+            ctx.fillRect(tSize/2, -barH/2, barLen, barH);
+
+            // Electric coil rings
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.7)';
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 4; i++) {
+                const cx = tSize/2 + barLen * (0.2 + i * 0.2);
+                ctx.beginPath();
+                ctx.arc(cx, 0, barH * 0.45, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Top edge glow
+            ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+            ctx.fillRect(tSize/2, -barH/2, barLen, barH * 0.3);
+
+            // Muzzle opening - electric discharge point
+            const muzzleX = tSize/2 + barLen;
+            const muzzleGrad = ctx.createRadialGradient(muzzleX, 0, barH*0.15, muzzleX, 0, barH*0.7);
+            muzzleGrad.addColorStop(0, '#00ffff');
+            muzzleGrad.addColorStop(0.4, '#0080c0');
+            muzzleGrad.addColorStop(1, 'rgba(0, 128, 192, 0.2)');
+            ctx.fillStyle = muzzleGrad;
+            ctx.beginPath();
+            ctx.arc(muzzleX, 0, barH*0.7, 0, Math.PI*2);
+            ctx.fill();
+
+            // Dark core of muzzle
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(muzzleX, 0, barH*0.3, 0, Math.PI*2);
+            ctx.fill();
+
+            // Electric discharge spark lines from muzzle
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                const sparkLen = barH * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(muzzleX + Math.cos(angle) * barH*0.35, Math.sin(angle) * barH*0.35);
+                ctx.lineTo(muzzleX + Math.cos(angle) * (barH*0.35 + sparkLen), Math.sin(angle) * (barH*0.35 + sparkLen));
+                ctx.stroke();
+            }
+
         } else if (type === 'boss_dummy') {
             // Heavy boss cannon — thick red-black armored barrel
             const _bLen = Math.min(W, H) * 0.65 * turretScale;
@@ -1620,7 +1917,7 @@ function drawCharacterPreviews() {
     // Plasma (mythic)
     drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', tankBgGradients.plasma);
 
-    // CHROMATIC - Time Tank Animation Logic
+    // imitator - Time Tank Animation Logic
     if (typeof timeTankCtx !== 'undefined' && timeTankCtx && timeTankPreview) {
         // Stop any existing loop
         if (window.timeTankAnimId) cancelAnimationFrame(window.timeTankAnimId);
@@ -1680,16 +1977,16 @@ function drawCharacterPreviews() {
         animateTimeTank();
     }
 
-    // CHROMATIC Tank Animation Logic — use same pixelated Time background
-    if (typeof chromaticTankCtx !== 'undefined' && chromaticTankCtx && chromaticTankPreview) {
-        if (window.chromaticTankAnimId) cancelAnimationFrame(window.chromaticTankAnimId);
+    // imitator Tank Animation Logic — use same pixelated Time background
+    if (typeof imitatorTankCtx !== 'undefined' && imitatorTankCtx && imitatorTankPreview) {
+        if (window.imitatorTankAnimId) cancelAnimationFrame(window.imitatorTankAnimId);
 
-        const animateChromaticTank = () => {
+        const animateimitatorTank = () => {
             if (document.getElementById('characterModal').style.display === 'none') return;
 
-            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('chromatic');
-            const canvas = chromaticTankPreview;
-            const ctx = chromaticTankCtx;
+            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('imitator');
+            const canvas = imitatorTankPreview;
+            const ctx = imitatorTankCtx;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1716,11 +2013,11 @@ function drawCharacterPreviews() {
             const side = Math.min(canvas.width, canvas.height) / 2;
             ctx.save();
             if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
-            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a3e', 0, 1, 'chromatic');
+            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a3e', 0, 1, 'imitator');
             ctx.restore();
 
             // Selection Border or Lock
-            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'chromatic') {
+            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'imitator') {
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4;
                 ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
@@ -1734,10 +2031,13 @@ function drawCharacterPreviews() {
                 ctx.fillText('🔒', canvas.width/2, canvas.height/2);
             }
 
-            window.chromaticTankAnimId = requestAnimationFrame(animateChromaticTank);
+            window.imitatorTankAnimId = requestAnimationFrame(animateimitatorTank);
         };
-        animateChromaticTank();
+        animateimitatorTank();
     }
+    
+    // ELECTRIC Robot Tank - Static preview with gradient background
+    drawItem(electricTankCtx, electricTankPreview, 'electric', '#1a1a2e', tankBgGradients.electric);
 }
 
 function draw() {
@@ -2441,8 +2741,8 @@ function draw() {
                  });
             }
 
-        } else if (b.type === 'chromatic') {
-            // Chromatic base bullet — prismatic orb with rainbow trail
+        } else if (b.type === 'imitator') {
+            // imitator base bullet — prismatic orb with rainbow trail
             const pr = Math.max(3.5, b.w / 2);
             const ang = Math.atan2(b.vy, b.vx);
             // Rainbow trail
@@ -2536,6 +2836,84 @@ function draw() {
             ctx.arc(b.x - pr * 0.3, b.y - pr * 0.3, pr * 0.28, 0, Math.PI * 2);
             ctx.fill();
 
+        } else if (b.type === 'electricBall') {
+            // МИФИЧЕСКИЙ: Усиленный визуал шаровой молнии — яркая корона, вращающиеся искры и динамические отростки
+            const radius = (b.w || 12) / 2;
+            const t = Date.now() * 0.0025;
+            const pulse = 0.9 + Math.sin(Date.now() * 0.02 + b.x * 0.02) * 0.25;
+
+            // Trail (soft streak behind orb)
+            const ang = Math.atan2(b.vy, b.vx);
+            const trailLen = radius * 4;
+            const tx = b.x - Math.cos(ang) * trailLen;
+            const ty = b.y - Math.sin(ang) * trailLen;
+            const trailGrad = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            trailGrad.addColorStop(0, 'rgba(0, 212, 255, 0)');
+            trailGrad.addColorStop(0.5, 'rgba(0, 180, 255, 0.18)');
+            trailGrad.addColorStop(1, 'rgba(0, 220, 255, 0.6)');
+            ctx.strokeStyle = trailGrad;
+            ctx.lineWidth = radius * 1.8;
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(b.x, b.y); ctx.stroke();
+
+            // Additive glow + dynamic tendrils
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Outer corona
+            const outerGlow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius * 3 * pulse);
+            outerGlow.addColorStop(0, 'rgba(140,255,255,0.35)');
+            outerGlow.addColorStop(0.3, 'rgba(0,220,255,0.18)');
+            outerGlow.addColorStop(0.7, 'rgba(0,120,200,0.06)');
+            outerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = outerGlow; ctx.beginPath(); ctx.arc(b.x, b.y, radius * 3 * pulse, 0, Math.PI * 2); ctx.fill();
+
+            // Dynamic electric tendrils (curved)
+            for (let i = 0; i < 7; i++) {
+                const angOff = (i / 7) * Math.PI * 2 + t * (1 + i * 0.06);
+                const start = radius * (0.95 + Math.sin(t * 2 + i) * 0.05);
+                const len = radius * (1.5 + Math.abs(Math.cos(t * 1.5 + i)) * 1.2);
+                const cx = b.x + Math.cos(angOff) * len;
+                const cy = b.y + Math.sin(angOff) * len;
+                ctx.strokeStyle = `rgba(0, 220, 255, ${0.6 - i*0.06})`;
+                ctx.lineWidth = 1 + (i % 3) * 0.6;
+                ctx.beginPath();
+                ctx.moveTo(b.x + Math.cos(angOff) * start, b.y + Math.sin(angOff) * start);
+                ctx.quadraticCurveTo(
+                    b.x + Math.cos(angOff) * (radius * 1.25) + Math.sin(angOff) * 6,
+                    b.y + Math.sin(angOff) * (radius * 1.25) - Math.cos(angOff) * 6,
+                    cx + (Math.random() - 0.5) * 6,
+                    cy + (Math.random() - 0.5) * 6
+                );
+                ctx.stroke();
+            }
+
+            // Orbiting micro-sparks
+            for (let i = 0; i < 6; i++) {
+                const aa = t * 3 + i * (Math.PI * 2 / 6);
+                const rr = radius * 1.8 + Math.sin(t * 6 + i) * 2;
+                const sx = b.x + Math.cos(aa) * rr;
+                const sy = b.y + Math.sin(aa) * rr;
+                const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6);
+                g.addColorStop(0, 'rgba(255,255,255,0.95)');
+                g.addColorStop(0.25, 'rgba(0,230,255,0.9)');
+                g.addColorStop(1, 'rgba(0,140,200,0)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Central core (strong gradient)
+            const coreGrad = ctx.createRadialGradient(b.x - radius * 0.12, b.y - radius * 0.12, 0, b.x, b.y, radius);
+            coreGrad.addColorStop(0, '#ffffff');
+            coreGrad.addColorStop(0.18, '#e8ffff');
+            coreGrad.addColorStop(0.5, '#00f2ff');
+            coreGrad.addColorStop(1, '#003366');
+            ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(b.x, b.y, radius * 0.9, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore();
+
+            // Bright specular highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(b.x - radius * 0.25, b.y - radius * 0.25, radius * 0.35, 0, Math.PI * 2); ctx.fill();
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -2548,6 +2926,167 @@ function draw() {
             ctx.fillRect(b.x - b.w/2 + 1, b.y - b.h/2 + 1, b.w/3, b.h/3);
         }
     });
+
+    // 3.5.4. Электрические лучи (молнии)
+    if (typeof electricRays !== 'undefined' && electricRays) {
+        electricRays.forEach((ray, idx) => {
+            if (!isVisible(Math.min(ray.fromX, ray.toX) - 20, Math.min(ray.fromY, ray.toY) - 20, 
+                          Math.max(ray.fromX, ray.toX) - Math.min(ray.fromX, ray.toX) + 40,
+                          Math.max(ray.fromY, ray.toY) - Math.min(ray.fromY, ray.toY) + 40)) return;
+            
+            ctx.save();
+            
+            // Fade out over time
+            const fadeAlpha = ray.life / ray.maxLife;
+            const isNova = ray.isNova || false;
+            
+            // NOVA: BIG LIGHTNING STRIKES
+            if (isNova) {
+                ctx.globalCompositeOperation = 'lighter';  // Additive blending
+                
+                // Ultra-bright inner core
+                ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = 0.9 * fadeAlpha;
+                
+                ctx.beginPath();
+                ctx.moveTo(ray.fromX, ray.fromY);
+                
+                const segmentCount = 7;
+                const dx = (ray.toX - ray.fromX) / segmentCount;
+                const dy = (ray.toY - ray.fromY) / segmentCount;
+                
+                for (let i = 1; i < segmentCount; i++) {
+                    const offsetX = (Math.random() - 0.5) * 12;
+                    const offsetY = (Math.random() - 0.5) * 12;
+                    ctx.lineTo(ray.fromX + dx * i + offsetX, ray.fromY + dy * i + offsetY);
+                }
+                ctx.lineTo(ray.toX, ray.toY);
+                ctx.stroke();
+                
+                // Bright cyan main bolt
+                ctx.strokeStyle = 'rgba(0, 255, 255, 1)';
+                ctx.lineWidth = 8;
+                ctx.globalAlpha = 0.95 * fadeAlpha;
+                
+                ctx.beginPath();
+                ctx.moveTo(ray.fromX, ray.fromY);
+                for (let i = 1; i < segmentCount; i++) {
+                    const offsetX = (Math.random() - 0.5) * 12;
+                    const offsetY = (Math.random() - 0.5) * 12;
+                    ctx.lineTo(ray.fromX + dx * i + offsetX, ray.fromY + dy * i + offsetY);
+                }
+                ctx.lineTo(ray.toX, ray.toY);
+                ctx.stroke();
+                
+                // Massive outer glow
+                ctx.strokeStyle = 'rgba(0, 200, 255, 0.7)';
+                ctx.lineWidth = 24;
+                ctx.globalAlpha = 0.4 * fadeAlpha;
+                
+                ctx.beginPath();
+                ctx.moveTo(ray.fromX, ray.fromY);
+                for (let i = 1; i < segmentCount; i++) {
+                    const offsetX = (Math.random() - 0.5) * 12;
+                    const offsetY = (Math.random() - 0.5) * 12;
+                    ctx.lineTo(ray.fromX + dx * i + offsetX, ray.fromY + dy * i + offsetY);
+                }
+                ctx.lineTo(ray.toX, ray.toY);
+                ctx.stroke();
+                
+                // Branch effects (smaller lightning branches)
+                ctx.strokeStyle = 'rgba(100, 220, 255, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.6 * fadeAlpha;
+                
+                for (let b = 0; b < 3; b++) {
+                    ctx.beginPath();
+                    const branchStart = Math.floor(Math.random() * (segmentCount - 1)) + 1;
+                    const branchX = ray.fromX + dx * branchStart;
+                    const branchY = ray.fromY + dy * branchStart;
+                    ctx.moveTo(branchX, branchY);
+                    
+                    const branchAngle = Math.random() * Math.PI * 2;
+                    const branchLen = 40 + Math.random() * 60;
+                    ctx.lineTo(branchX + Math.cos(branchAngle) * branchLen, branchY + Math.sin(branchAngle) * branchLen);
+                    ctx.stroke();
+                }
+                
+                // Massive endpoint explosion
+                ctx.globalAlpha = 0.8 * fadeAlpha;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.arc(ray.toX, ray.toY, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(ray.toX, ray.toY, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+            } else {
+                // Regular chain lightning (thin rays)
+                ctx.globalAlpha = 0.8 * fadeAlpha;
+                
+                // Main bright lightning bolt
+                ctx.strokeStyle = 'rgba(0, 255, 255, 1)';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Draw main beam with slight jagged effect
+                ctx.beginPath();
+                ctx.moveTo(ray.fromX, ray.fromY);
+                
+                // Add jagger to make it look more like lightning
+                const segmentCount = 5;
+                const dx = (ray.toX - ray.fromX) / segmentCount;
+                const dy = (ray.toY - ray.fromY) / segmentCount;
+                
+                for (let i = 1; i < segmentCount; i++) {
+                    const offsetX = (Math.random() - 0.5) * 8;
+                    const offsetY = (Math.random() - 0.5) * 8;
+                    ctx.lineTo(ray.fromX + dx * i + offsetX, ray.fromY + dy * i + offsetY);
+                }
+                ctx.lineTo(ray.toX, ray.toY);
+                ctx.stroke();
+                
+                // Glow effect (outer light)
+                ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+                ctx.lineWidth = 8;
+                ctx.globalAlpha = 0.3 * fadeAlpha;
+                ctx.beginPath();
+                ctx.moveTo(ray.fromX, ray.fromY);
+                for (let i = 1; i < segmentCount; i++) {
+                    const offsetX = (Math.random() - 0.5) * 8;
+                    const offsetY = (Math.random() - 0.5) * 8;
+                    ctx.lineTo(ray.fromX + dx * i + offsetX, ray.fromY + dy * i + offsetY);
+                }
+                ctx.lineTo(ray.toX, ray.toY);
+                ctx.stroke();
+                
+                // Electric sparkles at endpoints
+                ctx.globalAlpha = fadeAlpha;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(ray.fromX, ray.fromY, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(ray.toX, ray.toY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            // Decrease life
+            ray.life--;
+        });
+        
+        // Remove dead rays
+        electricRays = electricRays.filter(ray => ray.life > 0);
+    }
 
     // 3.5.5. Звуковые волны
     soundWaves.forEach(sw => {
@@ -2913,7 +3452,7 @@ function draw() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = enemy.isDummy ? (enemy.maxHp || 3) : (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot' || enemy.tankType === 'chromatic') ? 4 : 3;
+        const maxHp = enemy.isDummy ? (enemy.maxHp || 3) : (enemy.tankType === 'fire') ? 6 : (enemy.tankType === 'musical' || enemy.tankType === 'waterjet') ? 4 : (enemy.tankType === 'illuminat' || enemy.tankType === 'buckshot' || enemy.tankType === 'imitator') ? 4 : 3;
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);
@@ -2970,8 +3509,8 @@ function draw() {
 
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
 
-        // Rainbow aura when chromatic transformation is active
-        if (tank.chromaticActive) {
+        // Rainbow aura when imitator transformation is active
+        if (tank.imitatorActive) {
             const auraR = Math.max(tank.w, tank.h) * 0.72;
             ctx.save();
             const hue = (Date.now() * 0.36) % 360;
@@ -2990,7 +3529,7 @@ function draw() {
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'black';
-        const maxTankHp = (tankType === 'fire') ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'chromatic') ? 4 : 3;
+        const maxTankHp = (tankType === 'fire') ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'imitator') ? 4 : 3;
         const missingHp = maxTankHp - tank.hp;
         if (missingHp > 0) {
             ctx.fillRect(tank.x + tank.w * (tank.hp / maxTankHp), tank.y - 10, tank.w * (missingHp / maxTankHp), 5);
@@ -3033,6 +3572,18 @@ function draw() {
     
     if (cameraTranslated) ctx.restore();
 
+    // DEBUG: Ultimate status (if electric tank)
+    if (gameState === 'play' && typeof tankType !== 'undefined' && tankType === 'electric') {
+        ctx.fillStyle = '#ffff00'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
+        const debugY = 60;
+        if (typeof tank !== 'undefined') {
+            ctx.fillText('Ultimate: ' + (tank.isUltimateActive ? 'ACTIVE' : 'idle'), 10, debugY);
+            ctx.fillText('Timer: ' + (tank.ultimateTimer || 0), 10, debugY + 20);
+            ctx.fillText('Cooldown: ' + (tank.ultimateCooldown || 0), 10, debugY + 40);
+            ctx.fillText('Rays: ' + (typeof electricRays !== 'undefined' ? electricRays.length : 0), 10, debugY + 60);
+        }
+    }
+
     if (tank.alive === false && currentMode === 'war' && tank.respawnTimer > 0 && gameState !== 'lose') {
         ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
         ctx.fillText('Respawn in ' + Math.ceil(tank.respawnTimer / 60) + 's', canvas.width/2, 40);
@@ -3065,6 +3616,9 @@ function showTankDetail(tankType) {
     const description = document.getElementById('tankDetailDescription');
     const ctx = canvas.getContext('2d');
 
+    // Reference to the modal primary action button (style updated elsewhere)
+    const tankDetailSelectBtn = document.getElementById('tankDetailSelect');
+
     // Set title, rarity and description
     title.textContent = tankDescriptions[tankType].name;
     const rarityText = "Редкость: " + tankDescriptions[tankType].rarity;
@@ -3095,7 +3649,7 @@ function showTankDetail(tankType) {
         const grass = (tankBgGradients && tankBgGradients.normal && tankBgGradients.normal[1]) ? tankBgGradients.normal[1] : '#228B22';
         ctx.fillStyle = grass;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else if (tankType === 'time' || tankType === 'chromatic') {
+    } else if (tankType === 'time' || tankType === 'imitator') {
         // Animated: pixelated rainbow flowing from top-left; redraw every frame
         if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
         modal.style.display = 'flex'; // ensure visible before first frame

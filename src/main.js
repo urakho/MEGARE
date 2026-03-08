@@ -23,6 +23,8 @@ let bullets = [];
 let flames = [];
 let soundWaves = [];
 let illusions = [];
+let electricRays = [];  // Electric chain lightning beams
+let novaZones = [];  // Active nova damage zones (center, radius, life, ownerTeam)
 let enemies = [];
 let allies = [];
 let gameState = 'menu';
@@ -126,7 +128,8 @@ const tankGemPrices = {
     'illuminat': 750, // Мифический
     'plasma': 750,    // Мифический
     'time': 750,      // Хроматический
-    'chromatic': 750  // Хроматический
+    'electric': 750,   // Электрический (Шаровая молния с цепочкой хит)
+    'electric': 750   // Электрический (Шаровая молния с цепочкой хит)
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -192,14 +195,22 @@ const tank = {
     hp: 3,
     maxHp: 3,
     team: 0,
-    fireCooldown: 0
+    fireCooldown: 0,
+    // Autopilot / ultimate ability flags
+    isAutopilotActive: false,
+    autoPilotTimer: 0,
+    autoPilotCooldown: 0,
+    // Ultimate (Electric): stop then nova
+    isUltimateActive: false,
+    ultimateTimer: 0,
+    ultimateCooldown: 0
 };
 
 // Apply saved tank type properties immediately if needed
 if (tankType === 'fire') tank.hp = 6;
 else if (tankType === 'musical' || tankType === 'waterjet') tank.hp = 4;
 else if (tankType === 'buckshot') tank.hp = 3;
-else if (tankType === 'chromatic') tank.hp = 4;
+else if (tankType === 'imitator' || tankType === 'electric') tank.hp = 4;
 
 // Слушатели событий
 window.onkeydown = (e) => {
@@ -477,7 +488,7 @@ function updateMusic() {
 
     // ---- Attack joystick mode: 'attack' | 'ult' ----
     // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'chromatic'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric'];
     let attackMode = 'attack';
     let attackTapStartTime = 0;
     let attackTapStartX = 0, attackTapStartY = 0;
@@ -663,8 +674,10 @@ const buckshotTankPreview = document.getElementById('buckshotTankPreview');
 const buckshotTankCtx = buckshotTankPreview && buckshotTankPreview.getContext ? buckshotTankPreview.getContext('2d') : null;
 const waterjetTankPreview = document.getElementById('waterjetTankPreview');
 const waterjetTankCtx = waterjetTankPreview && waterjetTankPreview.getContext ? waterjetTankPreview.getContext('2d') : null;
-const chromaticTankPreview = document.getElementById('chromaticTankPreview');
-const chromaticTankCtx = chromaticTankPreview && chromaticTankPreview.getContext ? chromaticTankPreview.getContext('2d') : null;
+const imitatorTankPreview = document.getElementById('imitatorTankPreview');
+const imitatorTankCtx = imitatorTankPreview && imitatorTankPreview.getContext ? imitatorTankPreview.getContext('2d') : null;
+const electricTankPreview = document.getElementById('electricTankPreview');
+const electricTankCtx = electricTankPreview && electricTankPreview.getContext ? electricTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -682,14 +695,14 @@ const modeCancel = document.getElementById('modeCancel');
 const modeOneVsAll = document.getElementById('modeOneVsAll');
 
 function startGame(mode) {
-    // If chromatic player died while transformed, restore the real tank type before any reset
-    if (tank.chromaticActive && tank.originalTankType) {
+    // If imitator player died while transformed, restore the real tank type before any reset
+    if (tank.imitatorActive && tank.originalTankType) {
         tankType = tank.originalTankType;
-    } else if (tank.chromaticActive) {
-        tankType = 'chromatic';
+    } else if (tank.imitatorActive) {
+        tankType = 'imitator';
     }
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = [];
+    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'buckshot' || tankType === 'imitator' || tankType === 'electric') ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = [];
     
     // Reset all effects
     tank.paralyzed = false;
@@ -718,10 +731,10 @@ function startGame(mode) {
     // Reset plasma blast ability
     tank.plasmaBlastUsed = 0;
     
-    // Reset chromatic transformation ability
-    tank.chromaticActive = false;
-    tank.chromaticTimer = 0;
-    tank.chromaticCooldown = 0;
+    // Reset imitator transformation ability
+    tank.imitatorActive = false;
+    tank.imitatorTimer = 0;
+    tank.imitatorCooldown = 0;
     tank.originalTankType = null;
     tank.originalMaxHp = 4;
     
@@ -729,6 +742,11 @@ function startGame(mode) {
     tank.poisonTimer = 0;
     tank.invertedControls = 0;
     tank.disoriented = 0;
+    
+    // Reset ultimate ability (electric tank)
+    tank.isUltimateActive = false;
+    tank.ultimateTimer = 0;
+    tank.ultimateCooldown = 0;
     
     navNeedsRebuild = true;
     lastResultState = null;
@@ -800,7 +818,7 @@ function startGame(mode) {
         worldWidth = 900 * 4; worldHeight = 700 * 4;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         tank.team = 0;
-        tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'chromatic') ? 4 : 3);
+        tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'imitator') ? 4 : 3);
         tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         generateMap();
         spawnOneVsAllMode();
@@ -1387,9 +1405,13 @@ const selectWaterjetTank = document.getElementById('selectWaterjetTank');
 if (selectWaterjetTank) selectWaterjetTank.addEventListener('click', () => {
     showTankDetail('waterjet');
 });
-const selectChromaticTank = document.getElementById('selectChromaticTank');
-if (selectChromaticTank) selectChromaticTank.addEventListener('click', () => {
-    showTankDetail('chromatic');
+const selectImitatorTank = document.getElementById('selectImitatorTank');
+if (selectImitatorTank) selectImitatorTank.addEventListener('click', () => {
+    showTankDetail('imitator');
+});
+const selectElectricTank = document.getElementById('selectElectricTank');
+if (selectElectricTank) selectElectricTank.addEventListener('click', () => {
+    showTankDetail('electric');
 });
 
 // По умолчанию показываем главное меню
@@ -1489,9 +1511,9 @@ function generateMap() {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
         // Choose a random tank type for this AI
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot', 'chromatic'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot', 'electric', 'imitator'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', chromatic: '#6c3483' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -1532,11 +1554,11 @@ function spawnAllies(numTeams, teamSize) {
             const offset = s * 44;
             // ensure ally spawn is inside and not colliding
             let pos = findFreeSpot(base.x + offset, base.y + offset, 38, 38);
-            allies.push({
+                allies.push({
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
                 // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet'])[Math.floor(Math.random()*11)],
+                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric'])[Math.floor(Math.random()*12)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -1581,7 +1603,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet'];
+                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
             allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : (allyType === 'musical' || allyType === 'waterjet') ? 4 : (allyType === 'illuminat' || allyType === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
@@ -1591,9 +1613,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot', 'chromatic'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'machinegun', 'waterjet', 'buckshot', 'electric', 'imitator'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', chromatic: '#6c3483' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -1629,15 +1651,15 @@ function spawnDuelMode() {
     // Player in top-left corner
     tank.x = 100; tank.y = 100;
     tank.alive = true;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'chromatic') ? 4 : 3);
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'imitator') ? 4 : 3);
     
     // 1 Bot in bottom-right corner
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'buckshot', 'chromatic'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'buckshot', 'electric', 'imitator'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', chromatic: '#6c3483' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -1678,7 +1700,7 @@ function spawnTrialMode() {
     const cx = worldWidth / 2, cy = worldHeight / 2;
     const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
     tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
     tank.alive = true; tank.respawnTimer = 0;
 
     // 7 bots spread around the map, each on its own team
@@ -1691,8 +1713,8 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','chromatic'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', chromatic:'#6c3483' };
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];
@@ -1781,7 +1803,7 @@ function spawnTrainingMode() {
     // Player starts center-left
     tank.x = 150; tank.y = worldHeight / 2 - 19;
     tank.team = 0;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
+    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
     tank.alive = true;
 
     // Dummy positions — split into 2 groups: upper (before corridor) and lower (after corridor)
@@ -1851,8 +1873,8 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','chromatic'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', chromatic:'#6c3483' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483' };
     
     for (let i = 0; i < 7; i++) {
         // Spread bots vertically around right side
@@ -1909,8 +1931,8 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → chromatic
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'toxic', 'mirror', 'illuminat', 'plasma', 'time', 'chromatic'];
+// Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'toxic', 'mirror', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
@@ -1923,8 +1945,9 @@ const tankRarityMap = {
     'mirror': 'legendary',
     'illuminat': 'mythic',
     'plasma': 'mythic',
-    'time': 'chromatic',
-    'chromatic': 'chromatic'
+    'electric': 'mythic',
+    'time': 'imitator',
+    'imitator': 'imitator'
 };
 
 const rarityChances = {
@@ -1932,7 +1955,7 @@ const rarityChances = {
     'super_rare': 25,
     'epic': 15,
     'legendary': 10,
-    'chromatic': 5,
+    'imitator': 5,
     'mythic': 5
 };
 
@@ -1946,7 +1969,7 @@ function getRarity() {
     const r = Math.random() * 100;
     let acc = 0;
     // Iterate in order to ensure correct accumulation
-    const order = ['rare', 'super_rare', 'epic', 'legendary', 'chromatic', 'mythic'];
+    const order = ['rare', 'super_rare', 'epic', 'legendary', 'imitator', 'mythic'];
     for (const rar of order) {
         acc += rarityChances[rar];
         if (r < acc) return rar;
@@ -2046,8 +2069,8 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
             rewardBox.style.boxShadow = ''; // restore default shadow from CSS
             
             // Only modify the CARD (square) background
-            if (tankType === 'time' || tankType === 'chromatic') {
-               // For Chromatic/Time, we need a CANVAS animation to match the menu exactly
+            if (tankType === 'time' || tankType === 'imitator') {
+               // For imitator/Time, we need a CANVAS animation to match the menu exactly
                // The menu uses JS to draw pixelated rainbow. We can't easily reuse that code 
                // without refactoring, but we can copy the logic into a new helper or inline.
                // Let's create a dedicated canvas for the background inside the card
@@ -2101,7 +2124,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         
         const ctx = canvas.getContext('2d');
         if (typeof drawTankOn === 'function') {
-            if (tankType === 'time' || tankType === 'chromatic') {
+            if (tankType === 'time' || tankType === 'imitator') {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
@@ -2310,6 +2333,65 @@ function openOmegaContainer(options = {}) {
     }
 }
 
+// Autopilot evasion AI for electric robot tank
+function updateAutopilotEvasion() {
+    // Find the nearest enemy
+    let nearest = null;
+    let nearestDist = Infinity;
+    const pcx = tank.x + tank.w / 2;
+    const pcy = tank.y + tank.h / 2;
+    
+    for (const e of enemies) {
+        if (!e.alive) continue;
+        const ecx = e.x + e.w / 2;
+        const ecy = e.y + e.h / 2;
+        const dist = Math.hypot(ecx - pcx, ecy - pcy);
+        if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = e;
+        }
+    }
+    
+    // Evasion behavior: move away from nearest enemy
+    if (nearest) {
+        const ecx = nearest.x + nearest.w / 2;
+        const ecy = nearest.y + nearest.h / 2;
+        
+        // Calculate direction away from enemy
+        const angleAwayFrom = Math.atan2(pcy - ecy, pcx - ecx);
+        
+        // Move away with evasion speed
+        const evadeSpeed = tank.speed * 1.2; // Slightly faster during evasion
+        const dx = Math.cos(angleAwayFrom) * evadeSpeed;
+        const dy = Math.sin(angleAwayFrom) * evadeSpeed;
+        
+        // Update tank's base angle toward move direction
+        tank.baseAngle = angleAwayFrom;
+        
+        // Continue moving away using movement logic
+        // Use the physics system to avoid walls
+        for (let step = 0; step < 2; step++) {
+            moveWithCollision(dx / 2, 0);
+            moveWithCollision(0, dy / 2);
+        }
+        
+        // Rotate turret to face the enemy (defensive posture)
+        const angleToEnemy = Math.atan2(ecy - pcy, ecx - pcx);
+        const angleDiff = angleToEnemy - tank.turretAngle;
+        
+        // Normalize angle difference
+        let normalizedDiff = angleDiff;
+        if (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
+        if (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
+        
+        // Gradually turn turret (smooth rotation)
+        const rotSpeed = 0.1;
+        if (Math.abs(normalizedDiff) > 0.05) {
+            tank.turretAngle += Math.sign(normalizedDiff) * rotSpeed;
+        }
+    }
+}
+
 // Построить навигационную сетку: 1 = блокировано, 0 = свободно
 function update() {
     updateMusic();
@@ -2475,6 +2557,11 @@ function update() {
 
         let dx = 0, dy = 0;
         let isW = keys['KeyW'], isS = keys['KeyS'], isA = keys['KeyA'], isD = keys['KeyD'];
+        
+        // Block player controls during autopilot or ultimate charge
+        if (tank.isAutopilotActive || tank.isUltimateActive) {
+            isW = isS = isA = isD = false;
+        }
         
         // Handle Control Inversion (Swap inputs)
         if (tank.invertedControls > 0) {
@@ -2653,10 +2740,10 @@ function update() {
             if (tank.teleportCooldown > 0) tank.teleportCooldown--;
         }
 
-        // Chromatic Tank Ability (E) — Transform into nearest enemy for 6 seconds (cooldown 18s)
-        if (tankType === 'chromatic' && !tank.chromaticActive) {
+        // Imitator Tank Ability (E) — Transform into nearest enemy for 6 seconds (cooldown 18s)
+        if (tankType === 'imitator' && !tank.imitatorActive) {
             if (keys['KeyE']) {
-                if (!tank.chromaticCooldown || tank.chromaticCooldown <= 0) {
+                if (!tank.imitatorCooldown || tank.imitatorCooldown <= 0) {
                     // Find nearest alive enemy
                     let nearest = null;
                     let nearestDist = Infinity;
@@ -2670,10 +2757,10 @@ function update() {
                     if (nearest) {
                         const copiedType = nearest.tankType || 'normal';
                         const copiedMaxHp = (copiedType === 'fire') ? 6 : (copiedType === 'musical' || copiedType === 'waterjet') ? 4 : 4;
-                        tank.chromaticActive = true;
-                        tank.chromaticTimer = 360; // 6 seconds at 60fps
-                        tank.chromaticCooldown = 60 * 18; // 18 second cooldown
-                        tank.originalTankType = 'chromatic';
+                        tank.imitatorActive = true;
+                        tank.imitatorTimer = 360; // 6 seconds at 60fps
+                        tank.imitatorCooldown = 60 * 18; // 18 second cooldown
+                        tank.originalTankType = 'imitator';
                         tank.originalMaxHp = 4;
                         tankType = copiedType;
                         tank.maxHp = copiedMaxHp;
@@ -2690,13 +2777,13 @@ function update() {
                 keys['KeyE'] = false;
             }
         }
-        // Tick chromatic transformation timer
-        if (tank.chromaticActive) {
-            tank.chromaticTimer--;
-            if (tank.chromaticTimer <= 0) {
-                // Revert to chromatic form
-                tank.chromaticActive = false;
-                tankType = tank.originalTankType || 'chromatic';
+        // Tick imitator transformation timer
+        if (tank.imitatorActive) {
+            tank.imitatorTimer--;
+            if (tank.imitatorTimer <= 0) {
+                // Revert to imitator form
+                tank.imitatorActive = false;
+                tankType = tank.originalTankType || 'imitator';
                 tank.maxHp = tank.originalMaxHp || 4;
                 tank.hp = Math.min(tank.hp, tank.maxHp);
                 // Clean up any copied-type state
@@ -2714,7 +2801,58 @@ function update() {
                 }
             }
         }
-        if (tank.chromaticCooldown > 0) tank.chromaticCooldown--;
+        if (tank.imitatorCooldown > 0) tank.imitatorCooldown--;
+
+        // electric / Electric Ability (E) — Ultimate: charge 1s, then nova through walls
+        if (tankType === 'electric') {
+            if (keys['KeyE']) {
+                if (!tank.isUltimateActive && (!tank.ultimateCooldown || tank.ultimateCooldown <= 0)) {
+                    // Activate ultimate: charge (stop) for 1 second
+                    tank.isUltimateActive = true;
+                    tank.ultimateTimer = 60; // 1 second at 60fps
+                    tank.ultimateCooldown = 480; // 8 seconds cooldown
+
+                    // Visual charge effect
+                    for (let i = 0; i < 30; i++) {
+                        spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w*1.2,
+                                     tank.y + tank.h/2 + (Math.random()-0.5)*tank.h*1.2,
+                                     '#00d4ff', 1);
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        // Update autopilot ability timers
+        if (tank.isAutopilotActive) {
+            tank.autoPilotTimer--;
+            if (tank.autoPilotTimer <= 0) {
+                tank.isAutopilotActive = false;
+            }
+        }
+        if (tank.autoPilotCooldown > 0) tank.autoPilotCooldown--;
+
+        // Update ultimate timers
+        if (tank.isUltimateActive) {
+            tank.ultimateTimer--;
+            if (tank.ultimateTimer <= 0) {
+                // End charge and unleash nova that hits all enemies through walls
+                tank.isUltimateActive = false;
+                const cx = tank.x + tank.w/2;
+                const cy = tank.y + tank.h/2;
+                // Reduced radius ~200px for electric electric ultimate
+                if (typeof createElectricNova === 'function') {
+                    createElectricNova(cx, cy, 200, 2, tank.team);
+                }
+                // Center burst particles
+                for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
+            }
+        }
+        if (tank.ultimateCooldown > 0) tank.ultimateCooldown--;
+
+        // Update active nova zones (continuous damage)
+        if (typeof updateNovaZones === 'function') {
+            updateNovaZones();
+        }
 
         if (keys['ArrowRight']) tank.turretAngle += 0.06;
 
@@ -2773,8 +2911,8 @@ function update() {
         tank.overheated = false;
     }
 
-        // Стрельба (только если перезарядка закончилась и нет перегрева)
-        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated) {
+        // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
+        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive) {
             shoot();
             if (tankType !== 'fire' && tankType !== 'machinegun' && tankType !== 'waterjet') {
                 keys['Space'] = false;
@@ -2783,6 +2921,10 @@ function update() {
         }
     }
 // --- APPEND_POINT_UPDATE_AI ---
+    // Autopilot evasion for electric tank
+    if (tank.isAutopilotActive) {
+        updateAutopilotEvasion();
+    }
     updateEnemyAI();
 // --- APPEND_POINT_UPDATE_AI_ALLIES ---
     updateAllyAI();
@@ -3097,7 +3239,7 @@ function updateTankDetailButton(type) {
         'fire': 'super', 'waterjet': 'super',
         'buratino': 'epic', 'musical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'time': 'chromatic', 'chromatic': 'chromatic'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator'
     };
 
     // If player has enough gems, color the buy button by rarity
@@ -3259,7 +3401,7 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
         const price = tankGemPrices[t] || 0;
         let comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
         if (rarity === 'legendary') comp = Math.max(comp, 100);
-        if (rarity === 'chromatic') comp = Math.max(comp, 150);
+        if (rarity === 'imitator') comp = Math.max(comp, 150);
         if (rarity === 'mythic') comp = Math.max(comp, 200);
 
         gems += comp;

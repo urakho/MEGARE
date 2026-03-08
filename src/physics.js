@@ -5,6 +5,236 @@ function checkRectCollision(r1, r2) {
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
 }
 
+// Create electric chain lightning - shoots instantly in a direction and chains between enemies
+function createElectricChain(startX, startY, angle, baseDamage = 2, ownerTeam = 0, chainedEnemies = []) {
+    const rayLength = 800;  // How far the initial ray can reach
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    
+    // Find first enemy in the direction of the angle
+    let firstHit = null;
+    let closestDist = Infinity;
+    
+    for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e || !e.alive || e.team === ownerTeam) continue;
+        if (chainedEnemies.includes(i)) continue;  // Already hit by this chain
+        
+        const ex = e.x + e.w / 2;
+        const ey = e.y + e.h / 2;
+        
+        // Check if enemy is roughly in the direction of angle (within 45 degrees)
+        const toEnemyAngle = Math.atan2(ey - startY, ex - startX);
+        let angleDiff = toEnemyAngle - angle;
+        
+        // Normalize angle difference
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        
+        // Only consider enemies within 60 degrees forward cone
+        if (Math.abs(angleDiff) > Math.PI / 3) continue;
+        
+        const dist = Math.hypot(ex - startX, ey - startY);
+        if (dist < rayLength && dist < closestDist) {
+            closestDist = dist;
+            firstHit = i;
+        }
+    }
+    
+    // If found a target, create ray to it
+    if (firstHit !== null) {
+        const targetE = enemies[firstHit];
+        let targetX = targetE.x + targetE.w / 2;
+        let targetY = targetE.y + targetE.h / 2;
+        
+        // Check if ray hits any walls/obstacles and shorten if needed
+        let rayEndX = targetX;
+        let rayEndY = targetY;
+        let closestWallDist = Math.hypot(targetX - startX, targetY - startY);
+        
+        // Check against all objects (walls, boxes, barrels)
+        for (const obj of objects) {
+            if (lineIntersectsRect(startX, startY, targetX, targetY, obj.x, obj.y, obj.w, obj.h)) {
+                // Ray hits this object - find intersection point and shorten ray
+                const dist = getRayRectDistance(startX, startY, Math.atan2(targetY - startY, targetX - startX), closestWallDist, obj);
+                if (dist < closestWallDist) {
+                    closestWallDist = dist;
+                    rayEndX = startX + Math.cos(Math.atan2(targetY - startY, targetX - startX)) * (dist - 10);
+                    rayEndY = startY + Math.sin(Math.atan2(targetY - startY, targetX - startX)) * (dist - 10);
+                }
+            }
+        }
+        
+        // Update target position if we hit a wall
+        targetX = rayEndX;
+        targetY = rayEndY;
+        
+        const chainLevel = chainedEnemies.length;
+        const damage = baseDamage * Math.pow(0.75, chainLevel);
+        
+        // Damage the target
+        targetE.hp -= damage;
+        
+        // Add to chained list
+        const newChained = [...chainedEnemies, firstHit];
+        
+        // Create visual electric ray - LONGER DURATION (not quick disappear)
+        electricRays.push({
+            fromX: startX,
+            fromY: startY,
+            toX: targetX,
+            toY: targetY,
+            life: 25,  // Display for 25 frames (~0.42 seconds) - longer than before
+            maxLife: 25,
+            chainLevel: chainLevel
+        });
+        
+        // Create spark effects
+        for (let k = 0; k < 8; k++) {
+            spawnParticle(targetX + (Math.random()-0.5)*targetE.w, 
+                         targetY + (Math.random()-0.5)*targetE.h, 
+                         '#00d4ff', 0.8);
+        }
+        
+        // Chain to next enemy after a delay
+        if (targetE.hp > 0) {
+            // Find nearest enemy for chaining
+            const chainRadius = 150;
+            let nextTarget = null;
+            let nextDist = Infinity;
+            
+            for (let i = 0; i < enemies.length; i++) {
+                if (newChained.includes(i)) continue;
+                const e = enemies[i];
+                if (!e || !e.alive || e.team === ownerTeam) continue;
+                
+                const ex = e.x + e.w / 2;
+                const ey = e.y + e.h / 2;
+                const d = Math.hypot(ex - targetX, ey - targetY);
+                
+                if (d < chainRadius && d < nextDist) {
+                    nextDist = d;
+                    nextTarget = i;
+                }
+            }
+            
+            // Continue chain if target found
+            if (nextTarget !== null) {
+                const nextE = enemies[nextTarget];
+                setTimeout(() => {
+                    if (typeof createElectricChain === 'function' && nextE && nextE.alive) {
+                        createElectricChain(targetX, targetY, 
+                                         Math.atan2(nextE.y + nextE.h/2 - targetY, 
+                                                   nextE.x + nextE.w/2 - targetX),
+                                         baseDamage, ownerTeam, newChained);
+                    }
+                }, 50);  // 50ms delay before next chain
+            }
+        }
+        
+        // Handle death from electric damage
+        if (targetE.hp <= 0) {
+            if (currentMode === 'war') {
+                targetE.alive = false;
+                targetE.respawnTimer = 600;
+                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65);
+            } else {
+                enemies.splice(firstHit, 1);
+                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65);
+            }
+        }
+    }
+}
+
+// Update and apply damage from active nova zones
+function updateNovaZones() {
+    if (typeof novaZones === 'undefined' || !novaZones.length) return;
+    
+    for (let z = novaZones.length - 1; z >= 0; z--) {
+        const zone = novaZones[z];
+        zone.life--;
+        
+        // Apply damage to enemies in range every 10 frames (~0.17 seconds)
+        if (zone.life % 10 === 0) {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                if (!e || !e.alive || e.team === zone.ownerTeam) continue;
+                const ex = e.x + e.w / 2;
+                const ey = e.y + e.h / 2;
+                const d = Math.hypot(ex - zone.centerX, ey - zone.centerY);
+                if (d <= zone.radius) {
+                    e.hp -= zone.damage;
+                    
+                    // Particle effect for repeated hits
+                    spawnParticle(ex + (Math.random()-0.5)*15, ey + (Math.random()-0.5)*15, '#00d4ff', 0.7);
+                    
+                    // Death handling
+                    if (e.hp <= 0) {
+                        if (currentMode === 'war') {
+                            e.alive = false;
+                            e.respawnTimer = 600;
+                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
+                        } else {
+                            enemies.splice(i, 1);
+                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Remove expired zones
+        if (zone.life <= 0) {
+            novaZones.splice(z, 1);
+        }
+    }
+}
+
+// Create an instant electric nova that hits ALL enemies in radius and ignores walls
+function createElectricNova(centerX, centerY, radius = 200, damage = 2, ownerTeam = 0) {
+    // Add nova damage zone (enemies take damage while rays are visible)
+    if (typeof novaZones !== 'undefined') {
+        novaZones.push({
+            centerX: centerX,
+            centerY: centerY,
+            radius: radius,
+            damage: damage,
+            ownerTeam: ownerTeam,
+            life: 90,  // Same as visual rays (1.5 seconds at 60fps)
+            maxLife: 90,
+            lastDamageFrame: {}  // Track which enemies were hit this frame
+        });
+    }
+    
+    // Loop backwards so we can remove dead enemies safely
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (!e || !e.alive || e.team === ownerTeam) continue;
+        const ex = e.x + e.w / 2;
+        const ey = e.y + e.h / 2;
+        const d = Math.hypot(ex - centerX, ey - centerY);
+        if (d <= radius) {
+            // Visual ray (ignore walls) — 1.5 seconds duration (90 frames at 60fps)
+            electricRays.push({
+                fromX: centerX,
+                fromY: centerY,
+                toX: ex,
+                toY: ey,
+                life: 90,
+                maxLife: 90,
+                chainLevel: 0,
+                ignoreWalls: true,
+                isNova: true  // Mark as big nova lightning strike
+            });
+
+            // Hit particles
+            for (let k = 0; k < 8; k++) spawnParticle(ex + (Math.random()-0.5)*e.w, ey + (Math.random()-0.5)*e.h, '#00d4ff', 0.9);
+        }
+    }
+    // Center burst visual
+    for (let p = 0; p < 30; p++) spawnParticle(centerX + (Math.random()-0.5)*radius*0.5, centerY + (Math.random()-0.5)*radius*0.5, '#00f2ff', 0.8);
+}
+
 function getRayRectDistance(x, y, angle, maxDist, rect) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -567,8 +797,8 @@ function shoot() {
             });
         }
         tank.fireCooldown = 40; // ~667ms (2x slower than normal 333ms)
-    } else if (tankType === 'chromatic') {
-        // Chromatic base form: single powerful shot, damage 2
+    } else if (tankType === 'imitator') {
+        // imitator base form: single powerful shot, damage 2
         const speed = 5;
         const life = 100;
         bullets.push({
@@ -580,9 +810,30 @@ function shoot() {
             life: life,
             owner: 'player',
             team: 0,
-            type: 'chromatic',
+            type: 'imitator',
             damage: 2
         });
+    } else if (tankType === 'electric') {
+        // Electric ball: homing projectile that tracks enemies for several seconds
+        const speed = 4;
+        const life = 300; // 5 seconds
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 12, h: 12,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: life,
+            maxLife: life,
+            owner: 'player',
+            team: 0,
+            type: 'electricBall',
+            damage: 1.5,
+            lastHitEnemy: null,  // Track which enemies we've hit to chain
+            homingStrength: 0.15,  // How aggressively it turns toward target
+            hitChain: []  // List of enemy indices we've already hit
+        });
+        tank.fireCooldown = 80; // ~1.33 second cooldown
     } else {
         const speed = 5;
         const life = 100;
@@ -598,7 +849,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -620,6 +871,56 @@ function updatePhysics() {
         b.x += b.vx;
         b.y += b.vy;
         b.life--;
+        
+        // ELECTRIC BALL HOMING: Track and pursue nearest hostile target (player, allies, enemies)
+        if (b.type === 'electricBall') {
+            let nearestTarget = null;
+            let nearestDist = Infinity;
+            // Build candidate list: include player, allies and enemies that are hostile to the bullet's team
+            const candidates = [];
+            // Player
+            if (typeof tank !== 'undefined' && tank && tank.alive !== false && tank.team !== b.team) {
+                candidates.push({ kind: 'player', ent: tank, id: -1 });
+            }
+            // Allies
+            for (let ai = 0; ai < allies.length; ai++) {
+                const a = allies[ai];
+                if (!a || !a.alive) continue;
+                if (a.team === b.team) continue;
+                candidates.push({ kind: 'ally', ent: a, id: -2 - ai });
+            }
+            // Enemies
+            for (let ei = 0; ei < enemies.length; ei++) {
+                const e = enemies[ei];
+                if (!e || !e.alive) continue;
+                if (e.team === b.team) continue;
+                candidates.push({ kind: 'enemy', ent: e, id: ei });
+            }
+
+            for (const c of candidates) {
+                const ex = c.ent.x + (c.ent.w || 0) / 2;
+                const ey = c.ent.y + (c.ent.h || 0) / 2;
+                const dist = Math.hypot(ex - b.x, ey - b.y);
+                if (b.hitChain && b.hitChain.includes(c.id)) continue; // already hit this target
+                if (dist < 400 && dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestTarget = { id: c.id, x: ex, y: ey, dist: dist, ent: c.ent };
+                }
+            }
+
+            if (nearestTarget) {
+                const targetAngle = Math.atan2(nearestTarget.y - b.y, nearestTarget.x - b.x);
+                const currentAngle = Math.atan2(b.vy, b.vx);
+                let angleDiff = targetAngle - currentAngle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                const turnAmount = Math.max(-b.homingStrength, Math.min(b.homingStrength, angleDiff));
+                const newAngle = currentAngle + turnAmount;
+                const speed = Math.hypot(b.vx, b.vy);
+                b.vx = Math.cos(newAngle) * speed;
+                b.vy = Math.sin(newAngle) * speed;
+            }
+        }
         
         // Decrease spawn protection counter
         if (b.spawned > 0) b.spawned--;
@@ -729,6 +1030,22 @@ function updatePhysics() {
         if (!hit) {
             // Check collision with tank (player team = 0) - toxic/megabomb only damage, don't stop
             if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
+                // Special handling for electric ball: chain damage and continue flying
+                if (b.type === 'electricBall') {
+                    if (!b.hitChain) b.hitChain = [];
+                    const pid = -1;
+                    if (!b.hitChain.includes(pid)) {
+                        tank.hp -= b.damage || 1.5;
+                        b.hitChain.push(pid);
+                        for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
+                    }
+                    if (tank.hp <= 0) {
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                        else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+                    }
+                    continue; // don't remove bullet, allow chaining
+                }
                 // Mirror tank shield reflection logic
                 if (tankType === 'mirror' && tank.mirrorShieldActive) {
                     // Reflect bullet!
@@ -826,6 +1143,25 @@ function updatePhysics() {
                         a.lastHitType = b.type;
                         a.lastHitTime = Date.now();
                     }
+                    // Special handling for electric ball: chain damage and continue flying
+                    if (b.type === 'electricBall') {
+                        if (!b.hitChain) b.hitChain = [];
+                        const aid = -2 - j;
+                        if (!b.hitChain.includes(aid)) {
+                            a.hp = (a.hp || 100) - (b.damage || 1.5);
+                            b.hitChain.push(aid);
+                            for (let k = 0; k < 6; k++) spawnParticle(a.x + a.w/2 + (Math.random()-0.5)*a.w, a.y + a.h/2 + (Math.random()-0.5)*a.h, '#00d4ff', 0.7);
+                        }
+                        if (a.hp <= 0) {
+                            if (currentMode === 'war') {
+                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            } else {
+                                allies.splice(j, 1);
+                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            }
+                        }
+                        break;
+                    }
                     if (b.type === 'rocket' || b.type === 'smallRocket') {
                         explodeRocket(b);
                         bullets.splice(i, 1);
@@ -903,6 +1239,19 @@ function updatePhysics() {
                         // Plasma blast pierces and damages all in line
                         e.hp -= b.damage || 5;
                         // continue flying, don't remove bullet
+                    } else if (b.type === 'electricBall') {
+                        // Electric ball: damage enemy, add to chain, continue flying to track other enemies
+                        if (!b.hitChain) b.hitChain = [];
+                        if (!b.hitChain.includes(j)) {
+                            e.hp -= b.damage || 1.5;
+                            b.hitChain.push(j);
+                            // Sparkle effects on hit
+                            for (let k = 0; k < 6; k++) {
+                                spawnParticle(e.x + e.w/2 + (Math.random()-0.5)*e.w, 
+                                            e.y + e.h/2 + (Math.random()-0.5)*e.h, 
+                                            '#00d4ff', 0.7);
+                            }
+                        }
                     } else {
                         e.hp -= (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
@@ -1511,7 +1860,7 @@ function updatePhysics() {
     if (currentMode === 'training') {
         if (gameState !== 'playing') gameState = 'playing'; // undo premature lose/win
         if (!tank.alive || tank.hp <= 0) {
-            tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
+            tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
             tank.alive = true;
             tank.x = 150; tank.y = worldHeight / 2 - 19;
         }

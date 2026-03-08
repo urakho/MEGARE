@@ -399,6 +399,24 @@ function updateEnemyAI() {
             if (enemy.artilleryTimer <= 0) enemy.artilleryMode = false;
             continue;
         }
+
+        // electric enemy ultimate handling: charge, then release nova (stationary while charging)
+        if (enemy.isUltimateActive) {
+            enemy.ultimateTimer = (enemy.ultimateTimer || 0) - 1;
+            if (enemy.ultimateTimer <= 0) {
+                enemy.isUltimateActive = false;
+                const cx = enemy.x + enemy.w/2;
+                const cy = enemy.y + enemy.h/2;
+                if (typeof createElectricNova === 'function') {
+                    createElectricNova(cx, cy, 200, 2, enemy.team);
+                }
+                for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
+            }
+            if (enemy.ultimateCooldown > 0) enemy.ultimateCooldown--;
+            // remain stationary and skip other actions while charging
+            continue;
+        }
+        if (enemy.ultimateCooldown > 0) enemy.ultimateCooldown--;
         
         // Check if enemy is in poison gas and escape if it's enemy poison
         let inEnemyPoison = false;
@@ -525,17 +543,27 @@ function updateEnemyAI() {
                 enemy.fireCooldown = 60;
             }
 
+            // electric: charge ultimate when close to targets
+            if (enemy.tankType === 'electric' && (!enemy.isUltimateActive) && (!enemy.ultimateCooldown || enemy.ultimateCooldown <= 0) && distToNearest < 280 && Math.random() < 0.035) {
+                enemy.isUltimateActive = true;
+                enemy.ultimateTimer = 60; // 1 second charge
+                enemy.ultimateCooldown = 480; // 8s cooldown
+                // Visual charge particles
+                for (let k = 0; k < 30; k++) spawnParticle(enemy.x + enemy.w/2 + (Math.random()-0.5)*enemy.w*1.2, enemy.y + enemy.h/2 + (Math.random()-0.5)*enemy.h*1.2, '#00d4ff', 1);
+                enemy.fireCooldown = 60;
+            }
+
         } catch (errAbility) { /* ignore ability errors for AI */ }
         }
 
-        // Chromatic bot: periodically transform into a random tank type for 6 seconds
-        if (enemy.originalTankType === 'chromatic' || enemy.tankType === 'chromatic') {
-            // Initialize chromatic state flags if missing
-            if (enemy.chromaticActive === undefined) enemy.chromaticActive = false;
-            if (enemy.chromaticTimer === undefined) enemy.chromaticTimer = 0;
-            if (enemy.originalTankType === undefined) enemy.originalTankType = 'chromatic';
+        // imitator bot: periodically transform into a random tank type for 6 seconds
+        if (enemy.originalTankType === 'imitator' || enemy.tankType === 'imitator') {
+            // Initialize imitator state flags if missing
+            if (enemy.imitatorActive === undefined) enemy.imitatorActive = false;
+            if (enemy.imitatorTimer === undefined) enemy.imitatorTimer = 0;
+            if (enemy.originalTankType === undefined) enemy.originalTankType = 'imitator';
 
-            if (!enemy.chromaticActive && Math.random() < 0.004) {
+            if (!enemy.imitatorActive && Math.random() < 0.004) {
                 // Find nearest tank (player or other enemy) to copy its type
                 const ex = enemy.x + enemy.w / 2;
                 const ey = enemy.y + enemy.h / 2;
@@ -552,21 +580,21 @@ function updateEnemyAI() {
                     const d = Math.hypot((other.x + other.w/2) - ex, (other.y + other.h/2) - ey);
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
-                // Don't copy chromatic or unknown types
+                // Don't copy imitator or unknown types
                 const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
                 const picked = (nearestType && validTypes.includes(nearestType)) ? nearestType : validTypes[Math.floor(Math.random() * validTypes.length)];
-                enemy.originalTankType = 'chromatic';
-                enemy.chromaticActive = true;
-                enemy.chromaticTimer = 360;
+                enemy.originalTankType = 'imitator';
+                enemy.imitatorActive = true;
+                enemy.imitatorTimer = 360;
                 enemy.tankType = picked;
                 const newMaxHp = (picked === 'fire') ? 6 : (picked === 'musical' || picked === 'waterjet') ? 4 : 3;
                 enemy.hp = Math.min(enemy.hp, newMaxHp);
             }
-            if (enemy.chromaticActive) {
-                enemy.chromaticTimer--;
-                if (enemy.chromaticTimer <= 0) {
-                    enemy.chromaticActive = false;
-                    enemy.tankType = 'chromatic';
+            if (enemy.imitatorActive) {
+                enemy.imitatorTimer--;
+                if (enemy.imitatorTimer <= 0) {
+                    enemy.imitatorActive = false;
+                    enemy.tankType = 'imitator';
                 }
             }
         }
@@ -931,9 +959,26 @@ function updateEnemyAI() {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 180, team: enemy.team, type: 'musical', damage: 2, bounces: 0, maxBounces: 3 };
-            } else if (tt === 'chromatic') {
-                // Chromatic base form: prismatic bullet, damage 2 (same as player)
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'chromatic', damage: 2 };
+            } else if (tt === 'imitator') {
+                // imitator base form: prismatic bullet, damage 2 (same as player)
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'imitator', damage: 2 };
+            } else if (tt === 'electric') {
+                // Enemy electric: fire electric homing ball
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25,
+                    w: 12, h: 12,
+                    vx: Math.cos(enemy.turretAngle) * 4,
+                    vy: Math.sin(enemy.turretAngle) * 4,
+                    life: 300,
+                    maxLife: 300,
+                    owner: 'enemy',
+                    team: enemy.team,
+                    type: 'electricBall',
+                    damage: 1.5,
+                    homingStrength: 0.15,
+                    hitChain: []
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -941,7 +986,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1237,6 +1282,23 @@ function updateAllyAI() {
                         ally.beamStartTime = Date.now();
                         ally.fireCooldown = 240;
                     }
+                } else if (tt === 'electric') {
+                    // Ally electric: fire electric homing ball
+                    b = {
+                        x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25,
+                        y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25,
+                        w: 12, h: 12,
+                        vx: Math.cos(ally.turretAngle) * 4,
+                        vy: Math.sin(ally.turretAngle) * 4,
+                        life: 300,
+                        maxLife: 300,
+                        owner: 'ally',
+                        team: ally.team,
+                        type: 'electricBall',
+                        damage: 1.5,
+                        homingStrength: 0.15,
+                        hitChain: []
+                    };
                 } else if (tt === 'machinegun') {
                     // Ally machinegun: rapid fire with low damage (match player projectile)
                     const speedA = 7;
@@ -1265,7 +1327,7 @@ function updateAllyAI() {
                     b = null; // prevent double push
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }
