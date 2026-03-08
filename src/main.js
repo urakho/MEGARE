@@ -41,6 +41,9 @@ teamMusic.volume = 0.5;
 let tankMusic = new Audio('music/tank.mp3');
 tankMusic.loop = true;
 tankMusic.volume = 0.5;
+let exfightMusic = new Audio('music/exfight.mp3');
+exfightMusic.loop = true;
+exfightMusic.volume = 0.5;
 let currentMode = 'menu';
 let duelState = null;
 
@@ -293,6 +296,7 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         menuMusic.volume = vol;
         fightMusic.volume = vol;
         duelMusic.volume = vol;
+        exfightMusic.volume = vol;
         teamMusic.volume = vol;
         tankMusic.volume = vol;
     });
@@ -308,6 +312,7 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         menuMusic.volume = window.musicVolume;
         fightMusic.volume = window.musicVolume;
         duelMusic.volume = window.musicVolume;
+        exfightMusic.volume = window.musicVolume;
         teamMusic.volume = window.musicVolume;
         tankMusic.volume = window.musicVolume;
         updateCmdBtnVisibility();
@@ -318,6 +323,7 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
 // Apply initial music volume
 menuMusic.volume = window.musicVolume;
 fightMusic.volume = window.musicVolume;
+exfightMusic.volume = window.musicVolume;
 
 // Music management
 let _lastMusicKey = '';
@@ -325,7 +331,8 @@ let _lastMusicKey = '';
 function _getTargetMusicKey() {
     if (gameState === 'menu') return 'menu';
     if (gameState === 'playing') {
-        if (currentMode === 'onevsall' || currentMode === 'trial') return 'fight';
+        if (currentMode === 'trial') return 'exfight';
+        if (currentMode === 'onevsall') return 'fight';
         if (currentMode === 'duel') return 'duel';
         if (currentMode === 'team') return 'team';
         if (currentMode === 'single') return 'tank';
@@ -339,6 +346,7 @@ function _getMusicTrack(key) {
     if (key === 'duel') return duelMusic;
     if (key === 'team') return teamMusic;
     if (key === 'tank') return tankMusic;
+    if (key === 'exfight') return exfightMusic;
     return null;
 }
 
@@ -355,6 +363,7 @@ function updateMusic() {
         duelMusic.pause();
         teamMusic.pause();
         tankMusic.pause();
+        exfightMusic.pause();
         if (track) {
             track.volume = vol;
             track.play().catch(() => {});
@@ -1742,12 +1751,6 @@ function generateTrainingMap() {
     for (const p of roomPillars) {
         objects.push({ x: p.x, y: p.y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
     }
-    // ── Sandbag covers in shooting range (3 rows aligned with targets) ──
-    const sandBagRows = [175, 415, 625];
-    for (const sy of sandBagRows) {
-        objects.push({ x: 280, y: sy, w: bw, h: bw, type: 'wall', color: '#8B7355' });
-        objects.push({ x: 330, y: sy, w: bw, h: bw, type: 'wall', color: '#8B7355' });
-    }
     // ── Decorative barrels ────────────────────────────────────────────
     const barrelPos = [
         { x: 100, y: 100 }, { x: 100, y: 750 },
@@ -1781,11 +1784,15 @@ function spawnTrainingMode() {
     tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'chromatic') ? 4 : 3);
     tank.alive = true;
 
-    // Dummy positions — shooting range, well inside x=50..800 zone (clear of room wall at x=850)
+    // Dummy positions — split into 2 groups: upper (before corridor) and lower (after corridor)
+    // Corridor entrance at y=375..475, so dummies positioned well above and below it
     const dummyPositions = [
-        { x: 480, y: 195 }, { x: 570, y: 195 }, { x: 660, y: 195 },
-        { x: 480, y: 415 }, { x: 570, y: 415 }, { x: 660, y: 415 },
-        { x: 480, y: 635 }, { x: 570, y: 635 }, { x: 660, y: 635 },
+        // Upper group (above corridor entrance)
+        { x: 480, y: 130 }, { x: 570, y: 130 }, { x: 660, y: 130 },
+        { x: 480, y: 280 }, { x: 570, y: 280 }, { x: 660, y: 280 },
+        // Lower group (below corridor entrance)
+        { x: 480, y: 570 }, { x: 570, y: 570 }, { x: 660, y: 570 },
+        { x: 480, y: 720 }, { x: 570, y: 720 }, { x: 660, y: 720 },
     ];
 
     for (let i = 0; i < dummyPositions.length; i++) {
