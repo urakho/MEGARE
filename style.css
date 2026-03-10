@@ -247,6 +247,31 @@ b { color: #ffcc00; }
     color: #e67e22;
 }
 
+/* Stage-specific claim button colors (apply when milestone is available) */
+.trophy-item.stage1.available .trophy-claim { background: linear-gradient(180deg,#2ecc71,#27ae60); box-shadow: 0 8px 0 rgba(39,174,96,0.85); color: #fff; }
+.trophy-item.stage1.available .trophy-claim:hover { background: linear-gradient(180deg,#27ae60,#2ecc71); }
+
+.trophy-item.stage2.available .trophy-claim { background: linear-gradient(180deg,#f1c40f,#f39c12); box-shadow: 0 8px 0 rgba(243,156,18,0.85); color: #222; }
+.trophy-item.stage2.available .trophy-claim:hover { background: linear-gradient(180deg,#f39c12,#f1c40f); }
+
+.trophy-item.stage3.available .trophy-claim { background: linear-gradient(180deg,#e67e22,#d35400); box-shadow: 0 8px 0 rgba(211,84,0,0.85); color: #fff; }
+.trophy-item.stage3.available .trophy-claim:hover { background: linear-gradient(180deg,#d35400,#e67e22); }
+
+.trophy-item.stage4.available .trophy-claim { background: linear-gradient(180deg,#5dade2,#3498db); box-shadow: 0 8px 0 rgba(52,152,219,0.85); color: #fff; }
+.trophy-item.stage4.available .trophy-claim:hover { background: linear-gradient(180deg,#3498db,#5dade2); }
+
+.trophy-item.stage5.available .trophy-claim { background: linear-gradient(180deg,#a88fd4,#9b59b6); box-shadow: 0 8px 0 rgba(155,89,182,0.85); color: #fff; }
+.trophy-item.stage5.available .trophy-claim:hover { background: linear-gradient(180deg,#9b59b6,#a88fd4); }
+
+.trophy-item.stage6.available .trophy-claim { background: linear-gradient(180deg,#ff6b6b,#c0392b); box-shadow: 0 8px 0 rgba(192,57,43,0.85); color: #fff; }
+.trophy-item.stage6.available .trophy-claim:hover { background: linear-gradient(180deg,#c0392b,#ff6b6b); }
+
+/* Legends (stage7) and Champions (stage8) button colors */
+.trophy-item.stage7.available .trophy-claim { background: linear-gradient(180deg,#2b2b2b,#121212); box-shadow: 0 8px 0 rgba(0,0,0,0.6); color: #fff; }
+.trophy-item.stage7.available .trophy-claim:hover { background: linear-gradient(180deg,#121212,#2b2b2b); }
+
+/* stage8 (Champions) removed — no styles needed */
+
 @keyframes slideIn {
     from { 
         transform: translateX(300px); 

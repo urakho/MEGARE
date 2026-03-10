@@ -86,24 +86,44 @@ let claimedRewards = JSON.parse(localStorage.getItem('tankClaimedRewards')) || [
 // Trophy Road Rewards
 const trophyRoadRewards = [
     { trophies: 0, type: 'start', reward: 'Старт', claimed: false },
-    { trophies: 10, type: 'coins', amount: 200, reward: '200 монет', claimed: false },
+    { trophies: 5, type: 'container', level: 'mini', reward: 'Мини-контейнер', claimed: false },
+    { trophies: 10, type: 'coins', amount: 150, reward: '150 монет', claimed: false },
+    { trophies: 15, type: 'container', level: 'mini', reward: 'Мини-контейнер', claimed: false },
     { trophies: 20, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 25, type: 'gems', amount: 5, reward: '5 гемов', claimed: false },
     { trophies: 30, type: 'gems', amount: 10, reward: '10 гемов', claimed: false },
-    { trophies: 40, type: 'coins', amount: 300, reward: '300 монет', claimed: false },
-    { trophies: 50, type: 'containers', level: 'normal', amount: 2, reward: '2 обычных контейнера', claimed: false },
-    { trophies: 75, type: 'gems', amount: 20, reward: '20 гемов', claimed: false },
+    { trophies: 40, type: 'coins', amount: 250, reward: '250 монет', claimed: false },
+    { trophies: 50, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 60, type: 'container', level: 'mini', reward: 'Мини-контейнер', claimed: false },
+    { trophies: 70, type: 'gems', amount: 10, reward: '10 гемов', claimed: false },
+    { trophies: 80, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 90, type: 'gems', amount: 15, reward: '15 гемов', claimed: false },
     { trophies: 100, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
-    { trophies: 125, type: 'choice', options: ['ice', 'machinegun'], reward: 'Ледяной или Пулеметный', claimed: false },
+    { trophies: 125, type: 'tank', tank: 'ice', compensation: 100, reward: 'Ледяной танк', claimed: false },
     { trophies: 150, type: 'coins', amount: 400, reward: '400 монет', claimed: false },
-    { trophies: 180, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
-    { trophies: 210, type: 'gems', amount: 25, reward: '25 гемов', claimed: false },
-    { trophies: 240, type: 'containers', level: 'normal', amount: 2, reward: '2 обычных контейнера', claimed: false },
-    { trophies: 270, type: 'coins', amount: 500, reward: '500 монет', claimed: false },
+    { trophies: 175, type: 'container', level: 'normal', reward: 'Обычный контейнер', claimed: false },
+    { trophies: 200, type: 'gems', amount: 25, reward: '25 гемов', claimed: false },
+    { trophies: 250, type: 'containers', level: 'normal', amount: 2, reward: '2 обычных контейнера', claimed: false },
     { trophies: 300, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
     { trophies: 350, type: 'coins', amount: 600, reward: '600 монет', claimed: false },
-    { trophies: 400, type: 'tank', tank: 'fire', compensation: 30, reward: 'Огнеметчик', claimed: false },
+    { trophies: 400, type: 'choice', options: ['machinegun', 'buckshot'], reward: 'Пулеметный или Дробовой на выбор', claimed: false },
     { trophies: 450, type: 'gems', amount: 40, reward: '40 гемов', claimed: false },
-    { trophies: 500, type: 'container', level: 'omega', reward: 'Омега-контейнер', claimed: false }
+    { trophies: 500, type: 'container', level: 'omega', reward: 'Омега-контейнер', claimed: false },
+    { trophies: 575, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
+    { trophies: 650, type: 'coins', amount: 800, reward: '800 монет', claimed: false },
+    { trophies: 725, type: 'gems', amount: 50, reward: '50 гемов', claimed: false },
+
+    // 🔴 Этап истины (800–1200)
+    { trophies: 900, type: 'coins', amount: 1000, reward: '1000 монет', claimed: false },
+    { trophies: 1000, type: 'container', level: 'omega', reward: 'Омега-контейнер', claimed: false },
+    { trophies: 1100, type: 'container', level: 'super', reward: 'Супер-контейнер', claimed: false },
+    { trophies: 1200, type: 'coins', amount: 1200, reward: '1200 монет', claimed: false },
+
+    // ⚫ Этап легенд
+    { trophies: 1350, type: 'gems', amount: 75, reward: '75 гемов', claimed: false },
+    { trophies: 1500, type: 'choice', options: ['time', 'imitator'], reward: 'Временной или Имитатор на выбор', claimed: false },
+    { trophies: 1650, type: 'coins', amount: 1000, reward: '1000 монет', claimed: false },
+    { trophies: 1800, type: 'coins', amount: 3000, reward: '3000 монет', claimed: false }
 ];
 // Unlocked tanks list
 let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
@@ -2992,29 +3012,55 @@ function generateTrophyRoad() {
     let currentStage = '';
     
     trophyRoadRewards.forEach((reward, index) => {
-        // Add stage headers
-        if (reward.trophies === 0 && currentStage !== 'start') {
-            currentStage = 'start';
+        // Add stage headers for new trophy road (0-1000)
+        if (reward.trophies === 0 && currentStage !== 'stage1') {
+            currentStage = 'stage1';
             const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage start';
-            stageDiv.textContent = '🟢 Старт';
+            stageDiv.className = 'trophy-stage stage1';
+            stageDiv.textContent = '🟢 Начальный этап';
             container.appendChild(stageDiv);
-        } else if (reward.trophies === 150 && currentStage !== 'middle') {
-            currentStage = 'middle';
+        } else if (reward.trophies === 30 && currentStage !== 'stage2') {
+            currentStage = 'stage2';
             const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage middle';
-            stageDiv.textContent = '🟡 Средний этап';
+            stageDiv.className = 'trophy-stage stage2';
+            stageDiv.textContent = '🟡 Ранний этап';
             container.appendChild(stageDiv);
-        } else if (reward.trophies === 350 && currentStage !== 'advanced') {
-            currentStage = 'advanced';
+        } else if (reward.trophies === 100 && currentStage !== 'stage3') {
+            currentStage = 'stage3';
             const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage advanced';
-            stageDiv.textContent = '🟠 Продвинутый этап';
+            stageDiv.className = 'trophy-stage stage3';
+            stageDiv.textContent = '🟠 Этап развития';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 200 && currentStage !== 'stage4') {
+            currentStage = 'stage4';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage stage4';
+            stageDiv.textContent = '🔵 Продвинутый этап';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 500 && currentStage !== 'stage5') {
+            currentStage = 'stage5';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage stage5';
+            stageDiv.textContent = '🟣 Мастерство';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 900 && currentStage !== 'stage6') {
+            currentStage = 'stage6';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage stage6';
+            stageDiv.textContent = '🔴 Этап истины';
+            container.appendChild(stageDiv);
+        } else if (reward.trophies === 1200 && currentStage !== 'stage7') {
+            currentStage = 'stage7';
+            const stageDiv = document.createElement('div');
+            stageDiv.className = 'trophy-stage stage7';
+            stageDiv.textContent = '⚫ Этап легенд';
             container.appendChild(stageDiv);
         }
         
         const itemDiv = document.createElement('div');
         itemDiv.className = 'trophy-item';
+        // attach current stage class so we can style buttons according to stage color
+        if (currentStage) itemDiv.classList.add(currentStage);
         
         const isClaimed = claimedRewards.includes(index);
         const isAvailable = trophies >= reward.trophies && !isClaimed;
@@ -3055,9 +3101,15 @@ function claimTrophyReward(index) {
             gems += reward.amount;
             showNotification(`+${reward.amount} гемов!`, '#2ecc71');
             break;
+        case 'bundle':
+            if (reward.coins) { coins += reward.coins; showNotification(`+${reward.coins} монет!`, '#f1c40f'); }
+            if (reward.gems) { gems += reward.gems; showNotification(`+${reward.gems} гемов!`, '#2ecc71'); }
+            break;
         case 'container':
             // Show container modal like in shop
-            if (reward.level === 'normal') {
+            if (reward.level === 'mini') {
+                showFreeContainerFlow('mini');
+            } else if (reward.level === 'normal') {
                 showFreeContainerFlow('bronze');
             } else if (reward.level === 'super') {
                 showFreeContainerFlow('legendary');
@@ -3075,7 +3127,9 @@ function claimTrophyReward(index) {
             
             // Add remaining containers to queue (first one will be shown immediately)
             for (let i = 1; i < reward.amount; i++) {
-                if (reward.level === 'normal') {
+                if (reward.level === 'mini') {
+                    containerQueue.push('mini');
+                } else if (reward.level === 'normal') {
                     containerQueue.push('bronze');
                 } else if (reward.level === 'super') {
                     containerQueue.push('legendary');
@@ -3085,7 +3139,9 @@ function claimTrophyReward(index) {
             }
             
             // Show first container immediately
-            if (reward.level === 'normal') {
+            if (reward.level === 'mini') {
+                showFreeContainerFlow('mini');
+            } else if (reward.level === 'normal') {
                 showFreeContainerFlow('bronze');
             } else if (reward.level === 'super') {
                 showFreeContainerFlow('legendary');
@@ -3111,7 +3167,36 @@ function claimTrophyReward(index) {
                 showNotification(`Разблокирован ${tankName}!`, '#e74c3c');
             }
             break;
+        case 'chromatic':
+            // Grant chromatic variant based on player's 1000-choice
+            try {
+                const chosenKey = localStorage.getItem('trophyChoice_1000');
+                if (!chosenKey) {
+                    gems += 150;
+                    showNotification('Нет выбранного танка на 1000 трофеев. +150 гемов вместо хроматического танка.', '#2ecc71');
+                } else {
+                    const tankName = (window.tankDescriptions && window.tankDescriptions[chosenKey]) ? window.tankDescriptions[chosenKey].name : chosenKey;
+                    const chromKey = 'tankChromatic_' + chosenKey;
+                    if (localStorage.getItem(chromKey)) {
+                        gems += 200;
+                        showNotification('У вас уже есть хроматическая версия! +200 гемов.', '#f1c40f');
+                    } else {
+                        localStorage.setItem(chromKey, 'true');
+                        if (!unlockedTanks.includes(chosenKey)) unlockedTanks.push(chosenKey);
+                        showNotification(`Разблокирована хроматическая версия ${tankName}!`, '#9b59b6');
+                        saveProgress();
+                    }
+                }
+            } catch (e) {
+                console.error('Chromatic reward error', e);
+            }
+            break;
+        default:
+            console.warn('Unknown trophy reward type:', reward.type);
     }
+    
+    // Persist changes and refresh UI
+    saveProgress();
     
     updateCoinDisplay();
     generateTrophyRoad(); // Refresh the display
@@ -3502,19 +3587,39 @@ window.cancelChoiceSelection = function() {
 
 window.confirmChoice = function() {
     if (selectedChoiceIdx === -1 || !choiceRewardData) return;
-    
-    const chosenTank = choiceRewardData.options[selectedChoiceIdx];
-    
-    // Process reward as if it was a tank reward
-    if (unlockedTanks.includes(chosenTank)) {
+
+    const chosenOption = choiceRewardData.options[selectedChoiceIdx];
+
+    // If this choice is a title selection (2000), handle separately
+    if (choiceRewardData.subType === 'title') {
+        try {
+            localStorage.setItem('playerTitle', chosenOption);
+        } catch (e) {}
+        showNotification('Вы выбрали звание: ' + (chosenOption === 'legend' ? 'ЛЕГЕНДА' : 'ЧЕМПИОН'), '#f1c40f');
+        if (choiceRewardIndex !== null && choiceRewardIndex !== undefined) {
+            if (!claimedRewards.includes(choiceRewardIndex)) claimedRewards.push(choiceRewardIndex);
+            saveProgress();
+        }
+        document.getElementById('choiceModal').style.display = 'none';
+        generateTrophyRoad();
+        return;
+    }
+
+    // Persist the player's choice for later reference (e.g., chromatic reward at 1600)
+    if (choiceRewardData && typeof choiceRewardData.trophies !== 'undefined') {
+        try { localStorage.setItem('trophyChoice_' + choiceRewardData.trophies, chosenOption); } catch (e) {}
+    }
+
+    // Process as a tank reward by default
+    if (unlockedTanks.includes(chosenOption)) {
          gems += 50; // Compensation
          showNotification('У вас уже есть этот танк! +50 гемов', '#f1c40f');
     } else {
-         unlockedTanks.push(chosenTank);
-         const tData = (window.tankDescriptions && window.tankDescriptions[chosenTank]) ? window.tankDescriptions[chosenTank] : {name: chosenTank};
+         unlockedTanks.push(chosenOption);
+         const tData = (window.tankDescriptions && window.tankDescriptions[chosenOption]) ? window.tankDescriptions[chosenOption] : {name: chosenOption};
          showNotification('Вы получили ' + tData.name + '!', '#2ecc71');
     }
-    
+
     // Mark as claimed
     if (choiceRewardIndex !== null && choiceRewardIndex !== undefined) {
         if (!claimedRewards.includes(choiceRewardIndex)) {
@@ -3522,7 +3627,7 @@ window.confirmChoice = function() {
         }
         saveProgress();
     }
-    
+
     // Close modal
     document.getElementById('choiceModal').style.display = 'none';
     generateTrophyRoad();
