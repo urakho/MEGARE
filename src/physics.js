@@ -309,7 +309,7 @@ function explodeBarrel(obj) {
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - (obj.x + obj.w/2), ty - (obj.y + obj.h/2));
         if (dist <= R) {
-            const damage = Math.max(1, Math.round((1 - dist / R) * 3));
+            const damage = Math.max(50, Math.round((1 - dist / R) * 300));
             t.hp = (t.hp || 0) - damage;
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
@@ -360,7 +360,7 @@ function explodeRocket(bullet) {
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
         if (dist <= R) {
-            const damage = Math.max(1, Math.round((1 - dist / R) * 2));
+            const damage = Math.max(50, Math.round((1 - dist / R) * 300));
             t.hp = (t.hp || 0) - damage;
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
@@ -569,7 +569,7 @@ function shoot() {
                 vx: Math.cos(ang) * speed + tvx,
                 vy: Math.sin(ang) * speed + tvy,
                 life: 20 + Math.floor(Math.random() * 8),
-                damage: 0.22,
+                damage: 22,
                 team: 0
             });
         }
@@ -669,7 +669,7 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'plasma',
-            damage: 3, // 3 HP damage
+            damage: 350, // 350 damage
             piercing: true // can hit multiple targets
         });
         tank.fireCooldown = 120; // 2 second cooldown
@@ -685,7 +685,7 @@ function shoot() {
             life: 180,
             team: 0,
             type: 'musical',
-            damage: 2, // 2 HP damage
+            damage: 200, // 200 damage
             bounces: 0,
             maxBounces: 3
         });
@@ -737,19 +737,19 @@ function shoot() {
 
         // Customize projectile based on copied type
         if (pType === 'purple' || pType === 'plasma') {
-            props.damage = 3; props.w = 10; props.h = 10; props.piercing = true;
+            props.damage = 350; props.w = 10; props.h = 10; props.piercing = true;
         } else if (pType === 'fire') {
-            props.damage = 1; props.w = 5; props.h = 5; // flame
+            props.damage = 22; props.w = 5; props.h = 5; // flame
         } else if (pType === 'toxic') {
             props = { ...props, type:'toxic', explodeTimer: 45, spawned: 5 }; // mini toxic bomb
         } else if (pType === 'musical') {
-            props.damage = 2; props.w = 12; props.h = 12; props.bounces = 0; props.maxBounces = 3; // musical wave
+            props.damage = 200; props.w = 12; props.h = 12; props.bounces = 0; props.maxBounces = 3; // musical wave
         } else if (pType === 'mirror') {
             // Normal mirror shot
-            props.damage = 1; props.w = 8; props.h = 8; // specialized mirror shard
+            props.damage = 100; props.w = 8; props.h = 8; // specialized mirror shard
         } else {
             // Fallback for copied normal/other types
-            props.damage = 1; props.w = 6; props.h = 6; 
+            props.damage = 100; props.w = 6; props.h = 6; 
         }
         
         bullets.push(props);
@@ -768,7 +768,7 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'machinegun',
-            damage: 0.2 // Very low damage per bullet
+            damage: 20 // Low damage per bullet.
         });
         tank.fireCooldown = 5; // Fast rate (approx 12 shots/sec)
     } else if (tankType === 'buckshot') {
@@ -793,10 +793,27 @@ function shoot() {
                 owner: 'player',
                 team: 0,
                 type: 'buckshot',
-                damage: 1.5 // Each pellet deals 1.5 damage
+                damage: 125 // Each pellet deals 125 damage
             });
         }
         tank.fireCooldown = 40; // ~667ms (2x slower than normal 333ms)
+    } else if (tankType === 'time') {
+        // Time tank: regular shots with high damage
+        const speed = 5;
+        const life = 100;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
+            w: 9, h: 9,
+            vx: Math.cos(tank.turretAngle) * speed,
+            vy: Math.sin(tank.turretAngle) * speed,
+            life: life,
+            owner: 'player',
+            team: 0,
+            type: 'time',
+            damage: 100
+        });
+        tank.fireCooldown = 60; // 1 second cooldown
     } else if (tankType === 'imitator') {
         // imitator base form: single powerful shot, damage 2
         const speed = 5;
@@ -811,8 +828,9 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'imitator',
-            damage: 2
+            damage: 200
         });
+        tank.fireCooldown = 60; // 1 second cooldown
     } else if (tankType === 'electric') {
         // Electric ball: homing projectile that tracks enemies for several seconds
         const speed = 4;
@@ -828,7 +846,7 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'electricBall',
-            damage: 1.5,
+            damage: 150,
             lastHitEnemy: null,  // Track which enemies we've hit to chain
             homingStrength: 0.15,  // How aggressively it turns toward target
             hitChain: []  // List of enemy indices we've already hit
@@ -849,7 +867,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1035,7 +1053,7 @@ function updatePhysics() {
                     if (!b.hitChain) b.hitChain = [];
                     const pid = -1;
                     if (!b.hitChain.includes(pid)) {
-                        tank.hp -= b.damage || 1.5;
+                        tank.hp -= b.damage || 150;
                         b.hitChain.push(pid);
                         for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
                     }
@@ -1071,14 +1089,14 @@ function updatePhysics() {
                     bullets.splice(i, 1);
                 } else if (b.type === 'toxic' || b.type === 'megabomb') {
                     // Toxic bombs only damage, don't stop or explode on contact
-                    tank.hp -= 5;
+                    tank.hp -= 50;
                     // continue flying, don't remove bullet
                 } else if (b.type === 'plasma') {
                     // Mirror tank resistance to plasma
                     if (tankType === 'mirror') {
-                         tank.hp -= 2; // Reduced damage
+                         tank.hp -= 175; // Reduced damage (half)
                     } else {
-                         tank.hp -= b.damage || 3;
+                         tank.hp -= b.damage || 350;
                     }
                     bullets.splice(i, 1); // Remove bullet on hit
                 } else if (b.type === 'plasmaBlast') {
@@ -1087,20 +1105,24 @@ function updatePhysics() {
                     b.hitEntities = b.hitEntities || [];
                     if (!b.hitEntities.includes('player')) {
                         if (tankType === 'mirror') {
-                            tank.hp -= 3; // Reduced damage
+                            tank.hp -= 175; // Reduced damage (half)
                         } else {
-                            tank.hp -= b.damage || 5;
+                            tank.hp -= b.damage || 350;
                         }
                         b.hitEntities.push('player');
                         // Do not remove bullet if it's meant to pierce, but ensure single hit
                     }
                 } else if (b.type === 'illuminat') {
                     // Illuminat beam: damage and disorient
-                    tank.hp -= b.damage || 1;
+                    tank.hp -= b.damage || 75;
                     tank.disoriented = b.disorientTime || 36; // 0.6 seconds
                     bullets.splice(i, 1);
+                } else if (b.type === 'machinegun') {
+                    // Machinegun: rapid fire with consistent damage
+                    tank.hp -= b.damage;
+                    bullets.splice(i, 1);
                 } else {
-                     let dmg = (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
+                     let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      tank.hp -= dmg;
                      if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
                      bullets.splice(i, 1);
@@ -1148,7 +1170,7 @@ function updatePhysics() {
                         if (!b.hitChain) b.hitChain = [];
                         const aid = -2 - j;
                         if (!b.hitChain.includes(aid)) {
-                            a.hp = (a.hp || 100) - (b.damage || 1.5);
+                            a.hp = (a.hp || 300) - (b.damage || 150);
                             b.hitChain.push(aid);
                             for (let k = 0; k < 6; k++) spawnParticle(a.x + a.w/2 + (Math.random()-0.5)*a.w, a.y + a.h/2 + (Math.random()-0.5)*a.h, '#00d4ff', 0.7);
                         }
@@ -1167,18 +1189,22 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
                         // Toxic bombs only damage, don't stop or explode on contact
-                        a.hp = (a.hp || 100) - 5;
+                        a.hp = (a.hp || 300) - 50;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through allies
-                        a.hp = (a.hp || 100) - (b.damage || 3);
+                        a.hp = (a.hp || 300) - (b.damage || 350);
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasmaBlast') {
                         // Plasma blast pierces and damages all in line
-                        a.hp = (a.hp || 100) - (b.damage || 5);
+                        a.hp = (a.hp || 300) - (b.damage || 350);
                         // continue flying, don't remove bullet
+                    } else if (b.type === 'machinegun') {
+                        // Machinegun: rapid fire with consistent damage
+                        a.hp = (a.hp || 300) - b.damage;
+                        bullets.splice(i, 1);
                     } else {
-                        a.hp = (a.hp || 100) - (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
+                        a.hp = (a.hp || 300) - (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.type === 'ice' && a.tankType !== 'ice') { a.paralyzed = true; a.paralyzedTime = 180; a.frozenEffect = 180; }
                         bullets.splice(i, 1);
                     }
@@ -1229,21 +1255,21 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
                         // Toxic bombs only damage, don't stop or explode on contact
-                        e.hp -= 5;
+                        e.hp -= 50;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through enemies
-                        e.hp -= b.damage || 3;
+                        e.hp -= b.damage || 350;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasmaBlast') {
                         // Plasma blast pierces and damages all in line
-                        e.hp -= b.damage || 5;
+                        e.hp -= b.damage || 350;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'electricBall') {
                         // Electric ball: damage enemy, add to chain, continue flying to track other enemies
                         if (!b.hitChain) b.hitChain = [];
                         if (!b.hitChain.includes(j)) {
-                            e.hp -= b.damage || 1.5;
+                            e.hp -= b.damage || 150;
                             b.hitChain.push(j);
                             // Sparkle effects on hit
                             for (let k = 0; k < 6; k++) {
@@ -1252,8 +1278,12 @@ function updatePhysics() {
                                             '#00d4ff', 0.7);
                             }
                         }
+                    } else if (b.type === 'machinegun') {
+                        // Machinegun: rapid fire with consistent damage
+                        e.hp -= b.damage;
+                        bullets.splice(i, 1);
                     } else {
-                        e.hp -= (b.damage || (b.type === 'fire' ? 16 : b.type === 'rocket' ? 2 : 1));
+                        e.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         bullets.splice(i, 1);
@@ -1541,7 +1571,7 @@ function updatePhysics() {
                     for (let p of obj.planned) {
                         if (!p.exploded) {
                             spawnExplosion(p.x, p.y, 30);
-                            applyDamage(p.x, p.y, 30, 1, obj.team);
+                            applyDamage(p.x, p.y, 30, 300, obj.team);
                         }
                     }
                 } else {
@@ -1552,7 +1582,7 @@ function updatePhysics() {
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
                         spawnExplosion(ex, ey, 30);
-                        applyDamage(ex, ey, 30, 1, obj.team);
+                        applyDamage(ex, ey, 30, 300, obj.team);
                     }
                     for (let j = 0; j < 9; j++) {
                         const ang = (j / 9) * Math.PI * 2;
@@ -1560,7 +1590,7 @@ function updatePhysics() {
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
                         spawnExplosion(ex, ey, 30);
-                        applyDamage(ex, ey, 30, 1, obj.team);
+                        applyDamage(ex, ey, 30, 300, obj.team);
                     }
                 }
                 objects.splice(i, 1);
@@ -1600,7 +1630,7 @@ function updatePhysics() {
                         // spawn explosion at planned spot and mark it
                         spawnExplosion(obj.target.x, obj.target.y, 30);
                         obj.target.exploded = true;
-                        applyDamage(obj.target.x, obj.target.y, 30, 1, obj.team);
+                        applyDamage(obj.target.x, obj.target.y, 30, 300, obj.team);
                         exploded = true;
                     }
                 } else {
@@ -1611,7 +1641,7 @@ function updatePhysics() {
                             const dist = Math.hypot(obj.x - o.x, obj.y - o.y);
                             if (dist <= o.radius + 6) {
                                 spawnExplosion(obj.x, obj.y, 30);
-                                applyDamage(obj.x, obj.y, 30, 1, obj.team);
+                                applyDamage(obj.x, obj.y, 30, 300, obj.team);
                                 exploded = true;
                                 break;
                             }
@@ -1715,8 +1745,8 @@ function updatePhysics() {
         if (!ent || !ent.poisonTimer) return;
         if (ent.alive === false) return; // Don't poison dead entities
         if (ent.poisonTimer > 0) {
-            // damage = (maxHp or 3) / 6 per second -> per tick divide by 60
-            const maxHp = ent.maxHp || 3;
+            // damage = (maxHp or 300) / 6 per second -> per tick divide by 60
+            const maxHp = ent.maxHp || 300;
             const dmgPerSec = maxHp / 6;
             const dmgPerTick = dmgPerSec / 60;
 
@@ -1789,7 +1819,7 @@ function updatePhysics() {
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
                     // Mirror tank check for maxHP
-                    const maxHp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'mirror') ? 4 : (tankType === 'buckshot') ? 3 : 3);
+                    const maxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
                     if (p) {
                          tank.x = p.x; tank.y = p.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     } else {
@@ -1835,7 +1865,7 @@ function updatePhysics() {
                     if (teamHasAliveMember(a.team) && (a.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[a.team] || { x: 120, y: 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, a.w, a.h, 1000, 24);
-                        a.x = p.x; a.y = p.y; a.hp = (a.tankType === 'fire') ? 6 : 3; a.alive = true; a.respawnTimer = 0; a.respawnCount = (a.respawnCount || 0) + 1;
+                        a.x = p.x; a.y = p.y; a.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || 300; a.alive = true; a.respawnTimer = 0; a.respawnCount = (a.respawnCount || 0) + 1;
                     }
                 }
             }
@@ -1849,7 +1879,7 @@ function updatePhysics() {
                     if (teamHasAliveMember(e.team) && (e.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[e.team] || { x: worldWidth - 120, y: worldHeight - 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, e.w, e.h, 1000, 24);
-                        e.x = p.x; e.y = p.y; e.hp = (e.tankType === 'fire') ? 6 : 3; e.alive = true; e.respawnTimer = 0; e.respawnCount = (e.respawnCount || 0) + 1;
+                        e.x = p.x; e.y = p.y; e.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[e.tankType]) || 300; e.alive = true; e.respawnTimer = 0; e.respawnCount = (e.respawnCount || 0) + 1;
                     }
                 }
             }
@@ -1860,7 +1890,8 @@ function updatePhysics() {
     if (currentMode === 'training') {
         if (gameState !== 'playing') gameState = 'playing'; // undo premature lose/win
         if (!tank.alive || tank.hp <= 0) {
-            tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
+            const tankMaxHp = { 'normal': 300, 'ice': 300, 'fire': 600, 'buratino': 350, 'toxic': 250, 'plasma': 300, 'musical': 400, 'illuminat': 300, 'mirror': 400, 'time': 200, 'machinegun': 300, 'buckshot': 350, 'waterjet': 300, 'imitator': 250, 'electric': 400 };
+            tank.hp = tankMaxHp[tankType] || 300;
             tank.alive = true;
             tank.x = 150; tank.y = worldHeight / 2 - 19;
         }

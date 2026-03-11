@@ -202,6 +202,57 @@ let cameraFollow = true;
 // Тип танка игрока
 let tankType = localStorage.getItem('tankSelected') || 'normal';
 
+// Tank HP based on type
+const tankMaxHpByType = {
+    'normal': 300,
+    'ice': 300,
+    'fire': 600,
+    'buratino': 350,
+    'toxic': 250,
+    'plasma': 300,
+    'musical': 400,
+    'illuminat': 300,
+    'mirror': 400,
+    'time': 200,
+    'machinegun': 300,
+    'buckshot': 350,
+    'waterjet': 300,
+    'imitator': 250,
+    'electric': 400
+};
+
+function setTankHP(type) {
+    const hp = tankMaxHpByType[type] || 300;
+    tank.hp = hp;
+    tank.maxHp = hp;
+    return hp;
+}
+
+// Tank max speed by type
+const tankMaxSpeedByType = {
+    'normal': 3.2,
+    'ice': 3.0,
+    'fire': 2.5,
+    'buratino': 2.8,
+    'toxic': 3.5,
+    'plasma': 3.2,
+    'musical': 3.5,
+    'illuminat': 3.0,
+    'mirror': 3.0,
+    'time': 3.7,
+    'machinegun': 3.2,
+    'buckshot': 2.7,
+    'waterjet': 3.2,
+    'imitator': 3.5,
+    'electric': 2.6
+};
+
+function setTankSpeed(type) {
+    const speed = tankMaxSpeedByType[type] || 3.2;
+    tank.speed = speed;
+    return speed;
+}
+
 const tank = {
     x: 50,
     y: 50,
@@ -226,11 +277,9 @@ const tank = {
     ultimateCooldown: 0
 };
 
-// Apply saved tank type properties immediately if needed
-if (tankType === 'fire') tank.hp = 6;
-else if (tankType === 'musical' || tankType === 'waterjet') tank.hp = 4;
-else if (tankType === 'buckshot') tank.hp = 3;
-else if (tankType === 'imitator' || tankType === 'electric') tank.hp = 4;
+// Apply saved tank type properties
+setTankHP(tankType);
+setTankSpeed(tankType);
 
 // Слушатели событий
 window.onkeydown = (e) => {
@@ -722,7 +771,7 @@ function startGame(mode) {
         tankType = 'imitator';
     }
     // reset basic state
-    tank.turretAngle = 0; tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'buckshot' || tankType === 'imitator' || tankType === 'electric') ? 4 : 3); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = [];
+    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = [];
     
     // Reset all effects
     tank.paralyzed = false;
@@ -756,7 +805,7 @@ function startGame(mode) {
     tank.imitatorTimer = 0;
     tank.imitatorCooldown = 0;
     tank.originalTankType = null;
-    tank.originalMaxHp = 4;
+    tank.originalMaxHp = 250;
     
     // Reset poison and control effects
     tank.poisonTimer = 0;
@@ -838,7 +887,7 @@ function startGame(mode) {
         worldWidth = 900 * 4; worldHeight = 700 * 4;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         tank.team = 0;
-        tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'imitator') ? 4 : 3);
+        setTankHP(tankType);
         tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
         generateMap();
         spawnOneVsAllMode();
@@ -1538,7 +1587,7 @@ function generateMap() {
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
             tankType: tt,
-            hp: (tt === 'fire') ? 6 : (tt === 'musical' || tt === 'waterjet') ? 4 : (tt === 'illuminat' || tt === 'mirror') ? 3 : 3,
+            hp: (tankMaxHpByType[tt] || 300),
             turretAngle: 0,
             baseAngle: 0,
             speed: 2.5,
@@ -1625,7 +1674,7 @@ function spawnTeamMode() {
     // spawn one ally near player (use player's color)
                 const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (allyType === 'fire') ? 6 : (allyType === 'musical' || allyType === 'waterjet') ? 4 : (allyType === 'illuminat' || allyType === 'mirror') ? 3 : 3, turretAngle:0, baseAngle:0, speed: 2.5, trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
+            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     // spawn other corners with 2 enemies each; clear spawn areas first
@@ -1643,7 +1692,7 @@ function spawnTeamMode() {
             
             const p = findFreeSpot(sx, sy, 38, 38, 200, 20);
             if (p) {
-                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tt === 'fire')?6:(tt === 'musical' || tt === 'waterjet')?4:(tt === 'mirror' || tt === 'illuminat')?3:3, turretAngle:0, baseAngle:0, speed:2.5, trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
+                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tankMaxHpByType[tt] || 300), turretAngle:0, baseAngle:0, speed:(tankMaxSpeedByType[tt] || 3.2), trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0 });
             }
         }
     }
@@ -1671,7 +1720,7 @@ function spawnDuelMode() {
     // Player in top-left corner
     tank.x = 100; tank.y = 100;
     tank.alive = true;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet') ? 4 : (tankType === 'imitator') ? 4 : 3);
+    setTankHP(tankType);
     
     // 1 Bot in bottom-right corner
     const ex = worldWidth - 100;
@@ -1685,7 +1734,7 @@ function spawnDuelMode() {
         x: ex, y: ey, w:38, h:38, 
         color: typeColor[tt] || '#B22222', 
         tankType: tt, 
-        hp:(tt==='fire')?6:(tt==='musical')?4:(tt==='illuminat'||tt==='mirror')?3:3, 
+        hp:(tt==='fire')?600:(tt==='musical')?400:(tt==='illuminat'||tt==='mirror')?300:300, 
         turretAngle: Math.PI, 
         baseAngle: Math.PI, 
         speed: 2.5, 
@@ -1720,7 +1769,7 @@ function spawnTrialMode() {
     const cx = worldWidth / 2, cy = worldHeight / 2;
     const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
     tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
+    setTankHP(tankType);
     tank.alive = true; tank.respawnTimer = 0;
 
     // 7 bots spread around the map, each on its own team
@@ -1744,8 +1793,8 @@ function spawnTrialMode() {
             x: pos.x, y: pos.y, w: 38, h: 38,
             color: typeColor[tt] || '#B22222',
             tankType: tt,
-            hp: (tt === 'fire') ? 6 : (tt === 'musical' || tt === 'waterjet') ? 4 : 3,
-            turretAngle: 0, baseAngle: 0, speed: 2.5, trackOffset: 0,
+            hp: (tankMaxHpByType[tt] || 300),
+            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
             alive: true,
             team: i + 1, // each bot is its own team → FFA
             fireCooldown: 0, stuckCount: 0,
@@ -1823,7 +1872,7 @@ function spawnTrainingMode() {
     // Player starts center-left
     tank.x = 150; tank.y = worldHeight / 2 - 19;
     tank.team = 0;
-    tank.hp = (tankType === 'fire' ? 6 : (tankType === 'musical' || tankType === 'waterjet' || tankType === 'buckshot' || tankType === 'imitator') ? 4 : 3);
+    setTankHP(tankType);
     tank.alive = true;
 
     // Dummy positions — split into 2 groups: upper (before corridor) and lower (after corridor)
@@ -1843,7 +1892,7 @@ function spawnTrainingMode() {
             x: pos.x, y: pos.y, w: 38, h: 38,
             color: '#888888',
             tankType: 'dummy',
-            hp: 3, maxHp: 3,
+            hp: 300, maxHp: 300,
             turretAngle: 0, baseAngle: 0, speed: 0,
             alive: true,
             team: 99, // neutral team
@@ -1863,7 +1912,7 @@ function spawnTrainingMode() {
         x: 930, y: 431, w: 38, h: 38,
         color: '#880000',
         tankType: 'boss_dummy',
-        hp: 10, maxHp: 10,
+        hp: 1000, maxHp: 1000,
         turretAngle: Math.PI, baseAngle: Math.PI,
         speed: 0, alive: true,
         team: 1,
@@ -1910,7 +1959,7 @@ function spawnOneVsAllMode() {
             x: bp.x, y: bp.y, w: 38, h: 38,
             color: typeColors[tt] || '#B22222',
             tankType: tt,
-            hp: (tt === 'fire') ? 6 : (tt === 'musical' || tt === 'waterjet') ? 4 : 3,
+            hp: (tankMaxHpByType[tt] || 300),
             turretAngle: Math.random() * Math.PI * 2, baseAngle: 0, speed: 2.5, trackOffset: 0,
             alive: true, team: 1,  // all allied with each other
             fireCooldown: Math.floor(Math.random() * 60), stuckCount: 0,
@@ -2441,7 +2490,7 @@ function update() {
                 dummy.alive = false;
                 if (trainingRespawnTimers[i] >= 600) {
                     // Respawn: reset dummy and re-add to enemies
-                    dummy.hp = dummy.maxHp || 3;
+                    dummy.hp = dummy.maxHp || 300;
                     dummy.alive = true;
                     dummy.x = dummy.spawnX;
                     dummy.y = dummy.spawnY;
@@ -2452,7 +2501,7 @@ function update() {
             } else {
                 // Alive: keep hp capped and make sure it's in enemies
                 trainingRespawnTimers[i] = 0;
-                dummy.hp = Math.min(dummy.hp, dummy.maxHp || 3);
+                dummy.hp = Math.min(dummy.hp, dummy.maxHp || 300);
                 // Dummies don't move at all
                 dummy.speed = 0;
                 dummy.fireCooldown = 9999;
@@ -2471,7 +2520,7 @@ function update() {
                 if (sd.fireCooldown > 0) { sd.fireCooldown--; }
                 else {
                     const ang = sd.turretAngle;
-                    bullets.push({ x: sd.x+19+Math.cos(ang)*25, y: sd.y+19+Math.sin(ang)*25, w:5, h:5, vx:Math.cos(ang)*5, vy:Math.sin(ang)*5, life:130, owner:'enemy', team: sd.team, type:'fire', damage:1 });
+                    bullets.push({ x: sd.x+19+Math.cos(ang)*25, y: sd.y+19+Math.sin(ang)*25, w:5, h:5, vx:Math.cos(ang)*5, vy:Math.sin(ang)*5, life:130, owner:'enemy', team: sd.team, type:'fire', damage:100 });
                     sd.fireCooldown = 80;
                 }
             } else {
@@ -2519,7 +2568,7 @@ function update() {
 
         // Damage Check Player
         if (!isSafe(tank) && tank.alive !== false) {
-            if ((Date.now() % 1000) < 16) tank.hp -= 1; // 1 dmg/sec
+            if ((Date.now() % 1000) < 16) tank.hp -= 100; // 100 dmg/sec
             if (Math.random() > 0.8) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#FF0000');
             if (tank.hp <= 0) {
                 tank.alive = false;
@@ -2536,7 +2585,7 @@ function update() {
             if (!e || !e.alive) continue;
             
             if (!isSafe(e)) {
-                if ((Date.now() % 1000) < 16) e.hp -= 1;
+                if ((Date.now() % 1000) < 16) e.hp -= 100;
                 if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
                 if (e.hp <= 0) {
                     enemies.splice(i, 1);
@@ -2649,7 +2698,7 @@ function update() {
                     owner: 'player',
                     team: 0,
                     type: 'plasmaBlast',
-                    damage: 5, // high damage
+                    damage: 350, // high damage
                     piercing: true,
                     destroysWalls: true // will destroy walls it hits
                 });
@@ -2776,15 +2825,16 @@ function update() {
                     }
                     if (nearest) {
                         const copiedType = nearest.tankType || 'normal';
-                        const copiedMaxHp = (copiedType === 'fire') ? 6 : (copiedType === 'musical' || copiedType === 'waterjet') ? 4 : 4;
+                        const copiedMaxHp = tankMaxHpByType[copiedType] || 300;
                         tank.imitatorActive = true;
                         tank.imitatorTimer = 360; // 6 seconds at 60fps
                         tank.imitatorCooldown = 60 * 18; // 18 second cooldown
                         tank.originalTankType = 'imitator';
-                        tank.originalMaxHp = 4;
+                        tank.originalMaxHp = 250;
                         tankType = copiedType;
-                        tank.maxHp = copiedMaxHp;
-                        tank.hp = Math.min(tank.hp, copiedMaxHp);
+                        setTankSpeed(tankType);
+                        setTankHP(tankType);
+                        tank.hp = tank.maxHp; // Transform to full HP of copied tank
                         // Rainbow transformation particles
                         for (let i = 0; i < 35; i++) {
                             const hue = (i / 35) * 360;
@@ -2804,8 +2854,9 @@ function update() {
                 // Revert to imitator form
                 tank.imitatorActive = false;
                 tankType = tank.originalTankType || 'imitator';
-                tank.maxHp = tank.originalMaxHp || 4;
-                tank.hp = Math.min(tank.hp, tank.maxHp);
+                setTankSpeed(tankType);
+                setTankHP(tankType);
+                tank.hp = tank.maxHp; // Revert to full HP
                 // Clean up any copied-type state
                 tank.mirrorShieldActive = false;
                 tank.mirrorShieldTimer = 0;
@@ -3269,18 +3320,13 @@ window.setSelectedTank = function(selectedType) {
     tank.color = tankColor;
 
     // Special properties for specific tanks
-    if (selectedType === 'fire') {
-        tank.hp = 6;
-    } else if (selectedType === 'musical') {
-        tank.hp = 4;
-    } else if (selectedType === 'mirror') {
-        tank.hp = 4;
+    setTankHP(selectedType);
+    setTankSpeed(selectedType);
+    if (selectedType === 'mirror') {
         tank.lastHitType = null;
         tank.lastHitTime = 0;
         tank.mirrorShieldActive = false;
         tank.mirrorShieldTimer = 0;
-    } else {
-        tank.hp = 3; // Reset HP for others
     }
     
     if (selectedType === 'toxic') {
