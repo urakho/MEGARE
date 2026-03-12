@@ -375,15 +375,18 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     chkMusicVolume.value = Math.round(window.musicVolume * 100);
     if (chkOffline) chkOffline.checked = !!window.offlineMode;
 
-    // Real-time volume change
+    // Real-time volume change — set global volume and update music state
     chkMusicVolume.addEventListener('input', () => {
         const vol = chkMusicVolume.value / 100;
+        window.musicVolume = vol;
         menuMusic.volume = vol;
         fightMusic.volume = vol;
         duelMusic.volume = vol;
         exfightMusic.volume = vol;
         teamMusic.volume = vol;
         tankMusic.volume = vol;
+        // Ensure tracks pause/resume immediately according to volume
+        if (typeof updateMusic === 'function') updateMusic();
     });
 
     btn.addEventListener('click', () => { modal.style.display = 'flex'; });
