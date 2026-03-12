@@ -291,6 +291,7 @@ b { color: #ffcc00; }
 .rarity-legendary { background: linear-gradient(180deg,#ffd86b,#f1c40f); color: #222; box-shadow: 0 8px 0 rgba(241,196,15,0.85); }
 .rarity-mythic { background: linear-gradient(180deg,#ff6b6b,#8b0000); color: #fff; box-shadow: 0 8px 0 rgba(139,0,0,0.85); }
 .rarity-chromatic { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); color:#fff; box-shadow: 0 8px 0 rgba(255,0,170,0.6); background-size: 220% 220%; }
+.rarity-imitator { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); color:#fff; box-shadow: 0 8px 0 rgba(255,0,170,0.6); background-size: 220% 220%; }
 
 /* Trophy progress bar in character modal */
 .trophy-bar { width: 100%; margin: 8px 0 12px 0; box-sizing: border-box; }

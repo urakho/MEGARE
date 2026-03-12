@@ -328,7 +328,7 @@ function moveSmallSteps(entity, angle, dist) {
             // Проверяем, можно ли сдвинуть ящик (не врезается в стену/другой объект и в пределах канвы)
             let boxBlocked = false;
             // Map bounds for box
-            if (boxNx < 0 || boxNx < 0 || boxNx + collider.w > worldWidth || boxNy + collider.h > worldHeight) boxBlocked = true;
+            if (boxNx < 0 || boxNy < 0 || boxNx + collider.w > worldWidth || boxNy + collider.h > worldHeight) boxBlocked = true;
             else {
                  for (const o of objects) {
                     if (o === collider) continue;
@@ -337,9 +337,16 @@ function moveSmallSteps(entity, angle, dist) {
                         boxBlocked = true; break; 
                     }
                 }
+                // Also prevent pushing a box into another tank (player, allies, enemies, illusions)
+                if (!boxBlocked) {
+                    const boxRect = { x: boxNx, y: boxNy, w: collider.w, h: collider.h };
+                    if (typeof tank !== 'undefined' && tank !== entity && tank.alive !== false && checkRectCollision(boxRect, tank)) boxBlocked = true;
+                    for (const a of allies) { if (!boxBlocked && a && a.alive !== false && a !== entity && checkRectCollision(boxRect, a)) boxBlocked = true; }
+                    for (const e of enemies) { if (!boxBlocked && e && e.alive !== false && e !== entity && checkRectCollision(boxRect, e)) boxBlocked = true; }
+                    for (const il of illusions) { if (!boxBlocked && il && il.life > 0 && il !== entity && checkRectCollision(boxRect, il)) boxBlocked = true; }
+                }
             }
             if (boxBlocked) {
-                // if (SHOW_AI_DEBUG) console.log('box cannot be pushed');
                 return false;
             }
 
@@ -349,6 +356,13 @@ function moveSmallSteps(entity, angle, dist) {
             if (Math.random() > 0.5) spawnParticle(collider.x + collider.w / 2, collider.y + collider.h / 2);
             navNeedsRebuild = true;
         }
+
+        // Перед окончательным перемещением проверяем пересечение с другими танками
+        const testRect = { x: nx, y: ny, w: entity.w, h: entity.h };
+        if (typeof tank !== 'undefined' && tank !== entity && tank.alive !== false && checkRectCollision(testRect, tank)) return false;
+        for (const a of allies) { if (a && a.alive !== false && a !== entity && checkRectCollision(testRect, a)) return false; }
+        for (const e of enemies) { if (e && e.alive !== false && e !== entity && checkRectCollision(testRect, e)) return false; }
+        for (const il of illusions) { if (il && il.life > 0 && il !== entity && checkRectCollision(testRect, il)) return false; }
 
         // Наконец, двигаем сущность на шаг
         entity.x = nx; entity.y = ny;
@@ -772,6 +786,48 @@ function updateEnemyAI() {
         }
 
         // (Толкание ящиков теперь обрабатывается внутри moveSmallSteps при необходимости)
+        // Prevent enemy bots overlapping: apply small separation from same-team enemies
+        (function applyEnemySeparation(enemy) {
+            const minCenterDist = Math.max(enemy.w || 38, enemy.h || 38) * 0.9;
+            let sepX = 0, sepY = 0, count = 0;
+            for (const other of enemies) {
+                if (other === enemy || !other || !other.alive) continue;
+                // Only separate from same-team enemies (adjust if you want cross-team separation)
+                if (other.team !== enemy.team) continue;
+                const dx = enemy.x - other.x;
+                const dy = enemy.y - other.y;
+                const dist = Math.hypot(dx, dy);
+                const desired = ((enemy.w || 38) + (other.w || 38)) / 2 + 2;
+                if (dist === 0) {
+                    // exactly same position: random small nudge
+                    sepX += (Math.random() - 0.5) * 8;
+                    sepY += (Math.random() - 0.5) * 8;
+                    count++;
+                } else if (dist < desired) {
+                    const overlap = desired - dist;
+                    sepX += (dx / dist) * overlap;
+                    sepY += (dy / dist) * overlap;
+                    count++;
+                }
+            }
+            if (count > 0) {
+                sepX /= count; sepY /= count;
+                const pushFactor = 0.5; // fraction to apply per tick
+                const newX = enemy.x + sepX * pushFactor;
+                const newY = enemy.y + sepY * pushFactor;
+                // Verify we don't push into a wall/object — if safe, apply; otherwise try a safe small step
+                const rect = { x: newX, y: newY, w: enemy.w, h: enemy.h };
+                let collides = false;
+                for (const o of objects) { if (checkRectCollision(rect, o)) { collides = true; break; } }
+                if (!collides && newX >= 0 && newY >= 0 && newX + enemy.w <= worldWidth && newY + enemy.h <= worldHeight) {
+                    enemy.x = newX; enemy.y = newY;
+                } else {
+                    // fallback: try to step safely along separation angle
+                    const ang = Math.atan2(sepY, sepX);
+                    moveSmallSteps(enemy, ang, Math.max(4, Math.hypot(sepX, sepY) * 0.6));
+                }
+            }
+        })(enemy);
 
         // Стрелять по ближайшей цели; если цель враждебна (другая команда), стрелять чаще
         const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
@@ -1574,11 +1630,29 @@ function updateAllyAI() {
             e.paralyzed = true;
             e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);
             e.frozenEffect = Math.max(e.frozenEffect || 0, 6);
-            // Knockback along beam direction (medium force)
-            const kx = Math.cos(angle) * 1.3;
-            const ky = Math.sin(angle) * 1.3;
-            e.x = Math.max(0, Math.min((worldWidth || 1800) - (e.w || 20), e.x + kx));
-            e.y = Math.max(0, Math.min((worldHeight || 1400) - (e.h || 20), e.y + ky));
+            // Knockback along beam direction (medium force) — use movement helper so collisions are respected
+            const pushDist = 1.3;
+            const moved = moveSmallSteps(e, angle, pushDist);
+            if (!moved) {
+                // If move failed and entity overlaps a blocking object (wall/box/barrel), rescue player to a free spot
+                const rect = { x: e.x, y: e.y, w: e.w, h: e.h };
+                let overlapping = null;
+                for (const o of objects) {
+                    if ((o.type === 'wall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(rect, o)) { overlapping = o; break; }
+                }
+                if (overlapping && e === tank) {
+                    const tryRadius = Math.max(worldWidth, worldHeight);
+                    const p = (typeof findFreeSpot === 'function') ? findFreeSpot(e.x + (Math.random() - 0.5) * 200, e.y + (Math.random() - 0.5) * 200, e.w, e.h, tryRadius, 24) : null;
+                    if (p) {
+                        e.x = p.x; e.y = p.y;
+                        spawnParticle(e.x + e.w/2, e.y + e.h/2, '#00ff88');
+                    } else {
+                        // fallback: clamp inside world
+                        e.x = Math.max(0, Math.min((worldWidth || 1800) - (e.w || 20), e.x));
+                        e.y = Math.max(0, Math.min((worldHeight || 1400) - (e.h || 20), e.y));
+                    }
+                }
+            }
             // Water splash particles
             if (window.effectsEnabled !== false) {
                 for (let p = 0; p < 2; p++) {

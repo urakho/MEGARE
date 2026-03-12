@@ -875,6 +875,34 @@ function shoot() {
 
 function updatePhysics() {
 
+    // Safety: if player is stuck inside a wall/box/barrel, teleport to a nearby free spot
+    (function rescueStuckTank() {
+        if (typeof tank === 'undefined' || tank.alive === false) return;
+        const tRect = { x: tank.x, y: tank.y, w: tank.w, h: tank.h };
+        let stuck = false;
+        for (const o of objects) {
+            if (o.type === 'wall' || o.type === 'box' || o.type === 'barrel') {
+                if (checkRectCollision(tRect, o)) { stuck = true; break; }
+            }
+        }
+        if (!stuck) return;
+        const tryRadius = Math.max(worldWidth, worldHeight);
+        let p = (typeof findFreeSpot === 'function') ? findFreeSpot(tank.x + (Math.random() - 0.5) * 200, tank.y + (Math.random() - 0.5) * 200, tank.w, tank.h, tryRadius, 24) : null;
+        if (!p) {
+            const cx = Math.max(100, Math.min(worldWidth - tank.w - 100, Math.floor(worldWidth / 2)));
+            const cy = Math.max(100, Math.min(worldHeight - tank.h - 100, Math.floor(worldHeight / 2)));
+            p = (typeof findFreeSpot === 'function') ? findFreeSpot(cx, cy, tank.w, tank.h, tryRadius, 24) : null;
+        }
+        if (p) {
+            tank.x = p.x; tank.y = p.y;
+            spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#00ff88');
+        } else {
+            // last resort: clamp to world bounds
+            tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
+            tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
+        }
+    })();
+
     // Обновление пуль
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
@@ -1942,6 +1970,27 @@ function updatePhysics() {
 function moveWithCollision(dx, dy) {
     tank.x += dx;
     tank.y += dy;
+    // Если после движения мы врезаемся в другой танк — откатываем движение
+    const tRect = { x: tank.x, y: tank.y, w: tank.w, h: tank.h };
+    let collidedWithTank = false;
+    if (typeof tank !== 'undefined') {
+        for (const e of enemies) {
+            if (!e || e === tank || e.alive === false) continue;
+            if (checkRectCollision(tRect, e)) { collidedWithTank = true; break; }
+        }
+        for (const a of allies) {
+            if (!a || a === tank || a.alive === false) continue;
+            if (checkRectCollision(tRect, a)) { collidedWithTank = true; break; }
+        }
+        for (const il of illusions) {
+            if (!il || il === tank || il.life <= 0) continue;
+            if (checkRectCollision(tRect, il)) { collidedWithTank = true; break; }
+        }
+    }
+    if (collidedWithTank) {
+        tank.x -= dx; tank.y -= dy;
+        return; // movement blocked by another tank
+    }
 
     for (const obj of objects) {
         if (checkRectCollision(tank, obj)) {
@@ -1950,11 +1999,19 @@ function moveWithCollision(dx, dy) {
                 obj.x += dx;
                 obj.y += dy;
                 
-                const blocked = objects.some(o => o !== obj && checkRectCollision(obj, o)) ||
+                let boxBlocked = objects.some(o => o !== obj && checkRectCollision(obj, o)) ||
                                 obj.x < 0 || obj.y < 0 || 
                                 obj.x + obj.w > worldWidth || obj.y + obj.h > worldHeight;
+                // Also prevent pushing a box into a tank
+                if (!boxBlocked) {
+                    const boxRect = { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+                    if (typeof tank !== 'undefined' && checkRectCollision(boxRect, tank)) boxBlocked = true;
+                    for (const a of allies) { if (!boxBlocked && a && a.alive !== false && checkRectCollision(boxRect, a)) boxBlocked = true; }
+                    for (const e of enemies) { if (!boxBlocked && e && e.alive !== false && checkRectCollision(boxRect, e)) boxBlocked = true; }
+                    for (const il of illusions) { if (!boxBlocked && il && il.life > 0 && checkRectCollision(boxRect, il)) boxBlocked = true; }
+                }
                 
-                if (blocked) {
+                if (boxBlocked) {
                     obj.x -= dx; obj.y -= dy;
                     tank.x -= dx; tank.y -= dy;
                 } else if (dx !== 0 || dy !== 0) {
@@ -1967,7 +2024,7 @@ function moveWithCollision(dx, dy) {
             }
         }
     }
-    
+
     // Края мира
     tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
     tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
