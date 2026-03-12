@@ -668,6 +668,6 @@ window.syncResultOverlay = syncResultOverlay;
 if (resultRestart) resultRestart.addEventListener('click', () => startGame(currentMode));
 if (resultToMenu) resultToMenu.addEventListener('click', () => {
     if (typeof saveProgress === 'function') saveProgress();
-    location.reload();
+    if (typeof maybeReload === 'function') maybeReload(); else location.reload();
 });
 syncResultOverlay('menu');

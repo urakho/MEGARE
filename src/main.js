@@ -321,6 +321,8 @@ window.onkeyup = (e) => keys[e.code] = false;
 // ========================
 window.effectsEnabled = localStorage.getItem('settingEffects') !== 'false';
 window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
+// Offline mode: when true, app will avoid full page reloads when returning to menu
+window.offlineMode = localStorage.getItem('settingOffline') === 'true';
 // Read saved music volume. Use explicit null/isNaN checks so 0 is preserved.
 {
     const sv = localStorage.getItem('settingMusicVolume');
@@ -364,12 +366,14 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
     const chkEffects = document.getElementById('settingEffects');
     const chkMobile  = document.getElementById('settingMobile');
     const chkMusicVolume = document.getElementById('settingMusicVolume');
+    const chkOffline = document.getElementById('settingOffline');
     if (!btn || !modal) return;
 
     // Apply saved values
     chkEffects.checked = window.effectsEnabled;
     chkMobile.checked  = window.deviceModeMobile;
     chkMusicVolume.value = Math.round(window.musicVolume * 100);
+    if (chkOffline) chkOffline.checked = !!window.offlineMode;
 
     // Real-time volume change
     chkMusicVolume.addEventListener('input', () => {
@@ -387,6 +391,10 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         window.effectsEnabled   = chkEffects.checked;
         window.deviceModeMobile = chkMobile.checked;
         window.musicVolume = chkMusicVolume.value / 100;
+        if (chkOffline) {
+            window.offlineMode = chkOffline.checked;
+            localStorage.setItem('settingOffline', chkOffline.checked);
+        }
         localStorage.setItem('settingEffects', chkEffects.checked);
         localStorage.setItem('settingMobile',  chkMobile.checked);
         localStorage.setItem('settingMusicVolume', window.musicVolume);
@@ -400,6 +408,41 @@ window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
         modal.style.display = 'none';
     });
 })();
+
+    // --- Offline helpers: if offline mode enabled, do not perform full page reloads
+    window.isOfflineModeEnabled = function() {
+        return !!window.offlineMode;
+    };
+
+    window.goToMenuNoReload = function() {
+        if (typeof saveProgress === 'function') saveProgress();
+        try {
+            gameState = 'menu';
+            currentMode = 'menu';
+            _lastMusicKey = '';
+            const mainMenuEl = document.getElementById('mainMenu');
+            if (mainMenuEl) mainMenuEl.style.display = 'flex';
+            // Hide other overlays except settings modal so user can still change settings
+            const overlays = document.querySelectorAll('.modal-overlay');
+            overlays.forEach(o => {
+                if (!o.id) return;
+                if (o.id === 'mainMenu' || o.id === 'settingsModal') return;
+                o.style.display = 'none';
+            });
+            const trainingExitBtn = document.getElementById('trainingExitBtn');
+            if (trainingExitBtn) trainingExitBtn.style.display = 'none';
+        } catch (err) {
+            console.warn('goToMenuNoReload error', err);
+        }
+    };
+
+    window.maybeReload = function() {
+        if (window.offlineMode) {
+            window.goToMenuNoReload();
+        } else {
+            location.reload();
+        }
+    };
 
 // Apply initial music volume
 menuMusic.volume = window.musicVolume;
@@ -2471,7 +2514,7 @@ function update() {
             // Do not restart on Space — use Enter to restart instead
             if (keys['Enter']) {
                 saveProgress(); // Save before reload
-                location.reload();
+                maybeReload();
                 keys['Enter'] = false;
             }
         }
@@ -3502,7 +3545,7 @@ window.addEventListener('load', () => {
             // Restore tank type
             if (window._preTankType) { tankType = window._preTankType; window._preTankType = null; }
             saveProgress();
-            location.reload();
+            maybeReload();
         }
         trainingExitBtn.addEventListener('click', _doTrainingExit);
         trainingExitBtn.addEventListener('touchend', _doTrainingExit, { passive: false });
