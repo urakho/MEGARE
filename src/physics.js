@@ -191,7 +191,7 @@ function updateNovaZones() {
 }
 
 // Create an instant electric nova that hits ALL enemies in radius and ignores walls
-function createElectricNova(centerX, centerY, radius = 200, damage = 2, ownerTeam = 0) {
+function createElectricNova(centerX, centerY, radius = 200, damage = 200, ownerTeam = 0) {
     // Add nova damage zone (enemies take damage while rays are visible)
     if (typeof novaZones !== 'undefined') {
         novaZones.push({

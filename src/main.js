@@ -2959,7 +2959,7 @@ function update() {
                 const cy = tank.y + tank.h/2;
                 // Reduced radius ~200px for electric electric ultimate
                 if (typeof createElectricNova === 'function') {
-                    createElectricNova(cx, cy, 200, 2, tank.team);
+                    createElectricNova(cx, cy, 200, 200, tank.team);
                 }
                 // Center burst particles
                 for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
