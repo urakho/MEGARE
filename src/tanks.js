@@ -3164,6 +3164,11 @@ function draw() {
         if (missingHp > 0) {
             ctx.fillRect(a.x + a.w * (a.hp / maxAllyHp), a.y - 10, a.w * (missingHp / maxAllyHp), 5);
         }
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.ceil(a.hp) + '/' + maxAllyHp, a.x + a.w / 2, a.y - 7);
     });
 
     // Helper for beam drawing (applied to all)
@@ -3457,6 +3462,11 @@ function draw() {
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);
         }
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.ceil(enemy.hp) + '/' + maxHp, enemy.x + enemy.w / 2, enemy.y - 7);
     });
 
     // 6. Иллюзии
@@ -3534,6 +3544,11 @@ function draw() {
         if (missingHp > 0) {
             ctx.fillRect(tank.x + tank.w * (tank.hp / maxTankHp), tank.y - 10, tank.w * (missingHp / maxTankHp), 5);
         }
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.ceil(tank.hp) + '/' + maxTankHp, tank.x + tank.w / 2, tank.y - 7);
     }
     
     // Illuminat beam handled by drawUnitBeam above for all units including player
