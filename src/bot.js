@@ -1491,8 +1491,9 @@ function updateAllyAI() {
                 const hitRadius = Math.max(e.w||0, e.h||0) * 0.55 + 4; // small padding
                 const dist = distToSegment(cx, cy, beamX, beamY, endX, endY);
                 if (dist <= hitRadius) {
-                    // Damage scaled by beam intensity (slightly stronger)
-                    const dmg = 80 * unit.beamIntensity;
+                    // Damage scaled by beam intensity, boosted by upgrade if player
+                    const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
+                    const dmg = 80 * unit.beamIntensity * _beamUpgMult;
                     e.hp -= dmg;
                     // Apply strong disorientation/inversion + confusion so AI reacts
                     e.disoriented = Math.max(e.disoriented || 0, 60);
@@ -1624,8 +1625,9 @@ function updateAllyAI() {
             if (distToSeg(cx, cy, startX, startY, endX, endY) > hitRadius) continue;
             unit.waterjetHitTarget = true;
 
-            // Damage per frame (11/tick)
-            e.hp -= 11;
+            // Damage per frame (11/tick), boosted by upgrade if player
+            const _wjMult = (isPlayer && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
+            e.hp -= Math.round(11 * _wjMult);
             // Slow: brief recurring stun simulates medium slowdown
             e.paralyzed = true;
             e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);

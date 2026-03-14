@@ -80,6 +80,35 @@ const DODGE_BASE_ACCURACY = 0.8;
 // Глобальная валюта
 let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
+// Новая валюта: детали (пока недоступны в наградах)
+let parts = parseInt(localStorage.getItem('tankParts')) || 0;
+
+// ─── Tank characteristic upgrades ────────────────────────────────────────────
+// Structure: { [tankType]: { hp: 0-3, dmg: 0-3, spd: 0-3 } }
+let tankUpgrades = JSON.parse(localStorage.getItem('tankUpgrades') || '{}');
+function getTankUpgrade(type, stat) {
+    return (tankUpgrades[type] && tankUpgrades[type][stat]) || 0;
+}
+function saveTankUpgrades() {
+    localStorage.setItem('tankUpgrades', JSON.stringify(tankUpgrades));
+}
+// Returns damage multiplier for the player's current tank type
+// lvl 0→1.0, lvl 1→1.1, lvl 2→1.3, lvl 3→1.6
+const DMG_MULT_TABLE = [1.0, 1.1, 1.3, 1.6];
+function getPlayerDmgMult() {
+    const type = typeof tankType !== 'undefined' ? tankType : 'normal';
+    return DMG_MULT_TABLE[getTankUpgrade(type, 'dmg')] || 1.0;
+}
+// Speed increments per upgrade level: level1 +0.2, level2 +0.2, level3 +0.3
+const SPEED_INCREMENTS = [0.2, 0.2, 0.3];
+function getTankSpeedBonus(type) {
+    const lvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade(type, 'spd') : 0;
+    let sum = 0;
+    for (let i = 0; i < lvl; i++) sum += (SPEED_INCREMENTS[i] || 0);
+    return parseFloat(sum.toFixed(2));
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 let trophies = parseInt(localStorage.getItem('tankTrophies')) || 0;
 let claimedRewards = JSON.parse(localStorage.getItem('tankClaimedRewards')) || [];
 
@@ -223,7 +252,8 @@ const tankMaxHpByType = {
 };
 
 function setTankHP(type) {
-    const hp = tankMaxHpByType[type] || 300;
+    const base = tankMaxHpByType[type] || 300;
+    const hp = base + getTankUpgrade(type, 'hp') * 50;
     tank.hp = hp;
     tank.maxHp = hp;
     return hp;
@@ -249,7 +279,9 @@ const tankMaxSpeedByType = {
 };
 
 function setTankSpeed(type) {
-    const speed = tankMaxSpeedByType[type] || 3.2;
+    const base = tankMaxSpeedByType[type] || 3.2;
+    const bonus = (typeof getTankSpeedBonus === 'function') ? getTankSpeedBonus(type) : ((getTankUpgrade(type, 'spd') || 0) * 0.4);
+    const speed = parseFloat((base + bonus).toFixed(2));
     tank.speed = speed;
     return speed;
 }
@@ -982,6 +1014,7 @@ const buyMiniContainer = document.getElementById('buyMiniContainer');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
+const buyMechPartsContainer = document.getElementById('buyMechPartsContainer');
 const shopCancel = document.getElementById('shopCancel');
 const characterCancel = document.getElementById('characterCancel');
 const trophyRoadBtn = document.getElementById('trophyRoadBtn');
@@ -1052,8 +1085,29 @@ function processDevCommand(rawCommand) {
             saveProgress();
             console.log(`Gems updated: ${gems}`);
         }
+    } else if (command.startsWith('/parts')) {
+        const args = command.substring(6).trim().split(/\s+/);
+        let op = '+'; 
+        let valStr = args[0];
+        
+        if (['+', '-', '='].includes(args[0])) {
+            op = args[0];
+            valStr = args[1];
+        }
+        
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount >= 0) {
+            if (op === '+') parts += amount;
+            else if (op === '-') parts = Math.max(0, parts - amount);
+            else if (op === '=') parts = amount;
+            
+            localStorage.setItem('tankParts', parts);
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Parts updated: ${parts}`);
+        }
     } else if (command.startsWith('/trophy')) {
-        const parts = command.substring(7).trim().split(/\s+/);
+        const partsParse = command.substring(7).trim().split(/\s+/);
         let op = '='; 
         let valStr = parts[0];
         
@@ -1092,12 +1146,20 @@ function processDevCommand(rawCommand) {
         if (typeof drawCharacterPreviews === 'function' && characterModal && characterModal.style.display === 'flex') {
             drawCharacterPreviews();
         }
+    } else if (command === '/clear en') {
+        tankUpgrades = {};
+        saveTankUpgrades();
+        // Re-apply stats for current tank immediately
+        if (typeof setTankHP    === 'function') setTankHP(tankType);
+        if (typeof setTankSpeed === 'function') setTankSpeed(tankType);
+        console.log('All tank upgrades cleared.');
     } else if (command === '/help' || command === '/commands') {
         console.log('=== ДОСТУПНЫЕ КОМАНДЫ ===');
         console.log('/coins [+/-/=] [число] - управление монетами (по умолчанию +)');
         console.log('/gems [+/-/=] [число] - управление гемами (по умолчанию +)');
         console.log('/trophy [+/-/=] [число] - управление трофеями, = сбрасывает награды');
         console.log('/clear t - сбросить все танки кроме обычного');
+        console.log('/clear en - сбросить все улучшения характеристик');
         console.log('/help или /commands - показать этот список');
         console.log('========================');
     }
@@ -1147,6 +1209,7 @@ if (buyMiniContainer) buyMiniContainer.addEventListener('click', () => showConta
 if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
+if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () => showContainerFlow('mechParts'));
 
 const containerFlowModal = document.getElementById('containerFlowModal');
 const containerFlowPreview = document.getElementById('containerFlowPreview');
@@ -1192,6 +1255,7 @@ function updateContainerFlowStage(stage) {
     const isBronze = containerFlowType === 'bronze';
     const isOmega = containerFlowType === 'omega';
     const isMini = containerFlowType === 'mini';
+    const isMechParts = containerFlowType === 'mechParts';
     
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
@@ -1210,6 +1274,9 @@ function updateContainerFlowStage(stage) {
         } else if (isMini) {
             containerFlowPreview.src = 'cont-png/mini-cont.png';
             containerFlowText.textContent = 'Нажми на мини контейнер!';
+        } else if (isMechParts) {
+            containerFlowPreview.src = 'cont-png/mech-cont.png';
+            containerFlowText.textContent = 'Нажми на ящик деталей!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont1.png' : 'cont-png/super-cont.png';
             containerFlowText.textContent = isBronze
@@ -1223,6 +1290,9 @@ function updateContainerFlowStage(stage) {
         } else if (isMini) {
             containerFlowPreview.src = 'cont-png/mini-cont2.png';
             containerFlowText.textContent = 'Мини контейнер раскрывается!';
+        } else if (isMechParts) {
+            containerFlowPreview.src = 'cont-png/mech-cont2.png';
+            containerFlowText.textContent = 'Ящик деталей раскрывается!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont2.png' : 'cont-png/super-cont2.png';
             containerFlowText.textContent = isBronze
@@ -1267,7 +1337,7 @@ function animateContainerDrops(rewards, done) {
         const item = document.createElement('div');
         item.className = 'container-drop-item';
         // Use emoji for resource icons (fallback to reward.icon if provided)
-        const iconText = reward.icon || (reward.type === 'gems' ? '💎' : reward.type === 'tank' ? '🏆' : '💰');
+        const iconText = reward.icon || (reward.type === 'gems' ? '💎' : reward.type === 'parts' ? '🔧' : reward.type === 'tank' ? '🏆' : '💰');
         item.textContent = iconText;
         const label = reward.type === 'tank'
             ? (reward.tankType ? reward.tankType.toUpperCase() : 'TANK')
@@ -1410,7 +1480,7 @@ function showContainerRewards(rewards, index = 0) {
 function handleContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'omega' ? 4000 : 1000));
+    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : 1000)));
     if (coins < price) {
         alert('Недостаточно монет!');
         closeContainerFlow();
@@ -1418,7 +1488,7 @@ function handleContainerConfirm() {
     }
     coins -= price;
     updateCoinDisplay();
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : (currentType === 'mini' ? 2 : 5));
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'mini' ? 2 : (currentType === 'mechParts' ? 4 : (currentType === 'omega' ? 7 : 5)));
     const rewards = [];
     // Ensure we create unique objects for each reward
     for (let i = 0; i < dropCount; i++) {
@@ -1429,6 +1499,8 @@ function handleContainerConfirm() {
             reward = openContainer({ suppressRewardModal: true });
         } else if (currentType === 'mini') {
             reward = openMiniContainer({ suppressRewardModal: true });
+        } else if (currentType === 'mechParts') {
+            reward = openMechPartsContainer({ suppressRewardModal: true });
         } else {
             reward = openSuperContainer({ suppressRewardModal: true });
         }
@@ -2127,13 +2199,14 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     let titleColor = '#e74c3c'; // default red
     if (type === 'coins') titleColor = '#f1c40f';
     else if (type === 'gems') titleColor = '#2ecc71';
+    else if (type === 'parts') titleColor = '#95a5a6';
     else if (type === 'tank' && tankType && window.tankBgGradients && window.tankBgGradients[tankType]) {
         // Use the second color of the gradient for text as it's usually solid
         titleColor = window.tankBgGradients[tankType][1]; 
     }
 
-    const defaultTitle = type === 'coins' ? 'COINS!' : type === 'gems' ? 'GEMS!' : 'NEW TANK!';
-    const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : '🏆';
+    const defaultTitle = type === 'coins' ? 'COINS!' : type === 'gems' ? 'GEMS!' : type === 'parts' ? 'PARTS!' : 'NEW TANK!';
+    const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : type === 'parts' ? '🔧' : '🏆';
     const resolvedTitle = customTitle || defaultTitle;
     const resolvedIcon = customIcon || iconTextFallback;
 
@@ -2276,7 +2349,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     } else {
         amountText.textContent = (typeof amount === 'number' ? '+' + amount : amount || '');
         amountText.style.color = titleColor;
-        descText.textContent = desc || (type === 'coins' ? 'Shiny gold coins!' : 'Rare currency!');
+        descText.textContent = desc || (type === 'coins' ? 'Shiny gold coins!' : type === 'parts' ? 'Valuable parts!' : 'Rare currency!');
     }
 }
 
@@ -2401,6 +2474,46 @@ function openSuperContainer(options = {}) {
         return { type: 'gems', amount: val, desc: 'Gems (12–25)', icon: '💎' };
     }
     return unlockRandomTankNew(true, { suppressRewardModal });
+}
+
+// Open Mechanic Parts Container (Ящик деталей)
+// 40% - Coins 50-100
+// 30% - Coins 200-300
+// 15% - Parts 80-100
+// 10% - Parts 150-200
+// 5% - Parts 250-350
+function openMechPartsContainer(options = {}) {
+    const { suppressRewardModal = false } = options;
+    const r = Math.random() * 100;
+    if (r < 40) { // 40% — coins (50–100)
+        const val = getRandomInt(50, 100);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (50–100)');
+        return { type: 'coins', amount: val, desc: 'Coins (50–100)', icon: '💰' };
+    } else if (r < 70) { // next 30% — coins (200–300)
+        const val = getRandomInt(200, 300);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Coins (200–300)');
+        return { type: 'coins', amount: val, desc: 'Coins (200–300)', icon: '💰' };
+    } else if (r < 85) { // next 15% — parts (80–100)
+        const val = getRandomInt(80, 100);
+        parts += val;
+        localStorage.setItem('tankParts', parts);
+        if (!suppressRewardModal) showReward('parts', val, 'Parts (80–100)');
+        return { type: 'parts', amount: val, desc: 'Parts (80–100)', icon: '🔧' };
+    } else if (r < 95) { // next 10% — parts (150–200)
+        const val = getRandomInt(150, 200);
+        parts += val;
+        localStorage.setItem('tankParts', parts);
+        if (!suppressRewardModal) showReward('parts', val, 'Parts (150–200)');
+        return { type: 'parts', amount: val, desc: 'Parts (150–200)', icon: '🔧' };
+    } else { // last 5% — parts (250–350)
+        const val = getRandomInt(250, 350);
+        parts += val;
+        localStorage.setItem('tankParts', parts);
+        if (!suppressRewardModal) showReward('parts', val, 'Parts (250–350)');
+        return { type: 'parts', amount: val, desc: 'Parts (250–350)', icon: '🔧' };
+    }
 }
 
 // Open Omega container
@@ -2959,7 +3072,7 @@ function update() {
                 const cy = tank.y + tank.h/2;
                 // Reduced radius ~200px for electric electric ultimate
                 if (typeof createElectricNova === 'function') {
-                    createElectricNova(cx, cy, 200, 200, tank.team);
+                    createElectricNova(cx, cy, 200, Math.round(200 * getPlayerDmgMult()), tank.team);
                 }
                 // Center burst particles
                 for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
@@ -3031,7 +3144,21 @@ function update() {
 
         // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
         if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive) {
+            const _prevBLen = bullets.length, _prevFLen = flames.length;
             shoot();
+            // Apply player damage upgrade multiplier to newly created bullets/flames
+            const _dMult = getPlayerDmgMult();
+            if (_dMult > 1) {
+                for (let _i = _prevBLen; _i < bullets.length; _i++) {
+                    const _b = bullets[_i];
+                    // assign default damage if bullet has none (e.g. normal/ice have no explicit property)
+                    _b.damage = Math.round((_b.damage != null ? _b.damage : 100) * _dMult);
+                }
+                for (let _i = _prevFLen; _i < flames.length; _i++) {
+                    const _f = flames[_i];
+                    _f.damage = Math.round((_f.damage != null ? _f.damage : 22) * _dMult);
+                }
+            }
             if (tankType !== 'fire' && tankType !== 'machinegun' && tankType !== 'waterjet') {
                 keys['Space'] = false;
             }
@@ -3058,6 +3185,8 @@ function updateCoinDisplay() {
     if (gemDisplay) gemDisplay.textContent = gems;
     const trophyDisplay = document.getElementById('trophyDisplay');
     if (trophyDisplay) trophyDisplay.textContent = trophies;
+    const partDisplay = document.getElementById('partDisplay');
+    if (partDisplay) partDisplay.textContent = parts;
 
     // Menu Displays (IDs: menuCoinDisplay, menuGemDisplay, shopCoinDisplay, etc)
     const elementsToUpdate = document.querySelectorAll('.currency-coin');
@@ -3068,6 +3197,9 @@ function updateCoinDisplay() {
     
     const trophyElements = document.querySelectorAll('.currency-trophy');
     trophyElements.forEach(el => el.textContent = trophies);
+    
+    const partElements = document.querySelectorAll('.currency-part');
+    partElements.forEach(el => el.textContent = parts);
 
     // Update trophy progress bar if present (progress toward next milestone)
     const trophyBarFill = document.getElementById('trophyBarFill');

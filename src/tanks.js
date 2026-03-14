@@ -3622,6 +3622,87 @@ function draw() {
 // Ensure global access
 window.draw = draw;
 
+// ─── Upgrade costs per level (1→2→3) ─────────────────────────────────────────
+const UPGRADE_COSTS = [150, 350, 500]; // cost to reach level 1, 2, 3 (in parts)
+const UPGRADE_MAX  = 3;
+
+// Render the upgrade panel inside #tankDetailUpgrades for a given tankType
+function renderTankUpgradesUI(tt) {
+    const el = document.getElementById('tankDetailUpgrades');
+    if (!el) return;
+
+    // Check if player owns this tank
+    const isOwned = (typeof unlockedTanks !== 'undefined') && unlockedTanks.includes(tt);
+
+    const getLvl  = (stat) => (typeof getTankUpgrade === 'function') ? getTankUpgrade(tt, stat) : 0;
+    const canAfford = (cost) => isOwned && (typeof parts !== 'undefined') && parts >= cost;
+
+    const dmgBonusTxts = ['', '+10%', '+30%', '+60%'];
+    const statDefs = [
+        { stat: 'hp',  icon: '', label: 'HP',  bonusFn: (lvl) => `+${lvl*50} HP` },
+        { stat: 'dmg', icon: '', label: 'Урон', bonusFn: (lvl) => dmgBonusTxts[lvl] || '' },
+        { stat: 'spd', icon: '', label: 'Скорость', bonusFn: (lvl) => {
+            const incs = [0.2,0.2,0.3];
+            let s = 0;
+            for (let i = 0; i < lvl; i++) s += (incs[i] || 0);
+            return `+${s.toFixed(1)}`;
+        } },
+    ];
+
+    let html = `<div style="font-size:11px; font-weight:bold; color:#f1c40f; margin-bottom:5px;">🔧 Улучшения</div>`;
+    if (!isOwned) {
+        el.innerHTML = html + `<div style="font-size:11px; color:#888; padding:4px 0;">🔒 Разблокируй танк, чтобы улучшать характеристики</div>`;
+        return;
+    }
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px;">`;
+
+    for (const def of statDefs) {
+        const lvl  = getLvl(def.stat);
+        const dots = '●'.repeat(lvl) + '○'.repeat(UPGRADE_MAX - lvl);
+        const bonusTxt = def.bonusFn(lvl);
+        const nextCost = lvl < UPGRADE_MAX ? UPGRADE_COSTS[lvl] : null;
+        const affordable = nextCost !== null && canAfford(nextCost);
+        const btnHtml = nextCost !== null
+            ? `<button class="upgrade-btn" data-type="${tt}" data-stat="${def.stat}" data-cost="${nextCost}"
+                  style="display:inline-block; min-width:48px; margin-top:4px; padding:2px 4px; font-size:10px; border:1px solid ${affordable ? '#3498db' : '#555'}; border-radius:4px; background:${affordable ? 'rgba(52,152,219,0.25)' : 'rgba(80,80,80,0.2)'}; color:${affordable ? '#fff' : '#777'}; cursor:${affordable ? 'pointer' : 'not-allowed'};"
+                  ${affordable ? '' : 'disabled'}>Ур.${lvl+1} · ${nextCost}🔧</button>`
+            : `<div style="text-align:center; font-size:10px; color:#f1c40f; margin-top:3px;">MAX ✓</div>`;
+        html += `<div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:5px 6px; text-align:center;">
+            <div style="font-size:13px;">${def.icon} <span style="font-size:11px; color:#ccc;">${def.label}</span></div>
+            <div style="letter-spacing:1px; font-size:12px; margin:2px 0;">${dots}</div>
+            <div style="font-size:10px; color:#aaa; height:13px;">${bonusTxt}</div>
+            ${btnHtml}
+        </div>`;
+    }
+
+    html += `</div>`;
+    el.innerHTML = html;
+
+    // Attach buy-button listeners
+    el.querySelectorAll('.upgrade-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.type;
+            const stat = btn.dataset.stat;
+            const cost = parseInt(btn.dataset.cost);
+            if (typeof parts === 'undefined' || parts < cost) return;
+            // Deduct parts
+            parts -= cost;
+            localStorage.setItem('tankParts', parts);
+            if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
+            // Store upgrade
+            if (!tankUpgrades[type]) tankUpgrades[type] = {};
+            tankUpgrades[type][stat] = (tankUpgrades[type][stat] || 0) + 1;
+            saveTankUpgrades();
+            // Always re-apply HP and speed immediately (in case player buys mid-session)
+            if (typeof setTankHP    === 'function') setTankHP(type);
+            if (typeof setTankSpeed === 'function') setTankSpeed(type);
+            // Refresh both panels
+            showTankDetail(type);
+        });
+    });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Function to show tank detail modal
 function showTankDetail(tankType) {
     const modal = document.getElementById('tankDetailModal');
@@ -3658,6 +3739,120 @@ function showTankDetail(tankType) {
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
     description.textContent = tankDescriptions[tankType].description;
+
+    // Fill stats block (with inline upgrade buttons)
+    const statsEl = document.getElementById('tankDetailStats');
+    if (statsEl) {
+        const hpBase = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
+        const spdBase = (typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType[tankType]) || 3.2;
+        const hpLvl   = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'hp')  : 0;
+        const spdLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'spd') : 0;
+        const dmgLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'dmg') : 0;
+        const hp  = hpBase  + hpLvl  * 50;
+        // per-type maximum (base + full upgrades)
+        const hpMaxPossible = (tankMaxHpByType[tankType] || 300) + (UPGRADE_MAX * 50);
+        const hpStars  = Math.min(10, Math.round((hp / hpMaxPossible) * 10));
+        // speed current and per-type max
+        let spdBonus = 0;
+        if (typeof getTankSpeedBonus === 'function') {
+            spdBonus = getTankSpeedBonus(tankType);
+        } else {
+            const _incs = [0.2, 0.2, 0.3];
+            for (let _i = 0; _i < spdLvl; _i++) spdBonus += (_incs[_i] || 0);
+        }
+        const spd = parseFloat((spdBase + spdBonus).toFixed(1));
+        const spdMaxPossible = (tankMaxSpeedByType[tankType] || 3.2) + (typeof SPEED_INCREMENTS !== 'undefined' ? SPEED_INCREMENTS.reduce((a,b)=>a+b,0) : 0.7);
+        const spdStars = Math.min(10, Math.round((spd / spdMaxPossible) * 10));
+        const bar = (val, max = 10) => {
+            const filled = Math.min(val, max);
+            return '█'.repeat(filled) + '░'.repeat(max - filled);
+        };
+        const tankDamageByType = {
+            normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
+            plasma: 350, musical: 200, waterjet: 11, illuminat: 80,
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150
+        };
+        const dmgRaw   = tankDamageByType[tankType] || 100;
+        const dmgMaxPossible = dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6);
+        const dmgBoosted = Math.round(dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[dmgLvl] : (1 + dmgLvl*0.1)));
+        const dmgStars = Math.min(10, Math.round((dmgBoosted / dmgMaxPossible) * 10));
+        const dmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.' }[tankType] || '';
+
+        // Ownership and helper to generate compact inline button HTML
+        const isOwned = (typeof unlockedTanks !== 'undefined') && unlockedTanks.includes(tankType);
+        const getLvl  = (stat) => (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, stat) : 0;
+        // Near number: MAX or lock symbol shown right after the value
+        const makeNear = (stat) => {
+            const lvl = getLvl(stat);
+            if (!isOwned) return `<span style="font-size:12px; opacity:0.6; margin-left:6px;">🔒</span>`;
+            if (lvl >= UPGRADE_MAX) return `<span style="font-size:11px; color:#f1c40f; font-weight:bold; margin-left:8px;">MAX</span>`;
+            return '';
+        };
+        // Right side: upgrade button only (or nothing if MAX/locked)
+        const makeFar = (stat) => {
+            const lvl = getLvl(stat);
+            if (!isOwned || lvl >= UPGRADE_MAX) return '';
+            const nextCost = UPGRADE_COSTS[lvl];
+            const affordable = (typeof parts !== 'undefined') && parts >= nextCost;
+            return `<button class="upgrade-btn" data-type="${tankType}" data-stat="${stat}" data-cost="${nextCost}" ${affordable ? '' : 'disabled'} style="display:inline-block; min-width:48px; padding:2px 4px; font-size:10px; border-radius:4px; background:${affordable ? 'rgba(52,152,219,0.25)' : 'rgba(80,80,80,0.18)'}; border:1px solid ${affordable ? '#3498db' : '#555'}; color:${affordable ? '#fff' : '#888'};">Ур.${lvl+1} · ${nextCost}🔧</button>`;
+        };
+
+        const cssBar = (pct, color) => `<div style="width:90px;height:8px;background:#333;border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;flex-shrink:0;"><div style="width:${Math.round(pct)}%;height:100%;background:${color};border-radius:4px;"></div></div>`;
+        const hpPct  = Math.round((hp / hpMaxPossible) * 100);
+        const dmgPct = Math.round((dmgBoosted / dmgMaxPossible) * 100);
+        const spdPct = Math.round((spd / spdMaxPossible) * 100);
+
+        statsEl.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:9px; font-size:13px;">
+                <div style="display:flex; align-items:center;">
+                    <div style="width:80px; font-weight:bold; flex-shrink:0;">HP</div>
+                    ${cssBar(hpPct, '#e74c3c')}
+                    <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${hp}</div>
+                    ${makeNear('hp')}
+                    <div style="flex:1;"></div>
+                    <div style="flex-shrink:0;">${makeFar('hp')}</div>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <div style="width:80px; font-weight:bold; flex-shrink:0;">Урон</div>
+                    ${cssBar(dmgPct, '#A0522D')}
+                    <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${dmgBoosted}${dmgNote}</div>
+                    ${makeNear('dmg')}
+                    <div style="flex:1;"></div>
+                    <div style="flex-shrink:0;">${makeFar('dmg')}</div>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <div style="width:80px; font-weight:bold; flex-shrink:0;">Скорость</div>
+                    ${cssBar(spdPct, '#2ecc71')}
+                    <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${spd.toFixed(1)}</div>
+                    ${makeNear('spd')}
+                    <div style="flex:1;"></div>
+                    <div style="flex-shrink:0;">${makeFar('spd')}</div>
+                </div>
+            </div>`;
+
+        // Attach buy-button listeners inside statsEl
+        statsEl.querySelectorAll('.upgrade-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const type = btn.dataset.type;
+                const stat = btn.dataset.stat;
+                const cost = parseInt(btn.dataset.cost) || 0;
+                if (typeof parts === 'undefined' || parts < cost) return;
+                // Deduct parts
+                parts -= cost;
+                localStorage.setItem('tankParts', parts);
+                if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
+                // Store upgrade
+                if (!tankUpgrades[type]) tankUpgrades[type] = {};
+                tankUpgrades[type][stat] = (tankUpgrades[type][stat] || 0) + 1;
+                saveTankUpgrades();
+                // Always re-apply HP and speed immediately (in case player buys mid-session)
+                if (typeof setTankHP    === 'function') setTankHP(type);
+                if (typeof setTankSpeed === 'function') setTankSpeed(type);
+                // Refresh modal
+                showTankDetail(type);
+            });
+        });
+    }
 
     // Draw background: normal uses single grass color, others use rarity gradient
     if (tankType === 'normal') {

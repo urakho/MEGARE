@@ -18,6 +18,7 @@
     <b>F5</b> — В главное меню<br>
     <b>Coins: <span id="coinDisplay" class="currency-coin">0</span></b><br>
     <b>Gems: <span id="gemDisplay" class="currency-gem">0</span></b><br>
+    <b>Parts: <span id="partDisplay" class="currency-part">0</span></b><br>
     <b>Trophies: <span id="trophyDisplay" class="currency-trophy">0</span></b><br>
     <hr>
     <small>Сверху есть подсказки по игре и ниже отображаются ваши ресурсы.</small>
@@ -31,6 +32,7 @@
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
+            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
             <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
         </div>
         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:15px;">
@@ -69,7 +71,7 @@
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-            <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
         </div>
         
         <!-- Shop items container with scroll -->
@@ -85,6 +87,12 @@
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#f1c40f;">Бронзовый Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Содержит случайное количество монет (10-100) и шанс на обычного персонажа.</p>
                 <button id="buyContainer" class="btn btn-buy">Купить (100 монет)</button>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
+                <img src="cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
+                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
+                <p style="margin:5px 0; font-size:14px;">Контейнер с техническими деталями для улучшений. Содержит детали и монеты.</p>
+                <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
@@ -112,7 +120,7 @@
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-            <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
             </div>
         <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center; max-height:400px; overflow-y:auto;">
             <div style="text-align:center; width:180px;">
@@ -202,15 +210,20 @@
 
 <!-- Tank Detail Modal (hidden by default) -->
 <div id="tankDetailModal" class="modal-overlay">
-    <div class="modal-box" style="width:500px;">
+    <div class="modal-box" style="width:560px; max-height:90vh; overflow-y:auto;">
         <h2 id="tankDetailTitle" class="modal-title">Танк</h2>
         <p id="tankDetailRarity" style="margin:0 0 10px 0; font-size:20px; color:#f1c40f;">Редкость</p>
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
-            <canvas id="tankDetailCanvas" width="200" height="200" style="border:2px solid #444; border-radius:8px;"></canvas>
-            <div id="tankDetailDescription" style="flex:1; margin-left:20px; text-align:left; font-size:16px; line-height:1.5;">
-                Описание танка
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:16px;">
+            <canvas id="tankDetailCanvas" width="200" height="200" style="flex-shrink:0; border:2px solid #444; border-radius:8px;"></canvas>
+            <div style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
+                <div id="tankDetailDescription" style="text-align:left; font-size:14px; line-height:1.5; color:#ddd;">
+                    Описание танка
+                </div>
+                <div id="tankDetailStats" style="background:rgba(0,0,0,0.35); border-radius:8px; padding:8px 12px; font-size:13px; line-height:1.8; color:#fff; text-align:left;">
+                </div>
             </div>
         </div>
+        <div id="tankDetailUpgrades" style="border-top:1px solid #444; padding-top:10px; margin-bottom:14px;"></div>
         <div style="display:flex; gap:20px; justify-content:center;">
             <button id="tankDetailClose" class="btn btn-secondary">Закрыть</button>
             <button id="tankDetailTry" class="btn btn-mode">⚔️ Испытать</button>
@@ -315,8 +328,6 @@
     <div class="modal-box" style="width:900px; max-height:80vh;">
         <h2 class="modal-title">🏆 Трофейная дорога</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
-            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
-            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
             <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
         </div>
         
