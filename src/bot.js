@@ -477,7 +477,7 @@ function updateEnemyAI() {
         
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
-        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0)];
+        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...(typeof playerDrones !== 'undefined' ? playerDrones.filter(d => d && d.alive) : [])];
         const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
         if (targets.length === 0) continue;
         // Find nearest target
@@ -564,6 +564,31 @@ function updateEnemyAI() {
                 enemy.ultimateCooldown = 480; // 8s cooldown
                 // Visual charge particles
                 for (let k = 0; k < 30; k++) spawnParticle(enemy.x + enemy.w/2 + (Math.random()-0.5)*enemy.w*1.2, enemy.y + enemy.h/2 + (Math.random()-0.5)*enemy.h*1.2, '#00d4ff', 1);
+                enemy.fireCooldown = 60;
+            }
+
+            // Robot: spawn combat drones when close to targets
+            if (enemy.tankType === 'robot' && (!enemy.robotDroneCooldown || enemy.robotDroneCooldown <= 0) && distToNearest < 350 && Math.random() < 0.03) {
+                // Spawn 3 drones in triangle formation around robot
+                const baseAngle = Math.random() * Math.PI * 2;
+                for (let d = 0; d < 3; d++) {
+                    const angle = baseAngle + (d * Math.PI * 2 / 3);
+                    const droneX = enemy.x + enemy.w/2 + Math.cos(angle) * 50;
+                    const droneY = enemy.y + enemy.h/2 + Math.sin(angle) * 50;
+                    if (typeof enemyDrones === 'undefined') enemyDrones = [];
+                    enemyDrones.push({
+                        x: droneX, y: droneY, w: 24, h: 24,
+                        speed: 2.5,
+                        hp: 150, maxHp: 150,
+                        life: 600, maxLife: 600,
+                        fireCooldown: 0, turretAngle: 0, wanderAngle: Math.random() * Math.PI * 2,
+                        alive: true,
+                        team: enemy.team,
+                        owner: enemy,
+                        isEnemyDrone: true
+                    });
+                }
+                enemy.robotDroneCooldown = 600; // 10 second cooldown
                 enemy.fireCooldown = 60;
             }
 
@@ -1035,6 +1060,21 @@ function updateEnemyAI() {
                     homingStrength: 0.15,
                     hitChain: []
                 };
+            } else if (tt === 'robot') {
+                // Enemy Robot: fire railgun bolt
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 28,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 28,
+                    w: 6, h: 6,
+                    vx: Math.cos(enemy.turretAngle) * 18,
+                    vy: Math.sin(enemy.turretAngle) * 18,
+                    life: 110,
+                    owner: 'enemy',
+                    team: enemy.team,
+                    type: 'railgun',
+                    damage: 75,
+                    piercing: true
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1042,7 +1082,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1493,7 +1533,7 @@ function updateAllyAI() {
                 if (dist <= hitRadius) {
                     // Damage scaled by beam intensity, boosted by upgrade if player
                     const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
-                    const dmg = 80 * unit.beamIntensity * _beamUpgMult;
+                    const dmg = 25 * unit.beamIntensity * _beamUpgMult;
                     e.hp -= dmg;
                     // Apply strong disorientation/inversion + confusion so AI reacts
                     e.disoriented = Math.max(e.disoriented || 0, 60);

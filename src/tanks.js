@@ -77,6 +77,11 @@ const tankDescriptions = {
         name: "Электрический",
         description: "Мифический электрический танк. Шаровые молнии преследуют врагов и обходят препятствия. Ульта (E): вспышка молний поражает всех рядом, проходя сквозь препятствия. Кулдаун: 8 сек. Танк идеален для контроля толпы и точечных зачисток.",
         rarity: "Мифический"
+    },
+    robot: {
+        name: "Танк-робот",
+        description: "Тяжёлый боевой робот с рельсотроном. Его выстрел пробивает танки и наносит урон всем врагам на линии. Ульта выпускает 3 боевых дрона, которые самостоятельно ищут врагов и атакуют их.",
+        rarity: "Легендарный"
     }
 };
 
@@ -98,7 +103,9 @@ const tankBgGradients = {
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
-    electric: ['#ff6b6b', '#e74c3c']  // Электрический - red (robot theme)
+    electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
+    robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
+    // sport removed
 };
 
 // Base colors used in preview rendering (keeps menu and modal consistent)
@@ -115,7 +122,9 @@ const tankBaseColors = {
     mirror: '#0000FF',
     time: '#FF00FF',
     machinegun: '#0000FF',
-    electric: '#1a1a2e'  // Dark blue-purple for robot
+    electric: '#1a1a2e',  // Dark blue-purple for robot
+    robot:   '#263238',    // Dark steel for robot tank
+    // sport removed
 };
 
 // Make available globally
@@ -639,6 +648,26 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(100, 180, 220, 0.7)';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'robot') {
+            // Heavy armored robot body — dark steel plates
+            const rg = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            rg.addColorStop(0, '#37474f');
+            rg.addColorStop(0.5, '#263238');
+            rg.addColorStop(1, '#1c2628');
+            ctx.fillStyle = rg;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Armor panel lines
+            ctx.strokeStyle = '#546e7a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2 + 3, -bodyH/2 + 3, bodyW - 6, bodyH - 6);
+            ctx.strokeRect(-bodyW/2 + 7, -bodyH/2 + 7, bodyW - 14, bodyH - 14);
+            // Reactor vent (cyan glow)
+            ctx.fillStyle = '#00e5ff';
+            ctx.fillRect(-5, -bodyH/2 + 4, 10, 5);
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 8;
+            ctx.fillRect(-5, -bodyH/2 + 4, 10, 5);
+            ctx.shadowBlur = 0;
         } else {
             // Default
             ctx.fillStyle = color;
@@ -1276,6 +1305,26 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.beginPath(); ctx.arc(0, 0, tSize*0.12, 0, Math.PI*2); ctx.fill();
     } else if (type === 'plasma') {
         // Handled below
+    } else if (type === 'robot') {
+        // Robotic dome turret with sensor eye
+        const rTGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize/2);
+        rTGrad.addColorStop(0, '#455a64');
+        rTGrad.addColorStop(0.6, '#263238');
+        rTGrad.addColorStop(1, '#1a2226');
+        ctx.fillStyle = rTGrad;
+        ctx.beginPath(); ctx.arc(0, 0, tSize/2, 0, Math.PI*2); ctx.fill();
+        // Sensor ring
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.28, 0, Math.PI*2); ctx.stroke();
+        // Central red sensor eye
+        ctx.shadowColor = '#ff1744';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#ff1744';
+        ctx.beginPath(); ctx.arc(0, 0, tSize*0.12, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -1712,6 +1761,29 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Muzzle hole
             ctx.fillStyle = '#000';
             ctx.beginPath(); ctx.arc(tSize/2 + _bLen + 4, 0, _bH * 0.28, 0, Math.PI*2); ctx.fill();
+        } else if (type === 'robot') {
+            // Long slender railgun barrel
+            const rbLen = Math.min(W, H) * 0.82 * turretScale;
+            const rbH   = Math.min(W, H) * 0.14 * turretScale;
+            const rbGrad = ctx.createLinearGradient(tSize/2, 0, tSize/2 + rbLen, 0);
+            rbGrad.addColorStop(0, '#455a64');
+            rbGrad.addColorStop(0.4, '#b0bec5');
+            rbGrad.addColorStop(1, '#37474f');
+            ctx.fillStyle = rbGrad;
+            ctx.fillRect(tSize/2, -rbH/2, rbLen, rbH);
+            // Magnetic accelerator coil rings
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 4;
+            for (let ri = 0; ri < 4; ri++) {
+                const rx = tSize/2 + rbLen * (0.18 + ri * 0.2);
+                ctx.fillRect(rx, -rbH/2 - 2, 3, rbH + 4);
+            }
+            // Muzzle cap
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowBlur = 8;
+            ctx.fillRect(tSize/2 + rbLen - 2, -rbH/2 - 3, 5, rbH + 6);
+            ctx.shadowBlur = 0;
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2038,6 +2110,13 @@ function drawCharacterPreviews() {
     
     // ELECTRIC Robot Tank - Static preview with gradient background
     drawItem(electricTankCtx, electricTankPreview, 'electric', '#1a1a2e', tankBgGradients.electric);
+
+    // ROBOT Tank preview
+    if (typeof robotTankCtx !== 'undefined' && robotTankCtx && robotTankPreview) {
+        drawItem(robotTankCtx, robotTankPreview, 'robot', '#0d0d1e', tankBgGradients.robot);
+    }
+
+    // SPORT Soccer Tank preview removed
 }
 
 function draw() {
@@ -2914,6 +2993,45 @@ function draw() {
             // Bright specular highlight
             ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(b.x - radius * 0.25, b.y - radius * 0.25, radius * 0.35, 0, Math.PI * 2); ctx.fill();
 
+        } else if (b.type === 'railgun') {
+            // Fast cyan energy bolt with glow trail
+            const ang = Math.atan2(b.vy, b.vx);
+            const boltLen = 26;
+            const tx = b.x - Math.cos(ang) * boltLen;
+            const ty = b.y - Math.sin(ang) * boltLen;
+            const rg = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            rg.addColorStop(0, 'rgba(0,229,255,0)');
+            rg.addColorStop(0.5, 'rgba(0,229,255,0.7)');
+            rg.addColorStop(1, '#ffffff');
+            ctx.strokeStyle = rg;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            // Bright tip
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+        } else if (b.type === 'droneBullet') {
+            // Small cyan drone shot
+            const dpr = 3;
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, dpr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -3519,6 +3637,8 @@ function draw() {
 
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
 
+        // Sport visuals removed
+
         // Rainbow aura when imitator transformation is active
         if (tank.imitatorActive) {
             const auraR = Math.max(tank.w, tank.h) * 0.72;
@@ -3552,6 +3672,162 @@ function draw() {
     }
     
     // Illuminat beam handled by drawUnitBeam above for all units including player
+
+    // Draw combat drones (robot tank ultimate)
+    if (typeof playerDrones !== 'undefined' && playerDrones.length > 0) {
+        for (const d of playerDrones) {
+            if (!d.alive) continue;
+            const cx = d.x + d.w / 2;
+            const cy = d.y + d.h / 2;
+            const dr = d.w / 2;
+            const angle = d.turretAngle || 0;
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+
+            // Wing panels — two side fins aligned with movement
+            ctx.fillStyle = '#37474f';
+            ctx.fillRect(-dr * 0.2, -dr * 1.1, dr * 0.4, dr * 0.55);
+            ctx.fillRect(-dr * 0.2,  dr * 0.55, dr * 0.4, dr * 0.55);
+            ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 0.8;
+            ctx.strokeRect(-dr * 0.2, -dr * 1.1, dr * 0.4, dr * 0.55);
+            ctx.strokeRect(-dr * 0.2,  dr * 0.55, dr * 0.4, dr * 0.55);
+
+            // Hexagonal body
+            ctx.fillStyle = '#263238';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 7;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+                const px = Math.cos(a) * dr, py = Math.sin(a) * dr;
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Inner ring detail
+            ctx.strokeStyle = 'rgba(0,229,255,0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(0, 0, dr * 0.55, 0, Math.PI * 2); ctx.stroke();
+
+            // Mini cannon barrel pointing forward (along +X before rotation)
+            const barLen = dr * 1.1;
+            const barH  = dr * 0.22;
+            const barGrad = ctx.createLinearGradient(0, 0, barLen, 0);
+            barGrad.addColorStop(0, '#455a64');
+            barGrad.addColorStop(1, '#b0bec5');
+            ctx.fillStyle = barGrad;
+            ctx.fillRect(dr * 0.42, -barH / 2, barLen, barH);
+            // Cyan muzzle tip
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 5;
+            ctx.fillRect(dr * 0.42 + barLen - 2, -barH / 2 - 1, 3, barH + 2);
+            ctx.shadowBlur = 0;
+
+            // Red sensor eye
+            ctx.fillStyle = '#ff1744';
+            ctx.shadowColor = '#ff1744';
+            ctx.shadowBlur = 5;
+            ctx.beginPath(); ctx.arc(0, 0, dr * 0.2, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+
+            // HP bar (unrotated, above drone)
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(d.x, d.y - 9, d.w, 4);
+            ctx.fillStyle = '#00e5ff';
+            ctx.fillRect(d.x, d.y - 9, d.w * (d.hp / d.maxHp), 4);
+            // Life timer bar
+            const lifeRatio = d.life / d.maxLife;
+            ctx.fillStyle = 'rgba(255,255,100,0.35)';
+            ctx.fillRect(d.x, d.y - 14, d.w * lifeRatio, 3);
+        }
+    }
+
+    // Draw enemy combat drones (enemy robot tank ultimate)
+    if (typeof enemyDrones !== 'undefined' && enemyDrones.length > 0) {
+        for (const d of enemyDrones) {
+            if (!d.alive) continue;
+            const cx = d.x + d.w / 2;
+            const cy = d.y + d.h / 2;
+            const dr = d.w / 2;
+            const angle = d.turretAngle || 0;
+
+            // Determine color based on team
+            const teamColors = ['#00e5ff', '#ff6b6b', '#ffd700', '#2ecc71'];
+            const droneColor = teamColors[d.team % 4] || '#ff6b6b';
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+
+            // Wing panels — two side fins aligned with movement
+            ctx.fillStyle = '#37474f';
+            ctx.fillRect(-dr * 0.2, -dr * 1.1, dr * 0.4, dr * 0.55);
+            ctx.fillRect(-dr * 0.2,  dr * 0.55, dr * 0.4, dr * 0.55);
+            ctx.strokeStyle = droneColor; ctx.lineWidth = 0.8;
+            ctx.strokeRect(-dr * 0.2, -dr * 1.1, dr * 0.4, dr * 0.55);
+            ctx.strokeRect(-dr * 0.2,  dr * 0.55, dr * 0.4, dr * 0.55);
+
+            // Hexagonal body
+            ctx.fillStyle = '#263238';
+            ctx.shadowColor = droneColor;
+            ctx.shadowBlur = 7;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+                const px = Math.cos(a) * dr, py = Math.sin(a) * dr;
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = droneColor; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Inner ring detail
+            ctx.strokeStyle = 'rgba(' + (droneColor === '#00e5ff' ? '0,229,255' : droneColor === '#ff6b6b' ? '255,107,107' : droneColor === '#ffd700' ? '255,215,0' : '46,204,113') + ',0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(0, 0, dr * 0.55, 0, Math.PI * 2); ctx.stroke();
+
+            // Mini cannon barrel pointing forward (along +X before rotation)
+            const barLen = dr * 1.1;
+            const barH  = dr * 0.22;
+            const barGrad = ctx.createLinearGradient(0, 0, barLen, 0);
+            barGrad.addColorStop(0, '#455a64');
+            barGrad.addColorStop(1, '#b0bec5');
+            ctx.fillStyle = barGrad;
+            ctx.fillRect(dr * 0.42, -barH / 2, barLen, barH);
+            // Colored muzzle tip matching team
+            ctx.fillStyle = droneColor;
+            ctx.shadowColor = droneColor;
+            ctx.shadowBlur = 5;
+            ctx.fillRect(dr * 0.42 + barLen - 2, -barH / 2 - 1, 3, barH + 2);
+            ctx.shadowBlur = 0;
+
+            // Sensor eye
+            ctx.fillStyle = droneColor;
+            ctx.shadowColor = droneColor;
+            ctx.shadowBlur = 5;
+            ctx.beginPath(); ctx.arc(0, 0, dr * 0.2, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+
+            // HP bar (unrotated, above drone)
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(d.x, d.y - 9, d.w, 4);
+            ctx.fillStyle = droneColor;
+            ctx.fillRect(d.x, d.y - 9, d.w * (d.hp / d.maxHp), 4);
+            // Life timer bar
+            const lifeRatio = d.life / d.maxLife;
+            ctx.fillStyle = 'rgba(255,255,100,0.35)';
+            ctx.fillRect(d.x, d.y - 14, d.w * lifeRatio, 3);
+        }
+    }
 
     // DUEL MODE: Draw Shrinking Zone (Grid Based)
     if (typeof currentMode !== 'undefined' && currentMode === 'duel' && typeof duelState !== 'undefined' && duelState) {
@@ -3769,8 +4045,8 @@ function showTankDetail(tankType) {
         };
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
-            plasma: 350, musical: 200, waterjet: 11, illuminat: 80,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150
+            plasma: 350, musical: 200, waterjet: 11, illuminat: 25,
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         const dmgMaxPossible = dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6);

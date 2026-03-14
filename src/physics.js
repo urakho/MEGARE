@@ -852,6 +852,24 @@ function shoot() {
             hitChain: []  // List of enemy indices we've already hit
         });
         tank.fireCooldown = 80; // ~1.33 second cooldown
+    } else if (tankType === 'robot') {
+        // Railgun: fast piercing energy bolt
+        const ang = tank.turretAngle;
+        const speed = 18;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 28,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 28,
+            w: 6, h: 6,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 110,
+            owner: 'player',
+            team: 0,
+            type: 'railgun',
+            damage: 75,
+            piercing: true
+        });
+        tank.fireCooldown = 60;
     } else {
         const speed = 5;
         const life = 100;
@@ -867,7 +885,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1042,6 +1060,19 @@ function updatePhysics() {
                     
                     b.bounces++;
                     if (b.bounces > b.maxBounces) {
+                        // Ultimate ball explosion effect
+                        if (b.isUltimateBall && b.explosionRadius) {
+                            spawnExplosion(b.x, b.y, b.explosionRadius);
+                            // Damage all enemies in explosion radius
+                            for (let enemy of enemies) {
+                                const dx = enemy.x + enemy.w/2 - b.x;
+                                const dy = enemy.y + enemy.h/2 - b.y;
+                                const dist = Math.sqrt(dx*dx + dy*dy);
+                                if (dist < b.explosionRadius) {
+                                    enemy.hp -= b.explosionDamage || 100;
+                                }
+                            }
+                        }
                         bullets.splice(i, 1);
                         hit = true;
                     } else {
@@ -1142,13 +1173,22 @@ function updatePhysics() {
                     }
                 } else if (b.type === 'illuminat') {
                     // Illuminat beam: damage and disorient
-                    tank.hp -= b.damage || 75;
+                    tank.hp -= b.damage || 25;
                     tank.disoriented = b.disorientTime || 36; // 0.6 seconds
                     bullets.splice(i, 1);
                 } else if (b.type === 'machinegun') {
                     // Machinegun: rapid fire with consistent damage
                     tank.hp -= b.damage;
                     bullets.splice(i, 1);
+                } else if (b.type === 'railgun') {
+                    // Railgun pierces player too — hit once then continue flying
+                    if (!b.hitEntities) b.hitEntities = [];
+                    if (!b.hitEntities.includes('player')) {
+                        tank.hp -= b.damage || 75;
+                        b.hitEntities.push('player');
+                        for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
+                    }
+                    // Don't remove
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      tank.hp -= dmg;
@@ -1310,6 +1350,19 @@ function updatePhysics() {
                         // Machinegun: rapid fire with consistent damage
                         e.hp -= b.damage;
                         bullets.splice(i, 1);
+                    } else if (b.type === 'railgun') {
+                        // Railgun: pierce through all enemies, hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        if (!b.hitEntities.includes(j)) {
+                            e.hp -= b.damage || 75;
+                            b.hitEntities.push(j);
+                            for (let k = 0; k < 5; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#00e5ff', 0.6);
+                        }
+                        // Don't remove — keeps flying
+                    } else if (b.type === 'droneBullet') {
+                        // Drone bullet: damage and remove
+                        e.hp -= b.damage || 25;
+                        bullets.splice(i, 1);
                     } else {
                         e.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
@@ -1325,6 +1378,106 @@ function updatePhysics() {
                         }
                     }
                     break;
+                }
+            }
+            // Check collision with player drones
+            if (typeof playerDrones !== 'undefined' && playerDrones.length > 0) {
+                for (let j = playerDrones.length - 1; j >= 0; j--) {
+                    const d = playerDrones[j];
+                    if (!d || !d.alive) continue;
+                    if (checkRectCollision(bRect, d) && b.team !== d.team) {
+                        if (b.type === 'rocket' || b.type === 'smallRocket') {
+                            explodeRocket(b);
+                            bullets.splice(i, 1);
+                        } else if (b.type === 'toxic' || b.type === 'megabomb') {
+                            // Toxic bombs only damage, don't stop or explode on contact
+                            d.hp -= 50;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'plasma') {
+                            // Plasma bolt pierces through drones
+                            d.hp -= b.damage || 350;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'plasmaBlast') {
+                            // Plasma blast pierces and damages all in line
+                            d.hp -= b.damage || 350;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'railgun') {
+                            // Railgun: pierce through all drones, hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            if (!b.hitEntities.includes('drone_' + j)) {
+                                d.hp -= b.damage || 75;
+                                b.hitEntities.push('drone_' + j);
+                                for (let k = 0; k < 5; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#00e5ff', 0.6);
+                            }
+                            // Don't remove — keeps flying
+                        } else if (b.type === 'droneBullet') {
+                            // Drone bullets don't hurt other drones (same team)
+                            continue;
+                        } else if (b.type === 'machinegun') {
+                            // Machinegun: rapid fire with consistent damage
+                            d.hp -= b.damage;
+                            bullets.splice(i, 1);
+                        } else {
+                            d.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                            if (b.type === 'ice') { d.paralyzed = true; d.paralyzedTime = 180; }
+                            bullets.splice(i, 1);
+                        }
+                        if (d.hp <= 0) {
+                            playerDrones.splice(j, 1);
+                            spawnExplosion(d.x+d.w/2, d.y+d.h/2, 50);
+                        }
+                        break;
+                    }
+                }
+            }
+            // Check collision with enemy drones
+            if (typeof enemyDrones !== 'undefined' && enemyDrones.length > 0) {
+                for (let j = enemyDrones.length - 1; j >= 0; j--) {
+                    const d = enemyDrones[j];
+                    if (!d || !d.alive) continue;
+                    if (checkRectCollision(bRect, d) && b.team !== d.team) {
+                        if (b.type === 'rocket' || b.type === 'smallRocket') {
+                            explodeRocket(b);
+                            bullets.splice(i, 1);
+                        } else if (b.type === 'toxic' || b.type === 'megabomb') {
+                            // Toxic bombs only damage, don't stop or explode on contact
+                            d.hp -= 50;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'plasma') {
+                            // Plasma bolt pierces through drones
+                            d.hp -= b.damage || 350;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'plasmaBlast') {
+                            // Plasma blast pierces and damages all in line
+                            d.hp -= b.damage || 350;
+                            // continue flying, don't remove bullet
+                        } else if (b.type === 'railgun') {
+                            // Railgun: pierce through all drones, hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            if (!b.hitEntities.includes('enemyDrone_' + j)) {
+                                d.hp -= b.damage || 75;
+                                b.hitEntities.push('enemyDrone_' + j);
+                                for (let k = 0; k < 5; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#00e5ff', 0.6);
+                            }
+                            // Don't remove — keeps flying
+                        } else if (b.type === 'droneBullet') {
+                            // Drone bullets don't hurt other enemy drones (same team)
+                            continue;
+                        } else if (b.type === 'machinegun') {
+                            // Machinegun: rapid fire with consistent damage
+                            d.hp -= b.damage;
+                            bullets.splice(i, 1);
+                        } else {
+                            d.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                            if (b.type === 'ice') { d.paralyzed = true; d.paralyzedTime = 180; }
+                            bullets.splice(i, 1);
+                        }
+                        if (d.hp <= 0) {
+                            enemyDrones.splice(j, 1);
+                            spawnExplosion(d.x+d.w/2, d.y+d.h/2, 50);
+                        }
+                        break;
+                    }
                 }
             }
             // If bullet was reflected by a mirror bot, skip to next bullet immediately
@@ -2024,6 +2177,8 @@ function moveWithCollision(dx, dy) {
             }
         }
     }
+
+    // Sport shield removed
 
     // Края мира
     tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
