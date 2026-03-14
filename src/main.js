@@ -28,22 +28,22 @@ let novaZones = [];  // Active nova damage zones (center, radius, life, ownerTea
 let enemies = [];
 let allies = [];
 let gameState = 'menu';
-let menuMusic = new Audio('music/menu.mp3');
+let menuMusic = new Audio('music/mp3/menu.mp3');
 menuMusic.loop = true;
 menuMusic.volume = 0.5;
-let fightMusic = new Audio('music/fight.mp3');
+let fightMusic = new Audio('music/mp3/fight.mp3');
 fightMusic.loop = true;
 fightMusic.volume = 0.5;
-let duelMusic = new Audio('music/duel.mp3');
+let duelMusic = new Audio('music/mp3/duel.mp3');
 duelMusic.loop = true;
 duelMusic.volume = 0.5;
-let teamMusic = new Audio('music/team.mp3');
+let teamMusic = new Audio('music/mp3/team.mp3');
 teamMusic.loop = true;
 teamMusic.volume = 0.5;
-let tankMusic = new Audio('music/tank.mp3');
+let tankMusic = new Audio('music/mp3/tank.mp3');
 tankMusic.loop = true;
 tankMusic.volume = 0.5;
-let exfightMusic = new Audio('music/exfight.mp3');
+let exfightMusic = new Audio('music/mp3/exfight.mp3');
 exfightMusic.loop = true;
 exfightMusic.volume = 0.5;
 let currentMode = 'menu';
@@ -82,6 +82,8 @@ let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
 // Новая валюта: детали (пока недоступны в наградах)
 let parts = parseInt(localStorage.getItem('tankParts')) || 0;
+// Developer commands unlock flag (persisted)
+let devCommandsUnlocked = localStorage.getItem('tankDevUnlocked') === 'true';
 
 // ─── Tank characteristic upgrades ────────────────────────────────────────────
 // Structure: { [tankType]: { hp: 0-3, dmg: 0-3, spd: 0-3 } }
@@ -231,6 +233,16 @@ let cameraFollow = true;
 
 // Тип танка игрока
 let tankType = localStorage.getItem('tankSelected') || 'normal';
+
+// REMOVED: triggerAntiCheat function and all anti-cheat system code
+// The following 230 lines have been removed:
+// - Anti-cheat visual effects (glitch overlay, falling text, scanlines, screen shake, brightness flicker)
+// - Anti-cheat audio (idiotMusic playback and replay logic)
+// - Anti-cheat punishment (progress wipe, localStorage clear)
+// - Dev command gating logic (processDevCommand anti-cheat check)
+// - Warning modal event listeners
+
+// Placeholder for structure - removed code used to be here (lines 234-464)
 
 // Tank HP based on type
 const tankMaxHpByType = {
@@ -482,6 +494,9 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
 // Apply initial music volume
 menuMusic.volume = window.musicVolume;
 fightMusic.volume = window.musicVolume;
+duelMusic.volume = window.musicVolume;
+teamMusic.volume = window.musicVolume;
+tankMusic.volume = window.musicVolume;
 exfightMusic.volume = window.musicVolume;
 
 // Music management
@@ -772,18 +787,11 @@ if (commandInput) {
     commandInput.addEventListener('keydown', (e) => {
         if (e.code === 'Enter') {
             const command = commandInput.value.trim();
-            if (command.startsWith('/coins ')) {
-                const amount = parseInt(command.substring(7));
-                if (!isNaN(amount) && amount > 0) {
-                    coins += amount;
-                    updateCoinDisplay();
-                    localStorage.setItem('tankCoins', coins);
-                    console.log(`Added ${amount} coins. Total: ${coins}`);
-                }
-            }
+            processDevCommand(command);
             commandInput.value = '';
             commandInput.style.display = 'none';
             commandInput.blur();
+            e.stopImmediatePropagation();
         } else if (e.code === 'Escape') {
             commandInput.value = '';
             commandInput.style.display = 'none';
@@ -1045,6 +1053,32 @@ function processDevCommand(rawCommand) {
     const command = rawCommand.trim();
     if (!command) return;
 
+    // Control developer command gate: '/MEG on' or '/MEG off' (case-insensitive)
+    const lc = command.toLowerCase();
+    if (lc === '/meg' || lc.startsWith('/meg ')) {
+        const parts = command.split(/\s+/);
+        const arg = (parts[1] || '').toLowerCase();
+        if (arg === 'on') {
+            devCommandsUnlocked = true;
+            try { localStorage.setItem('tankDevUnlocked', 'true'); } catch (e) {}
+            console.log('Developer commands enabled (/MEG on).');
+        } else if (arg === 'off') {
+            devCommandsUnlocked = false;
+            try { localStorage.setItem('tankDevUnlocked', 'false'); } catch (e) {}
+            console.log('Developer commands disabled (/MEG off).');
+        } else {
+            console.log('Usage: /MEG on|off');
+        }
+        return;
+    }
+
+    // Legacy alias removed; use '/MEG on' to enable developer commands
+
+    // If not unlocked, skip dev commands
+    if (!devCommandsUnlocked) {
+        return;
+    }
+
     if (command.startsWith('/coins')) {
         const parts = command.substring(6).trim().split(/\s+/);
         let op = '+'; 
@@ -1107,13 +1141,13 @@ function processDevCommand(rawCommand) {
             console.log(`Parts updated: ${parts}`);
         }
     } else if (command.startsWith('/trophy')) {
-        const partsParse = command.substring(7).trim().split(/\s+/);
+        const trophyParts = command.substring(7).trim().split(/\s+/);
         let op = '='; 
-        let valStr = parts[0];
+        let valStr = trophyParts[0];
         
-        if (['+', '-', '='].includes(parts[0])) {
-            op = parts[0];
-            valStr = parts[1];
+        if (['+', '-', '='].includes(trophyParts[0])) {
+            op = trophyParts[0];
+            valStr = trophyParts[1];
         }
         
         const amount = parseInt(valStr);
