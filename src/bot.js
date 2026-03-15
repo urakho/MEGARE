@@ -619,14 +619,14 @@ function updateEnemyAI() {
                     const d = Math.hypot((other.x + other.w/2) - ex, (other.y + other.h/2) - ey);
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
-                // Don't copy imitator or unknown types
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot'];
-                const picked = (nearestType && validTypes.includes(nearestType)) ? nearestType : validTypes[Math.floor(Math.random() * validTypes.length)];
+                // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot'];
+                let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
                 enemy.imitatorTimer = 360;
-                enemy.tankType = picked;
-                const newMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[picked]) || 300;
+                enemy.tankType = copiedType;
+                const newMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[copiedType]) || 300;
                 enemy.hp = Math.min(enemy.hp, newMaxHp);
             }
             if (enemy.imitatorActive) {

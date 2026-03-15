@@ -3031,7 +3031,12 @@ function update() {
                         if (d < nearestDist) { nearestDist = d; nearest = e; }
                     }
                     if (nearest) {
-                        const copiedType = nearest.tankType || 'normal';
+                        let copiedType = nearest.tankType || 'normal';
+                        // Can't copy dummy tanks or another imitator — but mirror is allowed
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot'];
+                        if (!validCopyTypes.includes(copiedType)) {
+                            copiedType = 'normal'; // Default to normal tank if invalid
+                        }
                         const copiedMaxHp = tankMaxHpByType[copiedType] || 300;
                         tank.imitatorActive = true;
                         tank.imitatorTimer = 360; // 6 seconds at 60fps
