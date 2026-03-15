@@ -37,6 +37,7 @@
         </div>
         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:15px;">
             <button id="trophyRoadBtn" class="btn btn-trophy" style="flex:1;">🏆 Трофейная дорога</button>
+            <button id="newsBadge" class="btn btn-settings" title="Новости" aria-label="Новости">📰</button>
             <button id="settingsBtn" class="btn btn-settings">⚙️</button>
             <button id="cmdBtn" class="btn btn-settings" title="Командная строка">/</button>
         </div>
@@ -301,6 +302,19 @@
     </div>
 </div>
 
+<!-- News modal -->
+<div id="newsModal" class="modal-overlay" style="display:none; z-index:220;">
+    <div class="modal-box" style="width:760px; max-width:95vw; max-height:80vh; overflow-y:auto;">
+        <h2 class="modal-title">📰 Новости</h2>
+        <div id="newsContent" style="color:#ddd; font-size:16px; line-height:1.6; max-height:400px; overflow-y:auto;">
+            <!-- News items are populated dynamically from src/news.js -->
+        </div>
+        <div style="text-align:center; margin-top:12px;">
+            <button id="newsClose" class="btn btn-secondary">Закрыть</button>
+        </div>
+    </div>
+</div>
+
 <!-- Result overlay (win / lose) using standard modal styles -->
 <div id="resultOverlay" class="modal-overlay" style="z-index: 150;">
     <div class="modal-box" style="width: 500px;">
@@ -470,6 +484,8 @@
 <script src="src/tanks.js"></script>
 <script src="src/physics.js"></script>
 <script src="src/bot.js"></script>
+<script src="src/news.js"></script>
 <script src="src/win-lose.js"></script>
+
 </body>
 </html>
