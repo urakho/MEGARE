@@ -567,6 +567,135 @@ function updateEnemyAI() {
                 enemy.fireCooldown = 60;
             }
 
+            // Medical: spawn healing zones when nearby allies need healing
+            if (enemy.tankType === 'medical' && (!enemy.medicalZoneCooldown || enemy.medicalZoneCooldown <= 0) && distToNearest < 300 && Math.random() < 0.015) {
+                // Find damaged allies nearby
+                let hasHurtAlly = false;
+                for (let ai = 0; ai < allies.length; ai++) {
+                    const a = allies[ai];
+                    if (!a || !a.alive) continue;
+                    if (a.team !== enemy.team) continue;
+                    const aDistance = Math.hypot((a.x + a.w/2) - (enemy.x + enemy.w/2), (a.y + a.h/2) - (enemy.y + enemy.h/2));
+                    if (aDistance < 250 && (a.hp || 300) < (a.maxHp || 300)) {
+                        hasHurtAlly = true;
+                        break;
+                    }
+                }
+                if (hasHurtAlly || Math.random() < 0.5) { // 50% chance to cast even without nearby hurt
+                    if (typeof medicalZones === 'undefined') medicalZones = [];
+                    medicalZones.push({
+                        x: enemy.x + enemy.w / 2,
+                        y: enemy.y + enemy.h / 2,
+                        radius: 150,
+                        life: 300,  // 5 seconds
+                        maxLife: 300,
+                        healRate: 1.5,
+                        team: enemy.team
+                    });
+                    enemy.medicalZoneCooldown = 720; // 12 second cooldown
+                    enemy.fireCooldown = 60;
+                }
+            }
+
+            // Mine tank: periodically place a mine at current position while moving
+            if (enemy.tankType === 'mine') {
+                if (enemy.mineCooldown > 0) enemy.mineCooldown--;
+                if ((!enemy.mineCooldown || enemy.mineCooldown <= 0) && distToNearest < 400 && Math.random() < 0.025) {
+                    if (typeof mines === 'undefined') mines = [];
+                    mines.push({
+                        x: enemy.x + enemy.w / 2,
+                        y: enemy.y + enemy.h / 2,
+                        radius: 18,
+                        team: enemy.team,
+                        damage: 150
+                    });
+                    enemy.mineCooldown = 120; // 2s cooldown between mines
+                    enemy.fireCooldown = 30;  // Brief pause before logic re-evaluates
+                }
+            }
+
+            // Buratino: mass barrage when nearby enemies
+            if (enemy.tankType === 'buratino') {
+                if (enemy.barrageCooldown > 0) enemy.barrageCooldown--;
+                if ((!enemy.barrageCooldown || enemy.barrageCooldown <= 0) && distToNearest < 400 && Math.random() < 0.02) {
+                    const distU = 400;
+                    const targetXU = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * distU;
+                    const targetYU = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * distU;
+                    const tcU = { x: targetXU, y: targetYU, radius: 160, color: enemy.color, timer: 180, type: 'targetCircle', team: enemy.team };
+                    tcU.planned = [];
+                    for (let j = 0; j < 8; j++) {
+                        const ang = (j / 8) * Math.PI * 2;
+                        tcU.planned.push({ x: tcU.x + Math.cos(ang) * tcU.radius * 0.35, y: tcU.y + Math.sin(ang) * tcU.radius * 0.35, exploded: false });
+                    }
+                    for (let j = 0; j < 24; j++) {
+                        const ang = (j / 24) * Math.PI * 2;
+                        tcU.planned.push({ x: tcU.x + Math.cos(ang) * tcU.radius * 0.75, y: tcU.y + Math.sin(ang) * tcU.radius * 0.75, exploded: false });
+                    }
+                    objects.push(tcU);
+                    enemy.artilleryMode = true;
+                    enemy.artilleryTimer = 180;
+                    enemy.barrageCooldown = 720;
+                    const ultRowsE = 5, ultColsE = 9;
+                    const tSizeUE = Math.min(enemy.w, enemy.h) * 0.35 * 1.5;
+                    const insetUE = 6;
+                    const usableWUE = tSizeUE - insetUE * 2;
+                    const usableHUE = tSizeUE - insetUE * 2;
+                    const fanSpreadUE = 1.5;
+                    for (let r = 0; r < ultRowsE; r++) {
+                        const ry = -tSizeUE/2 + insetUE + r * (usableHUE / (ultRowsE - 1 || 1));
+                        for (let c = 0; c < ultColsE; c++) {
+                            const cx2 = -tSizeUE/2 + insetUE + c * (usableWUE / (ultColsE - 1 || 1));
+                            const lx = cx2, ly = ry;
+                            const sx = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * lx - Math.sin(enemy.turretAngle) * ly;
+                            const sy = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * lx + Math.cos(enemy.turretAngle) * ly;
+                            const colNorm = ultColsE <= 1 ? 0.5 : c / (ultColsE - 1);
+                            const rowNorm = ultRowsE <= 1 ? 0.5 : r / (ultRowsE - 1);
+                            const angOffset = (colNorm - 0.5) * fanSpreadUE + (rowNorm - 0.5) * 0.06;
+                            const planned = tcU.planned;
+                            const idx = (r * ultColsE + c) % planned.length;
+                            const targetPos = planned[idx];
+                            const dx = targetPos.x - sx;
+                            const dy = targetPos.y - sy;
+                            const delay = Math.floor((r * ultColsE + c) * 1 + Math.random() * 2);
+                            const travel = Math.max(16, 180 - delay - 2);
+                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: dx/travel, vy: dy/travel, life: travel + 6, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: enemy.team });
+                        }
+                    }
+                    enemy.fireCooldown = 60;
+                }
+            }
+
+            // Musical: sound ricochet when surrounded
+            if (enemy.tankType === 'musical') {
+                if (enemy.soundRicochetCooldown > 0) enemy.soundRicochetCooldown--;
+                if ((!enemy.soundRicochetCooldown || enemy.soundRicochetCooldown <= 0) && distToNearest < 350 && Math.random() < 0.015) {
+                    const tankCenterX = enemy.x + enemy.w / 2;
+                    const tankCenterY = enemy.y + enemy.h / 2;
+                    // 8 projectiles in all directions
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (Math.PI * 2 / 8) * i;
+                        const speed = 5;
+                        if (typeof musicalSoundWaves === 'undefined') musicalSoundWaves = [];
+                        musicalSoundWaves.push({
+                            x: tankCenterX,
+                            y: tankCenterY,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            radius: 6,
+                            life: 300,
+                            maxLife: 300,
+                            team: enemy.team,
+                            damage: 75,
+                            bounces: 0,
+                            maxBounces: 8
+                        });
+                    }
+                    enemy.soundRicochetCooldown = 720;
+                    enemy.fireCooldown = 60;
+                }
+            }
+
+
             // Robot: spawn combat drones when close to targets
             if (enemy.tankType === 'robot' && (!enemy.robotDroneCooldown || enemy.robotDroneCooldown <= 0) && distToNearest < 350 && Math.random() < 0.03) {
                 // Spawn 3 drones in triangle formation around robot
@@ -620,7 +749,7 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
@@ -1075,6 +1204,23 @@ function updateEnemyAI() {
                     damage: 75,
                     piercing: true
                 };
+            } else if (tt === 'mine') {
+                // Mine tank does not fire bullets — mines are placed via the ability block above
+                b = null;
+            } else if (tt === 'medical') {
+                // Medical tank: fires healing pulses that damage enemies and heal allies
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25,
+                    w: 8, h: 8,
+                    vx: Math.cos(enemy.turretAngle) * 5,
+                    vy: Math.sin(enemy.turretAngle) * 5,
+                    life: 120,
+                    owner: 'enemy',
+                    team: enemy.team,
+                    type: 'medicalPulse',
+                    damage: 75
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1082,7 +1228,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1365,65 +1511,77 @@ function updateAllyAI() {
                             objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: ally.team });
                         }
                     }
-                    const w = (tt === 'ice') ? 8 : 9;
-                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w: w, h: w, vx:Math.cos(ally.turretAngle)*6, vy:Math.sin(ally.turretAngle)*6, life:100, owner:'ally', team: ally.team, type: (tt === 'ice') ? 'ice' : 'normal' };
                 } else if (tt === 'musical') {
-                    // Ally musical: sound wave projectile that ricochets
-                    const speed = 6;
-                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 180, team: ally.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
-                } else if (tt === 'illuminat') {
-                    // Ally illuminat: activate beam
-                    if (!ally.beamActive && (!ally.beamCooldown || ally.beamCooldown <= 0)) {
-                        ally.beamActive = true;
-                        ally.beamStartTime = Date.now();
-                        ally.fireCooldown = 240;
-                    }
-                } else if (tt === 'electric') {
-                    // Ally electric: fire electric homing ball
-                    b = {
-                        x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25,
-                        y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25,
-                        w: 12, h: 12,
-                        vx: Math.cos(ally.turretAngle) * 4,
-                        vy: Math.sin(ally.turretAngle) * 4,
-                        life: 300,
-                        maxLife: 300,
-                        owner: 'ally',
-                        team: ally.team,
-                        type: 'electricBall',
-                        damage: 150,
-                        homingStrength: 0.15,
-                        hitChain: []
-                    };
-                } else if (tt === 'machinegun') {
-                    // Ally machinegun: rapid fire with low damage (match player projectile)
-                    const speedA = 7;
-                    const lifeA = 80;
-                    const angA = ally.turretAngle + (Math.random() - 0.5) * 0.05;
-                    b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: 20 };
-                } else if (tt === 'waterjet') {
-                    // Ally waterjet: activate stream for 1.5s
-                    ally.waterjetActive = true;
-                    ally.waterjetTimer = 90;
-                } else if (tt === 'buckshot') {
-                    // Ally buckshot: 5 pellets in a spread pattern
-                    const speed = 6;
-                    const life = 120;
-                    const baseAng = ally.turretAngle;
-                    const spreadAngle = 0.6;
-                    const startXA = ally.x + ally.w/2 + Math.cos(baseAng) * 20;
-                    const startYA = ally.y + ally.h/2 + Math.sin(baseAng) * 20;
-                    
-                    for (let i = 0; i < 5; i++) {
-                        const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
-                        b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: 125 };
-                        if (b) bullets.push(b);
-                    }
-                    ally.fireCooldown = 40;
-                    b = null; // prevent double push
+                        // Ally musical: sound wave projectile that ricochets
+                        const speed = 6;
+                        b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 180, team: ally.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+                    } else if (tt === 'illuminat') {
+                        // Ally illuminat: activate beam
+                        if (!ally.beamActive && (!ally.beamCooldown || ally.beamCooldown <= 0)) {
+                            ally.beamActive = true;
+                            ally.beamStartTime = Date.now();
+                            ally.fireCooldown = 240;
+                        }
+                    } else if (tt === 'electric') {
+                        // Ally electric: fire electric homing ball
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25,
+                            w: 12, h: 12,
+                            vx: Math.cos(ally.turretAngle) * 4,
+                            vy: Math.sin(ally.turretAngle) * 4,
+                            life: 300,
+                            maxLife: 300,
+                            owner: 'ally',
+                            team: ally.team,
+                            type: 'electricBall',
+                            damage: 150,
+                            homingStrength: 0.15,
+                            hitChain: []
+                        };
+                    } else if (tt === 'machinegun') {
+                        // Ally machinegun: rapid fire with low damage (match player projectile)
+                        const speedA = 7;
+                        const lifeA = 80;
+                        const angA = ally.turretAngle + (Math.random() - 0.5) * 0.05;
+                        b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: 20 };
+                    } else if (tt === 'waterjet') {
+                        // Ally waterjet: activate stream for 1.5s
+                        ally.waterjetActive = true;
+                        ally.waterjetTimer = 90;
+                    } else if (tt === 'buckshot') {
+                        // Ally buckshot: 5 pellets in a spread pattern
+                        const speed = 6;
+                        const life = 120;
+                        const baseAng = ally.turretAngle;
+                        const spreadAngle = 0.6;
+                        const startXA = ally.x + ally.w/2 + Math.cos(baseAng) * 20;
+                        const startYA = ally.y + ally.h/2 + Math.sin(baseAng) * 20;
+                        
+                        for (let i = 0; i < 5; i++) {
+                            const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
+                            b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: 125 };
+                            if (b) bullets.push(b);
+                        }
+                        ally.fireCooldown = 40;
+                        b = null; // prevent double push
+                    } else if (tt === 'medical') {
+                        // Ally medical: fires healing pulses
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25,
+                            w: 8, h: 8,
+                            vx: Math.cos(ally.turretAngle) * 5,
+                            vy: Math.sin(ally.turretAngle) * 5,
+                            life: 120,
+                            owner: 'ally',
+                            team: ally.team,
+                            type: 'medicalPulse',
+                            damage: 75
+                        };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

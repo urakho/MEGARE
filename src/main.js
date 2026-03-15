@@ -29,6 +29,10 @@ let enemies = [];
 let allies = [];
 let playerDrones = []; // Active combat drones (robot tank ultimate)
 let enemyDrones = []; // Combat drones spawned by enemy robot tanks
+let medicalZones = []; // Healing zones from medical tank ability
+let buratinoBarrages = []; // Rocket barrage projectiles (buratino ultimate)
+let musicalSoundWaves = []; // Sound ricochet projectiles (musical tank ultimate)
+let mines = [];        // Placed landmines (landmine tank)
 let gameState = 'menu';
 let menuMusic = new Audio('music/mp3/menu.mp3');
 menuMusic.loop = true;
@@ -174,7 +178,9 @@ const tankGemPrices = {
     'buckshot': 100,  // Редкий
     'fire': 200,      // Сверхредкий
     'waterjet': 200,  // Сверхредкий
+    'mine': 200,      // Сверхредкий
     'buratino': 300,  // Эпический
+    'medical': 300,   // Эпический
     'musical': 300,   // Эпический
     'toxic': 500,     // Легендарный
     'mirror': 500,    // Легендарный
@@ -263,7 +269,9 @@ const tankMaxHpByType = {
     'waterjet': 300,
     'imitator': 250,
     'electric': 400,
-    'robot': 450
+    'robot': 450,
+    'medical': 275,
+    'mine': 350
 };
 
 function setTankHP(type) {
@@ -291,7 +299,9 @@ const tankMaxSpeedByType = {
     'waterjet': 3.2,
     'imitator': 3.5,
     'electric': 2.6,
-    'robot': 2.7
+    'robot': 2.7,
+    'medical': 3.4,
+    'mine': 3.1
 };
 
 function setTankSpeed(type) {
@@ -327,6 +337,12 @@ const tank = {
     // (removed sport ultimate fields)
     // Robot tank drone cooldown
     robotDroneCooldown: 0,
+    // Medical tank zone
+    medicalZoneCooldown: 0,
+    // Buratino barrage cooldown
+    barrageCooldown: 0,
+    // Musical tank sound ricochet cooldown
+    soundRicochetCooldown: 0,
 };
 
 // Apply saved tank type properties
@@ -658,7 +674,7 @@ function updateMusic() {
 
     // ---- Attack joystick mode: 'attack' | 'ult' ----
     // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical'];
     let attackMode = 'attack';
     let attackTapStartTime = 0;
     let attackTapStartX = 0, attackTapStartY = 0;
@@ -741,18 +757,30 @@ function updateMusic() {
             if (t.identifier !== attackTouchId) continue;
             attackTouchId = null;
             // Quick tap — toggle attack / ult mode (only for tanks with ult)
+            // More lenient detection for mobile: if tap is quick and distance is short, allow toggle
             const tapDuration = Date.now() - attackTapStartTime;
             const ddx = t.clientX - attackTapStartX;
             const ddy = t.clientY - attackTapStartY;
-            if (!attackMoved && tapDuration < 250 && Math.sqrt(ddx*ddx + ddy*ddy) < 18) {
+            const tapDistance = Math.sqrt(ddx*ddx + ddy*ddy);
+            let firedUlt = false;
+            // Allow toggle if: quick tap (< 250ms) AND short movement (< 30px)
+            // This is more forgiving for touch devices with natural finger drift
+            if (tapDuration < 250 && tapDistance < 30) {
                 const tt = typeof tankType !== 'undefined' ? tankType : '';
                 if (TANKS_WITH_ULT.includes(tt)) {
+                    const wasInUltMode = attackMode === 'ult';
                     setAttackMode(attackMode === 'attack' ? 'ult' : 'attack');
+                    // If was already in ult mode, quick tap fires it
+                    if (wasInUltMode) {
+                        keys['KeyE'] = true;
+                        firedUlt = true;
+                        setTimeout(() => { keys['KeyE'] = false; }, 80);
+                    }
                 }
             }
             resetKnob(attackKnob);
             keys['Space'] = false;
-            keys['KeyE']  = false;
+            if (!firedUlt) keys['KeyE'] = false;
             // Если был тащить в режиме УЛТ — выстрел ульты при отпускании
             if (attackMoved && attackMode === 'ult') {
                 keys['KeyE'] = true;
@@ -837,12 +865,16 @@ const buckshotTankPreview = document.getElementById('buckshotTankPreview');
 const buckshotTankCtx = buckshotTankPreview && buckshotTankPreview.getContext ? buckshotTankPreview.getContext('2d') : null;
 const waterjetTankPreview = document.getElementById('waterjetTankPreview');
 const waterjetTankCtx = waterjetTankPreview && waterjetTankPreview.getContext ? waterjetTankPreview.getContext('2d') : null;
+const medicalTankPreview = document.getElementById('medicalTankPreview');
+const medicalTankCtx = medicalTankPreview && medicalTankPreview.getContext ? medicalTankPreview.getContext('2d') : null;
 const imitatorTankPreview = document.getElementById('imitatorTankPreview');
 const imitatorTankCtx = imitatorTankPreview && imitatorTankPreview.getContext ? imitatorTankPreview.getContext('2d') : null;
 const electricTankPreview = document.getElementById('electricTankPreview');
 const electricTankCtx = electricTankPreview && electricTankPreview.getContext ? electricTankPreview.getContext('2d') : null;
 const robotTankPreview = document.getElementById('robotTankPreview');
 const robotTankCtx = robotTankPreview && robotTankPreview.getContext ? robotTankPreview.getContext('2d') : null;
+const mineTankPreview = document.getElementById('mineTankPreview');
+const mineTankCtx = mineTankPreview && mineTankPreview.getContext ? mineTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -867,7 +899,7 @@ function startGame(mode) {
         tankType = 'imitator';
     }
     // reset basic state
-    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; tank.robotDroneCooldown = 0;
+    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; tank.robotDroneCooldown = 0;
     
     // Reset all effects
     tank.paralyzed = false;
@@ -1038,7 +1070,13 @@ const trophyRoadBtn = document.getElementById('trophyRoadBtn');
 const trophyRoadModal = document.getElementById('trophyRoadModal');
 const closeTrophyRoad = document.getElementById('closeTrophyRoad');
 if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'flex'; });
-if (characterBtn) characterBtn.addEventListener('click', () => { if (characterModal) { characterModal.style.display = 'flex'; drawCharacterPreviews(); } });
+if (characterBtn) characterBtn.addEventListener('click', () => { 
+    if (characterModal) { 
+        characterModal.style.display = 'flex'; 
+        drawCharacterPreviews(); 
+        updateShopButtonStyles();
+    } 
+});
 if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
 if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
 if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
@@ -1636,6 +1674,14 @@ const selectWaterjetTank = document.getElementById('selectWaterjetTank');
 if (selectWaterjetTank) selectWaterjetTank.addEventListener('click', () => {
     showTankDetail('waterjet');
 });
+const selectMedicalTank = document.getElementById('selectMedicalTank');
+if (selectMedicalTank) selectMedicalTank.addEventListener('click', () => {
+    showTankDetail('medical');
+});
+const selectMineTank = document.getElementById('selectMineTank');
+if (selectMineTank) selectMineTank.addEventListener('click', () => {
+    showTankDetail('mine');
+});
 const selectImitatorTank = document.getElementById('selectImitatorTank');
 if (selectImitatorTank) selectImitatorTank.addEventListener('click', () => {
     showTankDetail('imitator');
@@ -1745,9 +1791,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -1792,7 +1838,7 @@ function spawnAllies(numTeams, teamSize) {
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
                 // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric','robot'])[Math.floor(Math.random()*13)],
+                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric','robot','medical'])[Math.floor(Math.random()*14)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -1837,7 +1883,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot'];
+                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
             allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
 
@@ -1847,7 +1893,7 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
             const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
@@ -1891,9 +1937,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -1947,7 +1993,7 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot'];
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
     const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
 
     for (let i = 0; i < 7; i++) {
@@ -2107,7 +2153,7 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot'];
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
     const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
     
     for (let i = 0; i < 7; i++) {
@@ -2166,15 +2212,17 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
     'buckshot': 'rare',
     'fire': 'super_rare',
     'waterjet': 'super_rare',
+    'mine': 'super_rare',
     'buratino': 'epic',
     'musical': 'epic',
+    'medical': 'epic',
     'toxic': 'legendary',
     'mirror': 'legendary',
     'robot': 'legendary',
@@ -3033,7 +3081,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -3106,6 +3154,126 @@ function update() {
             }
         }
 
+        // Medical Tank: E key creates healing zone for 5 seconds
+        if (tankType === 'medical') {
+            if (keys['KeyE']) {
+                if (!tank.medicalZoneCooldown || tank.medicalZoneCooldown <= 0) {
+                    const zoneX = tank.x + tank.w / 2;
+                    const zoneY = tank.y + tank.h / 2;
+                    medicalZones.push({
+                        x: zoneX,
+                        y: zoneY,
+                        radius: 150,
+                        life: 300, // 5 seconds at 60fps
+                        maxLife: 300,
+                        healRate: 1.5, // HP per frame
+                        team: tank.team
+                    });
+                    tank.medicalZoneCooldown = 720; // 12 second cooldown
+                    // Spawn effect
+                    for (let i = 0; i < 25; i++) {
+                        spawnParticle(zoneX + (Math.random()-0.5)*120, zoneY + (Math.random()-0.5)*120, '#00ff88', 0.7);
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        if (tank.medicalZoneCooldown > 0) tank.medicalZoneCooldown--;
+
+        // Buratino: E key ultra barrage - same artillery mode but bigger area + more rockets
+        if (tankType === 'buratino') {
+            if (keys['KeyE']) {
+                if (!tank.barrageCooldown || tank.barrageCooldown <= 0) {
+                    // Target circle with 2.5x bigger radius than regular attack
+                    const dist = 400;
+                    const targetX = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * dist;
+                    const targetY = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * dist;
+                    const targetCircle = { x: targetX, y: targetY, radius: 160, color: tank.color, timer: 180, type: 'targetCircle', team: tank.team };
+                    // More planned explosion positions (inner 8 + outer 24)
+                    targetCircle.planned = [];
+                    for (let j = 0; j < 8; j++) {
+                        const ang = (j / 8) * Math.PI * 2;
+                        targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * targetCircle.radius * 0.35, y: targetCircle.y + Math.sin(ang) * targetCircle.radius * 0.35, exploded: false });
+                    }
+                    for (let j = 0; j < 24; j++) {
+                        const ang = (j / 24) * Math.PI * 2;
+                        targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * targetCircle.radius * 0.75, y: targetCircle.y + Math.sin(ang) * targetCircle.radius * 0.75, exploded: false });
+                    }
+                    objects.push(targetCircle);
+                    tank.artilleryMode = true;
+                    tank.artilleryTimer = 180;
+                    tank.barrageCooldown = 720; // 12 second cooldown
+                    // More visual rockets in wider fan (5 rows x 9 cols, spread 1.5 rad)
+                    const ultRows = 5;
+                    const ultCols = 9;
+                    const tSizeU = Math.min(tank.w, tank.h) * 0.35 * 1.5;
+                    const insetU = 6;
+                    const usableWU = tSizeU - insetU * 2;
+                    const usableHU = tSizeU - insetU * 2;
+                    const fanSpreadU = 1.5;
+                    for (let r = 0; r < ultRows; r++) {
+                        const ry = -tSizeU/2 + insetU + r * (usableHU / (ultRows - 1 || 1));
+                        for (let c = 0; c < ultCols; c++) {
+                            const cx2 = -tSizeU/2 + insetU + c * (usableWU / (ultCols - 1 || 1));
+                            const lx = cx2, ly = ry;
+                            const sx = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * lx - Math.sin(tank.turretAngle) * ly;
+                            const sy = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * lx + Math.cos(tank.turretAngle) * ly;
+                            const colNorm = ultCols <= 1 ? 0.5 : c / (ultCols - 1);
+                            const rowNorm = ultRows <= 1 ? 0.5 : r / (ultRows - 1);
+                            const angOffset = (colNorm - 0.5) * fanSpreadU + (rowNorm - 0.5) * 0.06;
+                            const angRocket = tank.turretAngle + angOffset + (Math.random() - 0.5) * 0.03;
+                            const planned = targetCircle.planned;
+                            const idx = (r * ultCols + c) % planned.length;
+                            const targetPos = planned[idx];
+                            const dx = targetPos.x - sx;
+                            const dy = targetPos.y - sy;
+                            const delay = Math.floor((r * ultCols + c) * 1 + Math.random() * 2);
+                            const travel = Math.max(16, tank.artilleryTimer - delay - 2);
+                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: dx/travel, vy: dy/travel, life: travel + 6, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: 0 });
+                        }
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        if (tank.barrageCooldown > 0) tank.barrageCooldown--;
+
+        // Musical Tank: E key sound ricochet - 8 bouncing projectiles
+        if (tankType === 'musical') {
+            if (keys['KeyE']) {
+                if (!tank.soundRicochetCooldown || tank.soundRicochetCooldown <= 0) {
+                    const tankCenterX = tank.x + tank.w / 2;
+                    const tankCenterY = tank.y + tank.h / 2;
+                    // 8 projectiles spread in all directions
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (Math.PI * 2 / 8) * i;
+                        const speed = 5;
+                        musicalSoundWaves.push({
+                            x: tankCenterX,
+                            y: tankCenterY,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            radius: 6,
+                            life: 300, // 5 seconds
+                            maxLife: 300,
+                            team: tank.team,
+                            damage: 75,
+                            bounces: 0,
+                            maxBounces: 8
+                        });
+                    }
+                    tank.soundRicochetCooldown = 720; // 12 second cooldown (match medical)
+                    // Spawn particles
+                    for (let i = 0; i < 40; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        spawnParticle(tankCenterX + Math.cos(angle)*30, tankCenterY + Math.sin(angle)*30, '#00ffff', 0.7);
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        if (tank.soundRicochetCooldown > 0) tank.soundRicochetCooldown--;
+
         // (Sport tank ability removed)
         // Robot Tank: E key spawns 3 combat drones
         if (tankType === 'robot') {
@@ -3172,6 +3340,99 @@ function update() {
         // Update active nova zones (continuous damage)
         if (typeof updateNovaZones === 'function') {
             updateNovaZones();
+        }
+
+        // Update medical healing zones
+        for (let zi = medicalZones.length - 1; zi >= 0; zi--) {
+            const zone = medicalZones[zi];
+            zone.life--;
+            if (zone.life <= 0) { medicalZones.splice(zi, 1); continue; }
+
+            // Heal player if in range and same team
+            if (zone.team === tank.team) {
+                const dx = (tank.x + tank.w/2) - zone.x;
+                const dy = (tank.y + tank.h/2) - zone.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist <= zone.radius) {
+                    tank.hp = Math.min(tank.hp + zone.healRate, tank.maxHp);
+                }
+            }
+
+            // Heal allies in zone
+            for (const a of allies) {
+                if (!a.alive) continue;
+                if (a.team !== zone.team) continue; // Don't heal enemies
+                const dx = (a.x + a.w/2) - zone.x;
+                const dy = (a.y + a.h/2) - zone.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist <= zone.radius) {
+                    a.hp = Math.min((a.hp || 300) + zone.healRate, (a.maxHp || 300));
+                }
+            }
+
+            // Heal player drones in zone
+            for (const d of playerDrones) {
+                if (!d.alive) continue;
+                if (d.team !== zone.team) continue;
+                const dx = (d.x + d.w/2) - zone.x;
+                const dy = (d.y + d.h/2) - zone.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist <= zone.radius) {
+                    d.hp = Math.min(d.hp + zone.healRate, d.maxHp);
+                }
+            }
+        }
+
+        // Update mines — check collisions and trigger explosions
+        for (let mi = mines.length - 1; mi >= 0; mi--) {
+            const mine = mines[mi];
+            let triggered = false;
+
+            if (mine.team === 0) {
+                // Player's mines: trigger on enemy contact
+                for (const e of enemies) {
+                    if (!e.alive) continue;
+                    const dx = (e.x + e.w / 2) - mine.x;
+                    const dy = (e.y + e.h / 2) - mine.y;
+                    if (Math.hypot(dx, dy) < mine.radius + e.w / 2) {
+                        spawnExplosion(mine.x, mine.y, 55);
+                        e.hp -= mine.damage;
+                        if (e.hp <= 0) e.alive = false;
+                        for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
+                        triggered = true;
+                        break;
+                    }
+                }
+            } else {
+                // Enemy mines: trigger on player or ally contact
+                if (tank.alive) {
+                    const dx = (tank.x + tank.w / 2) - mine.x;
+                    const dy = (tank.y + tank.h / 2) - mine.y;
+                    if (Math.hypot(dx, dy) < mine.radius + tank.w / 2) {
+                        spawnExplosion(mine.x, mine.y, 55);
+                        tank.hp -= mine.damage;
+                        for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
+                        triggered = true;
+                    }
+                }
+                if (!triggered) {
+                    for (const a of allies) {
+                        if (!a.alive || a.team === mine.team) continue;
+                        const dx = (a.x + a.w / 2) - mine.x;
+                        const dy = (a.y + a.h / 2) - mine.y;
+                        if (Math.hypot(dx, dy) < mine.radius + a.w / 2) {
+                            spawnExplosion(mine.x, mine.y, 55);
+                            a.hp -= mine.damage;
+                            if (a.hp <= 0) a.alive = false;
+                            for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
+                            triggered = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (triggered) mines.splice(mi, 1);
         }
 
         // Update combat drones (robot tank ultimate)
@@ -3489,6 +3750,68 @@ function updateCoinDisplay() {
     checkTrophyRewards();
 
     saveProgress();
+}
+
+// Update shop button styles based on player gems and tank affordability
+function updateShopButtonStyles() {
+    const tankButtonMap = {
+        'fire': 'selectFireTank',
+        'waterjet': 'selectWaterjetTank',
+        'medical': 'selectMedicalTank',
+        'mine': 'selectMineTank',
+        'buratino': 'selectBuratinoTank',
+        'musical': 'selectMusicalTank',
+        'toxic': 'selectToxicTank',
+        'mirror': 'selectMirrorTank',
+        'robot': 'selectRobotTank',
+        'illuminat': 'selectIlluminatTank',
+        'plasma': 'selectPlasmaTank',
+        'electric': 'selectElectricTank'
+    };
+    
+    const tankRarityMap = {
+        'fire': 'super', 'waterjet': 'super', 'mine': 'super',
+        'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
+        'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic'
+    };
+    
+    Object.keys(tankButtonMap).forEach(tankType => {
+        const btnId = tankButtonMap[tankType];
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        
+        const price = tankGemPrices[tankType];
+        const isUnlocked = unlockedTanks && unlockedTanks.includes(tankType);
+        
+        // If unlocked, keep normal appearance (no dynamic changes needed)
+        if (isUnlocked) return;
+        
+        // If not unlocked, update class based on affordability
+        const rarity = tankRarityMap[tankType];
+        const canAfford = (typeof gems !== 'undefined' && gems >= price);
+        
+        if (canAfford) {
+            // Add rarity class when affordable, remove btn-* classes
+            btn.classList.remove('btn-shop', 'btn-gold', 'btn-blood', 'btn-char', 'btn-mode');
+            btn.classList.add('rarity-' + rarity);
+        } else {
+            // Remove rarity class when not affordable, use default style
+            btn.classList.remove('rarity-rare', 'rarity-super', 'rarity-epic', 'rarity-legendary', 'rarity-mythic');
+            // Restore original btn-* class for unaffordable tanks
+            btn.classList.add('btn-char'); // Medical and epics use btn-char
+            if (rarity === 'super') {
+                btn.classList.remove('btn-char');
+                btn.classList.add('btn-shop');
+            } else if (rarity === 'legendary') {
+                btn.classList.remove('btn-char');
+                btn.classList.add('btn-gold');
+            } else if (rarity === 'mythic') {
+                btn.classList.remove('btn-char');
+                btn.classList.add('btn-blood');
+            }
+        }
+    });
 }
 
 // Check and auto-unlock trophy rewards
@@ -3816,8 +4139,8 @@ function updateTankDetailButton(type) {
     const rarityMap = {
         'normal': 'common',
         'ice': 'rare', 'machinegun': 'rare', 'buckshot': 'rare',
-        'fire': 'super', 'waterjet': 'super',
-        'buratino': 'epic', 'musical': 'epic',
+        'fire': 'super', 'waterjet': 'super', 'mine': 'super',
+        'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator'
     };
@@ -3868,6 +4191,8 @@ if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
                 updateTankDetailButton(currentTankType);
                 // Refresh character previews so the unlocked state is visible immediately
                 if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
+                // Update shop button styles after purchase
+                updateShopButtonStyles();
                 cleanup();
                 // show success reward: display the new tank card
                 if (typeof showReward === 'function') showReward('tank', 1, 'Танк успешно приобретен!', currentTankType);

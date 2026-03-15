@@ -149,6 +149,10 @@
                 <canvas id="waterjetTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
                 <button id="selectWaterjetTank" class="btn btn-shop">Водомётчик</button>
             </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="mineTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
+                <button id="selectMineTank" class="btn btn-shop">Минный</button>
+            </div>
             <!-- EPIC (эпические) -->
             <div style="text-align:center; width:180px;">
                 <canvas id="buratinoTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
@@ -157,6 +161,10 @@
             <div style="text-align:center; width:180px;">
                 <canvas id="musicalTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
                 <button id="selectMusicalTank" class="btn btn-char">Музыкальный</button>
+            </div>
+            <div style="text-align:center; width:180px;">
+                <canvas id="medicalTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
+                <button id="selectMedicalTank" class="btn btn-char">Медицинский</button>
             </div>
             <!-- LEGENDARY (легендарные) -->
             <div style="text-align:center; width:180px;">
@@ -172,7 +180,7 @@
                 <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(135deg,#fff9c4,#fff176); border-radius:11px;">
                     <canvas id="robotTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block; background:#0d0d1e;"></canvas>
                 </div>
-                <button id="selectRobotTank" class="btn btn-gold" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; border: none;">Танк-робот</button>
+                <button id="selectRobotTank" class="btn btn-gold">Танк-робот</button>
             </div>
             <!-- MYTHIC (мифические) -->
             <div style="text-align:center; width:180px;">
@@ -458,10 +466,10 @@
     </div>
 </div>
 
+<script src="src/main.js"></script>
 <script src="src/tanks.js"></script>
 <script src="src/physics.js"></script>
 <script src="src/bot.js"></script>
 <script src="src/win-lose.js"></script>
-<script src="src/main.js"></script>
 </body>
 </html>

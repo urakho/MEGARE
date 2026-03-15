@@ -284,14 +284,14 @@ b { color: #ffcc00; }
 }
 
 /* Rarity color helpers for buy buttons when affordable */
-.rarity-common { background: linear-gradient(180deg,#7f8c8d,#636e72); color: #fff; }
-.rarity-rare { background: linear-gradient(180deg,#2ecc71,#27ae60); color: #fff; box-shadow: 0 8px 0 rgba(39,174,96,0.85); }
-.rarity-super { background: linear-gradient(180deg,#5dade2,#3498db); color: #fff; box-shadow: 0 8px 0 rgba(52,152,219,0.85); }
-.rarity-epic { background: linear-gradient(180deg,#a88fd4,#9b59b6); color: #fff; box-shadow: 0 8px 0 rgba(155,89,182,0.85); }
-.rarity-legendary { background: linear-gradient(180deg,#ffd86b,#f1c40f); color: #222; box-shadow: 0 8px 0 rgba(241,196,15,0.85); }
-.rarity-mythic { background: linear-gradient(180deg,#ff6b6b,#8b0000); color: #fff; box-shadow: 0 8px 0 rgba(139,0,0,0.85); }
-.rarity-chromatic { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); color:#fff; box-shadow: 0 8px 0 rgba(255,0,170,0.6); background-size: 220% 220%; }
-.rarity-imitator { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); color:#fff; box-shadow: 0 8px 0 rgba(255,0,170,0.6); background-size: 220% 220%; }
+.rarity-common { background: linear-gradient(180deg,#7f8c8d,#636e72) !important; color: #fff !important; box-shadow: 0 8px 0 rgba(0,0,0,0.3) !important; }
+.rarity-rare { background: linear-gradient(180deg,#2ecc71,#27ae60) !important; color: #fff !important; box-shadow: 0 8px 0 rgba(39,174,96,0.85) !important; }
+.rarity-super { background: linear-gradient(180deg,#5dade2,#3498db) !important; color: #fff !important; box-shadow: 0 8px 0 rgba(52,152,219,0.85) !important; }
+.rarity-epic { background: linear-gradient(180deg,#a88fd4,#9b59b6) !important; color: #fff !important; box-shadow: 0 8px 0 rgba(155,89,182,0.85) !important; }
+.rarity-legendary { background: linear-gradient(180deg,#ffd86b,#f1c40f) !important; color: #222 !important; box-shadow: 0 8px 0 rgba(241,196,15,0.85) !important; }
+.rarity-mythic { background: linear-gradient(180deg,#ff6b6b,#8b0000) !important; color: #fff !important; box-shadow: 0 8px 0 rgba(139,0,0,0.85) !important; }
+.rarity-chromatic { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa) !important; color:#fff !important; box-shadow: 0 8px 0 rgba(255,0,170,0.6) !important; background-size: 220% 220% !important; }
+.rarity-imitator { background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa) !important; color:#fff !important; box-shadow: 0 8px 0 rgba(255,0,170,0.6) !important; background-size: 220% 220% !important; }
 
 /* Trophy progress bar in character modal */
 .trophy-bar { width: 100%; margin: 8px 0 12px 0; box-sizing: border-box; }

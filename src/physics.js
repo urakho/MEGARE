@@ -870,6 +870,36 @@ function shoot() {
             piercing: true
         });
         tank.fireCooldown = 60;
+    } else if (tankType === 'medical') {
+        // Medical pulse: heals allies, damages enemies
+        const ang = tank.turretAngle;
+        const speed = 6;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 25,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 25,
+            w: 8, h: 8,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 120,
+            owner: 'player',
+            team: 0,
+            type: 'medicalPulse',
+            damage: 75,  // Damage to enemies
+            healAmount: 30  // Healing to allies
+        });
+        tank.fireCooldown = 45; // ~0.75 sec
+    } else if (tankType === 'mine') {
+        // Place a landmine at the tank's current centre position
+        if (typeof mines !== 'undefined') {
+            mines.push({
+                x: tank.x + tank.w / 2,
+                y: tank.y + tank.h / 2,
+                radius: 18,
+                team: 0,
+                damage: 150
+            });
+        }
+        tank.fireCooldown = 90; // 1.5s between mine placements
     } else {
         const speed = 5;
         const life = 100;
@@ -885,7 +915,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1004,6 +1034,20 @@ function updatePhysics() {
         if (b.life <= 0) {
             if (b.type === 'rocket' || b.type === 'smallRocket') explodeRocket(b);
             else if (b.type === 'toxic' || b.type === 'megabomb') explodeGas(b, b.type === 'megabomb');
+            else if (b.hasExplosion) {
+                // Buratino enhanced shot: large explosion
+                spawnExplosion(b.x, b.y, b.explosionRadius);
+                // Damage enemies in radius
+                for (let e of enemies) {
+                    const dx = e.x + e.w/2 - b.x;
+                    const dy = e.y + e.h/2 - b.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < b.explosionRadius) {
+                        const dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                        e.hp -= dmg;
+                    }
+                }
+            }
             bullets.splice(i, 1);
             continue;
         }
@@ -1106,7 +1150,26 @@ function updatePhysics() {
         }
         if (!hit) {
             // Check collision with tank (player team = 0) - toxic/megabomb only damage, don't stop
-            if (tank.hp > 0 && checkRectCollision(bRect, tank) && b.team !== tank.team) {
+            if (tank.hp > 0 && checkRectCollision(bRect, tank)) {
+                // Medical pulse: only damage, no healing to allies
+                if (b.type === 'medicalPulse') {
+                    if (b.team !== tank.team) {
+                        // Damage enemy only
+                        tank.hp -= b.damage || 75;
+                    } else {
+                        // Same team - bullet passes through without healing
+                        continue;
+                    }
+                    bullets.splice(i, 1);
+                    if (tank.hp <= 0) {
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                        else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+                    }
+                    continue;
+                }
+                // Check team only for non-medical bullets
+                if (b.team === tank.team) continue;
                 // Special handling for electric ball: chain damage and continue flying
                 if (b.type === 'electricBall') {
                     if (!b.hitChain) b.hitChain = [];
@@ -1218,6 +1281,29 @@ function updatePhysics() {
             for (let j = allies.length - 1; j >= 0; j--) {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
+                // Medical pulse: only damage enemies, no healing to allies
+                if (b.type === 'medicalPulse') {
+                    if (checkRectCollision(bRect, a)) {
+                        if (b.team !== a.team) {
+                            // Damage enemy only
+                            a.hp = (a.hp || 300) - (b.damage || 75);
+                        } else {
+                            // Same team - bullet passes through without healing
+                            continue;
+                        }
+                        bullets.splice(i, 1);
+                        if (a.hp <= 0) {
+                            if (currentMode === 'war') {
+                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            } else {
+                                allies.splice(j, 1);
+                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            }
+                        }
+                        break;
+                    }
+                    continue;
+                }
                 if (checkRectCollision(bRect, a) && b.team !== a.team) {
                     // Mirror shield reflection for ally bots
                     if (a.tankType === 'mirror' && a.mirrorShieldActive) {
@@ -1293,6 +1379,26 @@ function updatePhysics() {
                 const e = enemies[j];
                 if (!e || !e.alive) continue;
                 if (checkRectCollision(bRect, e) && b.team !== e.team) {
+                    // Medical pulse: only damage enemies, no healing to allies
+                    if (b.type === 'medicalPulse') {
+                        if (b.team !== e.team) {
+                            // Damage enemy only
+                            e.hp -= b.damage || 75;
+                        } else {
+                            // Same team - bullet passes through without healing
+                            continue;
+                        }
+                        bullets.splice(i, 1);
+                        if (e.hp <= 0) {
+                            if (currentMode === 'war') {
+                                e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            } else {
+                                enemies.splice(j, 1);
+                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            }
+                        }
+                        break;
+                    }
                     if (e.tankType === 'mirror') {
                         // Activate shield on impact if cooldown allows
                         if (!e.mirrorShieldActive && e.mirrorShieldCooldown <= 0) {
@@ -1362,6 +1468,22 @@ function updatePhysics() {
                     } else if (b.type === 'droneBullet') {
                         // Drone bullet: damage and remove
                         e.hp -= b.damage || 25;
+                        bullets.splice(i, 1);
+                    } else if (b.hasExplosion) {
+                        // Buratino enhanced shot: large explosion on impact
+                        spawnExplosion(b.x, b.y, b.explosionRadius);
+                        // Damage all enemies in radius (including the one hit)
+                        for (let ej = 0; ej < enemies.length; ej++) {
+                            const ex = enemies[ej];
+                            if (!ex) continue;
+                            const dx = ex.x + ex.w/2 - b.x;
+                            const dy = ex.y + ex.h/2 - b.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            if (dist < b.explosionRadius) {
+                                const dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                                ex.hp -= dmg;
+                            }
+                        }
                         bullets.splice(i, 1);
                     } else {
                         e.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));

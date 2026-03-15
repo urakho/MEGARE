@@ -82,6 +82,16 @@ const tankDescriptions = {
         name: "Танк-робот",
         description: "Тяжёлый боевой робот с рельсотроном. Его выстрел пробивает танки и наносит урон всем врагам на линии. Ульта выпускает 3 боевых дрона, которые самостоятельно ищут врагов и атакуют их.",
         rarity: "Легендарный"
+    },
+    medical: {
+        name: "Медицинский танк",
+        description: "Боевой санитар, помогающий своей команде. Стреляет медицинскими импульсами — нанося урон врагам. Способность (E): создаёт лечебное поле на 5 секунд, восстанавливающее HP всех рядом находящихся товарищей. Кулдаун: 12 сек.",
+        rarity: "Эпический"
+    },
+    mine: {
+        name: "Минный танк",
+        description: "Скрытный сапёр, расставляющий замаскированные мины. Нажмите пробел, чтобы разместить мину на земле. Свои мины видны только вам — вражеские скрыты. Мина взрывается при контакте с противником, нанося урон.",
+        rarity: "Сверхредкий"
     }
 };
 
@@ -93,6 +103,8 @@ const tankBgGradients = {
     ice: ['#2ecc71', '#27ae60'],      // Редкий - green
     buckshot: ['#2ecc71', '#27ae60'], // Редкий - green
     fire: ['#3498db', '#5dade2'],     // Сверхредкий - blue
+    waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
+    mine: ['#3498db', '#5dade2'],     // Сверхредкий - blue
     buratino: ['#9b59b6', '#8e44ad'], // Эпический - purple
     toxic: ['#fff9c4', '#fff176'],    // Легендарный - pale yellow
     plasma: ['#ff6b6b', '#e74c3c'],   // Мифический - red
@@ -101,10 +113,10 @@ const tankBgGradients = {
     mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
-    waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
     robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
+    medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
     // sport removed
 };
 
@@ -124,6 +136,8 @@ const tankBaseColors = {
     machinegun: '#0000FF',
     electric: '#1a1a2e',  // Dark blue-purple for robot
     robot:   '#263238',    // Dark steel for robot tank
+    medical: '#0033ff',    // Bright blue for medical tank
+    mine: '#3d4c18',       // Dark olive for mine tank
     // sport removed
 };
 
@@ -668,6 +682,62 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.shadowBlur = 8;
             ctx.fillRect(-5, -bodyH/2 + 4, 10, 5);
             ctx.shadowBlur = 0;
+        } else if (type === 'medical') {
+            // Epic Medical tank body — advanced design with armor plating
+            const medGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            medGrad.addColorStop(0, '#ffffff');
+            medGrad.addColorStop(0.3, '#f0f8ff');
+            medGrad.addColorStop(0.7, '#e0f0ff');
+            medGrad.addColorStop(1, '#c8e6f5');
+            ctx.fillStyle = medGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Green accent stripe (left side) — healing color
+            ctx.fillStyle = '#00cc66';
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW * 0.2, bodyH);
+            // Blue accent stripe (right side)
+            ctx.fillStyle = '#0099ff';
+            ctx.fillRect(bodyW/2 - bodyW * 0.15, -bodyH/2, bodyW * 0.15, bodyH);
+            // Armor plating detail
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 2]);
+            ctx.strokeRect(-bodyW/2 + 3, -bodyH/2 + 3, bodyW - 6, bodyH - 6);
+            ctx.setLineDash([]);
+            // Large red medical cross
+            ctx.fillStyle = '#ff2222';
+            const crossW = bodyW * 0.16;
+            const crossH = bodyH * 0.10;
+            ctx.fillRect(-crossW/2, -bodyH/2 + bodyH * 0.35, crossW, crossH); // horizontal
+            ctx.fillRect(-bodyW/2 + bodyW * 0.35, -crossH/2, crossH, crossW); // vertical
+            // Border
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = 2.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'mine') {
+            // Dark olive camo body with hazard markings
+            const mineBodyGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            mineBodyGrad.addColorStop(0, '#4a5a1c');
+            mineBodyGrad.addColorStop(0.4, '#3d4c18');
+            mineBodyGrad.addColorStop(1, '#2f3c10');
+            ctx.fillStyle = mineBodyGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Camo dark patches
+            ctx.fillStyle = 'rgba(15, 25, 5, 0.5)';
+            ctx.fillRect(-bodyW/2, -bodyH * 0.15, bodyW * 0.28, bodyH * 0.45);
+            ctx.fillRect(bodyW * 0.22, -bodyH/2, bodyW * 0.22, bodyH * 0.38);
+            // Yellow hazard stripes on front
+            const sW = bodyW * 0.07;
+            ctx.fillStyle = '#ffcc00';
+            for (let si = 0; si < 3; si++) {
+                ctx.fillRect(-bodyW/2 + bodyW * (0.12 + si * 0.3), bodyH * 0.22, sW, bodyH * 0.28);
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(-bodyW/2 + bodyW * (0.12 + si * 0.3) + sW, bodyH * 0.22, sW, bodyH * 0.28);
+                ctx.fillStyle = '#ffcc00';
+            }
+            // Border
+            ctx.strokeStyle = '#2a3510';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else {
             // Default
             ctx.fillStyle = color;
@@ -1325,6 +1395,47 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.fillStyle = '#ff1744';
         ctx.beginPath(); ctx.arc(0, 0, tSize*0.12, 0, Math.PI*2); ctx.fill();
         ctx.shadowBlur = 0;
+    } else if (type === 'medical') {
+        // Medical turret — white dome with red cross
+        const medTGrad = ctx.createRadialGradient(0, 0, tSize*0.1, 0, 0, tSize/2);
+        medTGrad.addColorStop(0, '#f5f5f5');
+        medTGrad.addColorStop(0.5, '#d9d9d9');
+        medTGrad.addColorStop(1, '#bfbfbf');
+        ctx.fillStyle = medTGrad;
+        ctx.beginPath(); ctx.arc(0, 0, tSize/2, 0, Math.PI*2); ctx.fill();
+        // Simple outline
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, tSize/2, 0, Math.PI*2); ctx.stroke();
+        // Red medical cross
+        ctx.fillStyle = '#ff2222';
+        const crossSize = tSize * 0.20;
+        const crossThick = tSize * 0.09;
+        ctx.fillRect(-crossSize/2, -crossThick/2, crossSize, crossThick); // horizontal
+        ctx.fillRect(-crossThick/2, -crossSize/2, crossThick, crossSize); // vertical
+    } else if (type === 'mine') {
+        // Flat camo dome turret with mine deployer hatch
+        ctx.fillStyle = '#3d4c18';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, tSize * 0.55, tSize * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Deployer hatch on top
+        ctx.fillStyle = '#555500';
+        ctx.beginPath();
+        ctx.arc(0, -tSize * 0.08, tSize * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+        // Warning ring around hatch
+        ctx.strokeStyle = '#ffcc00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, -tSize * 0.08, tSize * 0.24, 0, Math.PI * 2);
+        ctx.stroke();
+        // Outline
+        ctx.strokeStyle = '#2a3510';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, tSize * 0.55, tSize * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -1784,6 +1895,53 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.shadowBlur = 8;
             ctx.fillRect(tSize/2 + rbLen - 2, -rbH/2 - 3, 5, rbH + 6);
             ctx.shadowBlur = 0;
+        } else if (type === 'medical') {
+            // Medical cannon — white barrel with red bands
+            const mbLen = Math.min(W, H) * 0.82 * turretScale;
+            const mbH = Math.min(W, H) * 0.13 * turretScale;
+            const mbGrad = ctx.createLinearGradient(tSize/2, 0, tSize/2 + mbLen, 0);
+            mbGrad.addColorStop(0, '#e8e8e8');
+            mbGrad.addColorStop(0.5, '#d0d0d0');
+            mbGrad.addColorStop(1, '#b8b8b8');
+            ctx.fillStyle = mbGrad;
+            ctx.fillRect(tSize/2, -mbH/2, mbLen, mbH);
+            // Red band markings
+            ctx.fillStyle = '#cc3333';
+            for (let bi = 0; bi < 3; bi++) {
+                const bx = tSize/2 + mbLen * (0.25 + bi * 0.35);
+                ctx.fillRect(bx - 1.5, -mbH/2, 3, mbH);
+            }
+            // Simple outline
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(tSize/2, -mbH/2, mbLen, mbH);
+        } else if (type === 'mine') {
+            // Short mine deployer arm with a mine at the end
+            const mBarrelLen = Math.min(W, H) * 0.34 * turretScale;
+            const mBarrelH = Math.min(W, H) * 0.11 * turretScale;
+            ctx.fillStyle = '#2a3510';
+            ctx.fillRect(tSize / 2, -mBarrelH / 2, mBarrelLen, mBarrelH);
+            // Mine shape at tip
+            const mineR = mBarrelH * 0.9;
+            ctx.fillStyle = '#333300';
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(tSize / 2 + mBarrelLen, 0, mineR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(tSize / 2 + mBarrelLen, 0, mineR, 0, Math.PI * 2);
+            ctx.stroke();
+            // Small detonator spike on mine
+            ctx.fillStyle = '#ff4400';
+            ctx.shadowColor = '#ff4400';
+            ctx.shadowBlur = 4;
+            ctx.beginPath();
+            ctx.arc(tSize / 2 + mBarrelLen, 0, mineR * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -1926,6 +2084,11 @@ function drawCharacterPreviews() {
     // SUPER_RARE
     drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
     drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
+    drawItem(medicalTankCtx, medicalTankPreview, 'medical', '#0033ff', tankBgGradients.medical);
+    // MINE
+    if (typeof mineTankCtx !== 'undefined' && mineTankCtx && mineTankPreview) {
+        drawItem(mineTankCtx, mineTankPreview, 'mine', '#3d4c18', tankBgGradients.mine);
+    }
     // EPIC
     drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', tankBgGradients.buratino);
     drawItem(musicalTankCtx, musicalTankPreview, 'musical', '#0000FF', tankBgGradients.musical);
@@ -3032,6 +3195,58 @@ function draw() {
             ctx.fill();
             ctx.shadowBlur = 0;
 
+        } else if (b.type === 'medicalPulse') {
+            // Medical healing projectile — green/white gradient with pulsing aura
+            const radius = (b.w || 8) / 2;
+            const pulse = 0.8 + Math.sin(Date.now() * 0.015) * 0.35;
+            const brightness = 0.6 + Math.sin(Date.now() * 0.025 + b.x * 0.01) * 0.4;
+            
+            // Pulsing healing aura
+            const auraGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius * 3.5 * pulse);
+            auraGrad.addColorStop(0, `rgba(100, 255, 150, ${0.25 * brightness})`);
+            auraGrad.addColorStop(0.5, `rgba(100, 255, 200, ${0.12 * brightness})`);
+            auraGrad.addColorStop(1, 'rgba(100, 255, 150, 0)');
+            ctx.fillStyle = auraGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius * 3.5 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Core gradient — healing green/white
+            const coreGrad = ctx.createRadialGradient(
+                b.x - radius * 0.2, b.y - radius * 0.2, radius * 0.15,
+                b.x, b.y, radius
+            );
+            coreGrad.addColorStop(0, '#ffffff');
+            coreGrad.addColorStop(0.4, '#a8ff7f');
+            coreGrad.addColorStop(0.8, '#64ff96');
+            coreGrad.addColorStop(1, '#2dad4c');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Highlight shine
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(b.x - radius * 0.25, b.y - radius * 0.25, radius * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Healing particles (flying outward on pulse)
+            if (window.effectsEnabled !== false && Math.random() > 0.65 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.8 + Math.random() * 0.6;
+                particles.push({
+                    x: b.x,
+                    y: b.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 0.6,
+                    size: 1.2,
+                    color: '#64ff96',
+                    type: 'heal'
+                });
+            }
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -3206,7 +3421,268 @@ function draw() {
         electricRays = electricRays.filter(ray => ray.life > 0);
     }
 
-    // 3.5.5. Звуковые волны
+    // 3.5.5. Медицинские зоны (лечение)
+    if (typeof medicalZones !== 'undefined' && medicalZones) {
+        medicalZones.forEach((zone, idx) => {
+            if (!isVisible(zone.x - zone.radius, zone.y - zone.radius, zone.radius * 2, zone.radius * 2)) return;
+            
+            ctx.save();
+            
+            // Fade out over time
+            const fadeAlpha = zone.life / zone.maxLife;
+            ctx.globalAlpha = 0.5 * fadeAlpha;
+            
+            // Outer pulsing circle (green glow)
+            const pulseScale = 1 + Math.sin(Date.now() * 0.005) * 0.15;
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y, zone.radius * (0.8 + 0.2 * pulseScale), 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Inner circle (softer)
+            ctx.globalAlpha = 0.3 * fadeAlpha;
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y, zone.radius * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Fill with subtle green
+            ctx.globalAlpha = 0.08 * fadeAlpha;
+            ctx.fillStyle = '#00ff88';
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Healing particles (sparkles around the zone)
+            ctx.globalAlpha = 0.6 * fadeAlpha;
+            for (let p = 0; p < 8; p++) {
+                const angle = (p / 8) * Math.PI * 2 + Date.now() * 0.002;
+                const pRadius = zone.radius + 5;
+                const px = zone.x + Math.cos(angle) * pRadius;
+                const py = zone.y + Math.sin(angle) * pRadius;
+                ctx.fillStyle = '#00ff88';
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        });
+        
+        // Remove expired zones
+        medicalZones = medicalZones.filter(zone => zone.life > 0);
+    }
+
+    // 3.5.5c. Buratino barrage projectiles
+    if (typeof buratinoBarrages !== 'undefined' && buratinoBarrages && buratinoBarrages.length > 0) {
+        for (let i = buratinoBarrages.length - 1; i >= 0; i--) {
+            const proj = buratinoBarrages[i];
+            
+            // Move projectile
+            proj.x += proj.vx;
+            proj.y += proj.vy;
+            proj.vy += 0.2; // gravity
+            proj.life--;
+            
+            // Check collisions with walls
+            let hitWall = false;
+            for (const obj of objects) {
+                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
+                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
+                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
+                    hitWall = true;
+                    break;
+                }
+            }
+            
+            // Check collisions with enemies
+            for (const enemy of enemies) {
+                const dx = proj.x - (enemy.x + enemy.w/2);
+                const dy = proj.y - (enemy.y + enemy.h/2);
+                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
+                    hitWall = true;
+                    break;
+                }
+            }
+            
+            // Explode on collision, timeout, or out of bounds
+            if (hitWall || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
+                // Explosion effect
+                spawnExplosion(proj.x, proj.y, proj.explosionRadius);
+                
+                // Damage enemies in explosion radius
+                for (let e of enemies) {
+                    const dx = e.x + e.w/2 - proj.x;
+                    const dy = e.y + e.h/2 - proj.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < proj.explosionRadius) {
+                        const dmg = proj.damage * (1 - dist / proj.explosionRadius);
+                        e.hp -= dmg;
+                        if (e.hp < 0) e.hp = 0;
+                    }
+                }
+                
+                // Spawn particles
+                for (let p = 0; p < 15; p++) {
+                    spawnParticle(proj.x + (Math.random()-0.5)*50, proj.y + (Math.random()-0.5)*50, '#ff6600', 0.6);
+                }
+                
+                buratinoBarrages.splice(i, 1);
+                continue;
+            }
+            
+            // Draw projectile
+            if (!isVisible(proj.x - proj.radius, proj.y - proj.radius, proj.radius*2, proj.radius*2)) continue;
+            
+            ctx.save();
+            ctx.fillStyle = '#ff6600';
+            ctx.shadowColor = '#ff3300';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // 3.5.5d. Musical tank sound ricochet projectiles
+    if (typeof musicalSoundWaves !== 'undefined' && musicalSoundWaves && musicalSoundWaves.length > 0) {
+        for (let i = musicalSoundWaves.length - 1; i >= 0; i--) {
+            const proj = musicalSoundWaves[i];
+            
+            // Move projectile
+            proj.x += proj.vx;
+            proj.y += proj.vy;
+            proj.life--;
+            
+            // Check collisions with walls and bounce
+            for (const obj of objects) {
+                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
+                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
+                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
+                    // Calculate bounce direction
+                    const overlapX = (proj.radius + 5) - Math.abs(proj.x - (obj.x + obj.w/2));
+                    const overlapY = (proj.radius + 5) - Math.abs(proj.y - (obj.y + obj.h/2));
+                    if (overlapX < overlapY) {
+                        proj.vx = -proj.vx;
+                    } else {
+                        proj.vy = -proj.vy;
+                    }
+                    proj.bounces++;
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.5);
+                    break;
+                }
+            }
+            
+            // Check collisions with enemies
+            for (const enemy of enemies) {
+                const dx = proj.x - (enemy.x + enemy.w/2);
+                const dy = proj.y - (enemy.y + enemy.h/2);
+                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
+                    // Damage enemy
+                    enemy.hp -= proj.damage;
+                    if (enemy.hp < 0) enemy.hp = 0;
+                    
+                    // Play hit effect
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
+                    
+                    // Bounce away
+                    const ang = Math.atan2(dy, dx);
+                    proj.vx = Math.cos(ang) * 5;
+                    proj.vy = Math.sin(ang) * 5;
+                    proj.bounces++;
+                    break;
+                }
+            }
+            
+            // Remove if too many bounces or out of bounds or timed out
+            if (proj.bounces > proj.maxBounces || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
+                spawnParticle(proj.x, proj.y, '#00ffff', 0.6);
+                musicalSoundWaves.splice(i, 1);
+                continue;
+            }
+            
+            // Draw projectile
+            if (!isVisible(proj.x - proj.radius, proj.y - proj.radius, proj.radius*2, proj.radius*2)) continue;
+            
+            ctx.save();
+            ctx.fillStyle = '#00ffff';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Add oscillating rings
+            const ringAlpha = 0.5 * (proj.life / proj.maxLife);
+            ctx.globalAlpha = ringAlpha;
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, proj.radius * 2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+    }
+
+    // 3.5.5b. Mines (only player-placed mines are visible; enemy mines are hidden)
+    if (typeof mines !== 'undefined' && mines && mines.length > 0) {
+        const now = Date.now();
+        for (const mine of mines) {
+            // Only render mines placed by the player (team 0); enemy mines are invisible
+            if (mine.team !== 0) continue;
+            if (!isVisible(mine.x - mine.radius - 6, mine.y - mine.radius - 6, (mine.radius + 6) * 2, (mine.radius + 6) * 2)) continue;
+            ctx.save();
+            ctx.translate(mine.x, mine.y);
+            // Mine body — dark olive disk
+            const mGrad = ctx.createRadialGradient(-3, -3, 1, 0, 0, mine.radius);
+            mGrad.addColorStop(0, '#555510');
+            mGrad.addColorStop(0.5, '#333300');
+            mGrad.addColorStop(1, '#111100');
+            ctx.fillStyle = mGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, mine.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // Yellow warning ring
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 7;
+            ctx.beginPath();
+            ctx.arc(0, 0, mine.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            // Rotating danger spokes
+            const rot = (now * 0.0012) % (Math.PI * 2);
+            ctx.rotate(rot);
+            ctx.strokeStyle = '#ff5500';
+            ctx.lineWidth = 1.8;
+            ctx.globalAlpha = 0.75;
+            for (let s = 0; s < 4; s++) {
+                const a = (s / 4) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(a) * 4, Math.sin(a) * 4);
+                ctx.lineTo(Math.cos(a) * (mine.radius - 3), Math.sin(a) * (mine.radius - 3));
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            ctx.rotate(-rot);
+            // Red detonator knob in center
+            ctx.fillStyle = '#ff2200';
+            ctx.shadowColor = '#ff5500';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+    }
+
+    // 3.5.6. Звуковые волны
     soundWaves.forEach(sw => {
         if (!isVisible(sw.x - sw.radius, sw.y - sw.radius, sw.radius * 2, sw.radius * 2)) return;
         ctx.strokeStyle = '#f1c40f';
@@ -4046,7 +4522,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 11, illuminat: 25,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         const dmgMaxPossible = dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6);
