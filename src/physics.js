@@ -1,5 +1,13 @@
 // physics.js  collision detection, explosions, particles, shooting, movement
 
+// Apply damage with god mode multiplier if enabled
+function applyPlayerDamage(damage) {
+    if (typeof godMode !== 'undefined' && godMode) {
+        return damage * 1000; // Massive damage in god mode
+    }
+    return damage;
+}
+
 function checkRectCollision(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
@@ -1043,7 +1051,8 @@ function updatePhysics() {
                     const dy = e.y + e.h/2 - b.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     if (dist < b.explosionRadius) {
-                        const dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                        let dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                        if (b.owner === 'player') dmg = applyPlayerDamage(dmg);
                         e.hp -= dmg;
                     }
                 }
@@ -1055,7 +1064,7 @@ function updatePhysics() {
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
         // Check collision with objects (but toxic/megabomb/plasmaBlast/musical pass through standard logic differently)
         let hit = false;
-        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical') {
+        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical' && b.type !== 'meteorMini') {
             for (const obj of objects) {
                 if (checkRectCollision(bRect, obj)) {
                     // Toxic/mega bombs pass through walls but explode on other objects
@@ -1113,7 +1122,9 @@ function updatePhysics() {
                                 const dy = enemy.y + enemy.h/2 - b.y;
                                 const dist = Math.sqrt(dx*dx + dy*dy);
                                 if (dist < b.explosionRadius) {
-                                    enemy.hp -= b.explosionDamage || 100;
+                                    let dmgExp = b.explosionDamage || 100;
+                                    if (b.owner === 'player') dmgExp = applyPlayerDamage(dmgExp);
+                                    enemy.hp -= dmgExp;
                                 }
                             }
                         }
@@ -1134,6 +1145,36 @@ function updatePhysics() {
                     break; // Handle one collision per frame
                 }
             }
+        }
+        // Special handling for meteorMini: breaks walls, explodes in 40px radius on hit
+        if (b.type === 'meteorMini') {
+            let mHit = false;
+            for (let j = objects.length - 1; j >= 0; j--) {
+                const obj = objects[j];
+                if (checkRectCollision(bRect, obj) && obj.type === 'wall') {
+                    objects.splice(j, 1);
+                    navNeedsRebuild = true;
+                    for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
+                    mHit = true;
+                }
+                if (checkRectCollision(bRect, obj) && obj.type !== 'wall') {
+                    objects.splice(j, 1);
+                    mHit = true;
+                }
+            }
+            // Splash damage on player
+            if (b.team !== (tank.team ?? 0)) {
+                const mdx = (tank.x + 19) - b.x, mdy = (tank.y + 19) - b.y;
+                if (Math.sqrt(mdx*mdx + mdy*mdy) < 40) {
+                    tank.hp = Math.max(0, tank.hp - (b.damage || 75));
+                    if (tank.hp <= 0 && gameState === 'playing') {
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
+                    }
+                    mHit = true;
+                }
+            }
+            if (mHit) { bullets.splice(i, 1); continue; }
         }
         // Special handling for plasmaBlast: destroys walls
         if (b.type === 'plasmaBlast') {
@@ -1236,7 +1277,7 @@ function updatePhysics() {
                     }
                 } else if (b.type === 'illuminat') {
                     // Illuminat beam: damage and disorient
-                    tank.hp -= b.damage || 25;
+                    tank.hp -= b.damage || 0.5;
                     tank.disoriented = b.disorientTime || 36; // 0.6 seconds
                     bullets.splice(i, 1);
                 } else if (b.type === 'machinegun') {
@@ -1429,21 +1470,29 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
                         // Toxic bombs only damage, don't stop or explode on contact
-                        e.hp -= 50;
+                        let dmgToxic = 50;
+                        if (b.owner === 'player') dmgToxic = applyPlayerDamage(dmgToxic);
+                        e.hp -= dmgToxic;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through enemies
-                        e.hp -= b.damage || 350;
+                        let dmgPlasma = b.damage || 350;
+                        if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
+                        e.hp -= dmgPlasma;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasmaBlast') {
                         // Plasma blast pierces and damages all in line
-                        e.hp -= b.damage || 350;
+                        let dmgPBlast = b.damage || 350;
+                        if (b.owner === 'player') dmgPBlast = applyPlayerDamage(dmgPBlast);
+                        e.hp -= dmgPBlast;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'electricBall') {
                         // Electric ball: damage enemy, add to chain, continue flying to track other enemies
                         if (!b.hitChain) b.hitChain = [];
                         if (!b.hitChain.includes(j)) {
-                            e.hp -= b.damage || 150;
+                            let dmgElec = b.damage || 150;
+                            if (b.owner === 'player') dmgElec = applyPlayerDamage(dmgElec);
+                            e.hp -= dmgElec;
                             b.hitChain.push(j);
                             // Sparkle effects on hit
                             for (let k = 0; k < 6; k++) {
@@ -1454,13 +1503,17 @@ function updatePhysics() {
                         }
                     } else if (b.type === 'machinegun') {
                         // Machinegun: rapid fire with consistent damage
-                        e.hp -= b.damage;
+                        let dmgMG = b.damage;
+                        if (b.owner === 'player') dmgMG = applyPlayerDamage(dmgMG);
+                        e.hp -= dmgMG;
                         bullets.splice(i, 1);
                     } else if (b.type === 'railgun') {
                         // Railgun: pierce through all enemies, hit each only once
                         if (!b.hitEntities) b.hitEntities = [];
                         if (!b.hitEntities.includes(j)) {
-                            e.hp -= b.damage || 75;
+                            let dmgRailgun = b.damage || 75;
+                            if (b.owner === 'player') dmgRailgun = applyPlayerDamage(dmgRailgun);
+                            e.hp -= dmgRailgun;
                             b.hitEntities.push(j);
                             for (let k = 0; k < 5; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#00e5ff', 0.6);
                         }
@@ -1480,13 +1533,16 @@ function updatePhysics() {
                             const dy = ex.y + ex.h/2 - b.y;
                             const dist = Math.sqrt(dx*dx + dy*dy);
                             if (dist < b.explosionRadius) {
-                                const dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                                let dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
+                                if (b.owner === 'player') dmg = applyPlayerDamage(dmg);
                                 ex.hp -= dmg;
                             }
                         }
                         bullets.splice(i, 1);
                     } else {
-                        e.hp -= (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                        let dmgDefault = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                        if (b.owner === 'player') dmgDefault = applyPlayerDamage(dmgDefault);
+                        e.hp -= dmgDefault;
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         bullets.splice(i, 1);
@@ -2218,16 +2274,25 @@ function updatePhysics() {
         if (currentMode === 'single') {
             coins += 30;
             trophies += 3; // single trophy reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);
         } else if (currentMode === 'team') {
             coins += 40;
             trophies += 5; // team trophy reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 5);
         } else if (currentMode === 'duel') {
             coins += 20;
             trophies += 2; // duel trophy reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 2);
         } else if (currentMode === 'onevsall') {
             coins += 80;
             trophies += 10; // one vs all trophy reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10);
+        } else if (currentMode === 'bossfight') {
+            coins += 500;
+            trophies += 30; // boss fight win reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 30);
         }
+        saveProgress();
         syncResultOverlay('win');
     } else if (!tank.alive || tank.hp <= 0) {
         gameState = 'lose';
@@ -2237,6 +2302,8 @@ function updatePhysics() {
             loseTrophies(3); // lose 3 trophies in team mode
         } else if (currentMode === 'onevsall') {
             loseTrophies(5); // lose 5 trophies in one vs all
+        } else if (currentMode === 'bossfight') {
+            loseTrophies(15); // lose 15 trophies in boss fight
         }
         syncResultOverlay('lose');
     }

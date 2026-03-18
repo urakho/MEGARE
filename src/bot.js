@@ -480,12 +480,16 @@ function updateEnemyAI() {
         const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...(typeof playerDrones !== 'undefined' ? playerDrones.filter(d => d && d.alive) : [])];
         const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
         if (targets.length === 0) continue;
-        // Find nearest target
-        let nearest = targets[0];
-        let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
-        for (const t of targets) {
-            const d = Math.hypot((t.x + (t.w||0)/2) - (enemy.x + enemy.w/2), (t.y + (t.h||0)/2) - (enemy.y + enemy.h/2));
-            if (d < nd) { nearest = t; nd = d; }
+        
+        let nearest;
+        {
+            // Find nearest target
+            nearest = targets[0];
+            let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
+            for (const t of targets) {
+                const d = Math.hypot((t.x + (t.w||0)/2) - (enemy.x + enemy.w/2), (t.y + (t.h||0)/2) - (enemy.y + enemy.h/2));
+                if (d < nd) { nearest = t; nd = d; }
+            }
         }
 
         // Башня смотрит на ближайшую цель
@@ -1691,7 +1695,7 @@ function updateAllyAI() {
                 if (dist <= hitRadius) {
                     // Damage scaled by beam intensity, boosted by upgrade if player
                     const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
-                    const dmg = 25 * unit.beamIntensity * _beamUpgMult;
+                    const dmg = 3 * unit.beamIntensity * _beamUpgMult;
                     e.hp -= dmg;
                     // Apply strong disorientation/inversion + confusion so AI reacts
                     e.disoriented = Math.max(e.disoriented || 0, 60);
@@ -1823,9 +1827,9 @@ function updateAllyAI() {
             if (distToSeg(cx, cy, startX, startY, endX, endY) > hitRadius) continue;
             unit.waterjetHitTarget = true;
 
-            // Damage per frame (11/tick), boosted by upgrade if player
+            // Damage per frame (1.5/tick), boosted by upgrade if player
             const _wjMult = (isPlayer && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
-            e.hp -= Math.round(11 * _wjMult);
+            e.hp -= 1.5 * _wjMult;
             // Slow: brief recurring stun simulates medium slowdown
             e.paralyzed = true;
             e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);

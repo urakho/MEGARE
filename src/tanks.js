@@ -1956,6 +1956,250 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
     ctx.restore();
 }
 
+// ── Boss Hell Tank custom renderer ────────────────────────────────────────────
+// Call with ctx already translated so (0,0) is the boss centre.
+// w, h = 114×114. turretAngle in radians. isPhase2 = rage mode boolean.
+function drawBossOn(ctx, w, h, turretAngle, phase) {
+    const t = Date.now();
+    const isPhase2 = phase >= 2;
+    const isPhase3 = phase === 3;
+
+    // Phase 3: slightly stronger random body shake
+    if (isPhase3) ctx.translate((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3);
+    else if (isPhase2) ctx.translate((Math.random() - 0.5) * 2.5, (Math.random() - 0.5) * 2.5);
+
+    const trackH = h * 0.14;
+    const bw = w * 0.82;
+    const bh = h * 0.60;
+
+    // ── Phase outer hell-glow ──────────────────────────────────────────────
+    if (isPhase2) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 0.01);
+        const intensity = isPhase3 ? 0.38 : 0.28; // Phase 3: stronger glow
+        const hg = ctx.createRadialGradient(0, 0, w * 0.2, 0, 0, w * 0.72);
+        hg.addColorStop(0, `rgba(255,${Math.floor(isPhase3 ? 80 : 60 + 40 * pulse)},0,${intensity})`);
+        hg.addColorStop(1, 'rgba(120,0,0,0)');
+        ctx.fillStyle = hg;
+        ctx.beginPath(); ctx.arc(0, 0, w * 0.72, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── TRACKS ───────────────────────────────────────────────────────────────
+    ctx.fillStyle = isPhase2 ? '#1a0000' : '#1c1c1c';
+    ctx.fillRect(-w / 2, -h / 2, w, trackH);
+    ctx.fillRect(-w / 2, h / 2 - trackH, w, trackH);
+    // Track segment lines
+    ctx.strokeStyle = isPhase2 ? '#4a0000' : '#383838';
+    ctx.lineWidth = 2;
+    for (let x = -w / 2 + 8; x < w / 2; x += 14) {
+        ctx.beginPath(); ctx.moveTo(x, -h / 2); ctx.lineTo(x, -h / 2 + trackH); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, h / 2 - trackH); ctx.lineTo(x, h / 2); ctx.stroke();
+    }
+    // Track wheel hints
+    const wheelY = [-h / 2 + trackH * 0.5, h / 2 - trackH * 0.5];
+    for (const wy of wheelY) {
+        for (let wx = -w / 2 + 10; wx < w / 2; wx += 22) {
+            ctx.beginPath(); ctx.arc(wx, wy, 5, 0, Math.PI * 2);
+            ctx.fillStyle = isPhase2 ? '#2a0000' : '#2a2a2a'; ctx.fill();
+            ctx.strokeStyle = isPhase2 ? '#660000' : '#555'; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+    }
+
+    // ── BODY ─────────────────────────────────────────────────────────────────
+    const bg = ctx.createLinearGradient(-bw / 2, -bh / 2, bw / 2, bh / 2);
+    if (isPhase3) {
+        // Phase 3: intense red/orange
+        bg.addColorStop(0, '#6b0000'); bg.addColorStop(0.45, '#8b1a1a');
+        bg.addColorStop(0.75, '#5a0000'); bg.addColorStop(1, '#2e0000');
+    } else if (isPhase2) {
+        // Phase 2: angry red
+        bg.addColorStop(0, '#4a0000'); bg.addColorStop(0.45, '#700000');
+        bg.addColorStop(0.75, '#4a0000'); bg.addColorStop(1, '#1e0000');
+    } else {
+        // Phase 1: normal dark red
+        bg.addColorStop(0, '#1a0000'); bg.addColorStop(0.45, '#3a0000');
+        bg.addColorStop(0.75, '#280000'); bg.addColorStop(1, '#0d0000');
+    }
+    ctx.fillStyle = bg;
+    ctx.fillRect(-bw / 2, -bh / 2, bw, bh);
+
+    // Sloped front armour panel
+    ctx.beginPath();
+    ctx.moveTo(bw / 2, -bh / 2);
+    ctx.lineTo(bw / 2 + 10, -bh / 4);
+    ctx.lineTo(bw / 2 + 10, bh / 4);
+    ctx.lineTo(bw / 2, bh / 2);
+    ctx.closePath();
+    ctx.fillStyle = isPhase2 ? '#5a0000' : '#250000'; ctx.fill();
+    ctx.strokeStyle = isPhase2 ? '#880000' : '#3a0000'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Side armour strips
+    ctx.fillStyle = isPhase2 ? '#3d0000' : '#1f0000';
+    ctx.fillRect(-bw / 2, -bh / 2, 10, bh);
+    ctx.fillRect(bw / 2 - 10, -bh / 2, 10, bh);
+
+    // Rivets
+    const rivets = [
+        [-bw / 2 + 8, -bh / 2 + 9], [bw / 2 - 8, -bh / 2 + 9],
+        [-bw / 2 + 8, bh / 2 - 9],  [bw / 2 - 8, bh / 2 - 9],
+        [0, -bh / 2 + 9], [0, bh / 2 - 9],
+        [-bw / 4, -bh / 2 + 9], [bw / 4, -bh / 2 + 9]
+    ];
+    ctx.fillStyle = isPhase2 ? '#8b2200' : '#4a2200';
+    for (const [rx, ry] of rivets) {
+        ctx.beginPath(); ctx.arc(rx, ry, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── CRACKED ARMOUR with inner fire glow (phase 2+) ───────────────────────
+    if (isPhase2) {
+        const crackGlow = Math.floor(isPhase3 ? 150 : 100 + 80 * Math.sin(t * 0.022));
+        ctx.strokeStyle = `rgba(255,${crackGlow},0,${isPhase3 ? 0.85 : 0.75})`;
+        ctx.lineWidth = isPhase3 ? 2 : 1.5;
+        const cracks = [
+            [[-bw / 4, -bh / 2 + 6], [-bw / 6, 2], [-bw / 3, bh / 3]],
+            [[bw / 6, -bh / 3], [bw / 4, bh / 5]],
+            [[-bw / 2 + 12, 0], [-bw / 4, bh / 4], [-bw / 5, bh / 2 - 4]],
+            [[bw / 3, -bh / 4], [bw / 5, bh / 3]]
+        ];
+        for (const pts of cracks) {
+            ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+            for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+            ctx.stroke();
+        }
+        // Inner fire leaking through cracks
+        ctx.fillStyle = `rgba(255,${crackGlow},0,${isPhase3 ? 0.55 : 0.35})`;
+        ctx.fillRect(-bw / 4 - 1, -bh / 2 + 4, 3, 10);
+        ctx.fillRect(bw / 5, -bh / 3 - 1, 2, 8);
+        
+        // Phase 3: extra cracks
+        if (isPhase3) {
+            const extraCracks = [
+                [[0, -bh / 3], [bw / 6, 0], [bw / 4, bh / 4]],
+                [[-bw / 3, bh / 4], [-bw / 5, bh / 2 - 2]]
+            ];
+            for (const pts of extraCracks) {
+                ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+                for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // ── GLOWING EYE SLITS ────────────────────────────────────────────────────
+    const eyeBrightness = isPhase2 ? Math.floor(isPhase3 ? 180 : 80 + 60 * Math.sin(t * 0.025)) : 50;
+    const eyeColor = `rgba(255,${eyeBrightness},0,${isPhase3 ? 1 : (isPhase2 ? 0.95 : 0.85)})`;
+    ctx.fillStyle = eyeColor;
+    ctx.fillRect(-bw / 4 - 10, -bh / 4 - 1, 20, 7);
+    ctx.fillRect(bw / 4 - 10, -bh / 4 - 1, 20, 7);
+    // Bright inner gleam
+    ctx.fillStyle = isPhase3 ? '#ffff00' : (isPhase2 ? '#ffffff' : '#ffcc44');
+    ctx.fillRect(-bw / 4 - 7, -bh / 4 + 1, 14, 3);
+    ctx.fillRect(bw / 4 - 7, -bh / 4 + 1, 14, 3);
+    // Eye glow halo
+    if (isPhase2) {
+        for (let ei = -1; ei <= 1; ei += 2) {
+            const ex = ei * bw / 4;
+            const eg = ctx.createRadialGradient(ex, -bh / 4 + 2, 0, ex, -bh / 4 + 2, isPhase3 ? 20 : 16);
+            eg.addColorStop(0, `rgba(255,${eyeBrightness},0,${isPhase3 ? 0.7 : 0.5})`);
+            eg.addColorStop(1, 'rgba(255,0,0,0)');
+            ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(ex, -bh / 4 + 2, isPhase3 ? 20 : 16, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    // Skull emblem
+    ctx.font = `bold ${Math.round(w * 0.21)}px Arial`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = isPhase3 ? 0.95 : (isPhase2 ? 0.8 + 0.2 * Math.sin(t * 0.03) : 0.55);
+    ctx.fillStyle = isPhase2 ? `rgba(255,${Math.floor(isPhase3 ? 100 : 40 + 30 * Math.sin(t * 0.04))},0,1)` : 'rgba(200,0,0,1)';
+    ctx.fillText('💀', bw / 10, bh / 8);
+    ctx.globalAlpha = 1;
+
+    // ── FIRE JETS (Phase 2+) ────────────────────────────────────────────────
+    if (isPhase2) {
+        // Top + bottom flames (spread along the width)
+        const flameCount = isPhase3 ? 11 : 9;
+        for (let i = 0; i < flameCount; i++) {
+            const fx = -bw / 2 + (i / (flameCount - 1)) * bw + (Math.random() - 0.5) * 6;
+            const fh = (isPhase3 ? 18 : 14) + Math.sin(t * 0.007 + i * 0.9) * 8 + Math.random() * 6;
+            const sides = [[-bh / 2, -1], [bh / 2, 1]];
+            for (const [fy0, dir] of sides) {
+                const fg = ctx.createRadialGradient(fx, fy0 + dir * fh * 0.35, 0, fx, fy0 + dir * fh * 0.35, fh * 0.75);
+                fg.addColorStop(0, `rgba(255,255,${isPhase3 ? 80 : 120},${isPhase3 ? 1 : 0.95})`);
+                fg.addColorStop(0.35, `rgba(255,${isPhase3 ? 180 : 130},0,${isPhase3 ? 0.85 : 0.75})`);
+                fg.addColorStop(0.7, `rgba(220,${isPhase3 ? 80 : 30},0,${isPhase3 ? 0.65 : 0.45})`);
+                fg.addColorStop(1, 'rgba(120,0,0,0)');
+                ctx.fillStyle = fg;
+                ctx.beginPath(); ctx.arc(fx, fy0 + dir * fh * 0.35, fh * 0.75, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        // Side venting flames (left & right) - more intense in Phase 3
+        for (let side = -1; side <= 1; side += 2) {
+            const count = isPhase3 ? 7 : 5;
+            for (let j = 0; j < count; j++) {
+                const fx = side * (bw / 2 + 6 + Math.random() * (isPhase3 ? 14 : 10));
+                const fy = -bh / 3 + (j / (count - 1)) * bh * 0.66 + (Math.random() - 0.5) * 8;
+                const fr = (isPhase3 ? 12 : 9) + Math.random() * (isPhase3 ? 14 : 10);
+                const sg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+                sg.addColorStop(0, `rgba(255,${isPhase3 ? 250 : 220},80,${isPhase3 ? 0.95 : 0.9})`);
+                sg.addColorStop(0.4, `rgba(255,${isPhase3 ? 150 : 80},0,${isPhase3 ? 0.75 : 0.6})`);
+                sg.addColorStop(1, 'rgba(150,0,0,0)');
+                ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        // Exhaust smoke wisps from underside - more in Phase 3
+        const smokeCount = isPhase3 ? 6 : 4;
+        for (let i = 0; i < smokeCount; i++) {
+            const ex = -bw / 3 + i * (bw * 0.22);
+            const ey = h / 2 + 5 + Math.random() * 8;
+            ctx.globalAlpha = isPhase3 ? 0.3 : (0.18 + Math.random() * 0.12);
+            ctx.fillStyle = isPhase3 ? '#440000' : '#220000';
+            ctx.beginPath(); ctx.arc(ex, ey, (isPhase3 ? 12 : 8) + Math.random() * (isPhase3 ? 8 : 6), 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // ── TURRET ───────────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.rotate(turretAngle);
+
+    // Turret dome
+    const tg = ctx.createRadialGradient(-w * 0.06, -h * 0.06, w * 0.02, 0, 0, w * 0.28);
+    if (isPhase2) {
+        tg.addColorStop(0, '#6b0000'); tg.addColorStop(0.55, '#420000'); tg.addColorStop(1, '#1a0000');
+    } else {
+        tg.addColorStop(0, '#320000'); tg.addColorStop(0.55, '#1e0000'); tg.addColorStop(1, '#0d0000');
+    }
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.ellipse(0, 0, w * 0.28, h * 0.21, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = isPhase2 ? '#770000' : '#380000'; ctx.lineWidth = 3; ctx.stroke();
+
+    // Barrel
+    const bLen = w * 0.58, bBarW = h * 0.088;
+    ctx.fillStyle = isPhase2 ? '#1e0000' : '#0f0000';
+    ctx.fillRect(0, -bBarW / 2, bLen, bBarW);
+    ctx.fillStyle = isPhase2 ? '#3d0000' : '#1a0000';
+    ctx.fillRect(8, -bBarW / 2 + 2, bLen - 14, bBarW - 4);
+    // Armour ring on barrel
+    ctx.fillStyle = isPhase2 ? '#550000' : '#220000';
+    ctx.fillRect(bLen * 0.55 - 5, -bBarW / 2 - 2, 10, bBarW + 4);
+    // Muzzle brake
+    ctx.fillStyle = isPhase2 ? '#660000' : '#1e0000';
+    ctx.fillRect(bLen - 12, -bBarW / 2 - 4, 16, bBarW + 8);
+
+    // Phase 2+: continuous muzzle fire glow
+    if (isPhase2) {
+        const mFlicker = 0.5 + 0.5 * Math.sin(t * 0.04);
+        const mSize = 16 + mFlicker * 10;
+        const mg = ctx.createRadialGradient(bLen + 10, 0, 0, bLen + 10, 0, mSize);
+        mg.addColorStop(0, `rgba(255,255,${Math.floor(150 * mFlicker)},0.9)`);
+        mg.addColorStop(0.4, `rgba(255,${Math.floor(80 + 50 * mFlicker)},0,0.6)`);
+        mg.addColorStop(1, 'rgba(180,0,0,0)');
+        ctx.fillStyle = mg;
+        ctx.beginPath(); ctx.arc(bLen + 10, 0, mSize, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.restore(); // end turret rotation
+}
+
 function drawPreview() {
     if (!previewCtx) return;
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
@@ -2055,6 +2299,20 @@ function drawCharacterPreviews() {
         }
         drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, baseColor, 0, 1, type);
         ctx.restore();
+        
+        // Draw trophy counter for unlocked tanks
+        if (isUnlocked && typeof getTankTrophies === 'function') {
+            const tankTrophies = getTankTrophies(type);
+            if (tankTrophies > 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                ctx.fillStyle = '#e67e22';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🏆 ' + tankTrophies, canvas.width/2, canvas.height - 12);
+            }
+        }
         
         if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === type) {
             ctx.strokeStyle = 'white';
@@ -3247,6 +3505,57 @@ function draw() {
                 });
             }
 
+        } else if (b.type === 'meteorMini') {
+            // Small meteor — rocky appearance with fire
+            const r = Math.max(4, b.w / 2);
+            const rotate = Date.now() * 0.01 + b.x * 0.05;
+            
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(rotate);
+            
+            // Dark rocky body
+            const rockGrad = ctx.createRadialGradient(-r*0.2, -r*0.2, r*0.1, 0, 0, r);
+            rockGrad.addColorStop(0, '#444');
+            rockGrad.addColorStop(0.6, '#1a1a1a');
+            rockGrad.addColorStop(1, '#0a0a0a');
+            ctx.fillStyle = rockGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Jagged edges
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // Lava glow edges
+            ctx.shadowColor = '#ff6600';
+            ctx.shadowBlur = 8;
+            const glowGrad = ctx.createRadialGradient(0, 0, r*0.7, 0, 0, r*1.3);
+            glowGrad.addColorStop(0, 'rgba(255, 100, 0, 0)');
+            glowGrad.addColorStop(0.7, 'rgba(255, 80, 0, 0.3)');
+            glowGrad.addColorStop(1, 'rgba(255, 50, 0, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Fire trail below
+            if (window.effectsEnabled !== false && Math.random() > 0.4) {
+                particles.push({
+                    x: b.x + (Math.random() - 0.5) * r,
+                    y: b.y + (Math.random() - 0.5) * r,
+                    size: 1 + Math.random() * 2,
+                    color: Math.random() > 0.5 ? '#ff6600' : '#ffaa00',
+                    life: 0.4,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5
+                });
+            }
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -3518,7 +3827,8 @@ function draw() {
                     const dy = e.y + e.h/2 - proj.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     if (dist < proj.explosionRadius) {
-                        const dmg = proj.damage * (1 - dist / proj.explosionRadius);
+                        let dmg = proj.damage * (1 - dist / proj.explosionRadius);
+                        if (typeof godMode !== 'undefined' && godMode) dmg = dmg * 1000;
                         e.hp -= dmg;
                         if (e.hp < 0) e.hp = 0;
                     }
@@ -4045,7 +4355,14 @@ function draw() {
             ctx.stroke();
             ctx.restore();
         }
-        drawTankOn(ctx, 0, 0, enemy.w, enemy.h, enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222'), enemy.turretAngle || 0, 1, enemy.tankType || 'normal', { heat: enemy.heat, overheated: enemy.overheated });
+        // Draw boss with custom texture; regular tanks use drawTankOn
+        if (enemy.isBoss) {
+            drawBossOn(ctx, enemy.w, enemy.h, enemy.turretAngle || 0, enemy.phase || 1);
+        } else {
+            const _drawColor = enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222');
+            drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, enemy.tankType || 'normal', { heat: enemy.heat, overheated: enemy.overheated });
+        }
+        // Boss phase 2 glow overlay is already baked into drawBossOn
         ctx.restore();
         if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
         ctx.fillStyle = 'red';
@@ -4337,7 +4654,214 @@ function draw() {
         ctx.restore();
     }
     
+    // Draw boss fire trail (Phase 3 only)
+    if (currentMode === 'bossfight') {
+        const boss = (typeof enemies !== 'undefined' && enemies.find(e => e && e.isBoss)) || null;
+        if (boss && boss.fireTrail && boss.fireTrail.length > 0) {
+            for (const trail of boss.fireTrail) {
+                const alpha = trail.life / 300; // 1 → 0 as trail fades
+                const flicker = Math.max(0.3, 0.3 + 0.7 * Math.sin(Date.now() * 0.015 + trail.x * 0.01));
+                
+                ctx.save();
+                ctx.globalAlpha = alpha * 0.7;
+                
+                // Core bright yellow flame
+                const cg = ctx.createRadialGradient(trail.x, trail.y, 2, trail.x, trail.y, 28);
+                cg.addColorStop(0, `rgba(255,255,${Math.floor(150 * flicker)},0.95)`);
+                cg.addColorStop(0.4, `rgba(255,200,0,${0.8 * flicker})`);
+                cg.addColorStop(0.8, `rgba(255,100,0,${0.4 * flicker})`);
+                cg.addColorStop(1, 'rgba(200,50,0,0)');
+                ctx.fillStyle = cg;
+                ctx.beginPath();
+                ctx.arc(trail.x, trail.y, Math.max(2, 28 * flicker), 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Middle orange layer
+                const mg = ctx.createRadialGradient(trail.x - 3, trail.y - 3, 0, trail.x, trail.y, 35);
+                mg.addColorStop(0, `rgba(255,150,0,${0.6 * alpha})`);
+                mg.addColorStop(0.6, `rgba(220,80,0,${0.3 * alpha})`);
+                mg.addColorStop(1, 'rgba(150,30,0,0)');
+                ctx.fillStyle = mg;
+                ctx.beginPath();
+                ctx.arc(trail.x, trail.y, Math.max(2, 35 * alpha), 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Outer red glow with jagged edges
+                const og = ctx.createRadialGradient(trail.x, trail.y, 10, trail.x, trail.y, 50);
+                og.addColorStop(0, `rgba(200,50,0,${0.5 * alpha})`);
+                og.addColorStop(0.5, `rgba(150,20,0,${0.2 * alpha})`);
+                og.addColorStop(1, 'rgba(100,0,0,0)');
+                ctx.fillStyle = og;
+                
+                // Draw jagged flame-like outer edge
+                ctx.beginPath();
+                const edgePoints = 12;
+                for (let i = 0; i < edgePoints; i++) {
+                    const angle = (i / edgePoints) * Math.PI * 2;
+                    const baseRadius = 45;
+                    const spike = (Math.sin(angle * 3) + Math.sin(angle * 2.3)) * 15;
+                    const r = baseRadius + spike;
+                    const x = trail.x + Math.cos(angle) * r;
+                    const y = trail.y + Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                // Spark particles
+                if (alpha > 0.3) {
+                    for (let s = 0; s < 3; s++) {
+                        const sparkAngle = Math.random() * Math.PI * 2;
+                        const sparkDist = Math.random() * 30 + 20;
+                        const sx = trail.x + Math.cos(sparkAngle) * sparkDist;
+                        const sy = trail.y + Math.sin(sparkAngle) * sparkDist;
+                        const sparkAlpha = (Math.random() * 0.5 + 0.3) * alpha;
+                        ctx.fillStyle = `rgba(255,${Math.floor(150 * Math.random())},0,${sparkAlpha})`;
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, Math.max(0.5, Math.random() * 2 + 1), 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                
+                ctx.restore();
+            }
+        }
+    }
+    
+    // Draw boss meteors (warning circles, fire zones, and falling rock animation)
+    if (currentMode === 'bossfight' && typeof bossMeteors !== 'undefined') {
+        for (const m of bossMeteors) {
+            if (!m.landed) {
+                const progress = 1 - m.warningTimer / 90; // 0→1 as it falls
+                const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.015);
+
+                // Ground warning circle (stays at target position)
+                ctx.save();
+                ctx.globalAlpha = (0.2 + 0.2 * progress) * (0.6 + 0.4 * pulse);
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8, 6]);
+                ctx.beginPath(); ctx.arc(m.x, m.y, 80, 0, Math.PI * 2); ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = (0.12 + 0.15 * progress) * (0.6 + 0.4 * pulse);
+                ctx.fillStyle = '#FF4500';
+                ctx.beginPath(); ctx.arc(m.x, m.y, 80, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+
+                // Falling rock: starts 200px above, descends to target
+                const rockY = m.y - 200 * (1 - progress);
+                const rockScale = 0.35 + 0.65 * progress;
+                const rockR = 18 * rockScale;
+
+                // Fire trail behind the rock (above it = negative Y)
+                for (let ti = 1; ti <= 7; ti++) {
+                    const trailProg = progress - ti * 0.04;
+                    if (trailProg < 0) continue;
+                    const trailY = m.y - 200 * (1 - trailProg) - 4 * ti;
+                    const trailR = rockR * (1 - ti / 9);
+                    const trailAlpha = (1 - ti / 8) * 0.65;
+                    ctx.save();
+                    ctx.globalAlpha = trailAlpha;
+                    const tg = ctx.createRadialGradient(m.x, trailY, 0, m.x, trailY, trailR * 1.5);
+                    tg.addColorStop(0, '#FFFF80');
+                    tg.addColorStop(0.35, '#FF6600');
+                    tg.addColorStop(0.7, '#CC2200');
+                    tg.addColorStop(1, 'rgba(80,0,0,0)');
+                    ctx.fillStyle = tg;
+                    ctx.beginPath(); ctx.arc(m.x, trailY, trailR * 1.5, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                }
+
+                // Rock body: dark gray with glowing orange-red cracks
+                ctx.save();
+                ctx.translate(m.x, rockY);
+                ctx.rotate(progress * Math.PI * 3); // spin as it falls
+                // Outer glow
+                const glow = ctx.createRadialGradient(0, 0, rockR * 0.2, 0, 0, rockR * 2.2);
+                glow.addColorStop(0, 'rgba(255,140,0,0.55)');
+                glow.addColorStop(0.5, 'rgba(200,40,0,0.3)');
+                glow.addColorStop(1, 'rgba(80,0,0,0)');
+                ctx.fillStyle = glow;
+                ctx.beginPath(); ctx.arc(0, 0, rockR * 2.2, 0, Math.PI * 2); ctx.fill();
+                // Rock silhouette (rough jagged polygon)
+                ctx.fillStyle = '#1a0000';
+                ctx.beginPath();
+                const sides = 8;
+                for (let k = 0; k < sides; k++) {
+                    const ang = (k / sides) * Math.PI * 2;
+                    const jitter = rockR * (0.8 + 0.22 * Math.sin(k * 2.3 + progress * 5));
+                    if (k === 0) ctx.moveTo(Math.cos(ang) * jitter, Math.sin(ang) * jitter);
+                    else ctx.lineTo(Math.cos(ang) * jitter, Math.sin(ang) * jitter);
+                }
+                ctx.closePath(); ctx.fill();
+                // Crack lines with lava glow
+                ctx.strokeStyle = `rgba(255,${Math.floor(120 + 80 * pulse)},0,0.85)`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(-rockR * 0.3, -rockR * 0.6); ctx.lineTo(0, 0); ctx.lineTo(rockR * 0.5, rockR * 0.4); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(rockR * 0.2, -rockR * 0.5); ctx.lineTo(-rockR * 0.1, rockR * 0.3); ctx.stroke();
+                ctx.restore();
+
+            } else if (m.fireTimer > 0) {
+                // Fire zone: orange-red radial gradient, fades as fireTimer decreases
+                const alpha = Math.min(0.65, m.fireTimer / 300);
+                const flicker = 0.5 + 0.5 * Math.sin(Date.now() * 0.02 + m.x);
+                ctx.save();
+                ctx.globalAlpha = alpha * (0.8 + 0.2 * flicker);
+                const grad = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 55);
+                grad.addColorStop(0, '#FFFF00');
+                grad.addColorStop(0.2, '#FF8800');
+                grad.addColorStop(0.6, '#FF2200');
+                grad.addColorStop(1, 'rgba(140,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.arc(m.x, m.y, 55, 0, Math.PI * 2); ctx.fill();
+                // Flickering inner flame tongues
+                for (let fl = 0; fl < 5; fl++) {
+                    const fa = (Date.now() * 0.003 + fl * 1.26) % (Math.PI * 2);
+                    const fr = Math.max(0, 10 + 12 * Math.sin(Date.now() * 0.008 + fl * 1.4));
+                    const fx = m.x + Math.cos(fa) * fr * 0.5;
+                    const fy = m.y + Math.sin(fa) * fr * 0.5;
+                    if (fr <= 0) continue;
+                    ctx.globalAlpha = alpha * 0.6;
+                    ctx.fillStyle = '#FF6600';
+                    ctx.beginPath(); ctx.arc(fx, fy, fr * 0.5, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+    }
+
     if (cameraTranslated) ctx.restore();
+
+    // Boss HP bar (screen coordinates, drawn after camera restore)
+    if (currentMode === 'bossfight' && typeof enemies !== 'undefined') {
+        const boss = enemies.find(e => e.isBoss && e.alive !== false);
+        if (boss && boss.hp > 0) {
+            const bw = 500, bh = 18, bx = (canvas.width - bw) / 2, by = 14;
+            const hpRatio = Math.max(0, boss.hp / boss.maxHp);
+            // Background
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+            // Empty bar
+            ctx.fillStyle = '#330000';
+            ctx.fillRect(bx, by, bw, bh);
+            // HP fill
+            ctx.fillStyle = boss.isPhase2 ? '#FF4500' : '#CC0000';
+            ctx.fillRect(bx, by, bw * hpRatio, bh);
+            // Gold border
+            ctx.strokeStyle = boss.isPhase2 ? '#FF6600' : '#880000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx, by, bw, bh);
+            // Label
+            ctx.fillStyle = '#FFDDDD';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(
+                '👹 АДСКИЙ ТАНК  ' + Math.ceil(boss.hp) + ' / ' + boss.maxHp + (boss.isPhase2 ? '  ⚡ ЯРОСТЬ!' : ''),
+                canvas.width / 2, by + bh - 3
+            );
+        }
+    }
 
     // DEBUG: Ultimate status (if electric tank)
     if (gameState === 'play' && typeof tankType !== 'undefined' && tankType === 'electric') {
@@ -4521,14 +5045,27 @@ function showTankDetail(tankType) {
         };
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
-            plasma: 350, musical: 200, waterjet: 11, illuminat: 25,
+            plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
             mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
-        const dmgMaxPossible = dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6);
-        const dmgBoosted = Math.round(dmgRaw * ((typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[dmgLvl] : (1 + dmgLvl*0.1)));
-        const dmgStars = Math.min(10, Math.round((dmgBoosted / dmgMaxPossible) * 10));
-        const dmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.' }[tankType] || '';
+        // Use multiplier table if present, compute raw (float) boosted damage
+        const dmgMultAtLvl = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[dmgLvl] : (1 + dmgLvl*0.1);
+        const dmgMultMax = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6;
+        const dmgBoostedRaw = dmgRaw * dmgMultAtLvl; // float value (not rounded) used for relative calculations
+        const dmgMaxPossible = dmgRaw * dmgMultMax;
+
+        // Prepare displayed values: for continuous/tick weapons (waterjet, illuminat) show per-second values in the modal
+        let displayDmgBoosted = Math.round(dmgBoostedRaw);
+        let displayDmgMaxPossible = dmgMaxPossible;
+        let displayDmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.' }[tankType] || '';
+        if (tankType === 'waterjet' || tankType === 'illuminat') {
+            // convert tick-based damage to per-second for display (60 ticks = 1s)
+            displayDmgBoosted = Math.round(dmgBoostedRaw * 60);
+            displayDmgMaxPossible = dmgMaxPossible * 60;
+            displayDmgNote = '/сек';
+        }
+        const dmgStars = Math.min(10, Math.round((dmgBoostedRaw / Math.max(1, dmgMaxPossible)) * 10));
 
         // Ownership and helper to generate compact inline button HTML
         const isOwned = (typeof unlockedTanks !== 'undefined') && unlockedTanks.includes(tankType);
@@ -4551,7 +5088,8 @@ function showTankDetail(tankType) {
 
         const cssBar = (pct, color) => `<div style="width:90px;height:8px;background:#333;border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;flex-shrink:0;"><div style="width:${Math.round(pct)}%;height:100%;background:${color};border-radius:4px;"></div></div>`;
         const hpPct  = Math.round((hp / hpMaxPossible) * 100);
-        const dmgPct = Math.round((dmgBoosted / dmgMaxPossible) * 100);
+        // For the progress bar, compare displayed values so bars match what the user sees
+        const dmgPct = Math.round((displayDmgBoosted / Math.max(1, displayDmgMaxPossible)) * 100);
         const spdPct = Math.round((spd / spdMaxPossible) * 100);
 
         statsEl.innerHTML = `
@@ -4567,7 +5105,7 @@ function showTankDetail(tankType) {
                 <div style="display:flex; align-items:center;">
                     <div style="width:80px; font-weight:bold; flex-shrink:0;">Урон</div>
                     ${cssBar(dmgPct, '#A0522D')}
-                    <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${dmgBoosted}${dmgNote}</div>
+                    <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${displayDmgBoosted}${displayDmgNote}</div>
                     ${makeNear('dmg')}
                     <div style="flex:1;"></div>
                     <div style="flex-shrink:0;">${makeFar('dmg')}</div>

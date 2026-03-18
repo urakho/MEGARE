@@ -52,6 +52,12 @@ tankMusic.volume = 0.5;
 let exfightMusic = new Audio('music/mp3/exfight.mp3');
 exfightMusic.loop = true;
 exfightMusic.volume = 0.5;
+let bossMusic = new Audio('music/mp3/boss.mp3');
+bossMusic.loop = true;
+bossMusic.volume = 0.5;
+let angryBossMusic = new Audio('music/mp3/angryboss.mp3');
+angryBossMusic.loop = true;
+angryBossMusic.volume = 0.5;
 let currentMode = 'menu';
 let duelState = null;
 
@@ -77,6 +83,12 @@ let navAgentW = 38, navAgentH = 38;
 let navNeedsRebuild = true;
 // War mode team spawn centers (filled by spawnWarMode)
 let warTeamSpawns = [];
+// Boss Fight mode: active meteors array
+let bossMeteors = [];
+let leaderHuntLeader = null; // kept for legacy compatibility
+
+// God mode: makes tank invincible with 100000 HP and 1000 damage
+let godMode = false;
 
 // Глобальная перезарядка в тиках (1 тик = 1/60s)
 const FIRE_COOLDOWN = 20; // ~333ms at 60fps
@@ -216,6 +228,29 @@ function loseTrophies(amount = 1) {
     }
 }
 
+// Get per-tank trophies from localStorage
+function getTankTrophies(tankType) {
+    try {
+        const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData')) || {};
+        return tankTrophiesData[tankType] || 0;
+    } catch (e) {
+        console.error('Error reading tank trophies:', e);
+        return 0;
+    }
+}
+
+// Add trophies to a specific tank
+function addIndividualTankTrophies(tankType, amount) {
+    try {
+        const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData')) || {};
+        tankTrophiesData[tankType] = (tankTrophiesData[tankType] || 0) + amount;
+        localStorage.setItem('tankTrophiesData', JSON.stringify(tankTrophiesData));
+        console.log(`Танку ${tankType} добавлено ${amount} трофеев (всего: ${tankTrophiesData[tankType]})`);
+    } catch (e) {
+        console.error('Error saving tank trophies:', e);
+    }
+}
+
 // Mode-aware trophy loss: 3 for team, 5 for onevsall, 1 for single and duel
 function loseModeTrophies() {
     if (currentMode === 'training') return;
@@ -223,6 +258,8 @@ function loseModeTrophies() {
         loseTrophies(3);
     } else if (currentMode === 'onevsall') {
         loseTrophies(5);
+    } else if (currentMode === 'bossfight') {
+        loseTrophies(15);
     } else {
         loseTrophies(1);
     }
@@ -271,7 +308,8 @@ const tankMaxHpByType = {
     'electric': 400,
     'robot': 450,
     'medical': 275,
-    'mine': 350
+    'mine': 350,
+    'boss_hell': 7500
 };
 
 function setTankHP(type) {
@@ -528,6 +566,12 @@ let _lastMusicKey = '';
 function _getTargetMusicKey() {
     if (gameState === 'menu') return 'menu';
     if (gameState === 'playing') {
+        if (currentMode === 'bossfight') {
+            // Check if boss is in phase 3 (hp <= 2500)
+            const boss = enemies.find(e => e.isBoss && e.alive);
+            if (boss && boss.phase === 3) return 'bossfight_phase3';
+            return 'bossfight';
+        }
         if (currentMode === 'trial') return 'exfight';
         if (currentMode === 'onevsall') return 'fight';
         if (currentMode === 'duel') return 'duel';
@@ -544,6 +588,8 @@ function _getMusicTrack(key) {
     if (key === 'team') return teamMusic;
     if (key === 'tank') return tankMusic;
     if (key === 'exfight') return exfightMusic;
+    if (key === 'bossfight') return bossMusic;
+    if (key === 'bossfight_phase3') return angryBossMusic;
     return null;
 }
 
@@ -561,6 +607,8 @@ function updateMusic() {
         teamMusic.pause();
         tankMusic.pause();
         exfightMusic.pause();
+        bossMusic.pause();
+        angryBossMusic.pause();
         if (track) {
             track.volume = vol;
             track.play().catch(() => {});
@@ -900,6 +948,14 @@ function startGame(mode) {
     }
     // reset basic state
     tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; tank.robotDroneCooldown = 0;
+    bossMeteors = [];
+    
+    // Apply god mode if enabled
+    if (godMode) {
+        tank.hp = 100000;
+        tank.maxHp = 100000;
+        console.log('✓ God mode applied: 100000 HP');
+    }
     
     // Reset all effects
     tank.paralyzed = false;
@@ -1020,6 +1076,20 @@ function startGame(mode) {
         generateMap();
         spawnOneVsAllMode();
         cameraFollow = true;
+    } else if (mode === 'leaderhunt') {
+        // Boss Fight mode replaces leaderhunt (removed)
+        worldWidth = 1800; worldHeight = 1400;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        generateBossFightMap();
+        spawnBossFightMode();
+        cameraFollow = true;
+    } else if (mode === 'bossfight') {
+        // Boss Fight: large fixed arena, player vs Hell Tank boss
+        worldWidth = 1800; worldHeight = 1400;
+        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+        generateBossFightMap();
+        spawnBossFightMode();
+        cameraFollow = true;
     }
     
     // set current mode for runtime logic
@@ -1096,6 +1166,10 @@ if (commandExecute) commandExecute.addEventListener('click', () => {
 const modeDuel = document.getElementById('modeDuel');
 if (modeDuel) modeDuel.addEventListener('click', () => startGame('duel'));
 
+// Boss Fight mode handler
+const modeBossFight = document.getElementById('modeBossFight');
+if (modeBossFight) modeBossFight.addEventListener('click', () => startGame('bossfight'));
+
 function processDevCommand(rawCommand) {
     const command = rawCommand.trim();
     if (!command) return;
@@ -1119,10 +1193,43 @@ function processDevCommand(rawCommand) {
         return;
     }
 
-    // Legacy alias removed; use '/MEG on' to enable developer commands
-
-    // If not unlocked, skip dev commands
+    // If not unlocked, skip remaining dev commands (including /god)
     if (!devCommandsUnlocked) {
+        console.log('Developer commands are disabled. Use /MEG on to enable.');
+        return;
+    }
+
+    // God mode requires dev commands to be unlocked
+    if (command.toLowerCase().startsWith('/god')) {
+        console.log('[DEBUG] God command triggered:', command);
+        const parts = command.split(/\s+/);
+        const arg = (parts[1] || '').toLowerCase();
+        console.log('[DEBUG] God arg:', arg);
+        
+        if (arg === 'on') {
+            godMode = true;
+            console.log('[DEBUG] godMode variable set to:', godMode);
+            
+            // Try to apply immediately even if tank doesn't exist
+            if (typeof tank !== 'undefined' && tank) {
+                console.log('[DEBUG] Tank exists, applying 100000 HP');
+                tank.hp = 100000;
+                tank.maxHp = 100000;
+                console.log('✓ God mode ENABLED: 100000 HP, 1000x damage');
+            } else {
+                console.log('[DEBUG] Tank does not exist yet');
+                console.log('✓ God mode flag enabled. Start a game to apply 100000 HP.');
+            }
+        } else if (arg === 'off') {
+            godMode = false;
+            console.log('[DEBUG] godMode variable set to:', godMode);
+            if (typeof tank !== 'undefined' && tank && typeof setTankHP === 'function') {
+                setTankHP(tankType);
+            }
+            console.log('✓ God mode DISABLED');
+        } else {
+            console.log('Usage: /god on|off');
+        }
         return;
     }
 
@@ -1236,6 +1343,9 @@ function processDevCommand(rawCommand) {
         console.log('All tank upgrades cleared.');
     } else if (command === '/help' || command === '/commands') {
         console.log('=== ДОСТУПНЫЕ КОМАНДЫ ===');
+        console.log('/god on|off - включить/отключить режим бога (100000 HP, 1000x урон)');
+        console.log('/MEG on|off - включить/отключить режим разработчика');
+        console.log('[После /MEG on:]');
         console.log('/coins [+/-/=] [число] - управление монетами (по умолчанию +)');
         console.log('/gems [+/-/=] [число] - управление гемами (по умолчанию +)');
         console.log('/trophy [+/-/=] [число] - управление трофеями, = сбрасывает награды');
@@ -2013,6 +2123,297 @@ function spawnTrialMode() {
             respawnCount: 0, paralyzed: false, paralyzedTime: 0
         });
     }
+
+    // Some barrels/boxes for cover
+    for (let b = 0; b < 15; b++) {
+        const rx = 180 + Math.random() * (worldWidth - 360);
+        const ry = 180 + Math.random() * (worldHeight - 360);
+        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
+        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
+    }
+
+    navNeedsRebuild = true;
+}
+
+// ── Boss Fight mode functions ──────────────────────────────────────────────────
+
+function generateBossFightMap() {
+    objects = [];
+    const W = 1800, H = 1400, B = 50;
+    const wall = (x, y, w, h) => objects.push({ x, y, w, h, type: 'wall', color: '#3d1a1a' });
+    const box  = (x, y) => objects.push({ x, y, w: 40, h: 40, type: 'box', color: '#6b3a1a' });
+    const brl  = (x, y) => objects.push({ x, y, w: 30, h: 30, type: 'barrel', color: '#5d4037' });
+
+    // Border walls
+    for (let x = 0; x < W; x += B) { wall(x, 0, B, B); wall(x, H - B, B, B); }
+    for (let y = B; y < H - B; y += B) { wall(0, y, B, B); wall(W - B, y, B, B); }
+
+    // Four corner L-structures (far from center corridor y=643..757)
+    wall(200, 150, 250, B);    wall(200, 200, B, 250);
+    wall(1350, 150, 250, B);   wall(1550, 200, B, 250);
+    wall(200, 1000, B, 250);   wall(200, 1200, 250, B);
+    wall(1550, 1000, B, 250);  wall(1350, 1200, 250, B);
+
+    // Inner vertical walls (above y=450 or below y=950 — clear of boss path)
+    wall(650, 200, B, 200);    wall(1100, 200, B, 200);
+    wall(650, 1000, B, 200);   wall(1100, 1000, B, 200);
+
+    // Horizontal cover walls at y=450 and y=900
+    wall(350, 450, 150, B);    wall(1300, 450, 150, B);
+    wall(350, 900, 150, B);    wall(1300, 900, 150, B);
+
+    // Top/bottom center accents
+    wall(800, 300, 200, B);    wall(800, 1100, 200, B);
+
+    // Symmetric boxes – all outside y=580..820 range (boss corridor is y≈643..757)
+    [   [160,150], [420,150], [700,150], [1100,150], [1380,150], [1640,150],
+        [160,1250],[420,1250],[700,1250],[1100,1250],[1380,1250],[1640,1250],
+        [160,430], [160,530],  [1640,430],[1640,530],
+        [160,870], [160,970],  [1640,870],[1640,970],
+        [500,380], [700,330], [1300,380],[1100,330],
+        [500,1020],[700,1070], [1300,1020],[1100,1070],
+        [870,350], [870,1050],
+    ].forEach(([x, y]) => box(x - 20, y - 20));
+
+    // Symmetric barrels – all outside y=580..820 range
+    [   [300,250],[900,250],[1500,250],  [300,1150],[900,1150],[1500,1150],
+        [560,430],[1240,430],[560,970],[1240,970],
+        [400,530],[1400,530],[400,870],[1400,870],
+        [900,200],[900,1200],
+    ].forEach(([x, y]) => brl(x - 15, y - 15));
+
+    navNeedsRebuild = true;
+}
+
+function spawnBossFightMode() {
+    enemies = [];
+    allies = [];
+    bossMeteors = [];
+
+    // Player spawns on left side, centered vertically
+    tank.x = 120;
+    tank.y = worldHeight / 2 - 19;
+    tank.team = 0;
+    setTankHP(tankType);
+    
+    // Apply god mode if enabled
+    if (godMode) {
+        tank.hp = 100000;
+        tank.maxHp = 100000;
+    }
+    
+    tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
+
+    // Hell Tank boss: 3× size (114×114), 7500 HP, team 99
+    const boss = {
+        x: 1600, y: worldHeight / 2 - 57,
+        w: 114, h: 114,
+        color: '#8B0000',
+        tankType: 'boss_hell',
+        isBoss: true, phase: 1,
+        hp: 7500, maxHp: 7500,
+        turretAngle: Math.PI, baseAngle: Math.PI,
+        speed: 0.8, team: 99,
+        fireCooldown: 0, meteorTimer: 120, miniTimer: 0,
+        trackOffset: 0, alive: true, stuckCount: 0,
+        paralyzed: false, paralyzedTime: 0, dodgeAccuracy: 0, respawnCount: 0,
+        fireTrail: [] // Phase 3: огненный след
+    };
+    enemies.push(boss);
+    navNeedsRebuild = true;
+}
+
+function updateBossFight() {
+    const boss = enemies.find(e => e.isBoss && e.alive);
+    if (!boss) return;
+
+    // Phase transitions
+    if (boss.phase === 1 && boss.hp <= 5000) {
+        boss.phase = 2;
+        boss.speed = 1.0; // Increases slightly
+    }
+    if (boss.phase === 2 && boss.hp <= 2500) {
+        boss.phase = 3;
+        boss.speed = 1.2; // 1.5x speed as requested, but adjusted for gameplay
+        // Music will automatically switch via updateMusic() which calls _getTargetMusicKey()
+    }
+
+    // Boss pursues player slowly, stops at ~260px
+    if (tank.alive) {
+        const dx = (tank.x + 19) - (boss.x + 57);
+        const dy = (tank.y + 19) - (boss.y + 57);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        boss.turretAngle = Math.atan2(dy, dx);
+        if (dist > 260) {
+            const nx = dx / dist, ny = dy / dist;
+            boss.x += nx * boss.speed;
+            boss.y += ny * boss.speed;
+            boss.baseAngle = Math.atan2(ny, nx);
+            
+            // Phase 3: leave fire trail
+            if (boss.phase === 3) {
+                boss.fireTrail.push({
+                    x: boss.x + 57,
+                    y: boss.y + 57,
+                    life: 300 // 5 seconds at 60fps
+                });
+            }
+        }
+    }
+
+    // Update and render fire trail (Phase 3 only)
+    if (boss.fireTrail) {
+        for (let i = boss.fireTrail.length - 1; i >= 0; i--) {
+            const trail = boss.fireTrail[i];
+            trail.life--;
+            if (trail.life <= 0) {
+                boss.fireTrail.splice(i, 1);
+            }
+        }
+    }
+
+    // Regular fire bullet
+    if (boss.fireCooldown > 0) boss.fireCooldown--;
+    if (boss.fireCooldown <= 0 && tank.alive) {
+        const ang = boss.turretAngle;
+        bullets.push({
+            x: boss.x + 57 + Math.cos(ang) * 60, y: boss.y + 57 + Math.sin(ang) * 60,
+            vx: Math.cos(ang) * 4.5, vy: Math.sin(ang) * 4.5,
+            damage: 80, owner: 'enemy', team: 99, type: 'fire', life: 220
+        });
+        // Faster cooldown in higher phases
+        if (boss.phase === 3) {
+            boss.fireCooldown = 50; // Faster
+        } else if (boss.phase === 2) {
+            boss.fireCooldown = 70;
+        } else {
+            boss.fireCooldown = 100;
+        }
+    }
+
+    // Drop meteors near player
+    if (boss.meteorTimer > 0) boss.meteorTimer--;
+    if (boss.meteorTimer <= 0 && tank.alive) {
+        const count = boss.phase === 3 ? 5 : (boss.phase === 2 ? 4 : 3);
+        for (let i = 0; i < count; i++) {
+            bossMeteors.push({
+                x: tank.x + 19 + (Math.random() - 0.5) * 320,
+                y: tank.y + 19 + (Math.random() - 0.5) * 320,
+                warningTimer: 90, landed: false, fireTimer: 0
+            });
+        }
+        // Faster meteor cooldown in higher phases
+        if (boss.phase === 3) {
+            boss.meteorTimer = 100; // Faster meteor drops
+        } else if (boss.phase === 2) {
+            boss.meteorTimer = 120;
+        } else {
+            boss.meteorTimer = 180;
+        }
+    }
+
+    // Phase 2+: burst 8-direction mini-meteors
+    if (boss.phase >= 2) {
+        if (boss.miniTimer > 0) boss.miniTimer--;
+        if (boss.miniTimer <= 0) {
+            const miniCount = boss.phase === 3 ? 12 : 8; // Phase 3: more mini-meteors
+            for (let i = 0; i < miniCount; i++) {
+                const ang = (Math.PI * 2 / miniCount) * i;
+                bullets.push({
+                    x: boss.x + 57, y: boss.y + 57,
+                    vx: Math.cos(ang) * 5, vy: Math.sin(ang) * 5,
+                    damage: 75, owner: 'enemy', team: 99,
+                    type: 'meteorMini', life: 150
+                });
+            }
+            boss.miniTimer = boss.phase === 3 ? 70 : 90;
+        }
+    }
+
+    // Update meteor warning / fire zones
+    for (let i = bossMeteors.length - 1; i >= 0; i--) {
+        const m = bossMeteors[i];
+        if (!m.landed) {
+            m.warningTimer--;
+            if (m.warningTimer <= 0) {
+                m.landed = true;
+                m.fireTimer = 300;
+                // Impact: increased damage in Phase 3
+                const damageAmount = boss.phase === 3 ? 200 : 150;
+                if (tank.alive) {
+                    const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
+                    if (Math.sqrt(ddx * ddx + ddy * ddy) < 80) {
+                        tank.hp = Math.max(0, tank.hp - damageAmount);
+                    }
+                }
+            }
+        } else {
+            m.fireTimer--;
+            // Fire DoT: increased in higher phases
+            const dotChance = boss.phase === 3 ? 0.15 : 0.10;
+            const dotDamage = boss.phase === 3 ? 12 : 8;
+            if (m.fireTimer > 0 && tank.alive && Math.random() < dotChance) {
+                const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
+                if (Math.sqrt(ddx * ddx + ddy * ddy) < 45) {
+                    tank.hp = Math.max(0, tank.hp - dotDamage);
+                }
+            }
+            if (m.fireTimer <= 0) bossMeteors.splice(i, 1);
+        }
+    }
+}
+
+// ── Legacy placeholder (replaced by Boss Fight) ───────────────────────────────
+function spawnLeaderHuntMode() {
+    enemies = [];
+    allies = [];
+    objects = objects || [];
+    leaderHuntLeader = null; // Reset leader
+
+    // Player at center-ish spawn
+    const cx = worldWidth / 2, cy = worldHeight / 2;
+    const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
+    tank.x = ps.x; tank.y = ps.y; tank.team = 0;
+    setTankHP(tankType);
+    tank.alive = true; tank.respawnTimer = 0;
+
+    // 7 bots spread around the map, each on its own team (FFA)
+    const spreadPositions = [
+        { x: 120, y: 120 },
+        { x: worldWidth - 120, y: 120 },
+        { x: 120, y: worldHeight - 120 },
+        { x: worldWidth - 120, y: worldHeight - 120 },
+        { x: cx, y: 120 },
+        { x: 120, y: cy },
+        { x: worldWidth - 120, y: cy }
+    ];
+    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
+
+    for (let i = 0; i < 7; i++) {
+        const sp = spreadPositions[i];
+        const pos = findFreeSpot(sp.x - 19, sp.y - 19, 38, 38, 600, 32) || sp;
+        const tt = leaderHuntTankTypes[Math.floor(Math.random() * leaderHuntTankTypes.length)];
+        const enemy = {
+            x: pos.x, y: pos.y, w: 38, h: 38,
+            color: typeColor[tt] || '#B22222',
+            tankType: tt,
+            hp: (tankMaxHpByType[tt] || 300),
+            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
+            alive: true,
+            team: i + 1, // each bot is its own team → FFA
+            fireCooldown: 0, stuckCount: 0,
+            dodgeAccuracy: 0.75 + Math.random() * 0.2,
+            respawnCount: 0, paralyzed: false, paralyzedTime: 0
+        };
+        enemies.push(enemy);
+    }
+
+    // Choose random leader (not player)
+    const leaderIndex = Math.floor(Math.random() * enemies.length);
+    leaderHuntLeader = enemies[leaderIndex];
+    leaderHuntLeader.hp += 100; // +100 HP bonus
+    leaderHuntLeader.isLeader = true; // Mark as leader
 
     // Some barrels/boxes for cover
     for (let b = 0; b < 15; b++) {
@@ -3396,7 +3797,9 @@ function update() {
                     const dy = (e.y + e.h / 2) - mine.y;
                     if (Math.hypot(dx, dy) < mine.radius + e.w / 2) {
                         spawnExplosion(mine.x, mine.y, 55);
-                        e.hp -= mine.damage;
+                        let dmgMine = mine.damage;
+                        if (mine.owner === 'player' || (!mine.team || mine.team === 'player')) dmgMine = applyPlayerDamage(dmgMine);
+                        e.hp -= dmgMine;
                         if (e.hp <= 0) e.alive = false;
                         for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                         triggered = true;
@@ -3701,7 +4104,11 @@ function update() {
     if (tank.isAutopilotActive) {
         updateAutopilotEvasion();
     }
-    updateEnemyAI();
+    if (currentMode === 'bossfight') {
+        updateBossFight();
+    } else {
+        updateEnemyAI();
+    }
 // --- APPEND_POINT_UPDATE_AI_ALLIES ---
     updateAllyAI();
 // --- APPEND_POINT_UPDATE_REST ---
