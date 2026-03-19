@@ -8,6 +8,7 @@ const resultMessage = document.getElementById('resultMessage');
 const resultReward = document.getElementById('resultReward');
 const resultRestart = document.getElementById('resultRestart');
 const resultToMenu = document.getElementById('resultToMenu');
+const resultEditor = document.getElementById('resultEditor');
 let lastResultState = null;
 
 // Determine outcome type based on battle metrics
@@ -120,11 +121,11 @@ function getResultMessages() {
                     "Ты выполнил невозможное — победил с наносекундным запасом HP!",
                     "Один энергоимпульс — и ты был на грани сами знаете чего...",
                     "Едва живой, но живой! Это была близко!",
-                    "Ты выстоял, хотя противник клевал в переулке пыль.",
+                    "Ты выстоял, хотя противник был силён.",
                     "На волосок от поражения — а вот и победа!",
                     "Последний HP спасил тебя от позора!",
                     "Это была самая жесткая, на грани жизни и смерти, победа.",
-                    "Ты пережил немыслимое дамаже и всё-таки выиграл!",
+                    "Ты пережил немыслимый урон и всё-таки выиграл!",
                     "Один HP — вот и вся разница между героем и нулём.",
                     "Противник был близко, но не достаточно близко.",
                     "Жесткая победа: ты чудом не полетел на дно.",
@@ -202,7 +203,7 @@ function getResultMessages() {
                     "Враг был готов, а ты нет. В следующий раз будь внимательнее!",
                     "Молниеносное поражение требует глубокого анализа.",
                     "Ты был застигнут врасплох в самом начале боя.",
-                    "Это была самая коротанна и болезненная смерть.",
+                    "Это была самая короткая и болезненная смерть.",
                     "За мгновение ока ты пал. Хронометруй медленнее!",
                     "Быстрое поражение — самое обидное, самое поучительное."
                 ],
@@ -221,12 +222,12 @@ function getResultMessages() {
                     "Очень, очень близко... слишком близко для поражения.",
                     "Если бы ещё полсекунды боя — был бы герой. Но нет.",
                     "Враг на грани, но ты первый перешёл грань.",
-                    "Это была трагична близко к победе.",
+                    "Это было трагически близко к победе.",
                     "На миллиметр HP врага от полного поражения... и всё.",
                     "Ты был настолько близко к триумфу. Настолько.",
                     "Враг падал, но ты упал быстрее.",
                     "На кромке лезвия между победой и поражением ты выбрал второе.",
-                    "Это была близко победа, но далеко от реальности."
+                    "Это была близкая победа, но далекая от реальности."
                 ],
                 overwhelm: [
                     "Слишком много врагов — даже герой не выдержит такой напор!",
@@ -286,21 +287,21 @@ function getResultMessages() {
                     "Командный блиц — враги упали прежде, чем разобрались.",
                     "Скоростная командная тактика показала полный класс!",
                     "Враги не успели расставить ловушки — вы уже победили.",
-                    "Быстрая, чистая, эффективная команд ная побед!",
+                    "Быстрая, чистая, эффективная командная победа!",
                     "Молниеносная победа в команде — рекордное время!",
                     "Враги рассыпались под синхронированным ударом.",
                     "За 30 секунд вы показали, как работает настоящая команда.",
                     "Скоростная координация — верх профессионализма!",
                     "Враги даже не успели получить урон — уже поражение.",
                     "Молниеносная команда — непобедимая команда!",
-                    "Быстрая победа в слаженной группе — это командный таланит!",
+                    "Быстрая победа в слаженной группе — это командный талант!",
                     "За полминуты вы прошли путь от встречи к торжеству!",
                     "Скоростная стратегия команды оправдала все ожидания.",
-                    "Враги пали перед синхронизированной атакой безза секунд!"
+                    "Враги пали перед синхронизированной атакой в считанные секунды!"
                 ],
                 hard: [
                     "Команда выстояла на грани поражения — вот это боевой дух!",
-                    "С наничожным запасом здоровья вы всё-таки одержали победу!",
+                    "С минимальным запасом здоровья вы всё-таки одержали победу!",
                     "Жесточайшая координированная борьба — и вы вышли!",
                     "На волосок от проигрыша — но победа ваша!",
                     "Команда держала строй до последнего HP — вот это стойкость!",
@@ -321,16 +322,16 @@ function getResultMessages() {
                     "Жесточайший контроль до последней капли здоровья — и победа!"
                 ],
                 crushing: [
-                    "Команда разнесла врага в пылмрц — абсолютное подавление!",
-                    "Враги не имели никаких шансов против вашей пестраницы!",
-                    "Одинокая координированная атака уничжила всю оборону!",
+                    "Команда разнесла врага в пух и прах — абсолютное подавление!",
+                    "Враги не имели никаких шансов против вашей команды!",
+                    "Слаженная координированная атака уничтожила всю оборону!",
                     "Ваша команда доминировала так полно, что враги могли только смотреть!",
-                    "Разгромы боевой слаженности — враги были беспомощный!",
+                    "Разгром — враги были беспомощны!",
                     "Команда показала класс — враги не поняли что произошло!",
                     "Сокрушающая командная атака разметала врага в клочья!",
-                    "Абсолютное превосходство вашей команды беспроектно видно!",
+                    "Абсолютное превосходство вашей команды бесспорно видно!",
                     "Враги рассыпались перед силой вашего единства!",
-                    "Это была демонстрация мощи окоординированной команды!",
+                    "Это была демонстрация мощи координированной команды!",
                     "Враги были окончательно разбиты вашим командным мастерством!",
                     "Разгромная победа показала уровень вашего взаимодействия!",
                     "Ваша команда была непреодолимой силой!",
@@ -501,6 +502,7 @@ function describeMode(mode) {
     if (mode === 'onevsall') return 'Один против всех';
     if (mode === 'leaderhunt') return 'Охота на лидера';
     if (mode === 'bossfight') return 'Босс-файт';
+    if (mode === 'custom') return 'Своя карта';
     return 'Свободный бой';
 }
 
@@ -541,6 +543,8 @@ function syncResultOverlay(state = gameState) {
                 rewardText = 'Испытание пройдено! (без наград)';
             } else if (currentMode === 'bossfight') {
                 rewardText = '+500 монет, +30 трофеев';
+            } else if (currentMode === 'custom' || window._customMapActive) {
+                rewardText = 'Своя карта — без наград';
             } else {
                 rewardText = '+0 монет';
             }
@@ -548,6 +552,8 @@ function syncResultOverlay(state = gameState) {
             // LOSE: show only trophy penalties
             if (currentMode === 'trial') {
                 rewardText = 'Испытание провалено (без штрафа)';
+            } else if (currentMode === 'custom' || window._customMapActive) {
+                rewardText = 'Своя карта — трофеи не снимаются';
             } else if (currentMode === 'single') {
                 rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей';
             } else if (currentMode === 'duel') {
@@ -566,6 +572,11 @@ function syncResultOverlay(state = gameState) {
         console.log('Reward text:', rewardText);
         
         resultOverlay.style.display = 'flex';
+        
+        // Show "Редактор" button only for custom maps; hide for normal games
+        if (resultEditor) {
+            resultEditor.style.display = window._customMapActive ? 'block' : 'none';
+        }
         
         // Update status (WIN/LOSE)
         if (resultStatus) {
@@ -623,6 +634,18 @@ function syncResultOverlay(state = gameState) {
                 
                 // Set the SINGLE selected message
                 resultMessage.textContent = selectedMsg;
+                // Custom map: override with player-defined message if set, otherwise use defaults
+                if (window._customMapActive) {
+                    const customMsgArray = isWin ? window._customMapWinMsg : window._customMapLoseMsg;
+                    if (customMsgArray && Array.isArray(customMsgArray) && customMsgArray.length > 0) {
+                        // Use ONLY custom messages if they exist
+                        const randomIdx = Math.floor(Math.random() * customMsgArray.length);
+                        resultMessage.textContent = customMsgArray[randomIdx];
+                    } else {
+                        // Use simple defaults if no custom messages
+                        resultMessage.textContent = isWin ? 'Ты победил!' : 'К сожалению, ты проиграл...';
+                    }
+                }
             } catch (err) {
                 console.error('Error setting message:', err);
                 resultMessage.textContent = '';
@@ -700,9 +723,29 @@ function syncResultOverlay(state = gameState) {
 
 window.syncResultOverlay = syncResultOverlay;
 
-if (resultRestart) resultRestart.addEventListener('click', () => startGame(currentMode));
-if (resultToMenu) resultToMenu.addEventListener('click', () => {
-    if (typeof saveProgress === 'function') saveProgress();
-    if (typeof maybeReload === 'function') maybeReload(); else location.reload();
+if (resultRestart) resultRestart.addEventListener('click', () => {
+    if (window._customMapActive && window._customMapParams) {
+        // Restart the custom map
+        const p = window._customMapParams;
+        window.startCustomMapMode(p.customObjects, p.worldW, p.worldH, p.enemySpawns, p.allySpawns, p.playerSpawn, p.enemyMode, p.customWinMsg, p.customLoseMsg);
+    } else {
+        startGame(currentMode);
+    }
 });
+if (resultToMenu) resultToMenu.addEventListener('click', () => {
+    // Always go to main menu
+    window._customMapActive = false;
+    if (typeof saveProgress === 'function') saveProgress();
+    if (typeof window.goToMenuNoReload === 'function') window.goToMenuNoReload();
+    else if (typeof maybeReload === 'function') maybeReload();
+    else window.goToMenuNoReload?.() || location.reload();
+});
+
+if (resultEditor) resultEditor.addEventListener('click', () => {
+    if (typeof window.openMapEditor === 'function') {
+        window.openMapEditor();
+        window._customMapActive = false;
+    }
+});
+
 syncResultOverlay('menu');

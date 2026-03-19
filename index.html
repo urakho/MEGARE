@@ -38,6 +38,7 @@
         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:15px;">
             <button id="trophyRoadBtn" class="btn btn-trophy" style="flex:1;">🏆 Трофейная дорога</button>
             <button id="newsBadge" class="btn btn-settings" title="Новости" aria-label="Новости">📰</button>
+            <button id="mapEditorMobileBtn" class="btn btn-settings" title="Редактор карт" aria-label="Редактор карт">🗺️</button>
             <button id="settingsBtn" class="btn btn-settings">⚙️</button>
             <button id="cmdBtn" class="btn btn-settings" title="Командная строка">/</button>
         </div>
@@ -48,6 +49,7 @@
         <button id="startBtn" class="btn btn-primary" style="margin-top:16px;">START</button>
         <button id="shopBtn" class="btn btn-shop" style="margin-top:8px;">Магазин</button>
         <button id="characterBtn" class="btn btn-char" style="margin-top:8px;">Персонажи</button>
+        <button id="mapEditorBtn" class="btn btn-mapeditor" style="margin-top:8px;">🗺️ Редактор карт</button>
     </div>
 </div>
 
@@ -330,6 +332,7 @@
         
         <div style="display: flex; justify-content: center; gap: 15px;">
             <button id="resultRestart" class="btn btn-primary">Заново</button>
+            <button id="resultEditor" class="btn btn-secondary" style="display:none;">✏️ Редактор</button>
             <button id="resultToMenu" class="btn btn-secondary">В меню</button>
         </div>
         
@@ -458,6 +461,7 @@
                 </label>
             </div>
 
+            <button id="settingsCommandBtn" class="btn btn-secondary" style="min-width:140px; margin-bottom:10px;">💬 Команды</button>
             <button id="settingsClose" class="btn btn-primary" style="min-width:140px;">Сохранить</button>
         </div>
     </div>
@@ -481,12 +485,138 @@
     </div>
 </div>
 
+<!-- ══════════════════════ MAP EDITOR MODAL ══════════════════════ -->
+<div id="mapEditorModal" class="modal-overlay" style="display:none; z-index:300;">
+  <div class="modal-box me-shell" style="width:min(1000px,98vw); max-height:96vh; padding:0; overflow:hidden; display:flex; flex-direction:column;">
+
+    <!-- Header bar -->
+    <div class="me-header">
+      <span class="me-title">🗺️ Редактор карт</span>
+      <div class="me-header-actions">
+        <button id="meNewBtn"    class="btn me-btn me-btn-green">➕ Новая</button>
+        <button id="meSaveBtn"   class="btn me-btn me-btn-gold">💾 Сохранить</button>
+        <button id="meMapsBtn"   class="btn me-btn me-btn-blue">📂 Мои карты</button>
+        <button id="meImportBtn" class="btn me-btn me-btn-gold">📥 Импорт .meg</button>
+        <button id="meExportBtn" class="btn me-btn me-btn-orange">📤 Экспорт .meg</button>
+        <button id="mePlayBtn"   class="btn me-btn me-btn-red">▶ Играть</button>
+        <button id="meCloseBtn"  class="btn me-btn me-btn-gray">✕</button>
+      </div>
+    </div>
+
+    <!-- Main workspace -->
+    <div class="me-workspace">
+
+      <!-- Left panel: tools -->
+      <div class="me-tools-panel">
+        <div class="me-panel-title">Инструменты</div>
+        <button class="me-tool-btn active" data-tool="wall">🧱 Стена · 1</button>
+        <button class="me-tool-btn" data-tool="box">📦 Ящик · 2</button>
+        <button class="me-tool-btn" data-tool="barrel">🚨 Бочка · 3</button>
+        <button class="me-tool-btn" data-tool="enemy">💀 Враг · 4</button>
+        <button class="me-tool-btn" data-tool="ally">🤝 Союзник · 5</button>
+        <button class="me-tool-btn" data-tool="player">🟢 Игрок · 6</button>
+        <button class="me-tool-btn" data-tool="erase">🗑️ Стереть · 7</button>
+        <hr class="me-sep">
+        <div class="me-panel-title">Режим врагов</div>
+        <select id="meEnemyMode" class="me-input me-select">
+          <option value="group">🤝 Все вместе</option>
+          <option value="solo">⚔️ Каждый за себя</option>
+        </select>
+        <hr class="me-sep">
+        <div class="me-panel-title">Действия</div>
+        <button id="meUndoBtn" class="me-tool-btn">↩ Отмена</button>
+        <button id="meClearBtn" class="me-tool-btn">🗑️ Очистить</button>
+        <hr class="me-sep">
+        <button id="meSettingsBtn" class="me-tool-btn">⚙️ Настройки</button>
+        <hr class="me-sep">
+        <div id="meObjectCount" class="me-label" style="font-size:11px;opacity:.7;">Объектов: 0 / 300</div>
+        <div id="meCoords"      class="me-label" style="font-size:11px;opacity:.7;">X: 0  Y: 0</div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="me-canvas-wrap" id="meCanvasWrap">
+        <canvas id="meCanvas"></canvas>
+      </div>
+
+    </div><!-- /me-workspace -->
+
+  </div>
+</div>
+
+<!-- Map Settings modal -->
+<div id="meSettingsModal" class="modal-overlay" style="display:none; z-index:410;">
+  <div class="modal-box" style="width:min(460px,94vw);">
+    <h2 class="modal-title">⚙️ Настройки карты</h2>
+
+    <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+
+      <div>
+        <label class="me-label" style="display:block; margin-bottom:4px;">Название карты</label>
+        <input id="meMapName" type="text" class="me-input" maxlength="32" placeholder="my_map" value="my_map" style="width:100%; box-sizing:border-box;">
+      </div>
+
+      <div>
+        <label class="me-label" style="display:block; margin-bottom:4px;">Размер карты</label>
+        <select id="meMapSize" class="me-input me-select" style="width:100%; box-sizing:border-box;">
+          <option value="small" selected>Маленькая (900×700)</option>
+          <option value="medium">Средняя (1350×900)</option>
+          <option value="large">Большая (1800×1100)</option>
+          <option value="huge">Огромная (2700×1400)</option>
+          <option value="ultra">Гигантская (3600×1800)</option>
+        </select>
+      </div>
+
+      <hr class="me-sep">
+
+      <div>
+        <label class="me-label" style="display:block; margin-bottom:4px;">🏆 Сообщение при победе</label>
+        <textarea id="meWinMsg" class="me-input" maxlength="200" placeholder="Поздравляю, ты выиграл!" rows="3" style="resize:vertical; width:100%; box-sizing:border-box;"></textarea>
+      </div>
+
+      <div>
+        <label class="me-label" style="display:block; margin-bottom:4px;">☠️ Сообщение при поражении</label>
+        <textarea id="meLoseMsg" class="me-input" maxlength="200" placeholder="Попробуй ещё раз!" rows="3" style="resize:vertical; width:100%; box-sizing:border-box;"></textarea>
+      </div>
+
+    </div>
+
+    <div style="text-align:center; margin-top:18px;">
+      <button id="meSettingsClose" class="btn btn-secondary">Готово</button>
+    </div>
+  </div>
+</div>
+
+<!-- My Maps popup -->
+<div id="meMapsModal" class="modal-overlay" style="display:none; z-index:400;">
+  <div class="modal-box" style="width:min(500px,94vw); max-height:80vh; display:flex; flex-direction:column; gap:10px;">
+    <h2 class="modal-title">📂 Мои карты</h2>
+    <div id="meMapsList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:60px;"></div>
+    <div style="display:flex; gap:8px;">
+      <label id="meMapsUploadBtn" class="btn btn-secondary" style="cursor:pointer; display:flex; align-items:center; justify-content:center; flex:1;">📥 Импортировать<input id="meFileInput" type="file" accept=".meg" style="display:none;"></label>
+      <button id="meMapsClose" class="btn btn-secondary" style="flex:1;">Закрыть</button>
+    </div>
+  </div>
+</div>
+<!-- hidden file input for .meg import is now inside meMapsUploadBtn label -->
+
+<!-- Map editor confirm dialog -->
+<div id="meConfirmOverlay" class="modal-overlay" style="display:none; z-index:500;">
+  <div class="modal-box" style="width:min(420px,90vw);">
+    <p id="meConfirmMsg" style="font-size:18px; margin:0 0 24px; color:#f0f0f0;"></p>
+    <div style="display:flex; gap:12px; justify-content:center;">
+      <button id="meConfirmYes" class="btn me-btn me-btn-red" style="min-width:90px;">Да</button>
+      <button id="meConfirmNo"  class="btn me-btn me-btn-gray" style="min-width:90px;">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <script src="src/main.js"></script>
 <script src="src/tanks.js"></script>
 <script src="src/physics.js"></script>
 <script src="src/bot.js"></script>
 <script src="src/news.js"></script>
 <script src="src/win-lose.js"></script>
+<script src="src/mapeditor.js"></script>
 
 </body>
 </html>

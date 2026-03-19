@@ -2271,7 +2271,10 @@ function updatePhysics() {
         }
     } else if (enemies.length === 0) {
         gameState = 'win';
-        if (currentMode === 'single') {
+        // Custom map: no rewards
+        if (window._customMapActive) {
+            syncResultOverlay('win');
+        } else if (currentMode === 'single') {
             coins += 30;
             trophies += 3; // single trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);
@@ -2292,11 +2295,14 @@ function updatePhysics() {
             trophies += 30; // boss fight win reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 30);
         }
-        saveProgress();
+        if (!window._customMapActive) saveProgress();
         syncResultOverlay('win');
     } else if (!tank.alive || tank.hp <= 0) {
         gameState = 'lose';
-        if (currentMode === 'single' || currentMode === 'duel') {
+        // Custom map: no trophy penalties
+        if (window._customMapActive) {
+            syncResultOverlay('lose');
+        } else if (currentMode === 'single' || currentMode === 'duel') {
             loseTrophies(1); // lose 1 trophy
         } else if (currentMode === 'team') {
             loseTrophies(3); // lose 3 trophies in team mode

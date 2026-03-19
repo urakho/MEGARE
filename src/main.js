@@ -254,6 +254,7 @@ function addIndividualTankTrophies(tankType, amount) {
 // Mode-aware trophy loss: 3 for team, 5 for onevsall, 1 for single and duel
 function loseModeTrophies() {
     if (currentMode === 'training') return;
+    if (window._customMapActive) return; // no trophy loss on custom maps
     if (currentMode === 'team') {
         loseTrophies(3);
     } else if (currentMode === 'onevsall') {
@@ -443,14 +444,21 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     const btn   = document.getElementById('settingsBtn');
     const cmdBtn = document.getElementById('cmdBtn');
 
-    // Show/hide cmdBtn based on mobile mode setting
+    const mapEditorMobileBtn = document.getElementById('mapEditorMobileBtn');
+    const mapEditorBtn = document.getElementById('mapEditorBtn');
+
+    // Show/hide buttons based on mobile mode setting
     function updateCmdBtnVisibility() {
-        if (!cmdBtn) return;
         // Use setProperty with !important to override display:flex !important from .btn-settings class
         if (window.deviceModeMobile) {
-            cmdBtn.style.setProperty('display', 'flex', 'important');
+            // Mobile mode: hide command button (accessible via settings), show mobile editor button
+            cmdBtn?.style.setProperty('display', 'none', 'important');
+            mapEditorMobileBtn?.style.setProperty('display', 'flex', 'important');
+            mapEditorBtn?.style.setProperty('display', 'none', 'important');
         } else {
-            cmdBtn.style.setProperty('display', 'none', 'important');
+            cmdBtn?.style.setProperty('display', 'none', 'important');
+            mapEditorMobileBtn?.style.setProperty('display', 'none', 'important');
+            mapEditorBtn?.style.removeProperty('display');
         }
     }
     updateCmdBtnVisibility();
@@ -495,6 +503,21 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     });
 
     btn.addEventListener('click', () => { modal.style.display = 'flex'; });
+
+    // Commands button inside settings modal
+    const settingsCommandBtn = document.getElementById('settingsCommandBtn');
+    if (settingsCommandBtn) {
+        settingsCommandBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            const commandModal = document.getElementById('commandModal');
+            if (commandModal) {
+                commandModal.style.display = 'flex';
+                const ci = document.getElementById('commandInput');
+                if (ci) { ci.value = '/'; ci.focus(); }
+            }
+        });
+    }
+
     closeBtn.addEventListener('click', () => {
         window.effectsEnabled   = chkEffects.checked;
         window.deviceModeMobile = chkMobile.checked;
@@ -1113,6 +1136,165 @@ function startGame(mode) {
     navNeedsRebuild = true;
     try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
 }
+
+// ─── Custom Map Mode (Map Editor → Play) ────────────────────────────────────
+// Loads player-created map objects and starts a single-player game with no rewards.
+window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns, allySpawns, playerSpawn, enemyMode, customWinMsg, customLoseMsg) {
+    // Store custom messages for result overlay (split by newlines into array)
+    window._customMapWinMsg  = (customWinMsg  || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
+    window._customMapLoseMsg = (customLoseMsg || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
+    
+    // Store all params needed to restart the custom map
+    window._customMapParams = {
+        customObjects: JSON.parse(JSON.stringify(customObjects)),
+        worldW, worldH,
+        enemySpawns: JSON.parse(JSON.stringify(enemySpawns)),
+        allySpawns: JSON.parse(JSON.stringify(allySpawns)),
+        playerSpawn: JSON.parse(JSON.stringify(playerSpawn)),
+        enemyMode,
+        customWinMsg,
+        customLoseMsg
+    };
+    // Reset game state the same way startGame does
+    if (tank.imitatorActive && tank.originalTankType) tankType = tank.originalTankType;
+    else if (tank.imitatorActive) tankType = 'imitator';
+
+    tank.turretAngle = 0;
+    setTankHP(tankType); setTankSpeed(tankType);
+    tank.artilleryMode = false; tank.artilleryTimer = 0;
+    enemies = []; bullets = []; particles = []; electricRays = []; novaZones = [];
+    playerDrones = []; enemyDrones = []; medicalZones = [];
+    buratinoBarrages = []; musicalSoundWaves = []; mines = [];
+    bossMeteors = [];
+    tank.robotDroneCooldown = 0;
+
+    if (godMode) { tank.hp = 100000; tank.maxHp = 100000; }
+
+    tank.paralyzed = false; tank.paralyzedTime = 0; tank.frozenEffect = 0;
+    tank.confused = 0; tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0;
+    tank.lastHitType = null; tank.lastHitTime = 0; tank.alive = true;
+    tank.beamActive = false; tank.beamStart = 0; tank.beamCooldown = 0;
+    tank.waterjetActive = false; tank.waterjetBeamLen = 0;
+    tank.megaGasUsed = false; tank.plasmaBlastUsed = 0;
+    tank.imitatorActive = false; tank.imitatorTimer = 0; tank.imitatorCooldown = 0;
+    tank.originalTankType = null; tank.originalMaxHp = 250;
+    tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
+    tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0;
+
+    // World setup
+    worldWidth  = worldW || 900;
+    worldHeight = worldH || 700;
+    canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
+    // Use editor-placed player spawn if provided, otherwise default bottom-left
+    if (playerSpawn) {
+        tank.x = playerSpawn.x + playerSpawn.w / 2 - 19;
+        tank.y = playerSpawn.y + playerSpawn.h / 2 - 19;
+    } else {
+        tank.x = 50; tank.y = DISPLAY_H - 80;
+    }
+    cameraFollow = true;
+
+    // Inject custom objects (with correct colors)
+    const OBJ_COLORS = { wall: '#3a3a3a', box: '#8b5a2b', barrel: '#7a4d2a' };
+    objects = customObjects.map(o => ({ ...o, color: OBJ_COLORS[o.type] || '#888' }));
+
+    // Ensure player spawn area is clear
+    objects = objects.filter(o => Math.hypot(
+        o.x + o.w / 2 - (tank.x + 19),
+        o.y + o.h / 2 - (tank.y + 19)
+    ) > 80);
+
+    // Spawn enemies: use editor-placed markers if provided, otherwise corners
+    // Full type pool matching other game modes
+    const _allEnemyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical',
+                            'illuminat','mirror','machinegun','waterjet','buckshot',
+                            'electric','robot','medical','mine','time','imitator'];
+    const _typeColorMap = {
+        normal:'#e74c3c',   ice:'#54d1e8',    fire:'#e67e22',   buratino:'#9b59b6',
+        toxic:'#2ecc71',    plasma:'#3498db',  musical:'#e91e63', illuminat:'#f1c40f',
+        mirror:'#85c1e9',   machinegun:'#c0392b', waterjet:'#1abc9c', buckshot:'#2ecc71',
+        electric:'#f39c12', robot:'#2c3e50',   medical:'#27ae60', mine:'#8e44ad',
+        time:'#16a085',     imitator:'#7f8c8d'
+    };
+    const spawnPositions = (enemySpawns && enemySpawns.length > 0)
+        ? enemySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
+        : [
+            { x: worldWidth - 80,  y: 80 },
+            { x: 80,               y: worldHeight - 80 },
+            { x: worldWidth - 80,  y: worldHeight - 80 },
+            { x: worldWidth / 2,   y: 80 },
+        ];
+    enemies = spawnPositions.map((pos, i) => {
+        // Random type each time for variety
+        const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
+        // In 'solo' mode each enemy gets its own team (2, 3, 4...) so they fight each other
+        const teamId = (enemyMode === 'solo') ? (i + 2) : 1;
+        return {
+            x: pos.x, y: pos.y, w: 38, h: 38,
+            color: _typeColorMap[tt] || '#e74c3c',
+            tankType: tt,
+            hp: (tankMaxHpByType[tt] || 300),
+            maxHp: (tankMaxHpByType[tt] || 300),
+            turretAngle: 0, baseAngle: 0,
+            speed: (tankMaxSpeedByType[tt] || 3.2),
+            trackOffset: 0, alive: true, team: teamId,
+            stuckCount: 0, fireCooldown: 0,
+            dodgeAccuracy: 0.7 + Math.random() * 0.25,
+            paralyzed: false, paralyzedTime: 0,
+            robotDroneCooldown: 0
+        };
+    });
+
+    // Spawn allies (friendly tanks on player team)
+    // Allies spawn from allySpawns or from empty positions
+    const allyPositions = (allySpawns && allySpawns.length > 0)
+        ? allySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
+        : [];
+    
+    const alliedTanks = allyPositions.map((pos, i) => {
+        // Random type for allied tanks
+        const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
+        return {
+            x: pos.x, y: pos.y, w: 38, h: 38,
+            color: _typeColorMap[tt] || '#2ecc71',
+            tankType: tt,
+            hp: (tankMaxHpByType[tt] || 300),
+            maxHp: (tankMaxHpByType[tt] || 300),
+            turretAngle: 0, baseAngle: 0,
+            speed: (tankMaxSpeedByType[tt] || 3.2),
+            trackOffset: 0, alive: true, team: 0,  // Team 0 = player team (allies)
+            stuckCount: 0, fireCooldown: 0,
+            dodgeAccuracy: 0.7 + Math.random() * 0.25,
+            paralyzed: false, paralyzedTime: 0,
+            robotDroneCooldown: 0
+        };
+    });
+    
+    // Add allied tanks to allies array (they fight alongside the player)
+    allies = allies.concat(alliedTanks);
+
+    // Mark as custom map (disables all rewards in win-lose logic)
+    window._customMapActive = true;
+    currentMode = 'custom';
+
+    if (modeModal) modeModal.style.display = 'none';
+    if (mainMenu)  mainMenu.style.display  = 'none';
+    const mapEditorModal = document.getElementById('mapEditorModal');
+    if (mapEditorModal) mapEditorModal.style.display = 'none';
+
+    gameState = 'playing';
+    lastResultState = null;
+    if (typeof syncResultOverlay === 'function') syncResultOverlay('playing');
+
+    gameStartTime = Date.now();
+    playerDamageTaken = 0;
+    playerMaxHpAtStart = tank.hp;
+    battleEnemyCount = enemies.length;
+
+    _lastMusicKey = '';
+    navNeedsRebuild = true;
+    try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
+};
 
                 // very large world (6x single)
                 worldWidth = 900 * 6; worldHeight = 700 * 6;

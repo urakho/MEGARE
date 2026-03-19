@@ -113,6 +113,12 @@ b { color: #ffcc00; }
 }
 #cmdBtn:hover { filter: brightness(1.3); }
 
+/* Mobile map editor button — same grey square as cmdBtn, hidden until mobile mode on */
+#mapEditorMobileBtn {
+    display: none;
+}
+#mapEditorMobileBtn:hover { filter: brightness(1.3); }
+
 /* Settings rows */
 .settings-row {
     display: flex;
@@ -916,7 +922,8 @@ canvas.tank-display {
     #mainMenu #shopBtn      { grid-column: 2 !important; grid-row: 5 !important; margin: 0 !important; }
     #mainMenu #characterBtn { grid-column: 2 !important; grid-row: 6 !important; margin: 0 !important; }
     /* Трофейная + настройки — компактно */
-    #mainMenu #trophyRoadBtn { font-size: 12px !important; padding: 6px 8px !important; min-height: 34px !important; }
+    /* Increased size so the trophy road button is more noticeable; text remains unchanged */
+    #mainMenu #trophyRoadBtn { font-size: 16px !important; padding: 10px 14px !important; min-height: 46px !important; }
     #mainMenu .btn-settings  { width: 36px !important; height: 34px !important; max-width: 36px !important;
                                 min-height: 34px !important; font-size: 14px !important; padding: 0 !important; }
 
@@ -1198,6 +1205,144 @@ canvas.tank-display {
     letter-spacing: 1px;
 }
 
+/* ════════════════════════════════
+   MAP EDITOR
+   ════════════════════════════════ */
+.btn-mapeditor {
+    background: linear-gradient(180deg, #2ecc71, #27ae60);
+    box-shadow: 0 8px 0 rgba(30,130,70,0.9);
+}
+.btn-mapeditor:hover { filter: brightness(1.08); }
+
+.me-shell {
+    background: linear-gradient(135deg, #2c3e50, #1a2530);
+    border: 4px solid #f39c12;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.me-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(0,0,0,0.4);
+    border-bottom: 2px solid #f39c12;
+    flex-wrap: wrap;
+}
+.me-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #f39c12;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 0 #000;
+    margin-right: auto;
+    white-space: nowrap;
+}
+.me-header-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.me-btn {
+    font-size: 13px !important;
+    padding: 6px 12px !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    white-space: nowrap;
+}
+.me-btn-green  { background: linear-gradient(180deg,#2ecc71,#27ae60); }
+.me-btn-blue   { background: linear-gradient(180deg,#3498db,#2980b9); }
+.me-btn-gold   { background: linear-gradient(180deg,#f1c40f,#d4a008); color:#222; }
+.me-btn-orange { background: linear-gradient(180deg,#e67e22,#d35400); }
+.me-btn-red    { background: linear-gradient(180deg,#e74c3c,#c0392b); }
+.me-btn-gray   { background: linear-gradient(180deg,#7f8c8d,#636e72); }
+
+.me-workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.me-tools-panel {
+    width: 160px;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.35);
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    border-right: 2px solid rgba(243,156,18,0.3);
+}
+.me-panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f39c12;
+    text-transform: uppercase;
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.5px;
+    margin: 6px 0 2px;
+}
+.me-tool-btn {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(243,156,18,0.25);
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 7px 8px;
+    text-align: left;
+    transition: background .15s, border-color .15s;
+    font-family: 'Courier New', Courier, monospace;
+}
+.me-tool-btn:hover { background: rgba(243,156,18,0.15); border-color: rgba(243,156,18,0.5); }
+.me-tool-btn.active {
+    background: linear-gradient(180deg, #e67e22, #d35400);
+    border-color: #d35400;
+    color: #fff;
+}
+.me-sep { border: none; border-top: 1px solid rgba(243,156,18,0.2); margin: 4px 0; }
+.me-label { font-size: 12px; color: #b0bec5; }
+.me-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(243,156,18,0.35);
+    border-radius: 5px;
+    color: #fff;
+    font-size: 13px;
+    padding: 5px 7px;
+    outline: none;
+    font-family: 'Courier New', Courier, monospace;
+}
+.me-input:focus { border-color: #f39c12; }
+.me-select { appearance: none; }
+
+.me-canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: crosshair;
+    background: #2d3436;
+}
+#meCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+/* Responsive: hide tool panel labels on very small screens */
+@media (max-width: 540px) {
+    .me-tools-panel { width: 110px; }
+    .me-panel-title { display: none; }
+    .me-title { font-size: 14px; }
+}
+
 /* hack: knob can show an emoji when ult mode active */
 #attackKnob {
     display: flex;
@@ -1208,4 +1353,129 @@ canvas.tank-display {
 /* hide keyboard hints on touch devices */
 @media (pointer: coarse) {
     .ui { display: none; }
+}
+
+/* ========================
+   РЕДАКТОР КАРТ НА МОБИЛКЕ
+   ======================== */
+/* Вертикальная ориентация на мобилке */
+@media (max-width: 700px) {
+    .me-shell { border-width: 2px; }
+    .me-header {
+        padding: 8px 10px;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+    .me-title { font-size: 16px; margin-right: auto; }
+    .me-header-actions { flex-wrap: wrap; gap: 4px; order: 2; width: 100%; }
+    .me-btn {
+        font-size: 11px !important;
+        padding: 5px 8px !important;
+        min-height: 30px !important;
+    }
+    .me-tools-panel {
+        width: 90px;
+        padding: 6px 4px;
+    }
+    .me-panel-title { font-size: 9px; margin: 4px 0 2px; }
+    .me-tool-btn {
+        font-size: 11px;
+        padding: 5px 4px;
+    }
+}
+
+/* Горизонтальная ориентация на мобилке */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    .me-shell { border-width: 2px; }
+    
+    .me-header {
+        padding: 6px 8px;
+        gap: 3px;
+        flex-wrap: wrap;
+    }
+    .me-title {
+        font-size: 14px;
+        margin-right: auto;
+        flex: 0 0 auto;
+    }
+    .me-header-actions {
+        flex-wrap: wrap;
+        gap: 3px;
+        order: 2;
+        width: 100%;
+    }
+    .me-btn {
+        font-size: 10px !important;
+        padding: 4px 6px !important;
+        min-height: 28px !important;
+    }
+    
+    .me-workspace {
+        flex-direction: row;
+    }
+    
+    .me-tools-panel {
+        width: 65px;
+        padding: 4px 3px;
+        overflow-y: auto;
+        max-height: calc(100vh - 80px);
+    }
+    .me-panel-title {
+        font-size: 8px;
+        margin: 3px 0 1px;
+    }
+    .me-label { font-size: 10px; }
+    .me-tool-btn {
+        font-size: 10px;
+        padding: 4px 3px;
+    }
+    .me-sep { margin: 2px 0; }
+    
+    .me-canvas-wrap {
+        flex: 1;
+        overflow: hidden;
+    }
+    #meCanvas {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════
+   ГЛАВНОЕ МЕНЮ — добавить редактор карт в сетку (landscape)
+   ══════════════════════════════════════════════════════════ */
+@media (orientation: landscape) and (pointer: coarse) {
+    #mainMenu #mapEditorBtn {
+        grid-column: 2 !important;
+        grid-row: 7 !important;
+        margin: 0 !important;
+        font-size: 12px !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+    
+    #mainMenu .modal-box {
+        grid-template-rows: auto auto auto auto auto auto auto !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ГЛАВНОЕ МЕНЮ — кнопка редактора в вертикальной ориентации
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 700px) and (pointer: coarse) {
+    #mainMenu .modal-box {
+        max-width: calc(100vw - 16px) !important;
+        width: auto !important;
+        padding: 12px 10px !important;
+    }
+    #mainMenu #previewWrap {
+        margin-bottom: 10px !important;
+    }
+    #mainMenu #mapEditorBtn {
+        font-size: 13px !important;
+        padding: 8px 12px !important;
+        min-height: 36px !important;
+        width: 100% !important;
+        height: auto !important;
+    }
 }
