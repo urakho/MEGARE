@@ -663,6 +663,24 @@ function shoot() {
             spawned: 5 // spawn protection for 5 ticks
         });
         tank.fireCooldown = 35; // moderate cooldown
+    } else if (tankType === 'radioactive') {
+        // Radioactive tank: fires glowing neon green orbs that deal DoT on hit
+        const speed = 7;
+        const ang = tank.turretAngle;
+        const sx = tank.x + tank.w / 2 + Math.cos(ang) * 25;
+        const sy = tank.y + tank.h / 2 + Math.sin(ang) * 25;
+        bullets.push({
+            x: sx, y: sy,
+            w: 8, h: 8,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 400,
+            owner: 'player',
+            team: 0,
+            type: 'radioactive',
+            damage: 40
+        });
+        tank.fireCooldown = 40;
     } else if (tankType === 'plasma') {
         // Plasma tank: fires a single piercing plasma bolt
         const speed = 8;
@@ -923,7 +941,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'radioactive' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1545,6 +1563,17 @@ function updatePhysics() {
                         e.hp -= dmgDefault;
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
+                        if (b.type === 'radioactive') {
+                            // Infect target with radiation DoT (3 sec) + create mini radiation zone
+                            e.radiationTimer = Math.max(e.radiationTimer || 0, 180);
+                            objects.push({
+                                type: 'radiationZone',
+                                x: b.x, y: b.y,
+                                radius: 60,
+                                life: 240, maxLife: 240,
+                                ownerTeam: b.team
+                            });
+                        }
                         bullets.splice(i, 1);
                     }
                     if (e.hp <= 0) {
@@ -1968,6 +1997,10 @@ function updatePhysics() {
             // gas cloud visual fades over time
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'radiationZone') {
+            // radiation zone persists and fades over time
+            obj.life--;
+            if (obj.life <= 0) objects.splice(i, 1);
         } else if (obj.type === 'visualRocket') {
             // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
             if (obj.delay && obj.delay > 0) {
@@ -2040,8 +2073,11 @@ function updatePhysics() {
 
     // Apply gas effects: check entities entering gas clouds and apply poison timers
     const GAS_DEBUFF_TICKS = 3 * 60; // 3 seconds
+    const RAD_DEBUFF_TICKS = 4 * 60; // 4 seconds for radiation zones
     for (const obj of objects) {
-        if (obj.type !== 'gas') continue;
+        if (obj.type !== 'gas' && obj.type !== 'radiationZone') continue;
+        const isRadiation = obj.type === 'radiationZone';
+        const debuffTicks = isRadiation ? RAD_DEBUFF_TICKS : GAS_DEBUFF_TICKS;
         const ownerTeam = typeof obj.ownerTeam !== 'undefined' ? obj.ownerTeam : null;
 
         // If ownerTeam is set, poison entities whose team differs from ownerTeam
@@ -2052,14 +2088,22 @@ function updatePhysics() {
                 if (e.team === ownerTeam) continue;
                 const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
-                    if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
+                    if (isRadiation) {
+                        if (!e.radiationTimer || e.radiationTimer <= 0) e.radiationTimer = debuffTicks;
+                    } else {
+                        if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = debuffTicks;
+                    }
                 }
             }
             // Poison player if not on same team
             if (tank && tank.alive !== false && tank.team !== ownerTeam) {
                 const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
                 if (dist <= obj.radius) {
-                    if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
+                    if (isRadiation) {
+                        if (!tank.radiationTimer || tank.radiationTimer <= 0) tank.radiationTimer = debuffTicks;
+                    } else {
+                        if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = debuffTicks;
+                    }
                 }
             }
             // Poison allies not on ownerTeam
@@ -2068,7 +2112,40 @@ function updatePhysics() {
                 if (a.team === ownerTeam) continue;
                 const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
-                    if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
+                    if (isRadiation) {
+                        if (!a.radiationTimer || a.radiationTimer <= 0) a.radiationTimer = debuffTicks;
+                    } else {
+                        if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = debuffTicks;
+                    }
+                }
+            }
+        } else {
+
+        // If ownerTeam is set, poison entities whose team differs from ownerTeam
+        if (ownerTeam !== null) {
+            // Poison enemies (team !== ownerTeam)
+            for (const e of enemies) {
+                if (!e || !e.alive) continue;
+                if (e.team === ownerTeam) continue;
+                const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
+                if (dist <= obj.radius) {
+                    if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = debuffTicks;
+                }
+            }
+            // Poison player if not on same team
+            if (tank && tank.alive !== false && tank.team !== ownerTeam) {
+                const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
+                if (dist <= obj.radius) {
+                    if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = debuffTicks;
+                }
+            }
+            // Poison allies not on ownerTeam
+            for (const a of allies) {
+                if (!a || !a.alive) continue;
+                if (a.team === ownerTeam) continue;
+                const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
+                if (dist <= obj.radius) {
+                    if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = debuffTicks;
                 }
             }
         } else {
@@ -2078,21 +2155,21 @@ function updatePhysics() {
                     if (!e || !e.alive) continue;
                     const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
                     if (dist <= obj.radius) {
-                        if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
+                        if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = debuffTicks;
                     }
                 }
             } else if (obj.owner === 'enemy') {
                 if (tank.alive !== false) {
                     const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
                     if (dist <= obj.radius) {
-                        if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
+                        if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = debuffTicks;
                     }
                 }
                 for (const a of allies) {
                     if (!a || !a.alive) continue;
                     const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
                     if (dist <= obj.radius) {
-                        if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
+                        if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = debuffTicks;
                     }
                 }
             }
@@ -2131,13 +2208,40 @@ function updatePhysics() {
             }
         }
     };
+    // Apply radiation damage (3x weaker than poison: maxHp/18 per second)
+    const applyRadiationTick = (ent) => {
+        if (!ent || !ent.radiationTimer) return;
+        if (ent.alive === false) return;
+        if (ent.radiationTimer > 0) {
+            const maxHp = ent.maxHp || 300;
+            // Hell boss resists radiation 3x more
+            const radiationResist = ent.tankType === 'boss_hell' ? 3 : 1;
+            const dmgPerTick = (maxHp / 18) / 60 / radiationResist;
+            ent.hp = (ent.hp || 0) - dmgPerTick;
+            ent.radiationTimer--;
+            if (ent.hp <= 0) {
+                ent.hp = 0;
+                ent.alive = false;
+                if (ent === tank) {
+                    spawnExplosion(ent.x+ent.w/2, ent.y+ent.h/2, 65);
+                    if (currentMode !== 'war') {
+                        gameState = 'lose';
+                        loseModeTrophies();
+                        syncResultOverlay('lose');
+                    }
+                }
+            }
+        }
+    };
     applyPoisonTick(tank);
+    applyRadiationTick(tank);
     
     // Allies poison check
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i];
         applyPoisonTick(a);
-        if (a.hp <= 0 && a.alive === false) {
+        applyRadiationTick(a);
+        if (a.hp <= 0) {
              if (currentMode === 'war') {
                  if (!a.respawnTimer) {
                      a.respawnTimer = 600;
@@ -2154,7 +2258,8 @@ function updatePhysics() {
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         applyPoisonTick(e);
-        if (e.hp <= 0 && e.alive === false) {
+        applyRadiationTick(e);
+        if (e.hp <= 0) {
              if (currentMode === 'war') {
                  if (!e.respawnTimer) {
                      e.respawnTimer = 600;
@@ -2313,6 +2418,7 @@ function updatePhysics() {
         }
         syncResultOverlay('lose');
     }
+}
 }
 
 function moveWithCollision(dx, dy) {

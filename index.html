@@ -110,6 +110,12 @@
                 <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
+            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
+                <img src="cont-png/ex-cont.png" alt="Экзотический Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#ba0070; text-shadow:0 0 8px #e0008a;">✨ Экзотический Контейнер</p>
+                <p style="margin:5px 0; font-size:14px;">Самый редкий контейнер с самыми редкими наградами! Есть шанс получить экзотический танк!</p>
+                <button id="buyExoticContainer" class="btn btn-buy">Купить (8000 монет)</button>
+            </div>
         </div>
         <div style="margin-top: 15px; text-align: center;">
             <button id="shopCancel" class="btn btn-secondary">Закрыть</button>
@@ -206,11 +212,16 @@
             <!-- CHROMATIC (хроматическая) -->
             <div style="text-align:center; width:180px;">
 <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="timeTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
-                <button id="selectTimeTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">⏳ Временной</button>
+                <button id="selectTimeTank" class="btn" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0;">⏳ Временной</button>
             </div>
             <div style="text-align:center; width:180px;">
 <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="imitatorTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
-                <button id="selectImitatorTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">Имитатор</button>
+                <button id="selectImitatorTank" class="btn" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0;">Имитатор</button>
+            </div>
+            <!-- EXOTIC (экзотический: Радиоактивный) -->
+            <div style="text-align:center; width:180px;">
+                <canvas id="radioactiveTankPreview" width="150" height="150" style="border:2px solid #ba0070; border-radius:8px; display:block; margin:0 auto;"></canvas>
+                <button id="selectRadioactiveTank" class="btn" style="width:100%; box-sizing:border-box; display:flex; align-items:center; justify-content:center; margin:8px 0; padding:12px 0;">☢ Радиоактивный</button>
             </div>
             
         </div>
