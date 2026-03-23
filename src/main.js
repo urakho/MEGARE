@@ -201,8 +201,7 @@ const tankGemPrices = {
     'time': 750,      // Хроматический
     'imitator': 750,  // Имитатор (same tier as Time)
     'electric': 750,  // Электрический (Шаровая молния с цепочкой хит)
-    'robot': 500,     // Легендарный (Рельсотрон + дроны)
-    'radioactive': 6000 // Экзотический
+    'robot': 500      // Легендарный (Рельсотрон + дроны)
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -311,8 +310,7 @@ const tankMaxHpByType = {
     'robot': 450,
     'medical': 275,
     'mine': 350,
-    'boss_hell': 7500,
-    'radioactive': 350
+    'boss_hell': 7500
 };
 
 function setTankHP(type) {
@@ -342,8 +340,7 @@ const tankMaxSpeedByType = {
     'electric': 2.6,
     'robot': 2.7,
     'medical': 3.4,
-    'mine': 3.1,
-    'radioactive': 3.1
+    'mine': 3.1
 };
 
 function setTankSpeed(type) {
@@ -947,8 +944,6 @@ const electricTankPreview = document.getElementById('electricTankPreview');
 const electricTankCtx = electricTankPreview && electricTankPreview.getContext ? electricTankPreview.getContext('2d') : null;
 const robotTankPreview = document.getElementById('robotTankPreview');
 const robotTankCtx = robotTankPreview && robotTankPreview.getContext ? robotTankPreview.getContext('2d') : null;
-const radioactiveTankPreview = document.getElementById('radioactiveTankPreview');
-const radioactiveTankCtx = radioactiveTankPreview && radioactiveTankPreview.getContext ? radioactiveTankPreview.getContext('2d') : null;
 const mineTankPreview = document.getElementById('mineTankPreview');
 const mineTankCtx = mineTankPreview && mineTankPreview.getContext ? mineTankPreview.getContext('2d') : null;
 
@@ -1011,9 +1006,6 @@ function startGame(mode) {
     
     // Reset plasma blast ability
     tank.plasmaBlastUsed = 0;
-    
-    // Reset radioactive blast ability
-    tank.radBlastUsed = false;
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1184,7 +1176,6 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.beamActive = false; tank.beamStart = 0; tank.beamCooldown = 0;
     tank.waterjetActive = false; tank.waterjetBeamLen = 0;
     tank.megaGasUsed = false; tank.plasmaBlastUsed = 0;
-    tank.radBlastUsed = false;
     tank.imitatorActive = false; tank.imitatorTimer = 0; tank.imitatorCooldown = 0;
     tank.originalTankType = null; tank.originalMaxHp = 250;
     tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
@@ -1223,7 +1214,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         toxic:'#2ecc71',    plasma:'#3498db',  musical:'#e91e63', illuminat:'#f1c40f',
         mirror:'#85c1e9',   machinegun:'#c0392b', waterjet:'#1abc9c', buckshot:'#2ecc71',
         electric:'#f39c12', robot:'#2c3e50',   medical:'#27ae60', mine:'#8e44ad',
-        time:'#16a085',     imitator:'#7f8c8d',    radioactive:'#39ff14'
+        time:'#16a085',     imitator:'#7f8c8d'
     };
     const spawnPositions = (enemySpawns && enemySpawns.length > 0)
         ? enemySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
@@ -1324,7 +1315,6 @@ const buyMiniContainer = document.getElementById('buyMiniContainer');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
-const buyExoticContainer = document.getElementById('buyExoticContainer');
 const buyMechPartsContainer = document.getElementById('buyMechPartsContainer');
 const shopCancel = document.getElementById('shopCancel');
 const characterCancel = document.getElementById('characterCancel');
@@ -1592,7 +1582,6 @@ if (buyMiniContainer) buyMiniContainer.addEventListener('click', () => showConta
 if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
-if (buyExoticContainer) buyExoticContainer.addEventListener('click', () => showContainerFlow('exotic'));
 if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () => showContainerFlow('mechParts'));
 
 const containerFlowModal = document.getElementById('containerFlowModal');
@@ -1640,7 +1629,6 @@ function updateContainerFlowStage(stage) {
     const isOmega = containerFlowType === 'omega';
     const isMini = containerFlowType === 'mini';
     const isMechParts = containerFlowType === 'mechParts';
-    const isExotic = containerFlowType === 'exotic';
     
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
@@ -1662,9 +1650,6 @@ function updateContainerFlowStage(stage) {
         } else if (isMechParts) {
             containerFlowPreview.src = 'cont-png/mech-cont.png';
             containerFlowText.textContent = 'Нажми на ящик деталей!';
-        } else if (isExotic) {
-            containerFlowPreview.src = 'cont-png/ex-cont.png';
-            containerFlowText.textContent = 'Нажми на экзотический контейнер!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont1.png' : 'cont-png/super-cont.png';
             containerFlowText.textContent = isBronze
@@ -1681,9 +1666,6 @@ function updateContainerFlowStage(stage) {
         } else if (isMechParts) {
             containerFlowPreview.src = 'cont-png/mech-cont2.png';
             containerFlowText.textContent = 'Ящик деталей раскрывается!';
-        } else if (isExotic) {
-            containerFlowPreview.src = 'cont-png/ex-cont2.png';
-            containerFlowText.textContent = '✨ Экзотический контейнер раскрывается волшебством!';
         } else {
             containerFlowPreview.src = isBronze ? 'cont-png/cont2.png' : 'cont-png/super-cont2.png';
             containerFlowText.textContent = isBronze
@@ -1747,7 +1729,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
-    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'omega' ? 4000 : (type === 'exotic' ? 8000 : 1000)));
+    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'omega' ? 4000 : 1000));
     if (coins < price) {
         alert('Недостаточно монет!');
         return;
@@ -1789,8 +1771,6 @@ function handleFreeContainerConfirm() {
         let reward;
         if (currentType === 'omega') {
             reward = openOmegaContainer({ suppressRewardModal: true });
-        } else if (currentType === 'exotic') {
-            reward = openExoticContainer({ suppressRewardModal: true });
         } else if (currentType === 'bronze') {
             reward = openContainer({ suppressRewardModal: true });
         } else if (currentType === 'mini') {
@@ -1873,7 +1853,7 @@ function showContainerRewards(rewards, index = 0) {
 function handleContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : (currentType === 'exotic' ? 8000 : 1000))));
+    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : 1000)));
     if (coins < price) {
         alert('Недостаточно монет!');
         closeContainerFlow();
@@ -1881,15 +1861,13 @@ function handleContainerConfirm() {
     }
     coins -= price;
     updateCoinDisplay();
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'mini' ? 2 : (currentType === 'mechParts' ? 4 : (currentType === 'omega' ? 7 : (currentType === 'exotic' ? 6 : 5))));
+    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'mini' ? 2 : (currentType === 'mechParts' ? 4 : (currentType === 'omega' ? 7 : 5)));
     const rewards = [];
     // Ensure we create unique objects for each reward
     for (let i = 0; i < dropCount; i++) {
         let reward;
         if (currentType === 'omega') {
             reward = openOmegaContainer({ suppressRewardModal: true });
-        } else if (currentType === 'exotic') {
-            reward = openExoticContainer({ suppressRewardModal: true });
         } else if (currentType === 'bronze') {
             reward = openContainer({ suppressRewardModal: true });
         } else if (currentType === 'mini') {
@@ -2007,10 +1985,6 @@ if (selectElectricTank) selectElectricTank.addEventListener('click', () => {
 const selectRobotTank = document.getElementById('selectRobotTank');
 if (selectRobotTank) selectRobotTank.addEventListener('click', () => {
     showTankDetail('robot');
-});
-const selectRadioactiveTank = document.getElementById('selectRadioactiveTank');
-if (selectRadioactiveTank) selectRadioactiveTank.addEventListener('click', () => {
-    showTankDetail('radioactive');
 });
 
 // По умолчанию показываем главное меню
@@ -2821,7 +2795,7 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'radioactive', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
@@ -2839,8 +2813,7 @@ const tankRarityMap = {
     'plasma': 'mythic',
     'electric': 'mythic',
     'time': 'imitator',
-    'imitator': 'imitator',
-    'radioactive': 'exotic'
+    'imitator': 'imitator'
 };
 
 const rarityChances = {
@@ -2849,8 +2822,7 @@ const rarityChances = {
     'epic': 15,
     'legendary': 10,
     'imitator': 5,
-    'mythic': 5,
-    'exotic': 3
+    'mythic': 5
 };
 
 // Removed duplicate tankDescriptions declaration to avoid conflict with tanks.js
@@ -3268,55 +3240,6 @@ function openOmegaContainer(options = {}) {
     }
 }
 
-// Open Exotic container (самый редкий контейнер)
-// 50% - Coins 500-800
-// 25% - Gems 50-100
-// 15% - Parts 200-400
-// 9.9% - Random tank (не экзотический)
-// 0.1% - Exotic tank (radioactive)
-function openExoticContainer(options = {}) {
-    const { suppressRewardModal = false } = options;
-    const r = Math.random() * 100;
-    
-    if (r < 50) { // 50% - coins (500-800)
-        const val = getRandomInt(500, 800);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (500–800)');
-        return { type: 'coins', amount: val, desc: 'Coins (500–800)', icon: '💰' };
-    
-    } else if (r < 75) { // 25% - gems (50-100) [50 + 25 = 75]
-        const val = getRandomInt(50, 100);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (50–100)');
-        return { type: 'gems', amount: val, desc: 'Gems (50–100)', icon: '💎' };
-    
-    } else if (r < 90) { // 15% - parts (200-400) [75 + 15 = 90]
-        const val = getRandomInt(200, 400);
-        parts += val;
-        localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Parts (200–400)');
-        return { type: 'parts', amount: val, desc: 'Parts (200–400)', icon: '🔧' };
-    
-    } else if (r < 99.9) { // 9.9% - random tank [90 + 9.9 = 99.9]
-        return unlockRandomTankNew(true, { suppressRewardModal, isRadioactive: false });
-    
-    } else { // 0.1% - exotic (radioactive) tank [99.9 + 0.1 = 100]
-        // Unlock radioactive tank specifically
-        if (unlockedTanks && !unlockedTanks.includes('radioactive')) {
-            unlockedTanks.push('radioactive');
-            saveTanks();
-            if (!suppressRewardModal) showReward('tank', 1, '✨ Экзотический танк!', 'radioactive');
-            return { type: 'tank', tankType: 'radioactive', desc: '✨ Экзотический танк (Радиоактивный)', icon: '☢' };
-        } else {
-            // If already unlocked, give gems as compensation
-            const val = 500;
-            gems += val;
-            if (!suppressRewardModal) showReward('gems', val, 'Gems (компенсация за имеющийся танк)');
-            return { type: 'gems', amount: val, desc: 'Gems (500 — компенсация)', icon: '💎' };
-        }
-    }
-}
-
 // Autopilot evasion AI for electric robot tank
 function updateAutopilotEvasion() {
     // Find the nearest enemy
@@ -3663,50 +3586,6 @@ function update() {
             keys['KeyE'] = false;
         }
 
-        // Radioactive blast ability (E) - one-time AoE explosion + persistent radiation zone
-        if (tankType === 'radioactive' && keys['KeyE']) {
-            if (!tank.radBlastUsed) {
-                const cx = tank.x + tank.w / 2;
-                const cy = tank.y + tank.h / 2;
-                const blastRadius = 200;
-                // Deal 500 damage to all enemies in range
-                for (const e of enemies) {
-                    if (!e.alive) continue;
-                    const ex = e.x + e.w / 2;
-                    const ey = e.y + e.h / 2;
-                    if (Math.hypot(ex - cx, ey - cy) <= blastRadius) {
-                        e.hp -= 500;
-                        e.radiationTimer = 360; // 6 sec radiation DoT
-                        if (e.hp <= 0) e.alive = false;
-                    }
-                }
-                // Visual explosion ring
-                objects.push({
-                    type: 'explosion',
-                    x: cx, y: cy,
-                    radius: blastRadius,
-                    life: 60, maxLife: 60,
-                    color: 'rgba(57,255,20,0.25)'
-                });
-                // Neon green radiation particle burst
-                for (let k = 0; k < 30; k++) {
-                    const a = Math.random() * Math.PI * 2;
-                    const r = blastRadius * Math.sqrt(Math.random());
-                    spawnParticle(cx + Math.cos(a) * r, cy + Math.sin(a) * r, '#39ff14');
-                }
-                // Persistent radiation zone (8 sec)
-                objects.push({
-                    type: 'radiationZone',
-                    x: cx, y: cy,
-                    radius: 150,
-                    life: 480, maxLife: 480,
-                    ownerTeam: 0
-                });
-                tank.radBlastUsed = true;
-            }
-            keys['KeyE'] = false;
-        }
-
         // Mirror tank ability (E) - Mirror Shield
         if (tankType === 'mirror') {
              if (keys['KeyE']) {
@@ -4014,17 +3893,6 @@ function update() {
             }
         }
         if (tank.robotDroneCooldown > 0) tank.robotDroneCooldown--;
-        // Radioactive tank passive: radiation field infects nearby enemies every 30 ticks
-        if (tankType === 'radioactive' && (window.frameCount || 0) % 30 === 0) {
-            const cx = tank.x + tank.w / 2;
-            const cy = tank.y + tank.h / 2;
-            for (const e of enemies) {
-                if (!e.alive) continue;
-                if (Math.hypot(e.x + e.w / 2 - cx, e.y + e.h / 2 - cy) <= 100) {
-                    e.radiationTimer = Math.max(e.radiationTimer || 0, 180); // 3 sec radiation DoT
-                }
-            }
-        }
         // Update autopilot ability timers
         if (tank.isAutopilotActive) {
             tank.autoPilotTimer--;
@@ -4485,21 +4353,16 @@ function updateShopButtonStyles() {
         'toxic': 'selectToxicTank',
         'mirror': 'selectMirrorTank',
         'robot': 'selectRobotTank',
-        'radioactive': 'selectRadioactiveTank',
         'illuminat': 'selectIlluminatTank',
         'plasma': 'selectPlasmaTank',
-        'electric': 'selectElectricTank',
-        'time': 'selectTimeTank',
-        'imitator': 'selectImitatorTank'
+        'electric': 'selectElectricTank'
     };
     
     const tankRarityMap = {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
-        'time': 'chromatic', 'imitator': 'chromatic',
-        'radioactive': 'exotic'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic'
     };
     
     Object.keys(tankButtonMap).forEach(tankType => {
@@ -4508,42 +4371,33 @@ function updateShopButtonStyles() {
         if (!btn) return;
         
         const price = tankGemPrices[tankType];
+        const isUnlocked = unlockedTanks && unlockedTanks.includes(tankType);
         
-        // If tank is unlocked, we revert to its default class
-        if (unlockedTanks && unlockedTanks.includes(tankType)) {
-            // Restore default class based on rarity map/hardcoded logic
-            btn.className = 'btn';
-            if (tankType === 'radioactive') btn.classList.add('btn-exotic');
-            else if (tankType === 'fire' || tankType === 'waterjet' || tankType === 'mine') btn.classList.add('btn-shop'); // Super Rare
-            else if (tankType === 'buratino' || tankType === 'musical' || tankType === 'medical') btn.classList.add('btn-shop'); // Epic (uses similar style?)
-            else if (tankType === 'toxic' || tankType === 'mirror' || tankType === 'robot') btn.classList.add('btn-gold'); // Legendary
-            else if (tankType === 'illuminat' || tankType === 'plasma' || tankType === 'electric') btn.classList.add('btn-blood'); // Mythic
-            else btn.classList.add('btn-char'); // Default fallback + chromatic
-            return;
-        }
+        // If unlocked, keep normal appearance (no dynamic changes needed)
+        if (isUnlocked) return;
         
-        // If not unlocked, check affordability
+        // If not unlocked, update class based on affordability
         const rarity = tankRarityMap[tankType];
         const canAfford = (typeof gems !== 'undefined' && gems >= price);
         
-        // Wipe all classes except 'btn' and set new ones
-        btn.className = 'btn';
-        
         if (canAfford) {
-            // Add rarity class when affordable
+            // Add rarity class when affordable, remove btn-* classes
+            btn.classList.remove('btn-shop', 'btn-gold', 'btn-blood', 'btn-char', 'btn-mode');
             btn.classList.add('rarity-' + rarity);
         } else {
-            // Unaffordable: show rarity color but darker/static
+            // Remove rarity class when not affordable, use default style
+            btn.classList.remove('rarity-rare', 'rarity-super', 'rarity-epic', 'rarity-legendary', 'rarity-mythic');
+            // Restore original btn-* class for unaffordable tanks
+            btn.classList.add('btn-char'); // Medical and epics use btn-char
             if (rarity === 'super') {
+                btn.classList.remove('btn-char');
                 btn.classList.add('btn-shop');
             } else if (rarity === 'legendary') {
+                btn.classList.remove('btn-char');
                 btn.classList.add('btn-gold');
             } else if (rarity === 'mythic') {
+                btn.classList.remove('btn-char');
                 btn.classList.add('btn-blood');
-            } else if (rarity === 'exotic') {
-                btn.classList.add('btn-exotic');
-            } else {
-                btn.classList.add('btn-char');
             }
         }
     });
@@ -4877,8 +4731,7 @@ function updateTankDetailButton(type) {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
-        'time': 'chromatic', 'imitator': 'chromatic', 'radioactive': 'exotic'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator'
     };
 
     // If player has enough gems, color the buy button by rarity

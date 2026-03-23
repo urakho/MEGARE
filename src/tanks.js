@@ -92,11 +92,6 @@ const tankDescriptions = {
         name: "Минный танк",
         description: "Скрытный сапёр, расставляющий замаскированные мины. Нажмите пробел, чтобы разместить мину на земле. Свои мины видны только вам — вражеские скрыты. Мина взрывается при контакте с противником, нанося урон.",
         rarity: "Сверхредкий"
-    },
-    radioactive: {
-        name: "Радиоактивный танк",
-        description: "Экзотический танк, заражающий врагов радиацией и наносящий урон со временем. Создаёт опасные зоны, которых сложно избежать. Ульта вызывает мощный радиационный выброс, оставляя заражённую область.",
-        rarity: "Экзотический"
     }
 };
 
@@ -121,7 +116,6 @@ const tankBgGradients = {
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
     robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
-    radioactive: ['#ba0070', '#590036'], // Экзотический - top #ba0070 to bottom #590036
     medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
     // sport removed
 };
@@ -744,60 +738,6 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#2a3510';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-        } else if (type === 'radioactive') {
-            // Curved organic body with neon green glow and radiation hazard markings
-            const radBodyGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
-            radBodyGrad.addColorStop(0, '#1c2a1c');
-            radBodyGrad.addColorStop(0.5, '#0d1a0d');
-            radBodyGrad.addColorStop(1, '#1a2a1a');
-            ctx.fillStyle = radBodyGrad;
-            // Rounded rectangle body using arc path
-            const radius = Math.min(bodyW, bodyH) * 0.12;
-            ctx.beginPath();
-            ctx.moveTo(-bodyW/2 + radius, -bodyH/2);
-            ctx.lineTo(bodyW/2 - radius, -bodyH/2);
-            ctx.arc(bodyW/2 - radius, -bodyH/2 + radius, radius, -Math.PI/2, 0);
-            ctx.lineTo(bodyW/2, bodyH/2 - radius);
-            ctx.arc(bodyW/2 - radius, bodyH/2 - radius, radius, 0, Math.PI/2);
-            ctx.lineTo(-bodyW/2 + radius, bodyH/2);
-            ctx.arc(-bodyW/2 + radius, bodyH/2 - radius, radius, Math.PI/2, Math.PI);
-            ctx.lineTo(-bodyW/2, -bodyH/2 + radius);
-            ctx.arc(-bodyW/2 + radius, -bodyH/2 + radius, radius, Math.PI, -Math.PI/2);
-            ctx.closePath();
-            ctx.fill();
-            // Neon green border glow
-            ctx.shadowColor = '#39ff14';
-            ctx.shadowBlur = 12;
-            ctx.strokeStyle = '#39ff14';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            // Curved hazard rings (concentric circles with gaps)
-            ctx.strokeStyle = 'rgba(57,255,20,0.45)';
-            ctx.lineWidth = 1.5;
-            for (let ri = 0; ri < 3; ri++) {
-                const ringR = (bodyW / 2) * (0.35 + ri * 0.25);
-                ctx.beginPath();
-                ctx.arc(0, 0, Math.min(ringR, bodyW * 0.45), 0, Math.PI * 2);
-                ctx.stroke();
-            }
-            // Curved pulsing aura
-            const pulse = 0.5 + 0.3 * Math.sin(Date.now() * 0.005);
-            ctx.fillStyle = `rgba(57,255,20,${0.1 * pulse})`;
-            ctx.beginPath();
-            ctx.arc(0, 0, Math.min(bodyW/2 + 5, bodyW * 0.52), 0, Math.PI * 2);
-            ctx.fill();
-            // ☢ hazard symbol in center
-            ctx.font = `bold ${Math.round(bodyH * 0.38)}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = '#39ff14';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#39ff14';
-            ctx.fillText('☢', 0, 0);
-            ctx.shadowBlur = 0;
-            ctx.textAlign = 'start';
-            ctx.textBaseline = 'alphabetic';
         } else {
             // Default
             ctx.fillStyle = color;
@@ -1496,32 +1436,6 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.beginPath();
         ctx.ellipse(0, 0, tSize * 0.55, tSize * 0.4, 0, 0, Math.PI * 2);
         ctx.stroke();
-    } else if (type === 'radioactive') {
-        // Round neon green glowing turret dome
-        const radTurretGrad = ctx.createRadialGradient(0, -tSize*0.1, 0, 0, 0, tSize * 0.52);
-        radTurretGrad.addColorStop(0, '#7fff50');
-        radTurretGrad.addColorStop(0.6, '#39ff14');
-        radTurretGrad.addColorStop(1, '#1a7a00');
-        ctx.shadowColor = '#39ff14';
-        ctx.shadowBlur = 14;
-        ctx.fillStyle = radTurretGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, tSize * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        // ☢ symbol on turret
-        ctx.font = `bold ${Math.round(tSize * 0.5)}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#001a00';
-        ctx.fillText('☢', 0, 0);
-        ctx.textAlign = 'start';
-        ctx.textBaseline = 'alphabetic';
-        ctx.strokeStyle = '#00cc00';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, tSize * 0.5, 0, Math.PI * 2);
-        ctx.stroke();
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -2028,27 +1942,6 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.arc(tSize / 2 + mBarrelLen, 0, mineR * 0.35, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
-        } else if (type === 'radioactive') {
-            // Standard barrel with radiation hazard bands
-            const rbLen = Math.min(W, H) * 0.6 * turretScale;
-            const rbH = Math.min(W, H) * 0.13 * turretScale;
-            // Dark barrel body
-            ctx.fillStyle = '#1a2a1a';
-            ctx.fillRect(tSize/2 - 2, -rbH/2, rbLen, rbH);
-            // Neon green glowing muzzle
-            ctx.shadowColor = '#39ff14';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#39ff14';
-            ctx.fillRect(tSize/2 + rbLen - rbH, -rbH/2, rbH, rbH);
-            ctx.shadowBlur = 0;
-            // Hazard band stripes along barrel
-            ctx.fillStyle = 'rgba(57,255,20,0.45)';
-            for (let bi = 0; bi < 3; bi++) {
-                ctx.fillRect(tSize/2 + rbLen * (0.22 + bi * 0.22), -rbH/2, rbH * 0.35, rbH);
-            }
-            ctx.strokeStyle = '#39ff14';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(tSize/2 - 2, -rbH/2, rbLen, rbH);
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2644,11 +2537,6 @@ function drawCharacterPreviews() {
         drawItem(robotTankCtx, robotTankPreview, 'robot', '#0d0d1e', tankBgGradients.robot);
     }
 
-    // RADIOACTIVE Tank preview
-    if (typeof radioactiveTankCtx !== 'undefined' && radioactiveTankCtx && radioactiveTankPreview) {
-        drawItem(radioactiveTankCtx, radioactiveTankPreview, 'radioactive', '#0d1e0d', tankBgGradients.radioactive);
-    }
-
     // SPORT Soccer Tank preview removed
 }
 
@@ -2929,27 +2817,6 @@ function draw() {
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = `rgba(120,240,120,${alpha * 0.25})`;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.6, 0, Math.PI * 2); ctx.fill();
-        } else if (obj.type === 'radiationZone') {
-            const alpha = Math.max(0.05, obj.life / obj.maxLife * 0.55);
-            // Pulsing neon green radiation zone
-            const pulse = 0.85 + Math.sin(Date.now() * 0.006) * 0.15;
-            ctx.shadowColor = '#39ff14';
-            ctx.shadowBlur = 18;
-            ctx.fillStyle = `rgba(57,255,20,${alpha * 0.4 * pulse})`;
-            ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * pulse, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-            // Outer glowing ring
-            ctx.strokeStyle = `rgba(57,255,20,${alpha * 0.9})`;
-            ctx.lineWidth = 2.5;
-            ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * pulse, 0, Math.PI * 2); ctx.stroke();
-            // Inner ☢ symbol
-            ctx.font = `bold ${Math.round(obj.radius * 0.5)}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = `rgba(57,255,20,${alpha * 0.7})`;
-            ctx.fillText('☢', obj.x, obj.y);
-            ctx.textAlign = 'start';
-            ctx.textBaseline = 'alphabetic';
         } else {
             const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
             ctx.fillStyle = '#cd853f'; // Peru
@@ -3138,26 +3005,6 @@ function draw() {
                        x: b.x, y: b.y, size: 2, color: '#76ff03', life: 0.5, vx: (Math.random()-0.5), vy: (Math.random()-0.5)
                     });
                 }
-            }
-
-        } else if (b.type === 'radioactive') {
-            // Neon green glowing radioactive orb
-            const r = Math.max(4, b.w / 2);
-            const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r + 5);
-            glow.addColorStop(0, 'rgba(200,255,160,1)');
-            glow.addColorStop(0.45, 'rgba(57,255,20,0.85)');
-            glow.addColorStop(1, 'rgba(0,80,0,0)');
-            ctx.shadowColor = '#39ff14';
-            ctx.shadowBlur = 14;
-            ctx.fillStyle = glow;
-            ctx.beginPath(); ctx.arc(b.x, b.y, r + 3, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-            // Small core
-            ctx.fillStyle = '#ccffaa';
-            ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.4, 0, Math.PI * 2); ctx.fill();
-            // Trailing particles
-            if (Math.random() > 0.5 && window.effectsEnabled !== false) {
-                particles.push({ x: b.x, y: b.y, size: 2.5, color: '#39ff14', life: 0.4, vx: (Math.random()-0.5)*1.2, vy: (Math.random()-0.5)*1.2 });
             }
 
         } else if (b.type === 'megabomb') {
@@ -5165,9 +5012,6 @@ function showTankDetail(tankType) {
     } else if (rarityValue === 'Хроматическая') {
         rarityColor = '#00ffcc';
         glowStyle = 'text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc, 0 0 30px #00ffcc;';
-    } else if (rarityValue === 'Экзотический') {
-        rarityColor = '#ba0070';
-        glowStyle = 'text-shadow: 0 0 12px #ba0070, 0 0 24px #ba0070;';
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
     description.textContent = tankDescriptions[tankType].description;
@@ -5202,7 +5046,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, radioactive: 40
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
