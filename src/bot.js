@@ -571,6 +571,14 @@ function updateEnemyAI() {
                 enemy.fireCooldown = 60;
             }
 
+            // Roman: activate shield defensive ability when close to targets
+            if (enemy.tankType === 'roman' && (!enemy.romanShieldCooldown || enemy.romanShieldCooldown <= 0) && !enemy.romanShieldActive && distToNearest < 350 && Math.random() < 0.025) {
+                enemy.romanShieldActive = true;
+                enemy.romanShieldTimer = 240; // 4 seconds
+                enemy.romanShieldCooldown = 600; // 10 seconds
+                enemy.fireCooldown = 60;
+            }
+
             // Medical: spawn healing zones when nearby allies need healing
             if (enemy.tankType === 'medical' && (!enemy.medicalZoneCooldown || enemy.medicalZoneCooldown <= 0) && distToNearest < 300 && Math.random() < 0.015) {
                 // Find damaged allies nearby
@@ -753,7 +761,7 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
@@ -1225,6 +1233,20 @@ function updateEnemyAI() {
                     type: 'medicalPulse',
                     damage: 75
                 };
+            } else if (tt === 'roman') {
+                // Roman throwing blade: 200 dmg, ricochet 1 time
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 22,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 22,
+                    w: 14, h: 14,
+                    vx: Math.cos(enemy.turretAngle) * 6.5,
+                    vy: Math.sin(enemy.turretAngle) * 6.5,
+                    life: 130,
+                    owner: 'enemy', team: enemy.team,
+                    type: 'romanBlade',
+                    damage: 200,
+                    bounces: 0, maxBounces: 1, spinAngle: 0
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1232,7 +1254,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1302,6 +1324,34 @@ function updateAllyAI() {
                 ally.mirrorShieldActive = true;
                 ally.mirrorShieldTimer = 120;
                 ally.mirrorShieldCooldown = 60 * 14;
+            }
+        }
+
+        // Lazy-init Roman shield for allies
+        if (ally.romanShieldActive === undefined) ally.romanShieldActive = false;
+        if (ally.romanShieldTimer === undefined) ally.romanShieldTimer = 0;
+        if (ally.romanShieldCooldown === undefined) ally.romanShieldCooldown = 0;
+        // Tick Roman shield for ally
+        if (ally.romanShieldActive) {
+            ally.romanShieldTimer--;
+            if (ally.romanShieldTimer <= 0) ally.romanShieldActive = false;
+        }
+        if (ally.romanShieldCooldown > 0) ally.romanShieldCooldown--;
+        // Activate Roman shield for ally when close to targets
+        if (ally.tankType === 'roman' && !ally.romanShieldActive && ally.romanShieldCooldown <= 0) {
+            const ax = ally.x + ally.w / 2, ay = ally.y + ally.h / 2;
+            let threat = false;
+            for (const b of bullets) {
+                if (b.team === ally.team) continue;
+                if (Math.hypot(b.x - ax, b.y - ay) < 350) {
+                    const dot = b.vx * (ax - b.x) + b.vy * (ay - b.y);
+                    if (dot > 0) { threat = true; break; }
+                }
+            }
+            if (threat && Math.random() < 0.3) {
+                ally.romanShieldActive = true;
+                ally.romanShieldTimer = 240; // 4 seconds
+                ally.romanShieldCooldown = 600; // 10 seconds
             }
         }
 
@@ -1583,9 +1633,23 @@ function updateAllyAI() {
                             type: 'medicalPulse',
                             damage: 75
                         };
+                    } else if (tt === 'roman') {
+                        // Ally roman: throwing blade
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 22,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 22,
+                            w: 14, h: 14,
+                            vx: Math.cos(ally.turretAngle) * 6.5,
+                            vy: Math.sin(ally.turretAngle) * 6.5,
+                            life: 130,
+                            owner: 'ally', team: ally.team,
+                            type: 'romanBlade',
+                            damage: 200,
+                            bounces: 0, maxBounces: 1, spinAngle: 0
+                        };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

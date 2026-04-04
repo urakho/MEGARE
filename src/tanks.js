@@ -92,6 +92,11 @@ const tankDescriptions = {
         name: "Минный танк",
         description: "Скрытный сапёр, расставляющий замаскированные мины. Нажмите пробел, чтобы разместить мину на земле. Свои мины видны только вам — вражеские скрыты. Мина взрывается при контакте с противником, нанося урон.",
         rarity: "Сверхредкий"
+    },
+    roman: {
+        name: "Римский танк",
+        description: "Имперский танк, вдохновлённый величием древнего Рима. Бросает тяжёлый клинок, способный поражать врагов даже за укрытиями, а в критический момент возводит сияющий золотой щит, становясь неуязвимым для любой атаки. Символ силы, чести и несгибаемой воли легионера.",
+        rarity: "Хроматическая"
     }
 };
 
@@ -112,6 +117,7 @@ const tankBgGradients = {
     illuminat: ['#ff6b6b', '#e74c3c'],// Мифический - red
     mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
+    roman: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - animated like time
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
@@ -138,11 +144,49 @@ const tankBaseColors = {
     robot:   '#263238',    // Dark steel for robot tank
     medical: '#0033ff',    // Bright blue for medical tank
     mine: '#3d4c18',       // Dark olive for mine tank
+    roman: '#8B6914',      // Dark gold for Roman tank
     // sport removed
 };
 
 // Make available globally
 window.tankDescriptions = tankDescriptions;
+
+// Trio data: each tank belongs to exactly one trio (or null for illuminat)
+// color: accent colour for the badge; icon: big badge icon; members: [type, emoji] pairs
+const _trioTechno = {
+    icon: '⚡', name: 'Техно-трио', color: '#00d4ff',
+    members: [['electric','⚡'],['robot','🤖'],['plasma','💜']]
+};
+const _trioFire = {
+    icon: '🔥', name: 'Огневое трио', color: '#ff6633',
+    members: [['buckshot','🔱'],['machinegun','🔫'],['fire','🔥']]
+};
+const _trioTactic = {
+    icon: '🏛', name: 'Тактическое трио', color: '#d4a017',
+    members: [['roman','🏛'],['time','⏰'],['imitator','🌈']]
+};
+const _trioBase = {
+    icon: '🛡️', name: 'Базовое трио', color: '#5dade2',
+    members: [['normal','🔵'],['ice','❄️'],['waterjet','💧']]
+};
+const _trioControl = {
+    icon: '☢️', name: 'Контролирующее трио', color: '#aaff00',
+    members: [['mine','💣'],['buratino','🟡'],['toxic','☠️']]
+};
+const _trioSupport = {
+    icon: '💫', name: 'Поддерживающее трио', color: '#00cc88',
+    members: [['musical','🎵'],['medical','🩺'],['mirror','🪞']]
+};
+const tankTrios = {
+    electric: _trioTechno, robot: _trioTechno, plasma: _trioTechno,
+    buckshot: _trioFire, machinegun: _trioFire, fire: _trioFire,
+    roman: _trioTactic, time: _trioTactic, imitator: _trioTactic,
+    normal: _trioBase, ice: _trioBase, waterjet: _trioBase,
+    mine: _trioControl, buratino: _trioControl, toxic: _trioControl,
+    musical: _trioSupport, medical: _trioSupport, mirror: _trioSupport,
+    illuminat: null,
+};
+window.tankTrios = tankTrios;
 window.tankBgGradients = tankBgGradients;
 
 // Preview canvas global access (defined in main.js, used here)
@@ -712,6 +756,57 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Border
             ctx.strokeStyle = '#0066ff';
             ctx.lineWidth = 2.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'roman') {
+            // Roman Tank Body - imperial crimson with gold lorica bands
+            const bodyGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            bodyGrad.addColorStop(0, '#6b0000');
+            bodyGrad.addColorStop(0.3, '#C41E3A');
+            bodyGrad.addColorStop(0.65, '#8B0000');
+            bodyGrad.addColorStop(1, '#4a0000');
+            ctx.fillStyle = bodyGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Gold lorica bands (horizontal armor strips)
+            const bandColor = '#D4A017';
+            const bandH = Math.max(2.5, bodyH * 0.09);
+            ctx.fillStyle = bandColor;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bandH);                             // top band
+            ctx.fillRect(-bodyW/2, bodyH/2 - bandH, bodyW, bandH);                     // bottom band
+            ctx.fillRect(-bodyW/2, -bodyH * 0.14, bodyW, bandH * 0.7);                 // upper mid band
+            ctx.fillRect(-bodyW/2,  bodyH * 0.05, bodyW, bandH * 0.7);                 // lower mid band
+
+            // Gold side border strips
+            ctx.fillRect(-bodyW/2, -bodyH/2, bandH * 0.7, bodyH);
+            ctx.fillRect( bodyW/2 - bandH * 0.7, -bodyH/2, bandH * 0.7, bodyH);
+
+            // Inner crimson panel between bands
+            const panelGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, bodyW * 0.4);
+            panelGrad.addColorStop(0, 'rgba(220,20,60,0.35)');
+            panelGrad.addColorStop(1, 'rgba(80,0,0,0)');
+            ctx.fillStyle = panelGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Roman SPQR shield emblem (drawn geometry, no emoji)
+            const emR = Math.min(bodyW, bodyH) * 0.22;
+            // Shield outline - oval shape
+            ctx.fillStyle = '#D4A017';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, emR * 0.75, emR, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#8B0000';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, emR * 0.58, emR * 0.83, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Gold cross on the shield
+            const cw = emR * 0.12;
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(-emR * 0.55, -cw / 2, emR * 1.1, cw);
+            ctx.fillRect(-cw / 2, -emR * 0.8, cw, emR * 1.6);
+
+            // Gold outline
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 1.5;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'mine') {
             // Dark olive camo body with hazard markings
@@ -1413,6 +1508,59 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         const crossThick = tSize * 0.09;
         ctx.fillRect(-crossSize/2, -crossThick/2, crossSize, crossThick); // horizontal
         ctx.fillRect(-crossThick/2, -crossSize/2, crossThick, crossSize); // vertical
+    } else if (type === 'roman') {
+        // Roman Turret - domed imperial cupola: crimson base with gleaming gold crest
+        // Outer golden rim ring
+        ctx.strokeStyle = '#D4A017';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.56, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Dome body: crimson with golden highlight
+        const romTGrad = ctx.createRadialGradient(-tSize * 0.18, -tSize * 0.18, 0, 0, 0, tSize * 0.52);
+        romTGrad.addColorStop(0, '#FF4040');
+        romTGrad.addColorStop(0.45, '#C41E3A');
+        romTGrad.addColorStop(1, '#6b0000');
+        ctx.fillStyle = romTGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gold equatorial band on dome
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.38, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Helmet crest plume (front-pointing arc of crimson feathers)
+        ctx.strokeStyle = '#FF1010';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-tSize * 0.4, -tSize * 0.45);
+        ctx.quadraticCurveTo(0, -tSize * 0.78, tSize * 0.4, -tSize * 0.45);
+        ctx.stroke();
+        // Gold shimmer on crest
+        ctx.strokeStyle = 'rgba(255,215,0,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-tSize * 0.32, -tSize * 0.42);
+        ctx.quadraticCurveTo(0, -tSize * 0.68, tSize * 0.32, -tSize * 0.42);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+
+        // Inner dark socket
+        ctx.fillStyle = '#3b0000';
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        // Gold center rivet
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.07, 0, Math.PI * 2);
+        ctx.fill();
     } else if (type === 'mine') {
         // Flat camo dome turret with mine deployer hatch
         ctx.fillStyle = '#3d4c18';
@@ -1915,6 +2063,38 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#666';
             ctx.lineWidth = 1;
             ctx.strokeRect(tSize/2, -mbH/2, mbLen, mbH);
+        } else if (type === 'roman') {
+            // Roman barrel - elegant pilum arm: dark shaft with gleaming gold spear tip
+            const romBarrelLen = Math.min(W, H) * 0.52 * turretScale;
+            const romBarrelH  = Math.min(W, H) * 0.085 * turretScale;
+            const shaftLen = romBarrelLen * 0.74;
+            // Dark wooden shaft with highlight
+            const shaftGrad = ctx.createLinearGradient(tSize / 2, -romBarrelH / 2, tSize / 2, romBarrelH / 2);
+            shaftGrad.addColorStop(0, '#6b3a1f');
+            shaftGrad.addColorStop(0.4, '#9b5a2f');
+            shaftGrad.addColorStop(1, '#4a2010');
+            ctx.fillStyle = shaftGrad;
+            ctx.fillRect(tSize / 2, -romBarrelH / 2, shaftLen, romBarrelH);
+            // Gold collar ring at shaft-tip junction
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(tSize / 2 + shaftLen - 3, -romBarrelH / 2 - 1, 5, romBarrelH + 2);
+            // Iron tip - elongated golden lance head
+            const tipLen = romBarrelLen * 0.26;
+            const tipX = tSize / 2 + shaftLen;
+            const tipGrad = ctx.createLinearGradient(tipX, 0, tipX + tipLen, 0);
+            tipGrad.addColorStop(0, '#D4A017');
+            tipGrad.addColorStop(0.4, '#FFD700');
+            tipGrad.addColorStop(1, '#FFF8DC');
+            ctx.fillStyle = tipGrad;
+            ctx.beginPath();
+            ctx.moveTo(tipX, -romBarrelH * 0.9);
+            ctx.lineTo(tipX + tipLen, 0);
+            ctx.lineTo(tipX, romBarrelH * 0.9);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
         } else if (type === 'mine') {
             // Short mine deployer arm with a mine at the end
             const mBarrelLen = Math.min(W, H) * 0.34 * turretScale;
@@ -2537,6 +2717,54 @@ function drawCharacterPreviews() {
         drawItem(robotTankCtx, robotTankPreview, 'robot', '#0d0d1e', tankBgGradients.robot);
     }
 
+    // ROMAN Tank preview - animated chromatic
+    if (typeof romanTankCtx !== 'undefined' && romanTankCtx && typeof romanTankPreview !== 'undefined' && romanTankPreview) {
+        const animateRomanTank = function() {
+            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('roman');
+            const canvas = romanTankPreview;
+            const ctx    = romanTankCtx;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const time = Date.now() * 0.00012;
+            if (isUnlocked) {
+                const pixel  = Math.max(18, Math.floor(Math.min(canvas.width, canvas.height) / 12));
+                const shift  = (time * 360) % 360;
+                const step   = 0.12;
+                for (let py = 0; py < canvas.height; py += pixel) {
+                    for (let px = 0; px < canvas.width; px += pixel) {
+                        const s   = px + py;
+                        const hue = (((s * step) - shift) % 360 + 360) % 360;
+                        const light = 48 + 6 * Math.sin((px * 0.02 + py * 0.02) + time * 2.2);
+                        ctx.fillStyle = `hsl(${hue}, 82%, ${light}%)`;
+                        ctx.fillRect(px, py, pixel, pixel);
+                    }
+                }
+            } else {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            const side = Math.min(canvas.width, canvas.height) / 2;
+            ctx.save();
+            if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
+            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a2e', 0, 1, 'roman');
+            ctx.restore();
+            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'roman') {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth   = 4;
+                ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            } else if (!isUnlocked) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.font         = '40px Arial';
+                ctx.textAlign    = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle    = '#fff';
+                ctx.fillText('\ud83d\udd12', canvas.width/2, canvas.height/2);
+            }
+            window.romanTankAnimId = requestAnimationFrame(animateRomanTank);
+        };
+        animateRomanTank();
+    }
+
     // SPORT Soccer Tank preview removed
 }
 
@@ -3108,6 +3336,89 @@ function draw() {
                    vy: (Math.random()-0.5)*0.5
                 });
             }
+
+        } else if (b.type === 'romanBlade') {
+            // Roman gladius — solid iron short-sword spinning in flight
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(b.spinAngle || 0);
+
+            const bLen = (b.w || 14) * 0.95; // half-length from centre to tip
+            const bWid = bLen * 0.28;         // max half-width at blade shoulder
+
+            // === Blade body (iron/steel, flat faces) ===
+            // Left side: straight back edge, right side: double-edged taper to point
+            ctx.beginPath();
+            ctx.moveTo( bLen, 0);                      // front tip
+            ctx.lineTo( bLen * 0.55,  bWid);           // upper shoulder
+            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);    // upper back edge
+            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);    // lower back edge
+            ctx.lineTo( bLen * 0.55, -bWid);           // lower shoulder
+            ctx.closePath();
+            const bladeGrad = ctx.createLinearGradient(0, -bWid, 0, bWid);
+            bladeGrad.addColorStop(0,   '#8a9aaa');   // upper edge (lighter)
+            bladeGrad.addColorStop(0.3, '#b0c0cc');   // upper bevel
+            bladeGrad.addColorStop(0.5, '#d8e4e8');   // Fuller / central highlight
+            bladeGrad.addColorStop(0.7, '#8a9aaa');   // lower bevel
+            bladeGrad.addColorStop(1,   '#5c6a74');   // lower edge (shadow)
+            ctx.fillStyle = bladeGrad;
+            ctx.fill();
+
+            // Central fuller (ridge line)
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(bLen * 0.92, 0);
+            ctx.lineTo(-bLen * 0.3, 0);
+            ctx.stroke();
+
+            // Blade outline
+            ctx.strokeStyle = '#3d4a52';
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo( bLen, 0);
+            ctx.lineTo( bLen * 0.55,  bWid);
+            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);
+            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);
+            ctx.lineTo( bLen * 0.55, -bWid);
+            ctx.closePath();
+            ctx.stroke();
+
+            // === Crossguard (gold horizontal bar) ===
+            const gW = bWid * 0.28;
+            const gH = bWid * 1.55;
+            ctx.fillStyle = '#D4A017';
+            ctx.fillRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 0.6;
+            ctx.strokeRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
+
+            // === Handle (dark red leather wrapping) ===
+            const handleLen = bLen * 0.42;
+            const handleH   = bWid * 0.65;
+            ctx.fillStyle = '#6B1010';
+            ctx.fillRect(-bLen * 0.38 - gW - handleLen, -handleH / 2, handleLen, handleH);
+            // Wrapping bands
+            ctx.strokeStyle = '#3a0808';
+            ctx.lineWidth = 0.8;
+            for (let bi = 1; bi <= 3; bi++) {
+                const bx = -bLen * 0.38 - gW - handleLen * (bi / 4);
+                ctx.beginPath();
+                ctx.moveTo(bx, -handleH / 2);
+                ctx.lineTo(bx,  handleH / 2);
+                ctx.stroke();
+            }
+            // Pommel cap
+            const pomR = handleH * 0.72;
+            ctx.fillStyle = '#D4A017';
+            ctx.beginPath();
+            ctx.arc(-bLen * 0.38 - gW - handleLen, 0, pomR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 0.6;
+            ctx.stroke();
+
+            ctx.restore();
 
         } else if (b.type === 'illuminat') {
             ctx.save();
@@ -4430,6 +4741,92 @@ function draw() {
 
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
 
+        // Draw Roman Shield on top of tank body
+        if (tankType === 'roman' && tank.romanShieldActive) {
+            ctx.save();
+            const _now = Date.now();
+            const rShieldR = Math.max(tank.w, tank.h) * 0.88;
+            const _pulse = 0.7 + 0.3 * Math.sin(_now * 0.008);
+
+            // === Glowing base dome: crimson core fading to gold rim ===
+            const rGrad = ctx.createRadialGradient(0, 0, rShieldR * 0.22, 0, 0, rShieldR);
+            rGrad.addColorStop(0,    `rgba(180, 30, 10, ${0.06 * _pulse})`);
+            rGrad.addColorStop(0.5,  `rgba(255, 160, 0, ${0.10 * _pulse})`);
+            rGrad.addColorStop(0.82, `rgba(255, 215, 0, ${0.28 * _pulse})`);
+            rGrad.addColorStop(1,    `rgba(255, 130, 0, ${0.58 * _pulse})`);
+            ctx.beginPath();
+            ctx.arc(0, 0, rShieldR, 0, Math.PI * 2);
+            ctx.fillStyle = rGrad;
+            ctx.fill();
+
+            // === Bright outer rim with gold glow ===
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = '#FFD700';
+            ctx.strokeStyle = `rgba(255, 215, 0, ${0.92 * _pulse})`;
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, rShieldR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // === Outer rotating octagon ===
+            ctx.save();
+            ctx.rotate(_now * 0.0018);
+            ctx.strokeStyle = `rgba(255, 200, 50, ${0.50 * _pulse})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let _si = 0; _si <= 8; _si++) {
+                const _a = (_si / 8) * Math.PI * 2;
+                const _r = rShieldR * 1.07 * (1 + 0.04 * Math.sin(_si * 2.5 + _now * 0.009));
+                if (_si === 0) ctx.moveTo(Math.cos(_a) * _r, Math.sin(_a) * _r);
+                else          ctx.lineTo(Math.cos(_a) * _r, Math.sin(_a) * _r);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+
+            // === Inner concentric rings ===
+            [0.62, 0.38].forEach((_ratio, _ri) => {
+                ctx.strokeStyle = `rgba(255, 215, 0, ${(0.16 + _ri * 0.1) * _pulse})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, rShieldR * _ratio, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // === Slowly rotating golden spokes ===
+            ctx.save();
+            ctx.rotate(_now * 0.0022);
+            ctx.strokeStyle = `rgba(255, 200, 50, ${0.38 * _pulse})`;
+            ctx.lineWidth = 1.2;
+            for (let _si = 0; _si < 4; _si++) {
+                const _a = (_si / 4) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(_a) * rShieldR * 0.18, Math.sin(_a) * rShieldR * 0.18);
+                ctx.lineTo(Math.cos(_a) * rShieldR * 0.84, Math.sin(_a) * rShieldR * 0.84);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // === Counter-rotating bright arc highlights ===
+            ctx.save();
+            ctx.rotate(-_now * 0.0045);
+            ctx.shadowBlur = 7;
+            ctx.shadowColor = '#fff8cc';
+            for (let _ai = 0; _ai < 3; _ai++) {
+                const _a = (_ai / 3) * Math.PI * 2;
+                ctx.strokeStyle = `rgba(255, 255, 200, ${0.78 * _pulse})`;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, rShieldR + 5, _a, _a + Math.PI * 0.35);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            ctx.restore();
+
+            ctx.restore();
+        }
+
         // Sport visuals removed
 
         // Rainbow aura when imitator transformation is active
@@ -4877,7 +5274,7 @@ function draw() {
 
     if (tank.alive === false && currentMode === 'war' && tank.respawnTimer > 0 && gameState !== 'lose') {
         ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
-        ctx.fillText('Respawn in ' + Math.ceil(tank.respawnTimer / 60) + 's', canvas.width/2, 40);
+        ctx.fillText('Возрождение через ' + Math.ceil(tank.respawnTimer / 60) + ' с', canvas.width/2, 40);
     }
 
     if (gameState === 'menu') {
@@ -5016,6 +5413,70 @@ function showTankDetail(tankType) {
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
     description.textContent = tankDescriptions[tankType].description;
 
+    // Trio badge
+    const trioEl = document.getElementById('tankDetailTrio');
+    if (trioEl) {
+        const trio = tankTrios[tankType];
+        if (trio) {
+            const c = trio.color;
+            // Build member chips: emoji + short name, highlight current tank, gray out locked tanks
+            const chips = trio.members.map(([mType, mIcon]) => {
+                const mName = tankDescriptions[mType] ? tankDescriptions[mType].name : mType;
+                const isActive = mType === tankType;
+                const isUnlocked = unlockedTanks && unlockedTanks.includes(mType);
+                let bgColor, borderColor, textColor, fontWeight, opacity;
+                if (isActive) {
+                    bgColor = c + '55';
+                    borderColor = c;
+                    textColor = '#fff';
+                    fontWeight = '800';
+                    opacity = '1';
+                } else if (isUnlocked) {
+                    bgColor = c + '22';
+                    borderColor = c;
+                    textColor = '#fff';
+                    fontWeight = '600';
+                    opacity = '1';
+                } else {
+                    bgColor = 'rgba(100,100,100,0.15)';
+                    borderColor = 'rgba(150,150,150,0.3)';
+                    textColor = '#888';
+                    fontWeight = 'normal';
+                    opacity = '0.5';
+                }
+                return `<span style="
+                    display:inline-flex; align-items:center; gap:4px;
+                    background:${bgColor};
+                    border:1px solid ${borderColor};
+                    border-radius:20px; padding:3px 9px 3px 7px;
+                    font-size:12px; color:${textColor};
+                    font-weight:${fontWeight};
+                    opacity:${opacity};
+                ">${mIcon} ${mName}</span>`;
+            }).join('');
+            trioEl.style.display = 'block';
+            trioEl.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, ${c}18, ${c}08);
+                    border: 1px solid ${c}55;
+                    border-left: 3px solid ${c};
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                ">
+                    <span style="font-size:24px; line-height:1; flex-shrink:0;">${trio.icon}</span>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <div style="font-size:12px; font-weight:bold; color:${c}; letter-spacing:0.8px; text-transform:uppercase;">${trio.name}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:5px;">${chips}</div>
+                    </div>
+                </div>`;
+        } else {
+            trioEl.style.display = 'none';
+        }
+    }
+
     // Fill stats block (with inline upgrade buttons)
     const statsEl = document.getElementById('tankDetailStats');
     if (statsEl) {
@@ -5046,7 +5507,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 200
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
@@ -5149,7 +5610,7 @@ function showTankDetail(tankType) {
         const grass = (tankBgGradients && tankBgGradients.normal && tankBgGradients.normal[1]) ? tankBgGradients.normal[1] : '#228B22';
         ctx.fillStyle = grass;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else if (tankType === 'time' || tankType === 'imitator') {
+    } else if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
         // Animated: pixelated rainbow flowing from top-left; redraw every frame
         if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
         modal.style.display = 'flex'; // ensure visible before first frame

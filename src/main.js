@@ -201,7 +201,8 @@ const tankGemPrices = {
     'time': 750,      // Хроматический
     'imitator': 750,  // Имитатор (same tier as Time)
     'electric': 750,  // Электрический (Шаровая молния с цепочкой хит)
-    'robot': 500      // Легендарный (Рельсотрон + дроны)
+    'robot': 500,     // Легендарный (Рельсотрон + дроны)
+    'roman': 750      // Хроматический
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -310,6 +311,7 @@ const tankMaxHpByType = {
     'robot': 450,
     'medical': 275,
     'mine': 350,
+    'roman': 400,
     'boss_hell': 7500
 };
 
@@ -340,7 +342,8 @@ const tankMaxSpeedByType = {
     'electric': 2.6,
     'robot': 2.7,
     'medical': 3.4,
-    'mine': 3.1
+    'mine': 3.1,
+    'roman': 3.0
 };
 
 function setTankSpeed(type) {
@@ -382,6 +385,10 @@ const tank = {
     barrageCooldown: 0,
     // Musical tank sound ricochet cooldown
     soundRicochetCooldown: 0,
+    // Roman tank shield ultimate
+    romanShieldActive: false,
+    romanShieldTimer: 0,
+    romanShieldCooldown: 0,
 };
 
 // Apply saved tank type properties
@@ -745,7 +752,7 @@ function updateMusic() {
 
     // ---- Attack joystick mode: 'attack' | 'ult' ----
     // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman'];
     let attackMode = 'attack';
     let attackTapStartTime = 0;
     let attackTapStartX = 0, attackTapStartY = 0;
@@ -946,6 +953,8 @@ const robotTankPreview = document.getElementById('robotTankPreview');
 const robotTankCtx = robotTankPreview && robotTankPreview.getContext ? robotTankPreview.getContext('2d') : null;
 const mineTankPreview = document.getElementById('mineTankPreview');
 const mineTankCtx = mineTankPreview && mineTankPreview.getContext ? mineTankPreview.getContext('2d') : null;
+const romanTankPreview = document.getElementById('romanTankPreview');
+const romanTankCtx = romanTankPreview && romanTankPreview.getContext ? romanTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -1006,6 +1015,11 @@ function startGame(mode) {
     
     // Reset plasma blast ability
     tank.plasmaBlastUsed = 0;
+    
+    // Reset Roman shield ability
+    tank.romanShieldActive = false;
+    tank.romanShieldTimer = 0;
+    tank.romanShieldCooldown = 0;
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1180,18 +1194,39 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.originalTankType = null; tank.originalMaxHp = 250;
     tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
     tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0;
+    tank.romanShieldActive = false; tank.romanShieldTimer = 0; tank.romanShieldCooldown = 0;
 
     // World setup
     worldWidth  = worldW || 900;
     worldHeight = worldH || 700;
     canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
-    // Use editor-placed player spawn if provided, otherwise default bottom-left
+
+    // Determine player team spawn center
+    let playerTeamCenterX, playerTeamCenterY;
     if (playerSpawn) {
-        tank.x = playerSpawn.x + playerSpawn.w / 2 - 19;
-        tank.y = playerSpawn.y + playerSpawn.h / 2 - 19;
+        playerTeamCenterX = playerSpawn.x + playerSpawn.w / 2;
+        playerTeamCenterY = playerSpawn.y + playerSpawn.h / 2;
     } else {
-        tank.x = 50; tank.y = DISPLAY_H - 80;
+        playerTeamCenterX = 50 + 19; // tank center
+        playerTeamCenterY = DISPLAY_H - 80 + 19;
     }
+
+    // Calculate spawn positions for player and allies in a circle
+    const totalTeamMembers = 1 + (allySpawns ? allySpawns.length : 0); // player + allies
+    const teamSpawnPositions = [];
+    for (let i = 0; i < totalTeamMembers; i++) {
+        const angle = (Math.PI * 2 * i) / totalTeamMembers;
+        const offsetX = Math.cos(angle) * 150;
+        const offsetY = Math.sin(angle) * 150;
+        teamSpawnPositions.push({
+            x: playerTeamCenterX + offsetX - 19, // adjust for tank center
+            y: playerTeamCenterY + offsetY - 19
+        });
+    }
+
+    // Player spawns at first position
+    tank.x = teamSpawnPositions[0].x;
+    tank.y = teamSpawnPositions[0].y;
     cameraFollow = true;
 
     // Inject custom objects (with correct colors)
@@ -1208,13 +1243,13 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     // Full type pool matching other game modes
     const _allEnemyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical',
                             'illuminat','mirror','machinegun','waterjet','buckshot',
-                            'electric','robot','medical','mine','time','imitator'];
+                            'electric','robot','medical','mine','time','imitator','roman'];
     const _typeColorMap = {
         normal:'#e74c3c',   ice:'#54d1e8',    fire:'#e67e22',   buratino:'#9b59b6',
         toxic:'#2ecc71',    plasma:'#3498db',  musical:'#e91e63', illuminat:'#f1c40f',
         mirror:'#85c1e9',   machinegun:'#c0392b', waterjet:'#1abc9c', buckshot:'#2ecc71',
         electric:'#f39c12', robot:'#2c3e50',   medical:'#27ae60', mine:'#8e44ad',
-        time:'#16a085',     imitator:'#7f8c8d'
+        time:'#16a085',     imitator:'#7f8c8d', roman:'#c0392b'
     };
     const spawnPositions = (enemySpawns && enemySpawns.length > 0)
         ? enemySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
@@ -1229,8 +1264,15 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         // In 'solo' mode each enemy gets its own team (2, 3, 4...) so they fight each other
         const teamId = (enemyMode === 'solo') ? (i + 2) : 1;
+        // Scatter spawn position around center of map to keep enemies spread out
+        const centerX = worldWidth / 2;
+        const centerY = worldHeight / 2;
+        const scatter = 150;
+        const angle = (Math.PI * 2 * i) / Math.max(spawnPositions.length, 1);
+        const offsetX = Math.cos(angle) * scatter;
+        const offsetY = Math.sin(angle) * scatter;
         return {
-            x: pos.x, y: pos.y, w: 38, h: 38,
+            x: centerX + offsetX, y: centerY + offsetY, w: 38, h: 38,
             color: _typeColorMap[tt] || '#e74c3c',
             tankType: tt,
             hp: (tankMaxHpByType[tt] || 300),
@@ -1246,16 +1288,14 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     });
 
     // Spawn allies (friendly tanks on player team)
-    // Allies spawn from allySpawns or from empty positions
-    const allyPositions = (allySpawns && allySpawns.length > 0)
-        ? allySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
-        : [];
-    
-    const alliedTanks = allyPositions.map((pos, i) => {
+    // Allies spawn in remaining positions of the player team circle
+    const alliedTanks = (allySpawns && allySpawns.length > 0) ? allySpawns.map((spawn, i) => {
         // Random type for allied tanks
         const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
+        // Use the calculated team spawn positions (skip index 0 which is player)
+        const spawnPos = teamSpawnPositions[i + 1];
         return {
-            x: pos.x, y: pos.y, w: 38, h: 38,
+            x: spawnPos.x, y: spawnPos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#2ecc71',
             tankType: tt,
             hp: (tankMaxHpByType[tt] || 300),
@@ -1268,7 +1308,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
             paralyzed: false, paralyzedTime: 0,
             robotDroneCooldown: 0
         };
-    });
+    }) : [];
     
     // Add allied tanks to allies array (they fight alongside the player)
     allies = allies.concat(alliedTanks);
@@ -1815,9 +1855,9 @@ function showContainerRewards(rewards, index = 0) {
 
     // Update button text to indicate progress if multiple rewards
     if (rewards.length > 1) {
-        btn.textContent = isLast ? 'FINISH' : `NEXT REWARD (${index + 1}/${rewards.length})`;
+        btn.textContent = isLast ? 'ГОТОВО' : `СЛЕДУЮЩАЯ НАГРАДА (${index + 1}/${rewards.length})`;
     } else {
-        btn.textContent = 'CLAIM';
+        btn.textContent = 'ЗАБРАТЬ';
     }
     
     // Override button to show next reward
@@ -1985,6 +2025,10 @@ if (selectElectricTank) selectElectricTank.addEventListener('click', () => {
 const selectRobotTank = document.getElementById('selectRobotTank');
 if (selectRobotTank) selectRobotTank.addEventListener('click', () => {
     showTankDetail('robot');
+});
+const selectRomanTank = document.getElementById('selectRomanTank');
+if (selectRomanTank) selectRomanTank.addEventListener('click', () => {
+    showTankDetail('roman');
 });
 
 // По умолчанию показываем главное меню
@@ -2175,7 +2219,7 @@ function spawnTeamMode() {
     // clear around player spawn
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     // spawn one ally near player (use player's color)
-                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine'];
+                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine','roman'];
             const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
             allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
 
@@ -2185,7 +2229,7 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
             const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
@@ -2285,7 +2329,7 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman'];
     const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
 
     for (let i = 0; i < 7; i++) {
@@ -2795,7 +2839,7 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
@@ -2813,7 +2857,8 @@ const tankRarityMap = {
     'plasma': 'mythic',
     'electric': 'mythic',
     'time': 'imitator',
-    'imitator': 'imitator'
+    'imitator': 'imitator',
+    'roman': 'imitator'
 };
 
 const rarityChances = {
@@ -2883,7 +2928,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         titleColor = window.tankBgGradients[tankType][1]; 
     }
 
-    const defaultTitle = type === 'coins' ? 'COINS!' : type === 'gems' ? 'GEMS!' : type === 'parts' ? 'PARTS!' : 'NEW TANK!';
+    const defaultTitle = type === 'coins' ? 'МОНЕТЫ!' : type === 'gems' ? 'ГЕМЫ!' : type === 'parts' ? 'ДЕТАЛИ!' : 'НОВЫЙ ТАНК!';
     const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : type === 'parts' ? '🔧' : '🏆';
     const resolvedTitle = customTitle || defaultTitle;
     const resolvedIcon = customIcon || iconTextFallback;
@@ -2917,7 +2962,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         amountText.style.webkitTextFillColor = 'initial';
         amountText.style.textShadow = '';
         
-        descText.textContent = desc || 'A powerful new vehicle!';
+        descText.textContent = desc || 'Мощная новая боевая машина!';
         
         // Draw tank
         iconContainer.innerHTML = '';
@@ -2936,7 +2981,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
             rewardBox.style.boxShadow = ''; // restore default shadow from CSS
             
             // Only modify the CARD (square) background
-            if (tankType === 'time' || tankType === 'imitator') {
+            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
                // For imitator/Time, we need a CANVAS animation to match the menu exactly
                // The menu uses JS to draw pixelated rainbow. We can't easily reuse that code 
                // without refactoring, but we can copy the logic into a new helper or inline.
@@ -2991,7 +3036,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         
         const ctx = canvas.getContext('2d');
         if (typeof drawTankOn === 'function') {
-            if (tankType === 'time' || tankType === 'imitator') {
+            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
@@ -3027,7 +3072,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     } else {
         amountText.textContent = (typeof amount === 'number' ? '+' + amount : amount || '');
         amountText.style.color = titleColor;
-        descText.textContent = desc || (type === 'coins' ? 'Shiny gold coins!' : type === 'parts' ? 'Valuable parts!' : 'Rare currency!');
+        descText.textContent = desc || (type === 'coins' ? 'Блестящие золотые монеты!' : type === 'parts' ? 'Ценные запчасти!' : 'Редкая валюта!');
     }
 }
 
@@ -3055,8 +3100,8 @@ function unlockRandomTank(fromSuper = false, options = {}) {
         const comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
         gems += comp;
         saveProgress();
-        if (!suppressRewardModal) showReward('gems', comp, `Duplicate tank ${t.toUpperCase()} converted to Gems!`);
-        return { type: 'gems', amount: comp, desc: `Duplicate tank ${t.toUpperCase()} converted to Gems!`, icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', comp, `Дубликат танка ${t.toUpperCase()} конвертирован в Гемы!`);
+        return { type: 'gems', amount: comp, desc: `Дубликат танка ${t.toUpperCase()} конвертирован в Гемы!`, icon: '💎' };
     }
 }
 
@@ -3068,34 +3113,34 @@ function openMiniContainer(options = {}) {
     if (r < 60) { // 60% — coins (10–20)
         const val = getRandomInt(10, 20);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (10–20)');
-        return { type: 'coins', amount: val, desc: 'Coins (10–20)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (10–20)');
+        return { type: 'coins', amount: val, desc: 'Монеты (10–20)', icon: '💰' };
     } else if (r < 80) { // next 20% — gems (1–2)
         const val = getRandomInt(1, 2);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (1–2)');
-        return { type: 'gems', amount: val, desc: 'Gems (1–2)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–2)');
+        return { type: 'gems', amount: val, desc: 'Гемы (1–2)', icon: '💎' };
     } else if (r < 90) { // next 10% — coins (20–40)
         const val = getRandomInt(20, 40);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (20–40)');
-        return { type: 'coins', amount: val, desc: 'Coins (20–40)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (20–40)');
+        return { type: 'coins', amount: val, desc: 'Монеты (20–40)', icon: '💰' };
     } else if (r < 95) { // next 5% — gems (2–3)
         const val = getRandomInt(2, 3);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (2–3)');
-        return { type: 'gems', amount: val, desc: 'Gems (2–3)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (2–3)');
+        return { type: 'gems', amount: val, desc: 'Гемы (2–3)', icon: '💎' };
     } else if (r < 98) { // next 3% — coins (40–60)
         const val = getRandomInt(40, 60);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (40–60)');
-        return { type: 'coins', amount: val, desc: 'Coins (40–60)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (40–60)');
+        return { type: 'coins', amount: val, desc: 'Монеты (40–60)', icon: '💰' };
     }
     // remaining 2% — gems (3–5)
     const val = getRandomInt(3, 5);
     gems += val;
-    if (!suppressRewardModal) showReward('gems', val, 'Gems (3–5)');
-    return { type: 'gems', amount: val, desc: 'Gems (3–5)', icon: '💎' };
+    if (!suppressRewardModal) showReward('gems', val, 'Гемы (3–5)');
+    return { type: 'gems', amount: val, desc: 'Гемы (3–5)', icon: '💎' };
 }
 
 // Open normal container
@@ -3105,23 +3150,23 @@ function openContainer(options = {}) {
     if (r < 45) { // 45% — coins (20–60)
         const val = getRandomInt(20, 60);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (20–60)');
-        return { type: 'coins', amount: val, desc: 'Coins (20–60)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (20–60)');
+        return { type: 'coins', amount: val, desc: 'Монеты (20–60)', icon: '💰' };
     } else if (r < 75) { // next 30% — coins (60–120)
         const val = getRandomInt(60, 120);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (60–120)');
-        return { type: 'coins', amount: val, desc: 'Coins (60–120)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (60–120)');
+        return { type: 'coins', amount: val, desc: 'Монеты (60–120)', icon: '💰' };
     } else if (r < 90) { // next 15% — gems (1–3)
         const val = getRandomInt(1, 3);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (1–3)');
-        return { type: 'gems', amount: val, desc: 'Gems (1–3)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–3)');
+        return { type: 'gems', amount: val, desc: 'Гемы (1–3)', icon: '💎' };
     } else if (r < 95) { // next 5% — gems (3–6)
         const val = getRandomInt(3, 6);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (3–6)');
-        return { type: 'gems', amount: val, desc: 'Gems (3–6)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (3–6)');
+        return { type: 'gems', amount: val, desc: 'Гемы (3–6)', icon: '💎' };
     }
     return unlockRandomTankNew(false, { suppressRewardModal });
 }
@@ -3133,23 +3178,23 @@ function openSuperContainer(options = {}) {
     if (r < 35) { // 35% — coins (120–250)
         const val = getRandomInt(120, 250);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (120–250)');
-        return { type: 'coins', amount: val, desc: 'Coins (120–250)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (120–250)');
+        return { type: 'coins', amount: val, desc: 'Монеты (120–250)', icon: '💰' };
     } else if (r < 60) { // next 25% — coins (250–450)
         const val = getRandomInt(250, 450);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (250–450)');
-        return { type: 'coins', amount: val, desc: 'Coins (250–450)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–450)');
+        return { type: 'coins', amount: val, desc: 'Монеты (250–450)', icon: '💰' };
     } else if (r < 75) { // next 15% — gems (5–12)
         const val = getRandomInt(5, 12);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (5–12)');
-        return { type: 'gems', amount: val, desc: 'Gems (5–12)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (5–12)');
+        return { type: 'gems', amount: val, desc: 'Гемы (5–12)', icon: '💎' };
     } else if (r < 90) { // next 15% — gems (12–25)
         const val = getRandomInt(12, 25);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (12–25)');
-        return { type: 'gems', amount: val, desc: 'Gems (12–25)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (12–25)');
+        return { type: 'gems', amount: val, desc: 'Гемы (12–25)', icon: '💎' };
     }
     return unlockRandomTankNew(true, { suppressRewardModal });
 }
@@ -3166,31 +3211,31 @@ function openMechPartsContainer(options = {}) {
     if (r < 40) { // 40% — coins (50–100)
         const val = getRandomInt(50, 100);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (50–100)');
-        return { type: 'coins', amount: val, desc: 'Coins (50–100)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (50–100)');
+        return { type: 'coins', amount: val, desc: 'Монеты (50–100)', icon: '💰' };
     } else if (r < 70) { // next 30% — coins (200–300)
         const val = getRandomInt(200, 300);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (200–300)');
-        return { type: 'coins', amount: val, desc: 'Coins (200–300)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (200–300)');
+        return { type: 'coins', amount: val, desc: 'Монеты (200–300)', icon: '💰' };
     } else if (r < 85) { // next 15% — parts (80–100)
         const val = getRandomInt(80, 100);
         parts += val;
         localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Parts (80–100)');
-        return { type: 'parts', amount: val, desc: 'Parts (80–100)', icon: '🔧' };
+        if (!suppressRewardModal) showReward('parts', val, 'Детали (80–100)');
+        return { type: 'parts', amount: val, desc: 'Детали (80–100)', icon: '🔧' };
     } else if (r < 95) { // next 10% — parts (150–200)
         const val = getRandomInt(150, 200);
         parts += val;
         localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Parts (150–200)');
-        return { type: 'parts', amount: val, desc: 'Parts (150–200)', icon: '🔧' };
+        if (!suppressRewardModal) showReward('parts', val, 'Детали (150–200)');
+        return { type: 'parts', amount: val, desc: 'Детали (150–200)', icon: '🔧' };
     } else { // last 5% — parts (250–350)
         const val = getRandomInt(250, 350);
         parts += val;
         localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Parts (250–350)');
-        return { type: 'parts', amount: val, desc: 'Parts (250–350)', icon: '🔧' };
+        if (!suppressRewardModal) showReward('parts', val, 'Детали (250–350)');
+        return { type: 'parts', amount: val, desc: 'Детали (250–350)', icon: '🔧' };
     }
 }
 
@@ -3208,26 +3253,26 @@ function openOmegaContainer(options = {}) {
     if (r < 30) { // 30% coins small
         const val = getRandomInt(600, 1200);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (600–1200)');
-        return { type: 'coins', amount: val, desc: 'Coins (600–1200)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (600–1200)');
+        return { type: 'coins', amount: val, desc: 'Монеты (600–1200)', icon: '💰' };
     
     } else if (r < 50) { // 20% coins big (30 + 20 = 50)
         const val = getRandomInt(1200, 2000);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Coins (1200–2000)');
-        return { type: 'coins', amount: val, desc: 'Coins (1200–2000)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (1200–2000)');
+        return { type: 'coins', amount: val, desc: 'Монеты (1200–2000)', icon: '💰' };
     
     } else if (r < 70) { // 20% gems small (50 + 20 = 70)
         const val = getRandomInt(25, 50);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (25–50)');
-        return { type: 'gems', amount: val, desc: 'Gems (25–50)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (25–50)');
+        return { type: 'gems', amount: val, desc: 'Гемы (25–50)', icon: '💎' };
     
     } else if (r < 80) { // 10% gems big (70 + 10 = 80)
         const val = getRandomInt(50, 80);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Gems (50–80)');
-        return { type: 'gems', amount: val, desc: 'Gems (50–80)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (50–80)');
+        return { type: 'gems', amount: val, desc: 'Гемы (50–80)', icon: '💎' };
     
     } else { // Remaining 20% (80 -> 100) is Tank
         // Reuse unlockRandomTank but maybe prioritize unlocked ones? 
@@ -3664,7 +3709,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -3893,7 +3938,25 @@ function update() {
             }
         }
         if (tank.robotDroneCooldown > 0) tank.robotDroneCooldown--;
-        // Update autopilot ability timers
+        // Roman Tank: E key activates shield (50% dmg reduction for 4s, 10s cooldown)
+        if (tankType === 'roman') {
+            if (keys['KeyE'] && (!tank.romanShieldCooldown || tank.romanShieldCooldown <= 0) && !tank.romanShieldActive) {
+                tank.romanShieldActive = true;
+                tank.romanShieldTimer  = 240; // 4 seconds
+                tank.romanShieldCooldown = 600; // 10 seconds
+                // Shield activation particles
+                const cx = tank.x + tank.w/2, cy = tank.y + tank.h/2;
+                for (let p = 0; p < 20; p++) {
+                    spawnParticle(cx + (Math.random()-0.5)*55, cy + (Math.random()-0.5)*55, '#FFD700', 0.85);
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        if (tank.romanShieldActive) {
+            tank.romanShieldTimer--;
+            if (tank.romanShieldTimer <= 0) tank.romanShieldActive = false;
+        }
+        if (tank.romanShieldCooldown > 0) tank.romanShieldCooldown--;
         if (tank.isAutopilotActive) {
             tank.autoPilotTimer--;
             if (tank.autoPilotTimer <= 0) {
@@ -4355,14 +4418,16 @@ function updateShopButtonStyles() {
         'robot': 'selectRobotTank',
         'illuminat': 'selectIlluminatTank',
         'plasma': 'selectPlasmaTank',
-        'electric': 'selectElectricTank'
+        'electric': 'selectElectricTank',
+        'roman': 'selectRomanTank'
     };
     
     const tankRarityMap = {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
+        'roman': 'imitator'
     };
     
     Object.keys(tankButtonMap).forEach(tankType => {
@@ -4731,7 +4796,7 @@ function updateTankDetailButton(type) {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator'
     };
 
     // If player has enough gems, color the buy button by rarity
@@ -4888,9 +4953,9 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
     if (!unlockedTanks.includes(t)) {
         unlockedTanks.push(t);
         saveProgress();
-        if (!suppressRewardModal) showReward('tank', 1, `Unlocked ${rarityLabel} tank!`, t);
+        if (!suppressRewardModal) showReward('tank', 1, `Разблокирован ${tDesc}!`, t);
         updateTankDetailButton(t);
-        return { type: 'tank', tankType: t, desc: `${rarityLabel} Tank Unlocked!`, icon: '🚜', rarity: rarity };
+        return { type: 'tank', tankType: t, desc: `${tDesc} разблокирован!`, icon: '🚜', rarity: rarity };
     } else {
         const price = tankGemPrices[t] || 0;
         let comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
@@ -4900,8 +4965,8 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
 
         gems += comp;
         saveProgress();
-        if (!suppressRewardModal) showReward('gems', comp, `Duplicate ${rarityLabel} tank ${tDesc} converted to Gems!`);
-        return { type: 'gems', amount: comp, desc: `Duplicate ${rarityLabel} tank converted to Gems!`, icon: '💎', rarity: rarity };
+        if (!suppressRewardModal) showReward('gems', comp, `Дубликат ${tDesc} конвертирован в Гемы!`);
+        return { type: 'gems', amount: comp, desc: `Дубликат танка конвертирован в Гемы!`, icon: '💎', rarity: rarity };
     }
 }
 
