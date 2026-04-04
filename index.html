@@ -16,10 +16,10 @@
     <b>SPACE</b> — Выстрел<br>
     <b>E</b> — Спец. способность<br>
     <b>F5</b> — В главное меню<br>
-    <b>Coins: <span id="coinDisplay" class="currency-coin">0</span></b><br>
-    <b>Gems: <span id="gemDisplay" class="currency-gem">0</span></b><br>
-    <b>Parts: <span id="partDisplay" class="currency-part">0</span></b><br>
-    <b>Trophies: <span id="trophyDisplay" class="currency-trophy">0</span></b><br>
+    <b>Монеты: <span id="coinDisplay" class="currency-coin">0</span></b><br>
+    <b>Гемы: <span id="gemDisplay" class="currency-gem">0</span></b><br>
+    <b>Детали: <span id="partDisplay" class="currency-part">0</span></b><br>
+    <b>Трофеи: <span id="trophyDisplay" class="currency-trophy">0</span></b><br>
     <hr>
     <small>Сверху есть подсказки по игре и ниже отображаются ваши ресурсы.</small>
 </div>
@@ -212,6 +212,11 @@
 <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="imitatorTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
                 <button id="selectImitatorTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">Имитатор</button>
             </div>
+            <!-- ROMAN (хроматический: Римский танк) -->
+            <div style="text-align:center; width:180px;">
+<div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="romanTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
+                <button id="selectRomanTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">⚔️ Римский</button>
+            </div>
             
         </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
@@ -232,7 +237,8 @@
 <div id="tankDetailModal" class="modal-overlay">
     <div class="modal-box" style="width:560px; max-height:90vh; overflow-y:auto;">
         <h2 id="tankDetailTitle" class="modal-title">Танк</h2>
-        <p id="tankDetailRarity" style="margin:0 0 10px 0; font-size:20px; color:#f1c40f;">Редкость</p>
+        <p id="tankDetailRarity" style="margin:0 0 4px 0; font-size:20px; color:#f1c40f;">Редкость</p>
+        <div id="tankDetailTrio" style="margin:0 0 10px 0; display:none;"></div>
         <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:16px;">
             <canvas id="tankDetailCanvas" width="200" height="200" style="flex-shrink:0; border:2px solid #444; border-radius:8px;"></canvas>
             <div style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
@@ -267,13 +273,13 @@
 <!-- Reward Modal -->
 <div id="rewardModal" class="reward-overlay">
         <div class="reward-box">
-        <div class="reward-title" id="rewardTitle">YOU GOT!</div>
+        <div class="reward-title" id="rewardTitle">ВЫ ПОЛУЧИЛИ!</div>
             <div id="rewardIconContainer">
             <div class="reward-icon" id="rewardIcon">🏆</div>
         </div>
-        <div class="reward-amount" id="rewardAmount">+100 Coins</div>
-        <div class="reward-desc" id="rewardDesc">Basic reward</div>
-        <button class="reward-btn" id="rewardClaimBtn">CLAIM</button>
+        <div class="reward-amount" id="rewardAmount">+100 Монет</div>
+        <div class="reward-desc" id="rewardDesc">Базовая награда</div>
+        <button class="reward-btn" id="rewardClaimBtn">ЗАБРАТЬ</button>
     </div>
 </div>
 

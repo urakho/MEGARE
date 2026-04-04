@@ -8,6 +8,14 @@ function applyPlayerDamage(damage) {
     return damage;
 }
 
+// Apply Roman shield reduction to incoming damage received by the player
+function applyIncomingPlayerDamage(damage) {
+    if (typeof tank !== 'undefined' && tank.romanShieldActive) {
+        return Math.round(damage * 0.5);
+    }
+    return damage;
+}
+
 function checkRectCollision(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
@@ -368,6 +376,8 @@ function explodeRocket(bullet) {
         const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
         const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
         if (dist <= R) {
+            // Roman shield: full immunity to rocket splash
+            if (t === tank && t.romanShieldActive) return;
             const damage = Math.max(50, Math.round((1 - dist / R) * 300));
             t.hp = (t.hp || 0) - damage;
             if (t === tank && t.hp <= 0) {
@@ -908,6 +918,23 @@ function shoot() {
             });
         }
         tank.fireCooldown = 90; // 1.5s between mine placements
+    } else if (tankType === 'roman') {
+        // Throwing blade: 200 dmg, spins visually, ricochets 1 time
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 22,
+            y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 22,
+            w: 14, h: 14,
+            vx: Math.cos(tank.turretAngle) * 6.5,
+            vy: Math.sin(tank.turretAngle) * 6.5,
+            life: 130,
+            owner: 'player', team: 0,
+            type: 'romanBlade',
+            damage: 200,
+            bounces: 0,
+            maxBounces: 1,
+            spinAngle: 0
+        });
+        tank.fireCooldown = 65;
     } else {
         const speed = 5;
         const life = 100;
@@ -923,7 +950,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1064,7 +1091,7 @@ function updatePhysics() {
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
         // Check collision with objects (but toxic/megabomb/plasmaBlast/musical pass through standard logic differently)
         let hit = false;
-        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical' && b.type !== 'meteorMini') {
+        if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical' && b.type !== 'meteorMini' && b.type !== 'romanBlade') {
             for (const obj of objects) {
                 if (checkRectCollision(bRect, obj)) {
                     // Toxic/mega bombs pass through walls but explode on other objects
@@ -1146,7 +1173,43 @@ function updatePhysics() {
                 }
             }
         }
-        // Special handling for meteorMini: breaks walls, explodes in 40px radius on hit
+        // Special handling for romanBlade: 1 ricochet off walls, then removed
+        if (b.type === 'romanBlade') {
+            // Spin the blade visually
+            if (b.spinAngle !== undefined) b.spinAngle += 0.35;
+            for (let j = objects.length - 1; j >= 0; j--) {
+                const obj = objects[j];
+                if (checkRectCollision(bRect, obj)) {
+                    const bCenterX = b.x, bCenterY = b.y;
+                    const oCenterX = obj.x + obj.w/2, oCenterY = obj.y + obj.h/2;
+                    const overlapX = (b.w + obj.w)/2 - Math.abs(bCenterX - oCenterX);
+                    const overlapY = (b.h + obj.h)/2 - Math.abs(bCenterY - oCenterY);
+                    if (overlapX < overlapY) {
+                        b.vx = -b.vx;
+                        b.x += Math.sign(b.vx) * overlapX * 2;
+                    } else {
+                        b.vy = -b.vy;
+                        b.y += Math.sign(b.vy) * overlapY * 2;
+                    }
+                    b.bounces++;
+                    if (b.bounces > b.maxBounces) {
+                        bullets.splice(i, 1);
+                        hit = true;
+                    } else {
+                        // Golden spark particles on bounce
+                        for (let k = 0; k < 5; k++) spawnParticle(b.x, b.y, '#FFD700');
+                    }
+                    if (obj.type === 'box') {
+                        objects.splice(j, 1);
+                        for (let k = 0; k < 5; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                        navNeedsRebuild = true;
+                    } else if (obj.type === 'barrel') {
+                        explodeBarrel(obj);
+                    }
+                    break;
+                }
+            }
+        }
         if (b.type === 'meteorMini') {
             let mHit = false;
             for (let j = objects.length - 1; j >= 0; j--) {
@@ -1247,19 +1310,44 @@ function updatePhysics() {
                     tank.lastHitTime = Date.now();
                 }
 
+                // Roman shield: fully absorb all incoming bullets, zero damage
+                if (tank.romanShieldActive) {
+                    if (b.type === 'toxic' || b.type === 'megabomb') {
+                        // Pass-through bullets: block damage only, bullet keeps flying
+                    } else if (b.type === 'plasmaBlast') {
+                        b.hitEntities = b.hitEntities || [];
+                        if (!b.hitEntities.includes('player')) {
+                            b.hitEntities.push('player');
+                            for (let k = 0; k < 6; k++) spawnParticle(b.x, b.y, '#FFD700');
+                        }
+                    } else if (b.type === 'rocket' || b.type === 'smallRocket') {
+                        // Block rocket: small visual pop, no splash
+                        spawnExplosion(b.x, b.y, 22);
+                        for (let k = 0; k < 8; k++) spawnParticle(b.x, b.y, '#FFD700');
+                        bullets.splice(i, 1);
+                    } else {
+                        // All other bullets absorbed into the shield
+                        for (let k = 0; k < 6; k++) spawnParticle(b.x, b.y, '#FFD700');
+                        bullets.splice(i, 1);
+                    }
+                    continue;
+                }
+
+                const _romanShieldMult = 1.0; // shield handled above
+
                 if (b.type === 'rocket' || b.type === 'smallRocket') {
                     explodeRocket(b);
                     bullets.splice(i, 1);
                 } else if (b.type === 'toxic' || b.type === 'megabomb') {
                     // Toxic bombs only damage, don't stop or explode on contact
-                    tank.hp -= 50;
+                    tank.hp -= Math.round(50 * _romanShieldMult);
                     // continue flying, don't remove bullet
                 } else if (b.type === 'plasma') {
                     // Mirror tank resistance to plasma
                     if (tankType === 'mirror') {
-                         tank.hp -= 175; // Reduced damage (half)
+                         tank.hp -= Math.round(175 * _romanShieldMult); // Reduced damage (half)
                     } else {
-                         tank.hp -= b.damage || 350;
+                         tank.hp -= Math.round((b.damage || 350) * _romanShieldMult);
                     }
                     bullets.splice(i, 1); // Remove bullet on hit
                 } else if (b.type === 'plasmaBlast') {
@@ -1268,33 +1356,34 @@ function updatePhysics() {
                     b.hitEntities = b.hitEntities || [];
                     if (!b.hitEntities.includes('player')) {
                         if (tankType === 'mirror') {
-                            tank.hp -= 175; // Reduced damage (half)
+                            tank.hp -= Math.round(175 * _romanShieldMult); // Reduced damage (half)
                         } else {
-                            tank.hp -= b.damage || 350;
+                            tank.hp -= Math.round((b.damage || 350) * _romanShieldMult);
                         }
                         b.hitEntities.push('player');
                         // Do not remove bullet if it's meant to pierce, but ensure single hit
                     }
                 } else if (b.type === 'illuminat') {
                     // Illuminat beam: damage and disorient
-                    tank.hp -= b.damage || 0.5;
+                    tank.hp -= Math.round((b.damage || 0.5) * _romanShieldMult);
                     tank.disoriented = b.disorientTime || 36; // 0.6 seconds
                     bullets.splice(i, 1);
                 } else if (b.type === 'machinegun') {
                     // Machinegun: rapid fire with consistent damage
-                    tank.hp -= b.damage;
+                    tank.hp -= Math.round(b.damage * _romanShieldMult);
                     bullets.splice(i, 1);
                 } else if (b.type === 'railgun') {
                     // Railgun pierces player too — hit once then continue flying
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
-                        tank.hp -= b.damage || 75;
+                        tank.hp -= Math.round((b.damage || 75) * _romanShieldMult);
                         b.hitEntities.push('player');
                         for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
                     }
                     // Don't remove
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                     dmg = Math.round(dmg * _romanShieldMult);
                      tank.hp -= dmg;
                      if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
                      bullets.splice(i, 1);
