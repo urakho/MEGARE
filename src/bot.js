@@ -68,44 +68,6 @@ function steerAroundObstacles(entity, desiredAngle, dist) {
     return { angle: bestAng, dist: trimmedDist };
 }
 
-// Найти свободную точку рядом с (x,y) чтобы сущность не появлялась в стене
-function findFreeSpot(x, y, w, h, maxRadius = 200, step = 16) {
-    // clamp initial with margin from edges
-    const margin = 100;
-    x = Math.max(margin, Math.min(worldWidth - w - margin, x));
-    y = Math.max(margin, Math.min(worldHeight - h - margin, y));
-    // quick check
-    function collides(px, py) {
-        const rect = { x: px, y: py, w: w, h: h };
-        for (const o of objects) if (checkRectCollision(rect, o)) return true;
-        return false;
-    }
-    if (!collides(x, y)) return { x, y };
-    // search in expanding square/spiral
-    for (let r = step; r <= maxRadius; r += step) {
-        for (let dx = -r; dx <= r; dx += step) {
-            for (let dy of [-r, r]) {
-                const nx = Math.max(margin, Math.min(worldWidth - w - margin, x + dx));
-                const ny = Math.max(margin, Math.min(worldHeight - h - margin, y + dy));
-                if (!collides(nx, ny)) return { x: nx, y: ny };
-            }
-        }
-        for (let dy = -r + step; dy <= r - step; dy += step) {
-            for (let dx of [-r, r]) {
-                const nx = Math.max(margin, Math.min(worldWidth - w - margin, x + dx));
-                const ny = Math.max(margin, Math.min(worldHeight - h - margin, y + dy));
-                if (!collides(nx, ny)) return { x: nx, y: ny };
-            }
-        }
-    }
-    // fallback clamp
-    const fx = Math.max(margin, Math.min(worldWidth - w - margin, x));
-    const fy = Math.max(margin, Math.min(worldHeight - h - margin, y));
-    if (!collides(fx, fy)) return { x: fx, y: fy };
-    // if still collides, return null
-    return null;
-}
-
 // Проверяем, летят ли по сущности снаряды; если да — попробуем уклониться
 function tryDodgeIncoming(entity) {
     const ex = entity.x + (entity.w||0)/2; const ey = entity.y + (entity.h||0)/2;
@@ -1244,7 +1206,7 @@ function updateEnemyAI() {
                     life: 130,
                     owner: 'enemy', team: enemy.team,
                     type: 'romanBlade',
-                    damage: 200,
+                    damage: 125,
                     bounces: 0, maxBounces: 1, spinAngle: 0
                 };
             } else {
@@ -1644,7 +1606,7 @@ function updateAllyAI() {
                             life: 130,
                             owner: 'ally', team: ally.team,
                             type: 'romanBlade',
-                            damage: 200,
+                            damage: 125,
                             bounces: 0, maxBounces: 1, spinAngle: 0
                         };
                 }
@@ -1933,16 +1895,14 @@ function updateAllyAI() {
             // Death handling
             if (e.hp <= 0) {
                 if (e === tank) {
-                    if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
-                    else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+                    gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
                 } else {
-                    if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65); }
-                    else {
-                        const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); }
-                        const idxA = allies.indexOf(e); if (idxA !== -1) allies.splice(idxA, 1);
-                        spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
-                    }
+                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                    e.alive = false;
+                    const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); }
+                    const idxA = allies.indexOf(e); if (idxA !== -1) allies.splice(idxA, 1);
+                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                 }
             }
         }

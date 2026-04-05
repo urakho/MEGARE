@@ -329,12 +329,9 @@ function explodeBarrel(obj) {
             t.hp = (t.hp || 0) - damage;
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
-                if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
-                else { 
-                    gameState = 'lose'; 
-                    loseModeTrophies();
-                    syncResultOverlay('lose');
-                }
+                gameState = 'lose'; 
+                loseModeTrophies();
+                syncResultOverlay('lose');
             }
         }
     }
@@ -344,16 +341,14 @@ function explodeBarrel(obj) {
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i]; applyDamageToTank(a);
         if (a.hp <= 0) {
-            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65); }
-            else { allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65); }
+            allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65);
         }
     }
     // enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i]; applyDamageToTank(e);
         if (e.hp <= 0) {
-            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65); }
-            else { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65); }
+            enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
         }
     }
     // remove barrel object
@@ -382,12 +377,9 @@ function explodeRocket(bullet) {
             t.hp = (t.hp || 0) - damage;
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
-                if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
-                else { 
-                    gameState = 'lose'; 
-                    loseModeTrophies();
-                    syncResultOverlay('lose');
-                }
+                gameState = 'lose'; 
+                loseModeTrophies();
+                syncResultOverlay('lose');
             }
         }
     }
@@ -397,16 +389,14 @@ function explodeRocket(bullet) {
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i]; applyDamageToTank(a);
         if (a.hp <= 0) {
-            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65); }
-            else { allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65); }
+            allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65);
         }
     }
     // enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i]; applyDamageToTank(e);
         if (e.hp <= 0) {
-            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65); }
-            else { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65); }
+            enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
         }
     }
 }
@@ -919,7 +909,7 @@ function shoot() {
         }
         tank.fireCooldown = 90; // 1.5s between mine placements
     } else if (tankType === 'roman') {
-        // Throwing blade: 200 dmg, spins visually, ricochets 1 time
+        // Throwing blade: 125 dmg, spins visually, ricochets 1 time
         bullets.push({
             x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 22,
             y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 22,
@@ -929,7 +919,7 @@ function shoot() {
             life: 130,
             owner: 'player', team: 0,
             type: 'romanBlade',
-            damage: 200,
+            damage: 125,
             bounces: 0,
             maxBounces: 1,
             spinAngle: 0

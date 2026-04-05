@@ -3227,8 +3227,8 @@ function draw() {
             ctx.beginPath(); ctx.arc(b.x + r*0.4, b.y + r*0.2, r*0.15, 0, Math.PI*2); ctx.fill();
             
             if (Math.random() > 0.6) {
-                // Optimization: reduced particle spawn rate in war mode or if many particles
-                if (window.effectsEnabled !== false && (currentMode !== 'war' || particles.length < 150)) {
+                // Optimization: reduced particle spawn rate if many particles
+                if (window.effectsEnabled !== false && particles.length < 150) {
                     particles.push({
                        x: b.x, y: b.y, size: 2, color: '#76ff03', life: 0.5, vx: (Math.random()-0.5), vy: (Math.random()-0.5)
                     });
@@ -3281,7 +3281,7 @@ function draw() {
             ctx.fill();
             
             // Optimization: limit particle spawning here too
-            if (window.effectsEnabled !== false && Math.random() > 0.5 && (currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.5 && particles.length < 150) {
                 const px = (Math.random() - 0.5) * size;
                 const py = (Math.random() - 0.5) * size;
                 particles.push({
@@ -3325,7 +3325,7 @@ function draw() {
             ctx.restore();
             
             // Musical notes trail
-            if (window.effectsEnabled !== false && Math.random() > 0.8 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.8 && particles.length < 150) {
                  particles.push({
                    x: b.x - b.vx*2 + (Math.random()-0.5)*5, 
                    y: b.y - b.vy*2 + (Math.random()-0.5)*5, 
@@ -3487,7 +3487,7 @@ function draw() {
             ctx.restore();
             
             // Mystical particles
-            if (window.effectsEnabled !== false && Math.random() > 0.6 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.6 && particles.length < 150) {
                  particles.push({
                    x: b.x - b.vx*0.5 + (Math.random()-0.5)*4, 
                    y: b.y - b.vy*0.5 + (Math.random()-0.5)*4, 
@@ -3541,7 +3541,7 @@ function draw() {
             ctx.restore();
              
             // Trailing glittering shards (particles)
-            if (window.effectsEnabled !== false && Math.random() > 0.7 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.7 && particles.length < 150) {
                   particles.push({
                     x: b.x - b.vx*0.5 + (Math.random()-0.5)*2, 
                     y: b.y - b.vy*0.5 + (Math.random()-0.5)*2, 
@@ -3801,7 +3801,7 @@ function draw() {
             ctx.fill();
             
             // Healing particles (flying outward on pulse)
-            if (window.effectsEnabled !== false && Math.random() > 0.65 && (typeof currentMode === 'undefined' || currentMode !== 'war' || particles.length < 150)) {
+            if (window.effectsEnabled !== false && Math.random() > 0.65 && particles.length < 150) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 0.8 + Math.random() * 0.6;
                 particles.push({
@@ -5507,7 +5507,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 200
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage

@@ -346,6 +346,7 @@ b { color: #ffcc00; }
 .btn-secondary { background: linear-gradient(180deg,#b4b8bd,#95a5a6); box-shadow: 0 8px 0 rgba(127,140,141,0.9); }
 .btn-shop { background: linear-gradient(180deg,#5fb3ff,#3498db); box-shadow: 0 8px 0 rgba(41,128,185,0.9); }
 .btn-char { background: linear-gradient(180deg,#c48ce6,#9b59b6); box-shadow: 0 8px 0 rgba(142,68,173,0.9); }
+.btn-achievements { background: linear-gradient(180deg,#f9d06a,#e6a817); box-shadow: 0 8px 0 rgba(180,100,0,0.9); color: #1a1000; font-weight: bold; }
 .btn-news { background: linear-gradient(180deg,#f39c12,#e67e22); box-shadow: 0 8px 0 rgba(209,109,0,0.9); }
 .btn-news-small { background: linear-gradient(180deg,#f39c12,#e67e22); box-shadow: 0 6px 0 rgba(209,109,0,0.85); width:48px; height:48px; padding:0; display:inline-flex; align-items:center; justify-content:center; font-size:20px; border-radius:4px; }
 .btn-gold { background: linear-gradient(180deg,#ffe680,#f1c40f); box-shadow: 0 8px 0 rgba(211,84,0,0.9); color: #222; }
@@ -1478,4 +1479,131 @@ canvas.tank-display {
         width: 100% !important;
         height: auto !important;
     }
+}
+
+/* ── Achievement Cards ──────────────────────────────────── */
+.achievement-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f39c12;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 2px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(243,156,18,0.25);
+}
+.achievement-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 2px solid #2d3e52;
+    background: linear-gradient(135deg, #1e2d3d, #18232f);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.achievement-card.achievement-ready {
+    border-color: #f1c40f;
+    box-shadow: 0 0 16px rgba(241,196,15,0.28);
+    background: linear-gradient(135deg, #2b2000, #3a2c00);
+}
+.achievement-card.achievement-claimed {
+    opacity: 0.52;
+    border-color: #304050;
+}
+.achievement-card.achievement-locked {
+    opacity: 0.35;
+    filter: grayscale(60%);
+}
+.achievement-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+    width: 36px;
+    text-align: center;
+}
+.achievement-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.achievement-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e8edf2;
+}
+.achievement-desc {
+    font-size: 12px;
+    color: #8fa8bf;
+    line-height: 1.4;
+}
+.achievement-reward-label {
+    font-size: 11px;
+    color: #c49a3a;
+    margin-top: 2px;
+}
+.achievement-progress-wrap {
+    height: 7px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+.achievement-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #f39c12, #f1c40f);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+.achievement-progress-text {
+    font-size: 11px;
+    color: #a0bdd4;
+    margin-top: 2px;
+}
+.achievement-action {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+.achievement-claim-btn {
+    padding: 8px 16px;
+    background: linear-gradient(180deg, #f9d06a, #e6a817);
+    color: #1a1000;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 0 rgba(140,70,0,0.7);
+    transition: filter 0.15s, transform 0.1s;
+    white-space: nowrap;
+}
+.achievement-claim-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+.achievement-claim-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(140,70,0,0.7);
+}
+.achievement-status {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.achievement-status.claimed {
+    color: #2ecc71;
+    background: rgba(46,204,113,0.12);
+    border: 1px solid rgba(46,204,113,0.3);
+}
+.achievement-status.in-progress {
+    color: #8fa8bf;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.achievement-status.locked {
+    color: #4a5568;
+    font-size: 16px;
 }

@@ -10,19 +10,6 @@
 </head>
 <body>
 
-<div class="ui">
-    <b>WASD</b> — Ход танка<br>
-    <b>WHEEL</b> — Вращение башни<br>
-    <b>SPACE</b> — Выстрел<br>
-    <b>E</b> — Спец. способность<br>
-    <b>F5</b> — В главное меню<br>
-    <b>Монеты: <span id="coinDisplay" class="currency-coin">0</span></b><br>
-    <b>Гемы: <span id="gemDisplay" class="currency-gem">0</span></b><br>
-    <b>Детали: <span id="partDisplay" class="currency-part">0</span></b><br>
-    <b>Трофеи: <span id="trophyDisplay" class="currency-trophy">0</span></b><br>
-    <hr>
-    <small>Сверху есть подсказки по игре и ниже отображаются ваши ресурсы.</small>
-</div>
 <canvas id="gameCanvas"></canvas>
 
 <!-- Main menu overlay -->
@@ -36,7 +23,8 @@
             <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
         </div>
         <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:15px;">
-            <button id="trophyRoadBtn" class="btn btn-trophy" style="flex:1;">🏆 Трофейная дорога</button>
+            <button id="trophyRoadBtn" class="btn btn-trophy" style="flex:0.5;">🏆 Трофейная дорога</button>
+            <button id="achievementsBtn" class="btn btn-settings" title="Достижения" aria-label="Достижения">🏅</button>
             <button id="newsBadge" class="btn btn-settings" title="Новости" aria-label="Новости">📰</button>
             <button id="mapEditorMobileBtn" class="btn btn-settings" title="Редактор карт" aria-label="Редактор карт">🗺️</button>
             <button id="settingsBtn" class="btn btn-settings">⚙️</button>
@@ -254,6 +242,17 @@
             <button id="tankDetailClose" class="btn btn-secondary">Закрыть</button>
             <button id="tankDetailTry" class="btn btn-mode">⚔️ Испытать</button>
             <button id="tankDetailSelect" class="btn btn-primary">Выбрать</button>
+        </div>
+    </div>
+</div>
+
+<!-- Achievements Modal -->
+<div id="achievementsModal" class="modal-overlay">
+    <div class="modal-box" style="width:520px; max-height:82vh; display:flex; flex-direction:column;">
+        <h2 class="modal-title">🏅 ДОСТИЖЕНИЯ</h2>
+        <div id="achievementsList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px; padding-bottom:4px;"></div>
+        <div style="text-align:center; margin-top:14px; flex-shrink:0;">
+            <button id="achievementsModalClose" class="btn btn-secondary" style="min-width:140px;">Закрыть</button>
         </div>
     </div>
 </div>
