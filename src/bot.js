@@ -1725,6 +1725,7 @@ function updateAllyAI() {
                     const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
                     const dmg = 3 * unit.beamIntensity * _beamUpgMult;
                     e.hp -= dmg;
+                    e.hitFlashTime = Date.now();
                     // Apply strong disorientation/inversion + confusion so AI reacts
                     e.disoriented = Math.max(e.disoriented || 0, 60);
                     e.invertedControls = Math.max(e.invertedControls || 0, 120);
@@ -1860,6 +1861,7 @@ function updateAllyAI() {
             // Damage per frame (1.5/tick), boosted by upgrade if player
             const _wjMult = (isPlayer && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
             e.hp -= 1.5 * _wjMult;
+            e.hitFlashTime = Date.now();
             // Slow: brief recurring stun simulates medium slowdown
             e.paralyzed = true;
             e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);

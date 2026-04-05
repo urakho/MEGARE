@@ -192,6 +192,7 @@ window.tankBgGradients = tankBgGradients;
 // Preview canvas global access (defined in main.js, used here)
 
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null) {
+    if (!isFinite(cx) || !isFinite(cy) || !W || !H || !isFinite(W) || !isFinite(H)) return;
     ctx.save();
     ctx.translate(cx, cy);
 
@@ -2495,9 +2496,13 @@ function drawCharacterPreviews() {
         }
         
         if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === type) {
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            ctx.save();
+            ctx.shadowColor = '#f1c40f';
+            ctx.shadowBlur = 14;
+            ctx.strokeStyle = '#f1c40f';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+            ctx.restore();
         } else if (!isUnlocked) {
              // Рисуем замок
              ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -4369,6 +4374,21 @@ function draw() {
             ctx.restore();
         }
         drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated });
+        // Hit flash - radial impact burst
+        const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
+        if (_aFlashAge < 120) {
+            const _fa = 1 - _aFlashAge / 120;
+            const _ar = Math.max(a.w, a.h) * 0.75;
+            const _ag = ctx.createRadialGradient(0, 0, 0, 0, 0, _ar);
+            _ag.addColorStop(0,    `rgba(255,255,200,${(_fa * 0.95).toFixed(2)})`);
+            _ag.addColorStop(0.3,  `rgba(255,160,0,${(_fa * 0.7).toFixed(2)})`);
+            _ag.addColorStop(0.65, `rgba(255,40,0,${(_fa * 0.35).toFixed(2)})`);
+            _ag.addColorStop(1,    'rgba(255,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, _ar, 0, Math.PI * 2);
+            ctx.fillStyle = _ag;
+            ctx.fill();
+        }
         ctx.restore();
         if (a.frozenEffect && a.frozenEffect > 0) drawFrozenOverlay(ctx, a.x, a.y, a.w, a.h, a.frozenEffect);
         ctx.fillStyle = 'blue';
@@ -4673,6 +4693,21 @@ function draw() {
             const _drawColor = enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222');
             drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, enemy.tankType || 'normal', { heat: enemy.heat, overheated: enemy.overheated });
         }
+        // Hit flash - radial impact burst
+        const _eFlashAge = Date.now() - (enemy.hitFlashTime || 0);
+        if (_eFlashAge < 120) {
+            const _fa = 1 - _eFlashAge / 120;
+            const _er = Math.max(enemy.w, enemy.h) * 0.75;
+            const _eg = ctx.createRadialGradient(0, 0, 0, 0, 0, _er);
+            _eg.addColorStop(0,    `rgba(255,255,200,${(_fa * 0.95).toFixed(2)})`);
+            _eg.addColorStop(0.3,  `rgba(255,160,0,${(_fa * 0.7).toFixed(2)})`);
+            _eg.addColorStop(0.65, `rgba(255,40,0,${(_fa * 0.35).toFixed(2)})`);
+            _eg.addColorStop(1,    'rgba(255,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, _er, 0, Math.PI * 2);
+            ctx.fillStyle = _eg;
+            ctx.fill();
+        }
         // Boss phase 2 glow overlay is already baked into drawBossOn
         ctx.restore();
         if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
@@ -4740,6 +4775,22 @@ function draw() {
         }
 
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
+
+        // Hit flash overlay - radial impact burst, red-tinted for player
+        const _tFlashAge = Date.now() - (tank.hitFlashTime || 0);
+        if (_tFlashAge < 120) {
+            const _fa = 1 - _tFlashAge / 120;
+            const _tr = Math.max(tank.w, tank.h) * 0.75;
+            const _tg = ctx.createRadialGradient(0, 0, 0, 0, 0, _tr);
+            _tg.addColorStop(0,    `rgba(255,220,180,${(_fa * 0.95).toFixed(2)})`);
+            _tg.addColorStop(0.3,  `rgba(255,80,0,${(_fa * 0.8).toFixed(2)})`);
+            _tg.addColorStop(0.65, `rgba(200,0,0,${(_fa * 0.45).toFixed(2)})`);
+            _tg.addColorStop(1,    'rgba(150,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, _tr, 0, Math.PI * 2);
+            ctx.fillStyle = _tg;
+            ctx.fill();
+        }
 
         // Draw Roman Shield on top of tank body
         if (tankType === 'roman' && tank.romanShieldActive) {

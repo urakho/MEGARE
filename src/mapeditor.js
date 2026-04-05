@@ -451,7 +451,7 @@
             names.forEach(name => {
                 const map = maps[name];
                 const row = document.createElement('div');
-                row.style.cssText = 'display:flex;align-items:center;gap:8px;background:#334;padding:8px 12px;border-radius:8px;';
+                row.style.cssText = 'display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.4);padding:10px 12px;border-radius:8px;border:1px solid rgba(243,156,18,0.25);';
 
                 const info = document.createElement('span');
                 info.style.flex = '1';

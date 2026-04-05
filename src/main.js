@@ -6,7 +6,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 // Display size — fill the window
-const DISPLAY_W = window.innerWidth, DISPLAY_H = window.innerHeight;
+let DISPLAY_W = window.innerWidth, DISPLAY_H = window.innerHeight;
 canvas.width = DISPLAY_W;
 canvas.height = DISPLAY_H;
 canvas.style.width = '100vw';
@@ -1014,6 +1014,14 @@ const modeCancel = document.getElementById('modeCancel');
 const modeOneVsAll = document.getElementById('modeOneVsAll');
 
 function startGame(mode) {
+    // Recalculate canvas size for current orientation (handles portrait→landscape rotation before launch)
+    DISPLAY_W = window.innerWidth;
+    DISPLAY_H = window.innerHeight;
+    canvas.width = DISPLAY_W;
+    canvas.height = DISPLAY_H;
+    canvas.style.width = DISPLAY_W + 'px';
+    canvas.style.height = DISPLAY_H + 'px';
+
     // If imitator player died while transformed, restore the real tank type before any reset
     if (tank.imitatorActive && tank.originalTankType) {
         tankType = tank.originalTankType;
@@ -1237,6 +1245,12 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
     tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0;
     tank.romanShieldActive = false; tank.romanShieldTimer = 0; tank.romanShieldCooldown = 0;
+
+    // Recalculate canvas size for current orientation
+    DISPLAY_W = window.innerWidth;
+    DISPLAY_H = window.innerHeight;
+    canvas.style.width = DISPLAY_W + 'px';
+    canvas.style.height = DISPLAY_H + 'px';
 
     // World setup
     worldWidth  = worldW || 900;
@@ -4784,6 +4798,10 @@ window.setSelectedTank = function(selectedType) {
     console.log('Setting selected tank to: ' + selectedType);
     tankType = selectedType;
     localStorage.setItem('tankSelected', selectedType);
+    // Update selection highlight in char-grid
+    document.querySelectorAll('.char-grid > div').forEach(d => d.classList.remove('tank-selected'));
+    const _selPreview = document.getElementById(selectedType + 'TankPreview');
+    if (_selPreview) _selPreview.parentElement.classList.add('tank-selected');
     tankColor = '#0000FF';
     tank.color = tankColor;
 

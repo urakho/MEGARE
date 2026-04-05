@@ -36,7 +36,7 @@
             <!-- Preview column -->
             <div class="menu-preview">
                 <canvas id="previewCanvas" width="300" height="220" style="border-radius:14px;box-shadow:0 10px 50px rgba(0,0,0,0.8);width:min(420px,90%);height:auto;"></canvas>
-                <div id="previewLabel" style="margin-top:18px;font-size:22px;font-weight:700;color:#f1c40f;letter-spacing:1px;">Ваш танк</div>
+                <div id="previewLabel" style="margin-top:14px;font-size:18px;font-weight:700;color:#f1c40f;letter-spacing:2px;text-transform:uppercase;text-shadow:0 0 12px #f39c12,2px 2px 0 #000;">&#9654; Ваш танк</div>
             </div>
 
             <!-- Action buttons column -->
@@ -606,12 +606,12 @@
 
 <!-- My Maps popup -->
 <div id="meMapsModal" class="modal-overlay" style="display:none; z-index:400;">
-  <div class="modal-box" style="display:flex; flex-direction:column; gap:10px;">
-    <h2 class="modal-title">📂 Мои карты</h2>
+  <div class="modal-box me-maps-box">
+    <h2 class="modal-title">&#128194; Мои карты</h2>
     <div id="meMapsList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:60px;"></div>
-    <div style="display:flex; gap:8px;">
-      <label id="meMapsUploadBtn" class="btn btn-secondary" style="cursor:pointer; display:flex; align-items:center; justify-content:center; flex:1;">📥 Импортировать<input id="meFileInput" type="file" accept=".meg" style="display:none;"></label>
-      <button id="meMapsClose" class="btn btn-secondary" style="flex:1;">Закрыть</button>
+    <div style="display:flex; gap:8px; margin-top:4px;">
+      <label id="meMapsUploadBtn" class="btn me-btn me-btn-blue" style="cursor:pointer; display:flex; align-items:center; justify-content:center; flex:1;">&#128229; Импорт<input id="meFileInput" type="file" accept=".meg" style="display:none;"></label>
+      <button id="meMapsClose" class="btn me-btn me-btn-gray" style="flex:1;">Закрыть</button>
     </div>
   </div>
 </div>

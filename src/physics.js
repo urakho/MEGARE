@@ -437,6 +437,7 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
         if (dist <= R) {
             const damage = Math.max(1, Math.round((1 - dist / R) * coef));
             t.hp = (t.hp || 0) - damage;
+            t.hitFlashTime = Date.now();
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x+t.w/2, t.y+t.h/2, 70);
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
@@ -1378,6 +1379,7 @@ function updatePhysics() {
                      if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
                      bullets.splice(i, 1);
                 }
+                tank.hitFlashTime = Date.now();
                 if (tank.hp <= 0) {
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
                     if (currentMode === 'war') {
@@ -1626,6 +1628,7 @@ function updatePhysics() {
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         bullets.splice(i, 1);
                     }
+                    e.hitFlashTime = Date.now();
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
                             e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
