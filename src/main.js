@@ -1,14 +1,19 @@
-/**
+﻿/**
  * КЛАССИЧЕСКИЕ ТАНКИ С ПРОЦЕДУРНЫМИ СТЕНАМИ
  * Логика: Генерация длинных препятствий с проверкой путей
  */
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-// Display size (canvas kept reasonable for performance)
-const DISPLAY_W = 900, DISPLAY_H = 700;
+// Display size — fill the window
+const DISPLAY_W = window.innerWidth, DISPLAY_H = window.innerHeight;
 canvas.width = DISPLAY_W;
 canvas.height = DISPLAY_H;
+canvas.style.width = '100vw';
+canvas.style.height = '100vh';
+canvas.style.position = 'fixed';
+canvas.style.top = '0';
+canvas.style.left = '0';
 // World size (can be larger than display for big maps like War)
 let worldWidth = DISPLAY_W, worldHeight = DISPLAY_H;
 
@@ -81,8 +86,7 @@ let navCols = 0, navRows = 0, navCell = 25;
 // Размер агента, используемый при построении безопасных ячеек
 let navAgentW = 38, navAgentH = 38;
 let navNeedsRebuild = true;
-// War mode team spawn centers (filled by spawnWarMode)
-let warTeamSpawns = [];
+
 // Boss Fight mode: active meteors array
 let bossMeteors = [];
 let leaderHuntLeader = null; // kept for legacy compatibility
@@ -311,7 +315,7 @@ const tankMaxHpByType = {
     'robot': 450,
     'medical': 275,
     'mine': 350,
-    'roman': 400,
+    'roman': 350,
     'boss_hell': 7500
 };
 
@@ -352,6 +356,44 @@ function setTankSpeed(type) {
     const speed = parseFloat((base + bonus).toFixed(2));
     tank.speed = speed;
     return speed;
+}
+
+// Find free spot for spawning units (checks collision with objects and tanks)
+function findFreeSpot(x, y, w, h, maxRadius = 200, step = 16) {
+    // clamp initial with margin from edges
+    const margin = 100;
+    x = Math.max(margin, Math.min(worldWidth - w - margin, x));
+    y = Math.max(margin, Math.min(worldHeight - h - margin, y));
+    // quick check
+    function collides(px, py) {
+        const rect = { x: px, y: py, w: w, h: h };
+        for (const o of objects) if (checkRectCollision(rect, o)) return true;
+        return false;
+    }
+    if (!collides(x, y)) return { x, y };
+    // search in expanding square/spiral
+    for (let r = step; r <= maxRadius; r += step) {
+        for (let dx = -r; dx <= r; dx += step) {
+            for (let dy of [-r, r]) {
+                const nx = Math.max(margin, Math.min(worldWidth - w - margin, x + dx));
+                const ny = Math.max(margin, Math.min(worldHeight - h - margin, y + dy));
+                if (!collides(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+        for (let dy = -r + step; dy <= r - step; dy += step) {
+            for (let dx of [-r, r]) {
+                const nx = Math.max(margin, Math.min(worldWidth - w - margin, x + dx));
+                const ny = Math.max(margin, Math.min(worldHeight - h - margin, y + dy));
+                if (!collides(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+    }
+    // fallback clamp
+    const fx = Math.max(margin, Math.min(worldWidth - w - margin, x));
+    const fy = Math.max(margin, Math.min(worldHeight - h - margin, y));
+    if (!collides(fx, fy)) return { x: fx, y: fy };
+    // if still collides, return null
+    return null;
 }
 
 const tank = {
@@ -5079,7 +5121,8 @@ window.confirmChoice = function() {
         return;
     }
 
-    // Persist the player's choice for later reference (e.g., chromatic reward at 1600)
+
+// Persist the player's choice for later reference (e.g., chromatic reward at 1600)
     if (choiceRewardData && typeof choiceRewardData.trophies !== 'undefined') {
         try { localStorage.setItem('trophyChoice_' + choiceRewardData.trophies, chosenOption); } catch (e) {}
     }
@@ -5106,3 +5149,230 @@ window.confirmChoice = function() {
     document.getElementById('choiceModal').style.display = 'none';
     generateTrophyRoad();
 }
+
+// ── ACHIEVEMENTS SYSTEM (top-level) ──────────────────────────────────────────
+const ACHIEVEMENT_DEFS = [
+    // Wins group (sequential): only active after the previous step is claimed
+    { id: 'wins_1', group: 'wins', step: 0, name: 'Новичок',      desc: 'Победи в боях 10 раз',   winsNeeded: 10,  icon: '🏅', reward: { type: 'mini',   count: 1 }, rewardDesc: '1 мини-контейнер' },
+    { id: 'wins_2', group: 'wins', step: 1, name: 'Освоившийся',  desc: 'Победи в боях 20 раз',   winsNeeded: 20,  icon: '🏅', reward: { type: 'mini',   count: 2 }, rewardDesc: '2 мини-контейнера' },
+    { id: 'wins_3', group: 'wins', step: 2, name: 'Профессионал', desc: 'Победи в боях 50 раз',   winsNeeded: 50,  icon: '🥈', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'wins_4', group: 'wins', step: 3, name: 'Мастер',       desc: 'Победи в боях 100 раз',  winsNeeded: 100, icon: '🥇', reward: { type: 'normal', count: 2 }, rewardDesc: '2 контейнера' },
+    { id: 'wins_5', group: 'wins', step: 4, name: 'Чемпион',      desc: 'Победи в боях 200 раз',  winsNeeded: 200, icon: '🏆', reward: { type: 'super',  count: 1 }, rewardDesc: '1 супер-контейнер' },
+    // Any trio
+    { id: 'any_trio',     group: 'trio', name: 'Коллекционер',      desc: 'Собери полное трио из любых 3 танков одной группы', icon: '🧩', trioMembers: null,                           reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    // Specific trio achievements
+    { id: 'trio_techno',  group: 'trio', name: 'Техно-трио',        desc: 'Собери: Электрический + Робот + Плазма',            icon: '⚡', trioMembers: ['electric','robot','plasma'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_fire',    group: 'trio', name: 'Огневое трио',      desc: 'Собери: Дробовик + Пулемёт + Огнемёт',             icon: '🔥', trioMembers: ['buckshot','machinegun','fire'], reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_tactic',  group: 'trio', name: 'Тактическое трио',  desc: 'Собери: Роман + Временной + Имитатор',             icon: '🏛', trioMembers: ['roman','time','imitator'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_base',    group: 'trio', name: 'Базовое трио',      desc: 'Собери: Обычный + Ледяной + Водомёт',              icon: '🛡️', trioMembers: ['normal','ice','waterjet'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_control', group: 'trio', name: 'Контролирующее трио', desc: 'Собери: Мина + Буратино + Токсик',               icon: '☢️', trioMembers: ['mine','buratino','toxic'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_support', group: 'trio', name: 'Поддерживающее трио', desc: 'Собери: Музыкальный + Медик + Зеркало',          icon: '💫', trioMembers: ['musical','medical','mirror'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+];
+
+let achievementData = (function() {
+    try { return JSON.parse(localStorage.getItem('achievementData') || '{}'); } catch(e) { return {}; }
+})();
+
+function saveAchievements() {
+    try { localStorage.setItem('achievementData', JSON.stringify(achievementData)); } catch(e) {}
+}
+
+function checkAchievements() {
+    if (!achievementData.totalWins) achievementData.totalWins = 0;
+    if (!achievementData.claimed)   achievementData.claimed   = {};
+    if (!achievementData.completed) achievementData.completed = {};
+
+    const wins     = achievementData.totalWins;
+    const claimed  = achievementData.claimed;
+    const completed = achievementData.completed;
+
+    // Wins group: a step completes only after all previous steps are claimed
+    const winsGroup = ACHIEVEMENT_DEFS.filter(a => a.group === 'wins');
+    for (const a of winsGroup) {
+        if (completed[a.id]) continue;
+        const prevsClaimed = winsGroup.filter(p => p.step < a.step).every(p => claimed[p.id]);
+        if (prevsClaimed && wins >= a.winsNeeded) {
+            completed[a.id] = true;
+        }
+    }
+
+    // Trio achievements
+    const unlocked = (typeof unlockedTanks !== 'undefined') ? unlockedTanks : [];
+    const allTrioSets = [
+        ['electric','robot','plasma'],
+        ['buckshot','machinegun','fire'],
+        ['roman','time','imitator'],
+        ['normal','ice','waterjet'],
+        ['mine','buratino','toxic'],
+        ['musical','medical','mirror'],
+    ];
+    // any_trio
+    if (!completed['any_trio'] && allTrioSets.some(m => m.every(t => unlocked.includes(t)))) {
+        completed['any_trio'] = true;
+    }
+    // specific trios
+    for (const a of ACHIEVEMENT_DEFS.filter(d => d.group === 'trio' && d.trioMembers)) {
+        if (!completed[a.id] && a.trioMembers.every(t => unlocked.includes(t))) {
+            completed[a.id] = true;
+        }
+    }
+
+    achievementData.completed = completed;
+    saveAchievements();
+}
+
+// Called from win-lose.js after every battle win
+window.onBattleWin = function() {
+    if (!achievementData.totalWins) achievementData.totalWins = 0;
+    achievementData.totalWins++;
+    checkAchievements();
+    saveAchievements();
+};
+
+window.claimAchievement = function(id) {
+    checkAchievements();
+    if (!achievementData.completed || !achievementData.completed[id]) return;
+    if (achievementData.claimed && achievementData.claimed[id]) return;
+
+    const def = ACHIEVEMENT_DEFS.find(a => a.id === id);
+    if (!def) return;
+
+    achievementData.claimed[id] = true;
+    saveAchievements();
+
+    // Grant rewards — show full container flow animation for each container
+    // mini=мини, normal=bronze(обычный), super=legendary(супер/легендарный)
+    const contTypeMap = { mini: 'mini', normal: 'bronze', super: 'legendary' };
+    const flowType = contTypeMap[def.reward.type] || 'mini';
+    for (let i = 0; i < def.reward.count; i++) {
+        showFreeContainerFlow(flowType);
+    }
+
+    // Re-render
+    renderAchievementsModal();
+};
+
+function getActiveWinsStep() {
+    // Returns the step index of the first unclaimed wins achievement, or null if all done
+    for (const a of ACHIEVEMENT_DEFS.filter(x => x.group === 'wins')) {
+        if (!achievementData.claimed || !achievementData.claimed[a.id]) return a.step;
+    }
+    return null;
+}
+
+function buildAchievementCard(a, wins, claimed, completed, activeWinsStep) {
+    const isClaimed   = !!(claimed && claimed[a.id]);
+    const isCompleted = !!(completed && completed[a.id]);
+
+    let isLocked  = false;
+    let isCurrent = false;
+    if (a.group === 'wins') {
+        if (a.step < activeWinsStep)       { /* past & claimed — handled via isClaimed */ }
+        else if (a.step === activeWinsStep) { isCurrent = true; }
+        else                               { isLocked = true; }
+        // If activeWinsStep is null (all claimed), all steps are isClaimed
+    }
+
+    const card = document.createElement('div');
+    const cls = ['achievement-card'];
+    if (isClaimed)                      cls.push('achievement-claimed');
+    else if (isLocked)                  cls.push('achievement-locked');
+    else if (isCompleted)               cls.push('achievement-ready');
+    card.className = cls.join(' ');
+
+    // Progress HTML (only for wins group, active step)
+    let progressHtml = '';
+    if (a.group === 'wins') {
+        const target = a.winsNeeded;
+        const cur    = Math.min(wins, target);
+        const pct    = Math.round((cur / target) * 100);
+        if (isCurrent && !isCompleted) {
+            progressHtml = `
+                <div class="achievement-progress-wrap"><div class="achievement-progress-bar" style="width:${pct}%"></div></div>
+                <div class="achievement-progress-text">${cur} / ${target} побед</div>`;
+        } else if (isCompleted && !isClaimed) {
+            progressHtml = `<div class="achievement-progress-text" style="color:#f1c40f;">✔ Условие выполнено!</div>`;
+        } else if (isLocked) {
+            progressHtml = `<div class="achievement-progress-text">0 / ${target} побед</div>`;
+        }
+    }
+
+    // Action HTML
+    let actionHtml;
+    if (isClaimed) {
+        actionHtml = `<div class="achievement-status claimed">✔ Получено</div>`;
+    } else if (isCompleted && !isLocked) {
+        actionHtml = `<button class="achievement-claim-btn" onclick="claimAchievement('${a.id}')">Получить</button>`;
+    } else if (isLocked) {
+        actionHtml = `<div class="achievement-status locked">🔒</div>`;
+    } else {
+        actionHtml = `<div class="achievement-status in-progress">В процессе</div>`;
+    }
+
+    card.innerHTML = `
+        <div class="achievement-icon">${a.icon}</div>
+        <div class="achievement-body">
+            <div class="achievement-name">${a.name}</div>
+            <div class="achievement-desc">${a.desc}</div>
+            ${progressHtml}
+            <div class="achievement-reward-label">Награда: ${a.rewardDesc}</div>
+        </div>
+        <div class="achievement-action">${actionHtml}</div>`;
+
+    return card;
+}
+
+function renderAchievementsModal() {
+    const container = document.getElementById('achievementsList');
+    if (!container) return;
+
+    checkAchievements();
+    const wins           = achievementData.totalWins || 0;
+    const claimed        = achievementData.claimed   || {};
+    const completed      = achievementData.completed || {};
+    const activeWinsStep = getActiveWinsStep();
+
+    container.innerHTML = '';
+
+    // Section: Wins group
+    const winsTitle = document.createElement('div');
+    winsTitle.className = 'achievement-section-title';
+    winsTitle.textContent = '⚔️ Победы в боях';
+    container.appendChild(winsTitle);
+
+    const winsGroup = ACHIEVEMENT_DEFS.filter(a => a.group === 'wins');
+    for (const a of winsGroup) {
+        container.appendChild(buildAchievementCard(a, wins, claimed, completed, activeWinsStep));
+    }
+
+    // Section: Trio achievements
+    const trioTitle = document.createElement('div');
+    trioTitle.className = 'achievement-section-title';
+    trioTitle.style.marginTop = '16px';
+    trioTitle.textContent = '🧩 Сбор трио';
+    container.appendChild(trioTitle);
+
+    const trioAchievements = ACHIEVEMENT_DEFS.filter(a => a.group === 'trio');
+    for (const a of trioAchievements) {
+        container.appendChild(buildAchievementCard(a, wins, claimed, completed, null));
+    }
+}
+
+function openAchievementsModal() {
+    const modal = document.getElementById('achievementsModal');
+    if (!modal) return;
+    renderAchievementsModal();
+    modal.style.display = 'flex';
+}
+
+// Init on page load
+checkAchievements();
+
+const achievementsBtn = document.getElementById('achievementsBtn');
+if (achievementsBtn) achievementsBtn.addEventListener('click', openAchievementsModal);
+
+const achievementsModalClose = document.getElementById('achievementsModalClose');
+if (achievementsModalClose) achievementsModalClose.addEventListener('click', () => {
+    const modal = document.getElementById('achievementsModal');
+    if (modal) modal.style.display = 'none';
+});

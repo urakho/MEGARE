@@ -10,52 +10,61 @@
 </head>
 <body>
 
-<div class="ui">
-    <b>WASD</b> — Ход танка<br>
-    <b>WHEEL</b> — Вращение башни<br>
-    <b>SPACE</b> — Выстрел<br>
-    <b>E</b> — Спец. способность<br>
-    <b>F5</b> — В главное меню<br>
-    <b>Монеты: <span id="coinDisplay" class="currency-coin">0</span></b><br>
-    <b>Гемы: <span id="gemDisplay" class="currency-gem">0</span></b><br>
-    <b>Детали: <span id="partDisplay" class="currency-part">0</span></b><br>
-    <b>Трофеи: <span id="trophyDisplay" class="currency-trophy">0</span></b><br>
-    <hr>
-    <small>Сверху есть подсказки по игре и ниже отображаются ваши ресурсы.</small>
-</div>
 <canvas id="gameCanvas"></canvas>
+
+<!-- Animated particle background for all modals -->
+<canvas id="bgParticleCanvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9;background:transparent;"></canvas>
 
 <!-- Main menu overlay -->
 <div id="mainMenu" class="modal-overlay" style="display:flex;">
-    <div class="modal-box" style="width:440px;">
-        <h1 class="modal-title">Главное меню</h1>
-        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
-            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
-            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
-            <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+    <div class="modal-box">
+
+        <!-- Top header: MEGARE title + currencies, spanning full width -->
+        <div class="menu-header">
+            <h1 class="megare-title">MEGARE</h1>
+            <div class="menu-currency">
+                <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
+                <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
+                <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
+                <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+            </div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:15px;">
-            <button id="trophyRoadBtn" class="btn btn-trophy" style="flex:1;">🏆 Трофейная дорога</button>
-            <button id="newsBadge" class="btn btn-settings" title="Новости" aria-label="Новости">📰</button>
-            <button id="mapEditorMobileBtn" class="btn btn-settings" title="Редактор карт" aria-label="Редактор карт">🗺️</button>
-            <button id="settingsBtn" class="btn btn-settings">⚙️</button>
-            <button id="cmdBtn" class="btn btn-settings" title="Командная строка">/</button>
-        </div>
-        <div id="previewWrap" style="display:flex;flex-direction:column;align-items:center;">
-            <canvas id="previewCanvas" width="200" height="150"></canvas>
-            <div id="previewLabel" style="margin-top:10px; font-size:16px; font-weight:600;">Ваш танк</div>
-        </div>
-        <button id="startBtn" class="btn btn-primary" style="margin-top:16px;">START</button>
-        <button id="shopBtn" class="btn btn-shop" style="margin-top:8px;">Магазин</button>
-        <button id="characterBtn" class="btn btn-char" style="margin-top:8px;">Персонажи</button>
-        <button id="mapEditorBtn" class="btn btn-mapeditor" style="margin-top:8px;">🗺️ Редактор карт</button>
+
+        <!-- Body row: preview | action buttons | utility sidebar -->
+        <div class="menu-body">
+
+            <!-- Preview column -->
+            <div class="menu-preview">
+                <canvas id="previewCanvas" width="300" height="220" style="border-radius:14px;box-shadow:0 10px 50px rgba(0,0,0,0.8);width:min(420px,90%);height:auto;"></canvas>
+                <div id="previewLabel" style="margin-top:18px;font-size:22px;font-weight:700;color:#f1c40f;letter-spacing:1px;">Ваш танк</div>
+            </div>
+
+            <!-- Action buttons column -->
+            <div class="menu-actions">
+                <button id="startBtn" class="btn btn-start" style="width:100%;margin:0;">▶ START</button>
+                <button id="shopBtn" class="btn btn-game-shop" style="width:100%;margin:0;">🛒 Магазин</button>
+                <button id="characterBtn" class="btn btn-game-char" style="width:100%;margin:0;">👤 Персонажи</button>
+            </div>
+
+            <!-- Right utility sidebar -->
+            <div class="menu-sidebar">
+                <button id="settingsBtn" class="btn btn-sidebar" title="Настройки" style="margin:0;">⚙️</button>
+                <button id="achievementsBtn" class="btn btn-sidebar" title="Достижения" aria-label="Достижения" style="margin:0;">🏅</button>
+                <button id="newsBadge" class="btn btn-sidebar" title="Новости" aria-label="Новости" style="margin:0;">📰</button>
+                <button id="trophyRoadBtn" class="btn btn-sidebar btn-trophy" title="Трофейная дорога" style="margin:0;font-size:20px;">🏆</button>
+                <button id="mapEditorMobileBtn" class="btn btn-sidebar" title="Редактор карт" aria-label="Редактор карт" style="margin:0;">🗺️</button>
+                <button id="mapEditorBtn" class="btn btn-sidebar" title="Редактор карт (ПК)" style="margin:0;">✏️</button>
+                <div style="flex:1;"></div>
+                <button id="cmdBtn" class="btn btn-sidebar" title="Командная строка" style="margin:0;">/</button>
+            </div>
+
+        </div><!-- /menu-body -->
     </div>
 </div>
 
 <!-- Mode selection modal (hidden by default) -->
 <div id="modeModal" class="modal-overlay">
-    <div class="modal-box" style="width:520px;">
+    <div class="modal-box">
         <h2 class="modal-title">Выберите режим</h2>
         <div style="display:flex; flex-direction:column; gap:12px; align-items:center;">
             <button id="modeSingle" class="btn btn-mode" style="width:80%;">Одиночный режим</button>
@@ -70,7 +79,7 @@
 
 <!-- Shop modal (hidden by default) -->
 <div id="shopModal" class="modal-overlay">
-    <div class="modal-box" style="width:600px;">
+    <div class="modal-box">
         <h2 class="modal-title">🛒 Магазин</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
@@ -119,105 +128,97 @@
 
 <!-- Character modal (hidden by default) -->
 <div id="characterModal" class="modal-overlay">
-    <div class="modal-box" style="width:700px;">
+    <div class="modal-box">
         <h2 class="modal-title">👤 Персонажи</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
             <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
             </div>
-        <div style="display:flex; flex-direction:row; flex-wrap:wrap; gap:20px; align-items:center; justify-content:center; max-height:400px; overflow-y:auto;">
-            <div style="text-align:center; width:180px;">
+        <div class="char-grid">
+            <!-- COMMON -->
+            <div>
                 <canvas id="normalTankPreview" width="150" height="150" style="border:2px solid #e74c3c; border-radius:8px;"></canvas>
                 <button id="selectNormalTank" class="btn btn-primary">Обычный</button>
             </div>
-            <!-- RARE (редкие) -->
-            <div style="text-align:center; width:180px;">
+            <!-- RARE -->
+            <div>
                 <canvas id="iceTankPreview" width="150" height="150" style="border:2px solid #2ecc71; border-radius:8px;"></canvas>
                 <button id="selectIceTank" class="btn btn-mode">Ледяной</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="machinegunTankPreview" width="150" height="150" style="border:2px solid #2ecc71; border-radius:8px;"></canvas>
                 <button id="selectMachinegunTank" class="btn btn-mode">Пулемётчик</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="buckshotTankPreview" width="150" height="150" style="border:2px solid #2ecc71; border-radius:8px;"></canvas>
                 <button id="selectBuckshotTank" class="btn btn-mode">Дробовой</button>
             </div>
-            <!-- SUPER RARE (сверхредкие) -->
-            <div style="text-align:center; width:180px;">
+            <!-- SUPER RARE -->
+            <div>
                 <canvas id="fireTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
                 <button id="selectFireTank" class="btn btn-shop">Огнемётчик</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="waterjetTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
                 <button id="selectWaterjetTank" class="btn btn-shop">Водомётчик</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="mineTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
                 <button id="selectMineTank" class="btn btn-shop">Минный</button>
             </div>
-            <!-- EPIC (эпические) -->
-            <div style="text-align:center; width:180px;">
+            <!-- EPIC -->
+            <div>
                 <canvas id="buratinoTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
                 <button id="selectBuratinoTank" class="btn btn-char">Буратино</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="musicalTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
                 <button id="selectMusicalTank" class="btn btn-char">Музыкальный</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="medicalTankPreview" width="150" height="150" style="border:2px solid #9b59b6; border-radius:8px;"></canvas>
                 <button id="selectMedicalTank" class="btn btn-char">Медицинский</button>
             </div>
-            <!-- LEGENDARY (легендарные) -->
-            <div style="text-align:center; width:180px;">
+            <!-- LEGENDARY -->
+            <div>
                 <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
                 <button id="selectToxicTank" class="btn btn-gold">Отравляющий</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="mirrorTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
                 <button id="selectMirrorTank" class="btn btn-gold">Зеркальный</button>
             </div>
-            <!-- ROBOT (легендарный: Танк-робот) -->
-            <div style="text-align:center; width:180px;">
-                <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(135deg,#fff9c4,#fff176); border-radius:11px;">
-                    <canvas id="robotTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block; background:#0d0d1e;"></canvas>
-                </div>
+            <div>
+                <canvas id="robotTankPreview" width="150" height="150" style="border:3px solid #fff176; border-radius:8px; background:#0d0d1e;"></canvas>
                 <button id="selectRobotTank" class="btn btn-gold">Танк-робот</button>
             </div>
-            <!-- MYTHIC (мифические) -->
-            <div style="text-align:center; width:180px;">
+            <!-- MYTHIC -->
+            <div>
                 <canvas id="illuminatTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
                 <button id="selectIlluminatTank" class="btn btn-blood">👁 Иллюминат</button>
             </div>
-            <div style="text-align:center; width:180px;">
+            <div>
                 <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
                 <button id="selectPlasmaTank" class="btn btn-blood">Плазменный</button>
             </div>
-            <!-- ELECTRIC (мифический: Электрический) -->
-            <div style="text-align:center; width:180px;">
-                <div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(135deg,#ff6b6b,#e74c3c); border-radius:11px;">
-                    <canvas id="electricTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block; background:#1a1a2e;"></canvas>
-                </div>
-                <button id="selectElectricTank" class="btn btn-blood" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; border: none;">Электрический</button>
+            <div>
+                <canvas id="electricTankPreview" width="150" height="150" style="border:3px solid #e74c3c; border-radius:8px; background:#1a1a2e;"></canvas>
+                <button id="selectElectricTank" class="btn btn-blood">Электрический</button>
             </div>
-            
-            <!-- CHROMATIC (хроматическая) -->
-            <div style="text-align:center; width:180px;">
-<div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="timeTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
-                <button id="selectTimeTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">⏳ Временной</button>
+            <!-- CHROMATIC -->
+            <div>
+                <canvas id="timeTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
+                <button id="selectTimeTank" class="btn btn-rainbow">⏳ Временной</button>
             </div>
-            <div style="text-align:center; width:180px;">
-<div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="imitatorTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
-                <button id="selectImitatorTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">Имитатор</button>
+            <div>
+                <canvas id="imitatorTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
+                <button id="selectImitatorTank" class="btn btn-rainbow">Имитатор</button>
             </div>
-            <!-- ROMAN (хроматический: Римский танк) -->
-            <div style="text-align:center; width:180px;">
-<div style="display:inline-block; padding:3px; border-radius:11px; background:linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size:300% 300%; animation:rainbowPixelBg 4s linear infinite;"><canvas id="romanTankPreview" width="150" height="150" style="border:none; border-radius:8px; display:block;"></canvas></div>
-                <button id="selectRomanTank" class="btn btn-char" style="width: 100%; box-sizing: border-box; display: block; margin: 8px 0; font-size: 16px; padding: 12px 0; background: linear-gradient(90deg,#ff0044,#ff9a00,#ffee00,#33ff66,#00ccff,#6a00ff,#ff00aa); background-size: 220% 220%; animation: rainbowPixelBg 6s linear infinite; image-rendering: pixelated; box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.55); border: none;">⚔️ Римский</button>
+            <div>
+                <canvas id="romanTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
+                <button id="selectRomanTank" class="btn btn-rainbow">⚔️ Римский</button>
             </div>
-            
         </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
     </div>
@@ -235,7 +236,7 @@
 
 <!-- Tank Detail Modal (hidden by default) -->
 <div id="tankDetailModal" class="modal-overlay">
-    <div class="modal-box" style="width:560px; max-height:90vh; overflow-y:auto;">
+    <div class="modal-box">
         <h2 id="tankDetailTitle" class="modal-title">Танк</h2>
         <p id="tankDetailRarity" style="margin:0 0 4px 0; font-size:20px; color:#f1c40f;">Редкость</p>
         <div id="tankDetailTrio" style="margin:0 0 10px 0; display:none;"></div>
@@ -258,9 +259,20 @@
     </div>
 </div>
 
+<!-- Achievements Modal -->
+<div id="achievementsModal" class="modal-overlay">
+    <div class="modal-box">
+        <h2 class="modal-title">🏅 ДОСТИЖЕНИЯ</h2>
+        <div id="achievementsList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px; padding-bottom:4px;"></div>
+        <div style="text-align:center; margin-top:14px; flex-shrink:0;">
+            <button id="achievementsModalClose" class="btn btn-secondary" style="min-width:140px;">Закрыть</button>
+        </div>
+    </div>
+</div>
+
 <!-- Try Mode Modal (shown when clicking "Испытать") -->
 <div id="tryModeModal" class="modal-overlay">
-    <div class="modal-box" style="width:380px;">
+    <div class="modal-box">
         <h2 class="modal-title">⚔️ Испытать танк</h2>
         <div style="display:flex; flex-direction:column; gap:14px; align-items:center; margin-top:10px;">
             <button id="tryModeBattle" class="btn btn-mode" style="width:80%; font-size:18px; padding:14px;">⚔️ Бой</button>
@@ -300,7 +312,7 @@
 
 <!-- Command modal (hidden by default) -->
 <div id="commandModal" class="modal-overlay">
-    <div class="modal-box" style="width:400px;">
+    <div class="modal-box">
         <h2 class="modal-title">Командная строка</h2>
         <p style="text-align:center; margin-bottom:15px;">Введите команду, начинающуюся с /</p>
         <input type="text" id="commandInput" placeholder="/coins 100" style="width:100%; padding:10px; margin-bottom:15px; background:rgba(0,0,0,0.8); color:white; border:1px solid #fff; border-radius:4px; font-size:16px;">
@@ -313,7 +325,7 @@
 
 <!-- News modal -->
 <div id="newsModal" class="modal-overlay" style="display:none; z-index:220;">
-    <div class="modal-box" style="width:760px; max-width:95vw; max-height:80vh; overflow-y:auto;">
+    <div class="modal-box">
         <h2 class="modal-title">📰 Новости</h2>
         <div id="newsContent" style="color:#ddd; font-size:16px; line-height:1.6; max-height:400px; overflow-y:auto;">
             <!-- News items are populated dynamically from src/news.js -->
@@ -326,7 +338,7 @@
 
 <!-- Result overlay (win / lose) using standard modal styles -->
 <div id="resultOverlay" class="modal-overlay" style="z-index: 150;">
-    <div class="modal-box" style="width: 500px;">
+    <div class="modal-box">
         <h2 id="resultStatus" class="modal-title">Победа</h2>
         
         <div id="resultEmblem" style="font-size: 64px; margin-bottom: 10px;">🏆</div>
@@ -353,7 +365,7 @@
 
 <!-- Buy confirmation modal (styled) -->
 <div id="buyConfirmModal" class="modal-overlay" style="display:none; z-index:160;">
-    <div class="modal-box" style="width:420px; text-align:center;">
+    <div class="modal-box" style="text-align:center;">
         <h2 id="buyConfirmTitle" class="modal-title">Подтвердите покупку</h2>
         <p id="buyConfirmMessage" style="margin:12px 0 18px 0; color:#eee; font-size:16px;"></p>
         <div style="display:flex; justify-content:center; gap:12px;">
@@ -365,7 +377,7 @@
 
 <!-- Trophy Road modal -->
 <div id="trophyRoadModal" class="modal-overlay">
-    <div class="modal-box" style="width:900px; max-height:80vh;">
+    <div class="modal-box">
         <h2 class="modal-title">🏆 Трофейная дорога</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
@@ -383,7 +395,7 @@
 
 <!-- Choice Modal (Ice vs Machinegun) -->
 <div id="choiceModal" class="modal-overlay" style="display:none; z-index:200;">
-    <div class="modal-box" style="width:600px; text-align:center;">
+    <div class="modal-box" style="text-align:center;">
         <h2 class="modal-title">Выберите награду!</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin:20px 0;">
             <!-- Option 1 -->
@@ -418,7 +430,7 @@
 
 <!-- Settings modal -->
 <div id="settingsModal" class="modal-overlay" style="z-index:210;">
-    <div class="modal-box" style="width:420px; text-align:left;">
+    <div class="modal-box" style="text-align:left;">
         <h2 class="modal-title" style="text-align:center;">⚙️ Настройки</h2>
 
         <!-- Effects -->
@@ -493,7 +505,7 @@
 
 <!-- ══════════════════════ MAP EDITOR MODAL ══════════════════════ -->
 <div id="mapEditorModal" class="modal-overlay" style="display:none; z-index:300;">
-  <div class="modal-box me-shell" style="width:min(1000px,98vw); max-height:96vh; padding:0; overflow:hidden; display:flex; flex-direction:column;">
+  <div class="modal-box me-shell" style="padding:0; overflow:hidden; display:flex; flex-direction:column;">
 
     <!-- Header bar -->
     <div class="me-header">
@@ -551,7 +563,7 @@
 
 <!-- Map Settings modal -->
 <div id="meSettingsModal" class="modal-overlay" style="display:none; z-index:410;">
-  <div class="modal-box" style="width:min(460px,94vw);">
+  <div class="modal-box">
     <h2 class="modal-title">⚙️ Настройки карты</h2>
 
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
@@ -594,7 +606,7 @@
 
 <!-- My Maps popup -->
 <div id="meMapsModal" class="modal-overlay" style="display:none; z-index:400;">
-  <div class="modal-box" style="width:min(500px,94vw); max-height:80vh; display:flex; flex-direction:column; gap:10px;">
+  <div class="modal-box" style="display:flex; flex-direction:column; gap:10px;">
     <h2 class="modal-title">📂 Мои карты</h2>
     <div id="meMapsList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:60px;"></div>
     <div style="display:flex; gap:8px;">
@@ -607,7 +619,7 @@
 
 <!-- Map editor confirm dialog -->
 <div id="meConfirmOverlay" class="modal-overlay" style="display:none; z-index:500;">
-  <div class="modal-box" style="width:min(420px,90vw);">
+  <div class="modal-box">
     <p id="meConfirmMsg" style="font-size:18px; margin:0 0 24px; color:#f0f0f0;"></p>
     <div style="display:flex; gap:12px; justify-content:center;">
       <button id="meConfirmYes" class="btn me-btn me-btn-red" style="min-width:90px;">Да</button>
@@ -624,5 +636,165 @@
 <script src="src/win-lose.js"></script>
 <script src="src/mapeditor.js"></script>
 
-</body>
+<script>
+// ─── Animated background particle system ───────────────────────────────────
+(function() {
+    const pc = document.getElementById('bgParticleCanvas');
+    if (!pc) return;
+    const cx = pc.getContext('2d');
+
+    // Resize canvas to viewport
+    function resize() {
+        pc.width  = window.innerWidth;
+        pc.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // What "theme" is currently active based on the visible modal
+    function getTheme() {
+        const vis = id => { const el = document.getElementById(id); return el && el.style.display !== 'none' && el.style.display !== ''; };
+        if (vis('characterModal'))  return 'purple';
+        if (vis('shopModal'))       return 'blue';
+        if (vis('settingsModal'))   return 'steel';
+        if (vis('achievementsModal'))return 'gold';
+        if (vis('newsModal'))       return 'dark';
+        if (vis('trophyRoadModal')) return 'bronze';
+        if (vis('modeModal'))       return 'green';
+        if (vis('resultOverlay'))   return 'dark';
+        if (vis('tankDetailModal')) return 'purple';
+        if (vis('choiceModal'))     return 'blue';
+        if (vis('mainMenu'))        return 'menu';
+        return 'menu';
+    }
+
+    // Color palettes per theme
+    const PALETTES = {
+        menu:   ['#f39c12','#e74c3c','#2ecc71','#3498db','#fff','#f1c40f'],
+        purple: ['#9b59b6','#8e44ad','#c39bd3','#d7bde2','#fff'],
+        blue:   ['#3498db','#2980b9','#5dade2','#85c1e9','#fff'],
+        steel:  ['#7f8c8d','#95a5a6','#bdc3c7','#aab7b8','#fff'],
+        gold:   ['#f39c12','#f1c40f','#fad7a0','#e59866','#fff'],
+        dark:   ['#555','#777','#999','#333'],
+        bronze: ['#d35400','#e67e22','#f0b27a','#dc7633','#fff'],
+        green:  ['#2ecc71','#27ae60','#a9dfbf','#52be80','#fff'],
+    };
+
+    // Shape types
+    const SHAPES = ['circle', 'triangle', 'cross', 'hex', 'dot', 'spark'];
+
+    // Particle pool
+    const MAX_P = 60;
+    const particles = [];
+
+    function randColor(theme) {
+        const p = PALETTES[theme] || PALETTES.menu;
+        return p[Math.floor(Math.random() * p.length)];
+    }
+
+    function spawnParticle(theme) {
+        return {
+            x: Math.random() * pc.width,
+            y: pc.height + 20,
+            vx: (Math.random() - 0.5) * 0.6,
+            vy: -(0.3 + Math.random() * 0.9),
+            size: 3 + Math.random() * 14,
+            alpha: 0,
+            maxAlpha: 0.12 + Math.random() * 0.22,
+            shape: SHAPES[Math.floor(Math.random() * SHAPES.length)],
+            color: randColor(theme),
+            rot: Math.random() * Math.PI * 2,
+            rotV: (Math.random() - 0.5) * 0.025,
+            life: 0,
+            maxLife: 120 + Math.random() * 200,
+        };
+    }
+
+    function drawShape(p) {
+        cx.save();
+        cx.translate(p.x, p.y);
+        cx.rotate(p.rot);
+        cx.globalAlpha = p.alpha;
+        cx.strokeStyle = p.color;
+        cx.fillStyle   = p.color;
+        cx.lineWidth   = 1.5;
+        const s = p.size;
+        if (p.shape === 'circle') {
+            cx.beginPath(); cx.arc(0, 0, s / 2, 0, Math.PI * 2);
+            cx.stroke();
+        } else if (p.shape === 'dot') {
+            cx.beginPath(); cx.arc(0, 0, s / 4, 0, Math.PI * 2);
+            cx.fill();
+        } else if (p.shape === 'triangle') {
+            cx.beginPath();
+            cx.moveTo(0, -s/2); cx.lineTo(s/2, s/2); cx.lineTo(-s/2, s/2);
+            cx.closePath(); cx.stroke();
+        } else if (p.shape === 'cross') {
+            cx.beginPath();
+            cx.moveTo(-s/2, 0); cx.lineTo(s/2, 0);
+            cx.moveTo(0, -s/2); cx.lineTo(0, s/2);
+            cx.stroke();
+        } else if (p.shape === 'hex') {
+            cx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2;
+                i === 0 ? cx.moveTo(Math.cos(a)*s/2, Math.sin(a)*s/2)
+                        : cx.lineTo(Math.cos(a)*s/2, Math.sin(a)*s/2);
+            }
+            cx.closePath(); cx.stroke();
+        } else if (p.shape === 'spark') {
+            cx.beginPath();
+            cx.moveTo(0, -s/2); cx.lineTo(s*0.15, 0); cx.lineTo(0, s/2); cx.lineTo(-s*0.15, 0);
+            cx.closePath(); cx.fill();
+        }
+        cx.restore();
+    }
+
+    let lastTheme = 'menu';
+    let frame = 0;
+
+    function tick() {
+        requestAnimationFrame(tick);
+
+        // Only show particles when the main menu is visible (not during gameplay)
+        const menuEl = document.getElementById('mainMenu');
+        const menuVisible = menuEl && menuEl.style.display !== 'none' && menuEl.style.display !== '';
+        if (!menuVisible) {
+            cx.clearRect(0, 0, pc.width, pc.height);
+            particles.length = 0;
+            return;
+        }
+
+        frame++;
+        cx.clearRect(0, 0, pc.width, pc.height);
+
+        const theme = 'menu';
+        if (theme !== lastTheme) { particles.length = 0; lastTheme = theme; }
+
+        // Spawn
+        if (particles.length < MAX_P && frame % 3 === 0) {
+            particles.push(spawnParticle(theme));
+        }
+
+        // Update + draw
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.life++;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.rotV;
+
+            // Fade in/out
+            const t = p.life / p.maxLife;
+            p.alpha = t < 0.15 ? (t / 0.15) * p.maxAlpha
+                    : t > 0.75 ? ((1 - t) / 0.25) * p.maxAlpha
+                    : p.maxAlpha;
+
+            if (p.life >= p.maxLife || p.y < -20) { particles.splice(i, 1); continue; }
+            drawShape(p);
+        }
+    }
+    tick();
+})();
+</script>
 </html>

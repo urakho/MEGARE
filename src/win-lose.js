@@ -705,6 +705,11 @@ function syncResultOverlay(state = gameState) {
             }
         }
         
+        // Track battle wins for achievements (excluding trial and custom map modes)
+        if (isWin && currentMode !== 'trial' && !window._customMapActive) {
+            if (typeof window.onBattleWin === 'function') window.onBattleWin();
+        }
+
         // Save progress after battle ends
         if (typeof saveProgress === 'function') {
             saveProgress();
