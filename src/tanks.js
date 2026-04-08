@@ -45,7 +45,7 @@ const tankDescriptions = {
     },
     mirror: {
         name: "Зеркальный",
-        description: "Мастер адаптации. Копирует тип снарядов противника при получении урона и отражает их обратно. Особая способность (E): активирует зеркальный щит, отражающий все входящие атаки. Умный защитник.",
+        description: "Мастер адаптации. Копирует тип снарядов противника при получении урона и отражает их обратно. Особая способность (E): активирует зеркальный щит, отражающий все входящие атаки, кроме мин и ракет. Умный защитник.",
         rarity: "Легендарный"
     },
     time: {
@@ -97,6 +97,11 @@ const tankDescriptions = {
         name: "Римский танк",
         description: "Имперский танк, вдохновлённый величием древнего Рима. Бросает тяжёлый клинок, способный поражать врагов даже за укрытиями, а в критический момент возводит сияющий золотой щит, становясь неуязвимым для любой атаки. Символ силы, чести и несгибаемой воли легионера.",
         rarity: "Хроматическая"
+    },
+    pyro: {
+        name: "Зажигательный",
+        description: "Стреляет зажигательными снарядами, поджигающими врагов при попадании. Горящая цель получает урон каждые 0.5 сек на протяжении 3 секунд. Медленный, но хорошо бронированный — компенсирует скорость стрельбы постепенным уроном от ожога.",
+        rarity: "Редкий"
     }
 };
 
@@ -119,6 +124,7 @@ const tankBgGradients = {
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     roman: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - animated like time
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
+    pyro: ['#2ecc71', '#27ae60'],        // Редкий - green
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
     robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
@@ -145,11 +151,14 @@ const tankBaseColors = {
     medical: '#0033ff',    // Bright blue for medical tank
     mine: '#3d4c18',       // Dark olive for mine tank
     roman: '#8B6914',      // Dark gold for Roman tank
+    pyro: '#8b2500',        // Deep orange-red for Pyro tank
     // sport removed
 };
 
 // Make available globally
 window.tankDescriptions = tankDescriptions;
+window.tankBgGradients  = tankBgGradients;
+window.tankBaseColors   = tankBaseColors;
 
 // Trio data: each tank belongs to exactly one trio (or null for illuminat)
 // color: accent colour for the badge; icon: big badge icon; members: [type, emoji] pairs
@@ -185,6 +194,7 @@ const tankTrios = {
     mine: _trioControl, buratino: _trioControl, toxic: _trioControl,
     musical: _trioSupport, medical: _trioSupport, mirror: _trioSupport,
     illuminat: null,
+    pyro: null,
 };
 window.tankTrios = tankTrios;
 window.tankBgGradients = tankBgGradients;
@@ -808,6 +818,35 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Gold outline
             ctx.strokeStyle = '#8B6914';
             ctx.lineWidth = 1.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'pyro') {
+            // Body: dark-red gradient with two side vents and a subtle diagonal highlight
+            const pyBG = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            pyBG.addColorStop(0,   '#6b1000');
+            pyBG.addColorStop(0.5, '#9c2000');
+            pyBG.addColorStop(1,   '#4a0a00');
+            ctx.fillStyle = pyBG;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Two side vent slots
+            ctx.fillStyle = '#1a0400';
+            ctx.fillRect(-bodyW/2 + 1, -bodyH*0.28, bodyW*0.14, bodyH*0.56);
+            // Orange glow inside vents
+            ctx.fillStyle = 'rgba(220,80,0,0.55)';
+            ctx.fillRect(-bodyW/2 + 3, -bodyH*0.22, bodyW*0.10, bodyH*0.44);
+
+            // Diagonal light sheen across upper-left
+            ctx.fillStyle = 'rgba(255,120,40,0.10)';
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2, -bodyH/2);
+            ctx.lineTo(bodyW*0.15, -bodyH/2);
+            ctx.lineTo(-bodyW/2,   bodyH*0.25);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dark border
+            ctx.strokeStyle = '#2a0800';
+            ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'mine') {
             // Dark olive camo body with hazard markings
@@ -1585,6 +1624,25 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.beginPath();
         ctx.ellipse(0, 0, tSize * 0.55, tSize * 0.4, 0, 0, Math.PI * 2);
         ctx.stroke();
+    } else if (type === 'pyro') {
+        // Pyro Turret – rounded dark-red housing with orange glow ring
+        const pyTG = ctx.createRadialGradient(-tSize*0.15, -tSize*0.15, 0, 0, 0, tSize*0.72);
+        pyTG.addColorStop(0,   '#b42800');
+        pyTG.addColorStop(0.6, '#7a1200');
+        pyTG.addColorStop(1,   '#3a0600');
+        ctx.fillStyle = pyTG;
+        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
+        // Orange glow ring
+        ctx.strokeStyle = 'rgba(230,90,0,0.75)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(0, 0, tSize * 0.38, 0, Math.PI * 2); ctx.stroke();
+        // Small bright center dot
+        ctx.fillStyle = '#ff9940';
+        ctx.beginPath(); ctx.arc(0, 0, tSize * 0.13, 0, Math.PI * 2); ctx.fill();
+        // Border
+        ctx.strokeStyle = '#2a0800';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -2123,6 +2181,31 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.arc(tSize / 2 + mBarrelLen, 0, mineR * 0.35, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+        } else if (type === 'pyro') {
+            // Pyro barrel – heat-striped pipe with a flared orange nozzle
+            const pyBarLen = Math.min(W, H) * 0.56 * turretScale;
+            const pyBarH   = Math.min(W, H) * 0.115 * turretScale;
+            // Pipe: dark with two orange heat bands
+            ctx.fillStyle = '#2e2e2e';
+            ctx.fillRect(tSize/2, -pyBarH/2, pyBarLen * 0.74, pyBarH);
+            // Two heat bands
+            ctx.fillStyle = 'rgba(210,70,0,0.75)';
+            ctx.fillRect(tSize/2 + pyBarLen*0.22, -pyBarH/2, pyBarLen*0.06, pyBarH);
+            ctx.fillRect(tSize/2 + pyBarLen*0.50, -pyBarH/2, pyBarLen*0.06, pyBarH);
+            // Flared nozzle
+            const nzX = tSize/2 + pyBarLen*0.74;
+            ctx.fillStyle = '#c83800';
+            ctx.beginPath();
+            ctx.moveTo(nzX,              -pyBarH*0.8);
+            ctx.lineTo(tSize/2+pyBarLen, -pyBarH*1.65);
+            ctx.lineTo(tSize/2+pyBarLen,  pyBarH*1.65);
+            ctx.lineTo(nzX,               pyBarH*0.8);
+            ctx.closePath();
+            ctx.fill();
+            // Orange nozzle rim
+            ctx.strokeStyle = 'rgba(255,110,0,0.80)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2524,6 +2607,9 @@ function drawCharacterPreviews() {
     drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', tankBgGradients.ice);
     drawItem(machinegunTankCtx, machinegunTankPreview, 'machinegun', '#0000FF', tankBgGradients.machinegun);
     drawItem(buckshotTankCtx, buckshotTankPreview, 'buckshot', '#2ecc71', tankBgGradients.buckshot);
+    if (typeof pyroTankCtx !== 'undefined' && pyroTankCtx && pyroTankPreview) {
+        drawItem(pyroTankCtx, pyroTankPreview, 'pyro', '#8b2500', tankBgGradients.pyro);
+    }
     // SUPER_RARE
     drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
     drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
@@ -3872,6 +3958,73 @@ function draw() {
                 });
             }
 
+        } else if (b.type === 'pyroBullet') {
+            // Incendiary shell – glowing orange-red orb with fire trail and rotating ember sparks
+            const pr = (b.w || 9) / 2;
+            const t = Date.now() * 0.003;
+
+            // Fire trail behind bullet
+            const ang = Math.atan2(b.vy, b.vx);
+            const trailLen = pr * 4.5;
+            const tx = b.x - Math.cos(ang) * trailLen;
+            const ty = b.y - Math.sin(ang) * trailLen;
+            const trailGrad = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            trailGrad.addColorStop(0, 'rgba(200,50,0,0)');
+            trailGrad.addColorStop(0.5, 'rgba(255,100,0,0.28)');
+            trailGrad.addColorStop(1, 'rgba(255,200,0,0.55)');
+            ctx.strokeStyle = trailGrad;
+            ctx.lineWidth = pr * 1.8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+
+            // Additive glow layer
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Outer heat halo
+            const haloGrad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, pr * 3.2);
+            haloGrad.addColorStop(0,   'rgba(255,160,0,0.30)');
+            haloGrad.addColorStop(0.4, 'rgba(255,80,0,0.15)');
+            haloGrad.addColorStop(1,   'rgba(200,0,0,0)');
+            ctx.fillStyle = haloGrad;
+            ctx.beginPath(); ctx.arc(b.x, b.y, pr * 3.2, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore();
+
+            // Core orb – bright incendiary sphere
+            const coreGrad = ctx.createRadialGradient(
+                b.x - pr * 0.3, b.y - pr * 0.3, pr * 0.05,
+                b.x, b.y, pr
+            );
+            coreGrad.addColorStop(0,    '#ffffc0');   // white-yellow hot center
+            coreGrad.addColorStop(0.25, '#ffbf00');   // amber
+            coreGrad.addColorStop(0.6,  '#ff4500');   // orange-red
+            coreGrad.addColorStop(1,    '#6b0a00');   // deep red edge
+            ctx.fillStyle = coreGrad;
+            ctx.shadowColor = '#ff6600';
+            ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(b.x, b.y, pr, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Rotating ember sparks around the orb
+            for (let i = 0; i < 5; i++) {
+                const sa = t * 2.5 + (i / 5) * Math.PI * 2;
+                const sr = pr * 1.55 + Math.sin(t * 4 + i) * pr * 0.25;
+                const sx = b.x + Math.cos(sa) * sr;
+                const sy = b.y + Math.sin(sa) * sr;
+                ctx.fillStyle = i % 2 === 0 ? '#ffcc00' : '#ff6600';
+                ctx.beginPath(); ctx.arc(sx, sy, pr * 0.22, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Hot specular highlight
+            ctx.fillStyle = 'rgba(255,255,200,0.85)';
+            ctx.beginPath();
+            ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -4202,19 +4355,38 @@ function draw() {
                 }
             }
             
-            // Check collisions with enemies
-            for (const enemy of enemies) {
+            // Check collisions with player (if enemy wave)
+            if (proj.team !== tank.team) {
+                const pdx = proj.x - (tank.x + tank.w/2);
+                const pdy = proj.y - (tank.y + tank.h/2);
+                if (pdx*pdx + pdy*pdy < (proj.radius + tank.w/2)*(proj.radius + tank.w/2)) {
+                    tank.hp -= proj.damage;
+                    tank.confused = 30;
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
+                    if (tank.hp <= 0) {
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                        else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+                    }
+                    const pang = Math.atan2(pdy, pdx);
+                    proj.vx = Math.cos(pang) * 5;
+                    proj.vy = Math.sin(pang) * 5;
+                    proj.bounces++;
+                }
+            }
+            // Check collisions with enemies (skip same-team to avoid friendly fire / self-damage)
+            for (let ei = enemies.length - 1; ei >= 0; ei--) {
+                const enemy = enemies[ei];
+                if (enemy.team === proj.team) continue; // No friendly fire
                 const dx = proj.x - (enemy.x + enemy.w/2);
                 const dy = proj.y - (enemy.y + enemy.h/2);
                 if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
-                    // Damage enemy
                     enemy.hp -= proj.damage;
-                    if (enemy.hp < 0) enemy.hp = 0;
-                    
-                    // Play hit effect
                     spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
-                    
-                    // Bounce away
+                    if (enemy.hp <= 0) {
+                        spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65);
+                        enemies.splice(ei, 1);
+                    }
                     const ang = Math.atan2(dy, dx);
                     proj.vx = Math.cos(ang) * 5;
                     proj.vy = Math.sin(ang) * 5;
@@ -5558,7 +5730,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage

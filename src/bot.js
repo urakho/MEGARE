@@ -723,7 +723,7 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
@@ -1209,6 +1209,19 @@ function updateEnemyAI() {
                     damage: 125,
                     bounces: 0, maxBounces: 1, spinAngle: 0
                 };
+            } else if (tt === 'pyro') {
+                // Pyro: incendiary shell that sets targets on fire
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 22,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 22,
+                    w: 9, h: 9,
+                    vx: Math.cos(enemy.turretAngle) * 5.5,
+                    vy: Math.sin(enemy.turretAngle) * 5.5,
+                    life: 90,
+                    owner: 'enemy', team: enemy.team,
+                    type: 'pyroBullet',
+                    damage: 70
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1216,7 +1229,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : FIRE_COOLDOWN;
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1798,11 +1811,15 @@ function updateAllyAI() {
 
         unit.waterjetActive = true;
         const maxLen = 260;
-        const startX = unit.x + unit.w / 2;
-        const startY = unit.y + unit.h / 2;
+        const cx0 = unit.x + unit.w / 2;
+        const cy0 = unit.y + unit.h / 2;
         const angle = unit.turretAngle;
-        const rayEndX = startX + Math.cos(angle) * maxLen;
-        const rayEndY = startY + Math.sin(angle) * maxLen;
+        // Start beam from barrel tip (22px forward) so very-close targets are still hit
+        const barrelOffset = 22;
+        const startX = cx0 + Math.cos(angle) * barrelOffset;
+        const startY = cy0 + Math.sin(angle) * barrelOffset;
+        const rayEndX = cx0 + Math.cos(angle) * (maxLen + barrelOffset);
+        const rayEndY = cy0 + Math.sin(angle) * (maxLen + barrelOffset);
         // Raycast: stop at walls AND boxes/barrels
         let beamLen = maxLen;
         let hitBox = null;
@@ -1836,6 +1853,9 @@ function updateAllyAI() {
         unit.waterjetHitTarget = false;
         const endX = startX + Math.cos(angle) * beamLen;
         const endY = startY + Math.sin(angle) * beamLen;
+        // Use center origin for hit-detection so very-close targets (< barrelOffset) are always covered
+        const hitStartX = cx0;
+        const hitStartY = cy0;
 
         const distToSeg = (px, py, x1, y1, x2, y2) => {
             const dx = x2 - x1, dy = y2 - y1;
@@ -1855,7 +1875,7 @@ function updateAllyAI() {
             const cy = e.y + (e.h || 0) / 2;
             // Bots aim imprecisely (AI rotation), so give them a wider hit zone vs player using mouse
             const hitRadius = Math.max(e.w || 0, e.h || 0) * 0.5 + (isPlayer ? 7 : 18);
-            if (distToSeg(cx, cy, startX, startY, endX, endY) > hitRadius) continue;
+            if (distToSeg(cx, cy, hitStartX, hitStartY, endX, endY) > hitRadius) continue;
             unit.waterjetHitTarget = true;
 
             // Damage per frame (1.5/tick), boosted by upgrade if player
@@ -1921,7 +1941,10 @@ function updateAllyAI() {
     }
     // Waterjet: Enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
-        if (enemies[i].tankType === 'waterjet') updateUnitWaterjet(enemies[i], [tank, ...allies]);
+        if (enemies[i].tankType === 'waterjet') {
+            // Include all entities (team check inside filters same-team targets)
+            updateUnitWaterjet(enemies[i], [tank, ...allies, ...enemies.filter((_, j) => j !== i)]);
+        }
     }
 
 }

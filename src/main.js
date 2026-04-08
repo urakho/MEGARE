@@ -192,6 +192,7 @@ const tankGemPrices = {
     'ice': 100,       // Редкий
     'machinegun': 100,// Редкий
     'buckshot': 100,  // Редкий
+    'pyro': 100,      // Редкий
     'fire': 200,      // Сверхредкий
     'waterjet': 200,  // Сверхредкий
     'mine': 200,      // Сверхредкий
@@ -316,6 +317,7 @@ const tankMaxHpByType = {
     'medical': 275,
     'mine': 350,
     'roman': 350,
+    'pyro': 420,
     'boss_hell': 7500
 };
 
@@ -347,7 +349,8 @@ const tankMaxSpeedByType = {
     'robot': 2.7,
     'medical': 3.4,
     'mine': 3.1,
-    'roman': 3.0
+    'roman': 3.0,
+    'pyro': 2.75
 };
 
 function setTankSpeed(type) {
@@ -595,6 +598,8 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     };
 
     window.goToMenuNoReload = function() {
+        // Restore original tank if returning from a trial/preview battle
+        if (window._preTankType) { tankType = window._preTankType; window._preTankType = null; }
         if (typeof saveProgress === 'function') saveProgress();
         try {
             gameState = 'menu';
@@ -997,6 +1002,8 @@ const mineTankPreview = document.getElementById('mineTankPreview');
 const mineTankCtx = mineTankPreview && mineTankPreview.getContext ? mineTankPreview.getContext('2d') : null;
 const romanTankPreview = document.getElementById('romanTankPreview');
 const romanTankCtx = romanTankPreview && romanTankPreview.getContext ? romanTankPreview.getContext('2d') : null;
+const pyroTankPreview = document.getElementById('pyroTankPreview');
+const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -1046,6 +1053,7 @@ function startGame(mode) {
     tank.confused = 0;
     tank.mirrorShieldActive = false;
     tank.mirrorShieldTimer = 0;
+    tank.mirrorShieldCooldown = 0;
     tank.lastHitType = null;
     tank.lastHitTime = 0;
     tank.alive = true;
@@ -1070,6 +1078,9 @@ function startGame(mode) {
     tank.romanShieldActive = false;
     tank.romanShieldTimer = 0;
     tank.romanShieldCooldown = 0;
+    // Reset burn effect
+    tank.burning = false;
+    tank.burnTimer = 0;
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1235,7 +1246,8 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     if (godMode) { tank.hp = 100000; tank.maxHp = 100000; }
 
     tank.paralyzed = false; tank.paralyzedTime = 0; tank.frozenEffect = 0;
-    tank.confused = 0; tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0;
+    tank.confused = 0; tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0; tank.mirrorShieldCooldown = 0;
+    tank.burning = false; tank.burnTimer = 0;
     tank.lastHitType = null; tank.lastHitTime = 0; tank.alive = true;
     tank.beamActive = false; tank.beamStart = 0; tank.beamCooldown = 0;
     tank.waterjetActive = false; tank.waterjetBeamLen = 0;
@@ -1417,8 +1429,18 @@ const characterCancel = document.getElementById('characterCancel');
 const trophyRoadBtn = document.getElementById('trophyRoadBtn');
 const trophyRoadModal = document.getElementById('trophyRoadModal');
 const closeTrophyRoad = document.getElementById('closeTrophyRoad');
-if (shopBtn) shopBtn.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'flex'; });
+// Quick silent scan: called before opening shop or character screens
+function _quickResourceScan() {
+    if (coins < 0 || gems < 0 || parts < 0) {
+        showNegativeResourcePunishment();
+        return true; // blocked
+    }
+    return false;
+}
+
+if (shopBtn) shopBtn.addEventListener('click', () => { if (_quickResourceScan()) return; if (shopModal) shopModal.style.display = 'flex'; });
 if (characterBtn) characterBtn.addEventListener('click', () => { 
+    if (_quickResourceScan()) return;
     if (characterModal) { 
         characterModal.style.display = 'flex'; 
         drawCharacterPreviews(); 
@@ -1619,22 +1641,90 @@ function processDevCommand(rawCommand) {
         if (typeof setTankHP    === 'function') setTankHP(tankType);
         if (typeof setTankSpeed === 'function') setTankSpeed(tankType);
         console.log('All tank upgrades cleared.');
+    } else if (command.startsWith('/uncoin')) {
+        // Set coins to negative value
+        const valStr = command.substring(7).trim();
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount > 0) {
+            coins = -amount;
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Coins set to: ${coins}`);
+        } else {
+            console.log('Usage: /uncoin [number]');
+        }
+    } else if (command.startsWith('/ungem')) {
+        // Set gems to negative value
+        const valStr = command.substring(6).trim();
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount > 0) {
+            gems = -amount;
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Gems set to: ${gems}`);
+        } else {
+            console.log('Usage: /ungem [number]');
+        }
+    } else if (command.startsWith('/unpart')) {
+        // Set parts to negative value
+        const valStr = command.substring(7).trim();
+        const amount = parseInt(valStr);
+        if (!isNaN(amount) && amount > 0) {
+            parts = -amount;
+            localStorage.setItem('tankParts', parts);
+            updateCoinDisplay();
+            saveProgress();
+            console.log(`Parts set to: ${parts}`);
+        } else {
+            console.log('Usage: /unpart [number]');
+        }
     } else if (command === '/help' || command === '/commands') {
-        console.log('=== ДОСТУПНЫЕ КОМАНДЫ ===');
-        console.log('/god on|off - включить/отключить режим бога (100000 HP, 1000x урон)');
-        console.log('/MEG on|off - включить/отключить режим разработчика');
-        console.log('[После /MEG on:]');
-        console.log('/coins [+/-/=] [число] - управление монетами (по умолчанию +)');
-        console.log('/gems [+/-/=] [число] - управление гемами (по умолчанию +)');
-        console.log('/trophy [+/-/=] [число] - управление трофеями, = сбрасывает награды');
-        console.log('/clear t - сбросить все танки кроме обычного');
-        console.log('/clear en - сбросить все улучшения характеристик');
-        console.log('/help или /commands - показать этот список');
-        console.log('========================');
+        const helpText = [
+            '╔══════════════════════════════════════╗',
+            '║       ДОСТУПНЫЕ КОМАНДЫ              ║',
+            '╠══════════════════════════════════════╣',
+            '  /MEG on|off',
+            '    Включить/отключить режим разработчика',
+            '',
+            '  /god on|off',
+            '    Режим бога (100000 HP, 1000x урон)',
+            '',
+            '  ── Ресурсы (требует /MEG on) ──',
+            '  /coins [+/-/=] [число]',
+            '    Управление монетами',
+            '  /gems [+/-/=] [число]',
+            '    Управление гемами',
+            '  /parts [+/-/=] [число]',
+            '    Управление частями',
+            '  /trophy [+/-/=] [число]',
+            '    Управление трофеями (= сбрасывает награды)',
+            '',
+            '  ── Отрицательные ресурсы ──',
+            '  /uncoin [число]   Установить отриц. монеты',
+            '  /ungem [число]    Установить отриц. гемы',
+            '  /unpart [число]   Установить отриц. части',
+            '',
+            '  ── Прочее ──',
+            '  /clear t   Сбросить все танки (кроме обычного)',
+            '  /clear en  Сбросить все улучшения',
+            '  /help      Показать этот список',
+            '╚══════════════════════════════════════╝',
+        ].join('\n');
+        console.log(helpText);
+        // Show in separate help modal
+        const helpContent = document.getElementById('helpContent');
+        if (helpContent) {
+            helpContent.textContent = helpText;
+            const helpModal = document.getElementById('helpModal');
+            if (helpModal) helpModal.style.display = 'flex';
+        }
     }
 }
 
-if (commandCancel) commandCancel.addEventListener('click', () => { commandInput.value = ''; if (commandModal) commandModal.style.display = 'none'; });
+if (commandCancel) commandCancel.addEventListener('click', () => {
+    commandInput.value = '';
+    if (commandModal) commandModal.style.display = 'none';
+});
 if (commandModal) {
     commandModal.addEventListener('click', (e) => {
         if (e.target === commandModal) {
@@ -1652,6 +1742,20 @@ if (commandInput) {
         } else if (e.code === 'Escape') {
             commandInput.value = '';
             if (commandModal) commandModal.style.display = 'none';
+        }
+    });
+}
+
+const helpClose = document.getElementById('helpClose');
+if (helpClose) helpClose.addEventListener('click', () => {
+    const helpModal = document.getElementById('helpModal');
+    if (helpModal) helpModal.style.display = 'none';
+});
+const helpModal = document.getElementById('helpModal');
+if (helpModal) {
+    helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            helpModal.style.display = 'none';
         }
     });
 }
@@ -1825,7 +1929,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
-    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'omega' ? 4000 : 1000));
+    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : 1000)));
     if (coins < price) {
         alert('Недостаточно монет!');
         return;
@@ -2086,6 +2190,10 @@ const selectRomanTank = document.getElementById('selectRomanTank');
 if (selectRomanTank) selectRomanTank.addEventListener('click', () => {
     showTankDetail('roman');
 });
+const selectPyroTank = document.getElementById('selectPyroTank');
+if (selectPyroTank) selectPyroTank.addEventListener('click', () => {
+    showTankDetail('pyro');
+});
 
 // По умолчанию показываем главное меню
 if (mainMenu) mainMenu.style.display = 'flex';
@@ -2183,9 +2291,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -2230,7 +2338,7 @@ function spawnAllies(numTeams, teamSize) {
                 x: pos.x, y: pos.y, w: 38, h: 38,
                 color: teamColor,
                 // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric','robot','medical'])[Math.floor(Math.random()*14)],
+                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric','robot','medical','pyro'])[Math.floor(Math.random()*15)],
                 hp: 100,
                 turretAngle: 0,
                 baseAngle: 0,
@@ -2285,9 +2393,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -2329,9 +2437,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine','pyro'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -2385,8 +2493,8 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];
@@ -2604,6 +2712,7 @@ function updateBossFight() {
                 bullets.push({
                     x: boss.x + 57, y: boss.y + 57,
                     vx: Math.cos(ang) * 5, vy: Math.sin(ang) * 5,
+                    w: 14, h: 14,
                     damage: 75, owner: 'enemy', team: 99,
                     type: 'meteorMini', life: 150
                 });
@@ -2625,7 +2734,8 @@ function updateBossFight() {
                 if (tank.alive) {
                     const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
                     if (Math.sqrt(ddx * ddx + ddy * ddy) < 80) {
-                        tank.hp = Math.max(0, tank.hp - damageAmount);
+                        if (!tank.mirrorShieldActive)
+                            tank.hp = Math.max(0, tank.hp - damageAmount);
                     }
                 }
             }
@@ -2637,7 +2747,8 @@ function updateBossFight() {
             if (m.fireTimer > 0 && tank.alive && Math.random() < dotChance) {
                 const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
                 if (Math.sqrt(ddx * ddx + ddy * ddy) < 45) {
-                    tank.hp = Math.max(0, tank.hp - dotDamage);
+                    if (!tank.mirrorShieldActive)
+                        tank.hp = Math.max(0, tank.hp - dotDamage);
                 }
             }
             if (m.fireTimer <= 0) bossMeteors.splice(i, 1);
@@ -2669,8 +2780,8 @@ function spawnLeaderHuntMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
+    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];
@@ -2836,8 +2947,8 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
     
     for (let i = 0; i < 7; i++) {
         // Spread bots vertically around right side
@@ -2895,11 +3006,12 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'pyro', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
     'buckshot': 'rare',
+    'pyro': 'rare',
     'fire': 'super_rare',
     'waterjet': 'super_rare',
     'mine': 'super_rare',
@@ -3765,7 +3877,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -4081,6 +4193,73 @@ function update() {
                 const dist = Math.hypot(dx, dy);
                 if (dist <= zone.radius) {
                     d.hp = Math.min(d.hp + zone.healRate, d.maxHp);
+                }
+            }
+        }
+
+        // Burn DoT tick: apply 10 HP/sec to burning enemies (pyro tank effect)
+        for (let bi = enemies.length - 1; bi >= 0; bi--) {
+            const be = enemies[bi];
+            if (!be || !be.alive || !be.burning) continue;
+            be.burnTimer = (be.burnTimer || 0) - 1;
+            // Deal 10 HP/sec at 60fps = 10/60 per frame
+            be.hp -= (be.burnDps || 10) / 60;
+            // Emit small orange particles
+            if (Math.random() > 0.6) spawnParticle(be.x + Math.random() * be.w, be.y + Math.random() * be.h, '#ff6600', 0.5);
+            if (be.burnTimer <= 0) { be.burning = false; be.burnTimer = 0; }
+            if (be.hp <= 0) {
+                be.alive = false;
+                enemies.splice(bi, 1);
+                spawnExplosion(be.x + be.w/2, be.y + be.h/2, 65);
+            }
+        }
+
+        // Burn DoT on player (from enemy pyro)
+        if (tank.burning) {
+            tank.burnTimer = (tank.burnTimer || 0) - 1;
+            if (!tank.mirrorShieldActive) {
+                tank.hp -= (tank.burnDps || 10) / 60;
+                if (Math.random() > 0.6) spawnParticle(tank.x + Math.random() * tank.w, tank.y + Math.random() * tank.h, '#ff6600', 0.5);
+            }
+            if (tank.burnTimer <= 0) { tank.burning = false; tank.burnTimer = 0; }
+        }
+
+        // Universal death sweep: catch any tank that reached 0 HP without being removed
+        if (gameState === 'playing') {
+            // Enemy sweep
+            for (let _di = enemies.length - 1; _di >= 0; _di--) {
+                const _de = enemies[_di];
+                if (!_de || _de.hp > 0 || _de.alive === false) continue;
+                _de.alive = false;
+                if (typeof spawnExplosion === 'function') spawnExplosion(_de.x + _de.w/2, _de.y + _de.h/2, 65);
+                if (currentMode === 'war') {
+                    _de.respawnTimer = _de.respawnTimer || 600;
+                } else {
+                    enemies.splice(_di, 1);
+                }
+            }
+            // Ally sweep
+            if (typeof allies !== 'undefined') {
+                for (let _ai = allies.length - 1; _ai >= 0; _ai--) {
+                    const _al = allies[_ai];
+                    if (!_al || _al.hp > 0 || _al.alive === false) continue;
+                    _al.alive = false;
+                    if (typeof spawnExplosion === 'function') spawnExplosion(_al.x + _al.w/2, _al.y + _al.h/2, 65);
+                    if (currentMode === 'war') {
+                        _al.respawnTimer = _al.respawnTimer || 600;
+                    } else {
+                        allies.splice(_ai, 1);
+                    }
+                }
+            }
+            // Player tank sweep
+            if (typeof tank !== 'undefined' && tank.hp <= 0 && tank.alive !== false) {
+                tank.alive = false;
+                if (typeof spawnExplosion === 'function') spawnExplosion(tank.x + tank.w/2, tank.y + tank.h/2, 70);
+                if (currentMode !== 'war' && currentMode !== 'training') {
+                    gameState = 'lose';
+                    if (typeof loseModeTrophies === 'function') loseModeTrophies();
+                    if (typeof syncResultOverlay === 'function') syncResultOverlay('lose');
                 }
             }
         }
@@ -4458,6 +4637,88 @@ function updateCoinDisplay() {
     checkTrophyRewards();
 
     saveProgress();
+
+    // Trigger negative resource check 2 seconds after detection
+    scheduleNegativeResourceCheck();
+}
+
+// Track whether a negative-resource warning is already scheduled
+let _negResCheckScheduled = false;
+
+function scheduleNegativeResourceCheck() {
+    if (_negResCheckScheduled) return;
+    if (coins < 0 || gems < 0 || parts < 0) {
+        _negResCheckScheduled = true;
+        setTimeout(() => {
+            _negResCheckScheduled = false;
+            // Re-confirm still negative
+            if (coins < 0 || gems < 0 || parts < 0) {
+                showNegativeResourcePunishment();
+            }
+        }, 2000);
+    }
+}
+
+function showNegativeResourcePunishment() {
+    // Build modal using game's standard modal classes
+    const overlay = document.createElement('div');
+    overlay.id = 'negResOverlay';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'display:flex; z-index:99999;';
+
+    overlay.innerHTML = `
+        <div class="modal-box" style="background:#0d0000;border:2px solid #e74c3c;max-width:min(32rem,95vw);text-align:center;">
+            <div style="font-size:2.5rem;margin-bottom:1rem;">⛔</div>
+            <h2 class="modal-title" style="color:#e74c3c;font-size:1.3rem;letter-spacing:0.1rem;">
+                Нарушение целостности аккаунта
+            </h2>
+            <p style="color:#ddd;font-size:0.9rem;line-height:1.7;margin:0 0 0.75rem 0;">
+                На вашем аккаунте обнаружены
+                <strong style="color:#e74c3c;">отрицательные ресурсы</strong>.
+                Приобретение контента за отрицательный баланс является нарушением правил игры.
+            </p>
+            <p style="color:#aaa;font-size:0.82rem;line-height:1.6;margin:0 0 1.5rem 0;
+                border:1px solid rgba(231,76,60,0.25);border-radius:0.5rem;
+                padding:0.75rem 1rem;background:rgba(231,76,60,0.07);">
+                В целях восстановления баланса ваш аккаунт будет полностью очищен.
+                Все танки, ресурсы и улучшения будут сброшены до начальных значений.
+            </p>
+            <button id="negResDismiss" class="btn btn-primary" style="width:100%;">
+                Закрыть
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#negResDismiss').addEventListener('click', () => {
+        // Full account wipe
+        coins = 0;
+        gems = 0;
+        parts = 0;
+        trophies = 0;
+        unlockedTanks = ['normal'];
+        tankUpgrades = {};
+        claimedRewards = [];
+
+        localStorage.setItem('tankCoins', 0);
+        localStorage.setItem('tankGems', 0);
+        localStorage.setItem('tankParts', 0);
+        localStorage.setItem('tankTrophies', 0);
+        localStorage.setItem('tankClaimedRewards', JSON.stringify([]));
+        localStorage.setItem('tankUnlockedTanks', JSON.stringify(['normal']));
+        saveTankUpgrades();
+        saveProgress();
+
+        // Switch to normal tank
+        tankType = 'normal';
+        localStorage.setItem('tankSelected', 'normal');
+        if (typeof window.setSelectedTank === 'function') window.setSelectedTank('normal');
+
+        updateCoinDisplay();
+
+        overlay.remove();
+    });
 }
 
 // Update shop button styles based on player gems and tank affordability
@@ -4475,7 +4736,8 @@ function updateShopButtonStyles() {
         'illuminat': 'selectIlluminatTank',
         'plasma': 'selectPlasmaTank',
         'electric': 'selectElectricTank',
-        'roman': 'selectRomanTank'
+        'roman': 'selectRomanTank',
+        'pyro': 'selectPyroTank'
     };
     
     const tankRarityMap = {
@@ -4483,7 +4745,8 @@ function updateShopButtonStyles() {
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
-        'roman': 'imitator'
+        'roman': 'imitator',
+        'pyro': 'rare'
     };
     
     Object.keys(tankButtonMap).forEach(tankType => {
@@ -4852,7 +5115,7 @@ function updateTankDetailButton(type) {
     // Map tank type to rarity class
     const rarityMap = {
         'normal': 'common',
-        'ice': 'rare', 'machinegun': 'rare', 'buckshot': 'rare',
+        'ice': 'rare', 'machinegun': 'rare', 'buckshot': 'rare', 'pyro': 'rare',
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',

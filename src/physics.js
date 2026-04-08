@@ -756,6 +756,16 @@ function shoot() {
         } else if (pType === 'mirror') {
             // Normal mirror shot
             props.damage = 100; props.w = 8; props.h = 8; // specialized mirror shard
+        } else if (pType === 'romanBlade') {
+            props.type = 'romanBlade'; props.damage = 125; props.w = 14; props.h = 14; props.bounces = 0; props.maxBounces = 1; props.spinAngle = 0; props.life = 130; props.vx = Math.cos(tank.turretAngle) * 6.5; props.vy = Math.sin(tank.turretAngle) * 6.5;
+        } else if (pType === 'pyroBullet') {
+            props.type = 'pyroBullet'; props.damage = 70; props.w = 9; props.h = 9;
+        } else if (pType === 'buckshot') {
+            props.type = 'buckshot'; props.damage = 125; props.w = 6; props.h = 6;
+        } else if (pType === 'railgun') {
+            props.type = 'railgun'; props.damage = 75; props.w = 6; props.h = 6; props.piercing = true;
+        } else if (pType === 'machinegun') {
+            props.type = 'machinegun'; props.damage = 20; props.w = 7; props.h = 7;
         } else {
             // Fallback for copied normal/other types
             props.damage = 100; props.w = 6; props.h = 6; 
@@ -926,6 +936,23 @@ function shoot() {
             spinAngle: 0
         });
         tank.fireCooldown = 65;
+    } else if (tankType === 'pyro') {
+        // Incendiary shell: deals 70 impact damage and applies burn DoT on hit
+        const ang = tank.turretAngle;
+        const speed = 5.5;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 22,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 22,
+            w: 9, h: 9,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 90,
+            owner: 'player',
+            team: 0,
+            type: 'pyroBullet',
+            damage: 70
+        });
+        tank.fireCooldown = 35;
     } else {
         const speed = 5;
         const life = 100;
@@ -941,7 +968,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1250,7 +1277,7 @@ function updatePhysics() {
                 if (b.type === 'medicalPulse') {
                     if (b.team !== tank.team) {
                         // Damage enemy only
-                        tank.hp -= b.damage || 75;
+                        if (!tank.mirrorShieldActive) tank.hp -= b.damage || 75;
                     } else {
                         // Same team - bullet passes through without healing
                         continue;
@@ -1270,9 +1297,11 @@ function updatePhysics() {
                     if (!b.hitChain) b.hitChain = [];
                     const pid = -1;
                     if (!b.hitChain.includes(pid)) {
-                        tank.hp -= b.damage || 150;
-                        b.hitChain.push(pid);
-                        for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
+                        if (!tank.mirrorShieldActive) {
+                            tank.hp -= b.damage || 150;
+                            b.hitChain.push(pid);
+                            for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
+                        }
                     }
                     if (tank.hp <= 0) {
                         spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
@@ -1377,6 +1406,7 @@ function updatePhysics() {
                      dmg = Math.round(dmg * _romanShieldMult);
                      tank.hp -= dmg;
                      if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
+                     if (b.type === 'pyroBullet') { tank.burning = true; tank.burnTimer = 300; tank.burnDps = 10; }
                      bullets.splice(i, 1);
                 }
                 tank.hitFlashTime = Date.now();
@@ -1626,6 +1656,8 @@ function updatePhysics() {
                         e.hp -= dmgDefault;
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
+                        // Pyro bullet: apply burn DoT (10 HP/sec for 5 sec)
+                        if (b.type === 'pyroBullet') { e.burning = true; e.burnTimer = 300; e.burnDps = 10; }
                         bullets.splice(i, 1);
                     }
                     e.hitFlashTime = Date.now();
