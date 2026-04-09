@@ -99,6 +99,172 @@ const FIRE_COOLDOWN = 20; // ~333ms at 60fps
 // Базовая вероятность успешного уклонения AI (0..1)
 const DODGE_BASE_ACCURACY = 0.8;
 
+// ─── Profile (multi-account) system ──────────────────────────────────────────
+// All per-profile data is stored under localStorage key 'megare_profiles'
+// (an array of profile objects) and 'megare_activeProfile' (index).
+// The legacy flat keys (tankCoins, etc.) are automatically migrated into
+// profile 0 on first load.
+
+const PROFILE_SAVE_KEYS = [
+    'tankCoins','tankGems','tankParts','tankTrophies',
+    'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
+    'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
+    'tankAvatarUnlocks'
+];
+
+function _profilesLoad() {
+    try { return JSON.parse(localStorage.getItem('megare_profiles') || 'null'); } catch(e) { return null; }
+}
+function _profilesSave(profiles) {
+    try { localStorage.setItem('megare_profiles', JSON.stringify(profiles)); } catch(e) {}
+}
+function _getActiveIdx() {
+    const v = parseInt(localStorage.getItem('megare_activeProfile'));
+    return isNaN(v) ? 0 : v;
+}
+function _setActiveIdx(idx) {
+    localStorage.setItem('megare_activeProfile', idx);
+}
+
+// Build a snapshot of the current flat keys as a profile data object
+function _snapshotCurrentData() {
+    const snap = {};
+    for (const k of PROFILE_SAVE_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v !== null) snap[k] = v;
+    }
+    return snap;
+}
+
+// Restore flat keys from a profile data object
+function _restoreProfileData(data) {
+    for (const k of PROFILE_SAVE_KEYS) {
+        if (data && data[k] !== undefined && data[k] !== null) {
+            localStorage.setItem(k, data[k]);
+        } else {
+            localStorage.removeItem(k);
+        }
+    }
+}
+
+// Initialise profiles on startup: migrate legacy data if needed
+(function _initProfiles() {
+    let profiles = _profilesLoad();
+    if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
+        // First run — migrate existing flat data into profile 0
+        const snap = _snapshotCurrentData();
+        const name = snap['tankPlayerName'] || 'Игрок 1';
+        profiles = [{ name: 'Игрок 1', createdAt: Date.now(), data: snap }];
+        _profilesSave(profiles);
+        _setActiveIdx(0);
+    }
+})();
+
+// ── Public profile API ────────────────────────────────────────────────────────
+
+/** Save current flat keys into the active profile slot */
+window.saveActiveProfile = function() {
+    const profiles = _profilesLoad() || [];
+    const idx = _getActiveIdx();
+    if (!profiles[idx]) return;
+    profiles[idx].data = _snapshotCurrentData();
+    _profilesSave(profiles);
+};
+
+/** Switch to profile at index, persisting current first */
+window.switchProfile = function(idx) {
+    // Flush current state to in-memory first (saveProgress called by caller)
+    const profiles = _profilesLoad() || [];
+    if (!profiles[idx]) return false;
+    // Save current profile data
+    const curIdx = _getActiveIdx();
+    if (profiles[curIdx]) {
+        profiles[curIdx].data = _snapshotCurrentData();
+        _profilesSave(profiles);
+    }
+    // Restore new profile
+    _restoreProfileData(profiles[idx].data);
+    _setActiveIdx(idx);
+    // Reload page so all JS globals re-init from the new flat keys
+    location.reload();
+    return true;
+};
+
+/** Create a new profile with given name and avatar */
+window.createProfile = function(name, avatar) {
+    const profiles = _profilesLoad() || [];
+    // Save current first
+    const curIdx = _getActiveIdx();
+    if (profiles[curIdx]) profiles[curIdx].data = _snapshotCurrentData();
+    // New blank profile — absolutely no resources, only normal tank unlocked
+    const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
+                    tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
+                    tankUpgrades:'{}', tankTrophiesData:'{}',
+                    tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
+                    tankAvatarUnlocks:'[]' };
+    profiles.push({ name: name || ('Игрок ' + (profiles.length + 1)), avatar: avatar || '🎮', createdAt: Date.now(), data: blank });
+    _profilesSave(profiles);
+    // Switch to new profile
+    const newIdx = profiles.length - 1;
+    _restoreProfileData(blank);
+    _setActiveIdx(newIdx);
+    location.reload();
+};
+
+/** Edit profile name and/or avatar at index */
+window.editProfile = function(idx, newName, newAvatar) {
+    const profiles = _profilesLoad() || [];
+    if (!profiles[idx]) return;
+    if (newName && newName.trim()) profiles[idx].name = newName.trim();
+    if (newAvatar)               profiles[idx].avatar = newAvatar;
+    _profilesSave(profiles);
+};
+
+/** Rename profile at index (kept for backwards compat) */
+window.renameProfile = function(idx, newName) {
+    window.editProfile(idx, newName, null);
+};
+
+/** Delete profile at index (cannot delete if only one left) */
+window.deleteProfile = function(idx) {
+    const profiles = _profilesLoad() || [];
+    if (profiles.length <= 1) return false;
+    const curIdx = _getActiveIdx();
+    profiles.splice(idx, 1);
+    _profilesSave(profiles);
+    // Switch to profile 0 (or last remaining) and reload
+    const nextIdx = Math.min(0, profiles.length - 1);
+    _restoreProfileData(profiles[nextIdx].data);
+    _setActiveIdx(nextIdx);
+    location.reload();
+    return true;
+};
+
+/** Get list of profiles for display: [{name, avatar, trophies, idx, active}] */
+window.getProfileList = function() {
+    const profiles = _profilesLoad() || [];
+    const activeIdx = _getActiveIdx();
+    return profiles.map((p, i) => ({
+        idx: i,
+        name: p.name,
+        avatar: p.avatar || '🎮',
+        trophies: parseInt((p.data && p.data.tankTrophies) || '0') || 0,
+        active: i === activeIdx,
+        createdAt: p.createdAt || 0
+    }));
+};
+
+/** Get active profile index */
+window.getActiveProfileIdx = function() { return _getActiveIdx(); };
+
+/** Get active profile name */
+window.getActiveProfileName = function() {
+    const profiles = _profilesLoad() || [];
+    const idx = _getActiveIdx();
+    return (profiles[idx] && profiles[idx].name) || 'Игрок';
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Глобальная валюта
 let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
@@ -278,6 +444,8 @@ function saveProgress() {
     localStorage.setItem('tankTrophies', trophies);
     localStorage.setItem('tankClaimedRewards', JSON.stringify(claimedRewards));
     localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
+    // Persist into the active profile slot
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
 }
 
 // Camera follow flag — always on so player sees their tank
@@ -5657,3 +5825,339 @@ if (achievementsModalClose) achievementsModalClose.addEventListener('click', () 
     const modal = document.getElementById('achievementsModal');
     if (modal) modal.style.display = 'none';
 });
+
+// ─── Profiles UI ─────────────────────────────────────────────────────────────
+
+// Avatar tiers: common = free, rare = 800 coins, unique = 200 gems
+const PROFILE_AVATAR_TIERS = {
+    common: [
+        '🎮','💥','🎲','🎯','⚙️','🔧','💀','👻','👾','🎪',
+        '🎭','🎨','❌','✅','⚠️','🔴','⭐','💧','🌑','💨'
+    ],
+    rare: [
+        '⚔️','🛡️','🔫','💣','🚀','🏹','🗡️','🪛','🔩','🔱',
+        '🛸','🚁','🛩️','🪃','🪖','🎵','⏱️','🌀','🏴','🌈',
+        '🔥','❄️','⚡','🌊','🌪️','🌋','☢️','🧲','🌩️','🌞',
+        '🌿','🍄','🦠','🪨','🧊','🦅','🦊','🐺','🐙','🦑'
+    ],
+    unique: [
+        '👑','🤖','🦾','😈','🦁','🐉','🕷️','🦂','🐍','🦖',
+        '🦈','👿','🏆','💎','💰','🔮','🪄','🪞','🟣','🟠'
+    ]
+};
+
+// Get the tier of a preset avatar ('common' | 'rare' | 'unique' | null)
+function _getAvatarTier(av) {
+    if (PROFILE_AVATAR_TIERS.common.includes(av)) return 'common';
+    if (PROFILE_AVATAR_TIERS.rare.includes(av))   return 'rare';
+    if (PROFILE_AVATAR_TIERS.unique.includes(av)) return 'unique';
+    return null; // custom avatar
+}
+
+// Read/write unlocked paid avatars for the current profile
+function _getAvatarUnlocks() {
+    try { return JSON.parse(localStorage.getItem('tankAvatarUnlocks') || '[]'); } catch(e) { return []; }
+}
+function _isAvatarUnlocked(av) {
+    const tier = _getAvatarTier(av);
+    if (!tier || tier === 'common') return true;
+    return _getAvatarUnlocks().includes(av);
+}
+function _unlockAvatar(av) {
+    const unlocks = _getAvatarUnlocks();
+    if (!unlocks.includes(av)) {
+        unlocks.push(av);
+        localStorage.setItem('tankAvatarUnlocks', JSON.stringify(unlocks));
+        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
+    }
+}
+
+function renderProfilesList() {
+    const container = document.getElementById('profilesList');
+    if (!container) return;
+    const list = window.getProfileList();
+    container.innerHTML = '';
+    list.forEach(p => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;background:' +
+            (p.active ? 'rgba(46,204,113,0.18)' : 'rgba(255,255,255,0.06)') +
+            ';border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.12)') +
+            ';border-radius:12px;padding:10px 14px;';
+
+        // Avatar circle
+        const avatar = document.createElement('div');
+        avatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2c5282);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.2)') + ';';
+        avatar.textContent = p.avatar || '🎮';
+        row.appendChild(avatar);
+
+        // Name + trophies
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = '<div style="font-weight:700;font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+            escapeHtml(p.name) + (p.active ? ' <span style="color:#2ecc71;font-size:11px;">(активный)</span>' : '') + '</div>' +
+            '<div style="font-size:12px;color:#aaa;margin-top:2px;">🏆 ' + p.trophies + ' трофеев</div>';
+        row.appendChild(info);
+
+        // Buttons
+        const btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+
+        if (!p.active) {
+            const selBtn = document.createElement('button');
+            selBtn.className = 'btn';
+            selBtn.style.cssText = 'background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;padding:6px 12px;font-size:13px;border-radius:8px;white-space:nowrap;';
+            selBtn.textContent = '▶ Войти';
+            selBtn.onclick = () => { if (typeof saveProgress === 'function') saveProgress(); window.switchProfile(p.idx); };
+            btns.appendChild(selBtn);
+        }
+
+        const renBtn = document.createElement('button');
+        renBtn.className = 'btn btn-secondary';
+        renBtn.style.cssText = 'padding:6px 10px;font-size:13px;border-radius:8px;';
+        renBtn.textContent = '✏️';
+        renBtn.title = 'Редактировать профиль';
+        renBtn.onclick = () => openProfileEditModal('edit', p.idx);
+        btns.appendChild(renBtn);
+
+        if (list.length > 1) {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn';
+            delBtn.style.cssText = 'background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;padding:6px 10px;font-size:13px;border-radius:8px;';
+            delBtn.textContent = '🗑';
+            delBtn.title = 'Удалить профиль';
+            delBtn.onclick = () => openProfileDeleteConfirm(p.idx, p.name);
+            btns.appendChild(delBtn);
+        }
+
+        row.appendChild(btns);
+        container.appendChild(row);
+    });
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Profile edit modal ────────────────────────────────────────────────────────
+let _profileEditIdx = -1;  // -1 = create mode
+let _profileEditAvatar = '🎮';
+
+function openProfileEditModal(mode, idx) {
+    const modal = document.getElementById('profileEditModal');
+    if (!modal) return;
+    _profileEditIdx = (mode === 'edit') ? idx : -1;
+    // Hide buy panel
+    const buyPanel = document.getElementById('avatarBuyPanel');
+    if (buyPanel) buyPanel.style.display = 'none';
+    _avatarBuyTarget = null;
+
+    const list = window.getProfileList();
+    const existing = (mode === 'edit' && list[idx]) ? list[idx] : null;
+
+    _profileEditAvatar = existing ? (existing.avatar || '🎮') : '🎮';
+
+    document.getElementById('profileEditTitle').textContent =
+        mode === 'edit' ? '✏️ Редактирование профиля' : '➕ Новый профиль';
+    document.getElementById('profileEditName').value = existing ? existing.name : ('Игрок ' + (list.length + 1));
+    _updateEditAvatarPreview(_profileEditAvatar);
+    _buildAvatarGrid();
+    modal.style.display = 'flex';
+}
+
+function _updateEditAvatarPreview(av) {
+    _profileEditAvatar = av;
+    const el = document.getElementById('profileEditAvatarPreview');
+    if (el) el.textContent = av;
+    // Highlight selected in grid
+    const btns = document.querySelectorAll('.profile-avatar-opt');
+    btns.forEach(b => {
+        b.style.outline = (b.dataset.av === av) ? '3px solid #2ecc71' : 'none';
+    });
+}
+
+function _buildAvatarGrid() {
+    const grid = document.getElementById('profileAvatarGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    // Tier visual config
+    const tierCfg = {
+        common: { bg: 'rgba(100,100,100,0.28)', border: 'rgba(180,180,180,0.35)', label: 'Обычные · бесплатно',    labelColor: '#aaa' },
+        rare:   { bg: 'rgba(46,204,113,0.15)',  border: 'rgba(46,204,113,0.45)',  label: 'Редкие · 800 🪙',        labelColor: '#2ecc71' },
+        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Уникальные · 200 💎',   labelColor: '#9b59b6' }
+    };
+
+    ['common', 'rare', 'unique'].forEach(tier => {
+        // Section header
+        const cfg = tierCfg[tier];
+        const hdr = document.createElement('div');
+        hdr.style.cssText = 'width:100%;font-size:11px;color:' + cfg.labelColor + ';text-align:left;padding:2px 2px 4px;letter-spacing:0.03em;font-weight:600;';
+        hdr.textContent = cfg.label;
+        grid.appendChild(hdr);
+
+        // Row of avatars
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
+        PROFILE_AVATAR_TIERS[tier].forEach(av => {
+            const unlocked = _isAvatarUnlocked(av);
+            const isSelected = (av === _profileEditAvatar);
+            const btn = document.createElement('button');
+            btn.className = 'profile-avatar-opt';
+            btn.dataset.av = av;
+            btn.style.cssText = 'position:relative;width:40px;height:40px;background:' + cfg.bg + ';border:1px solid ' + cfg.border + ';border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';opacity:' + (unlocked ? '1' : '0.55') + ';';
+            if (unlocked) {
+                btn.innerHTML = '<span style="font-size:22px;">' + av + '</span>';
+                btn.onclick = () => _updateEditAvatarPreview(av);
+            } else {
+                btn.innerHTML = '<span style="font-size:16px;">' + av + '</span><span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
+                btn.onclick = () => _showAvatarBuyPanel(av, tier);
+            }
+            row.appendChild(btn);
+        });
+        grid.appendChild(row);
+    });
+}
+
+// ── Avatar purchase ───────────────────────────────────────────────────────────
+let _avatarBuyTarget = null;
+
+function _showAvatarBuyPanel(av, tier) {
+    _avatarBuyTarget = av;
+    const panel = document.getElementById('avatarBuyPanel');
+    const info  = document.getElementById('avatarBuyInfo');
+    if (!panel || !info) return;
+    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Уникальная · 200 кристаллов 💎';
+    info.innerHTML = '<span style="font-size:26px;vertical-align:middle;">' + av + '</span>&nbsp; <strong style="color:#fff;">' + tierLabel + '</strong>';
+    const buyBtn = document.getElementById('avatarBuyConfirmBtn');
+    if (buyBtn) buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 200';
+    panel.style.display = 'block';
+}
+
+function openProfilesModal() {
+    const modal = document.getElementById('profilesModal');
+    if (!modal) return;
+    renderProfilesList();
+    modal.style.display = 'flex';
+}
+
+const profilesBtn = document.getElementById('profilesBtn');
+if (profilesBtn) profilesBtn.addEventListener('click', openProfilesModal);
+
+const profilesCloseBtn = document.getElementById('profilesCloseBtn');
+if (profilesCloseBtn) profilesCloseBtn.addEventListener('click', () => {
+    const modal = document.getElementById('profilesModal');
+    if (modal) modal.style.display = 'none';
+});
+
+const profileCreateBtn = document.getElementById('profileCreateBtn');
+if (profileCreateBtn) profileCreateBtn.addEventListener('click', () => openProfileEditModal('create', -1));
+
+// Edit modal: Save
+const profileEditSave = document.getElementById('profileEditSave');
+if (profileEditSave) profileEditSave.addEventListener('click', () => {
+    const nameVal = (document.getElementById('profileEditName').value || '').trim();
+    if (!nameVal) { document.getElementById('profileEditName').focus(); return; }
+    const finalAvatar = _profileEditAvatar;
+
+    if (_profileEditIdx === -1) {
+        // Create mode
+        if (typeof saveProgress === 'function') saveProgress();
+        window.createProfile(nameVal, finalAvatar);
+    } else {
+        // Edit mode
+        window.editProfile(_profileEditIdx, nameVal, finalAvatar);
+        document.getElementById('profileEditModal').style.display = 'none';
+        renderProfilesList();
+        // Update header name if editing active profile
+        const nameEl = document.getElementById('activeProfileName');
+        if (nameEl) nameEl.textContent = '👤 ' + (window.getActiveProfileName ? window.getActiveProfileName() : '');
+    }
+});
+
+// Edit modal: Cancel
+const profileEditCancel = document.getElementById('profileEditCancel');
+if (profileEditCancel) profileEditCancel.addEventListener('click', () => {
+    document.getElementById('profileEditModal').style.display = 'none';
+});
+
+// Avatar buy panel
+const avatarBuyConfirmBtn = document.getElementById('avatarBuyConfirmBtn');
+if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
+    if (!_avatarBuyTarget) return;
+    const tier = _getAvatarTier(_avatarBuyTarget);
+    const info = document.getElementById('avatarBuyInfo');
+    if (tier === 'rare') {
+        if (coins < 800) {
+            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно монет! Нужно 800 🪙</span>';
+            return;
+        }
+        coins -= 800;
+        localStorage.setItem('tankCoins', coins);
+    } else if (tier === 'unique') {
+        if (gems < 200) {
+            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно кристаллов! Нужно 200 💎</span>';
+            return;
+        }
+        gems -= 200;
+        localStorage.setItem('tankGems', gems);
+    }
+    _unlockAvatar(_avatarBuyTarget);
+    _updateEditAvatarPreview(_avatarBuyTarget);
+    const panel = document.getElementById('avatarBuyPanel');
+    if (panel) panel.style.display = 'none';
+    _buildAvatarGrid(); // refresh to remove the lock
+    _avatarBuyTarget = null;
+    if (typeof saveProgress === 'function') saveProgress();
+});
+
+const avatarBuyCancelBtn = document.getElementById('avatarBuyCancelBtn');
+if (avatarBuyCancelBtn) avatarBuyCancelBtn.addEventListener('click', () => {
+    const panel = document.getElementById('avatarBuyPanel');
+    if (panel) panel.style.display = 'none';
+    _avatarBuyTarget = null;
+});
+
+// ── Delete confirmation modal ─────────────────────────────────────────────────
+let _profileDeleteTargetIdx = -1;
+
+function openProfileDeleteConfirm(idx, name) {
+    _profileDeleteTargetIdx = idx;
+    const msg = document.getElementById('profileDeleteMsg');
+    if (msg) msg.textContent = 'Вы уверены, что хотите удалить профиль «' + name + '»?';
+    const modal = document.getElementById('profileDeleteModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+const profileDeleteConfirmBtn = document.getElementById('profileDeleteConfirmBtn');
+if (profileDeleteConfirmBtn) profileDeleteConfirmBtn.addEventListener('click', () => {
+    document.getElementById('profileDeleteModal').style.display = 'none';
+    if (_profileDeleteTargetIdx >= 0) {
+        window.deleteProfile(_profileDeleteTargetIdx);
+        _profileDeleteTargetIdx = -1;
+    }
+});
+
+const profileDeleteCancelBtn = document.getElementById('profileDeleteCancelBtn');
+if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () => {
+    document.getElementById('profileDeleteModal').style.display = 'none';
+    _profileDeleteTargetIdx = -1;
+});
+
+// Show active profile name + avatar in main menu header
+(function _showActiveProfileName() {
+    const header = document.querySelector('.menu-header');
+    if (!header) return;
+    const nameEl = document.createElement('div');
+    nameEl.id = 'activeProfileName';
+    nameEl.style.cssText = 'font-size:11px;color:#aaa;text-align:center;margin-top:4px;cursor:pointer;user-select:none;';
+    nameEl.title = 'Сменить профиль';
+    nameEl.onclick = openProfilesModal;
+    const profiles = _profilesLoad() || [];
+    const idx = _getActiveIdx();
+    const prof = profiles[idx];
+    const av = (prof && prof.avatar) || '🎮';
+    const nm = (prof && prof.name) || 'Игрок';
+    nameEl.textContent = av + ' ' + nm;
+    header.appendChild(nameEl);
+})();
+// ─────────────────────────────────────────────────────────────────────────────
