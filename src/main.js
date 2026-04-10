@@ -109,7 +109,7 @@ const PROFILE_SAVE_KEYS = [
     'tankCoins','tankGems','tankParts','tankTrophies',
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
-    'tankAvatarUnlocks'
+    'tankAvatarUnlocks','tankPromoUsed'
 ];
 
 function _profilesLoad() {
@@ -201,7 +201,7 @@ window.createProfile = function(name, avatar) {
                     tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
                     tankUpgrades:'{}', tankTrophiesData:'{}',
                     tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
-                    tankAvatarUnlocks:'[]' };
+                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]' };
     profiles.push({ name: name || ('Игрок ' + (profiles.length + 1)), avatar: avatar || '🎮', createdAt: Date.now(), data: blank });
     _profilesSave(profiles);
     // Switch to new profile
@@ -1951,6 +1951,52 @@ if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
 if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () => showContainerFlow('mechParts'));
+
+// ── Promo codes ─────────────────────────────────────────────────────────────
+// Known promo codes: code → { reward function, message }
+const _PROMO_CODES = {
+    'gyth6-0%99^#8/*0': { reward: function() { gems += 20; localStorage.setItem('tankGems', gems); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 20 💎' },
+    'hypt98yh&|)?pon6':  { reward: function() { coins += 200; localStorage.setItem('tankCoins', coins); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 200 🪙' },
+    'megrui89)-+*_}]{':  { reward: function() { parts += 50; localStorage.setItem('tankParts', parts); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 50 🔧' }
+};
+function _getUsedPromos() {
+    try { return JSON.parse(localStorage.getItem('tankPromoUsed') || '[]'); } catch(e) { return []; }
+}
+function _markPromoUsed(code) {
+    const used = _getUsedPromos();
+    used.push(code);
+    localStorage.setItem('tankPromoUsed', JSON.stringify(used));
+}
+(function _initPromoUI() {
+    const btn = document.getElementById('promoActivateBtn');
+    const input = document.getElementById('promoCodeInput');
+    const result = document.getElementById('promoResult');
+    if (!btn || !input || !result) return;
+
+    function activate() {
+        const code = (input.value || '').trim();
+        if (!code) { result.innerHTML = '<span style="color:#e74c3c;">Введите промокод.</span>'; return; }
+        const used = _getUsedPromos();
+        if (used.includes(code)) {
+            result.innerHTML = '<span style="color:#e74c3c;">❌ Промокод уже использован.</span>';
+            return;
+        }
+        const entry = _PROMO_CODES[code];
+        if (!entry) {
+            result.innerHTML = '<span style="color:#e74c3c;">❌ Неверный промокод.</span>';
+            return;
+        }
+        entry.reward();
+        _markPromoUsed(code);
+        if (typeof saveProgress === 'function') saveProgress();
+        input.value = '';
+        result.innerHTML = '<span style="color:#2ecc71;">' + entry.msg + '</span>';
+    }
+
+    btn.addEventListener('click', activate);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') activate(); });
+})();
+// ────────────────────────────────────────────────────────────────────────────
 
 const containerFlowModal = document.getElementById('containerFlowModal');
 const containerFlowPreview = document.getElementById('containerFlowPreview');
@@ -5828,7 +5874,7 @@ if (achievementsModalClose) achievementsModalClose.addEventListener('click', () 
 
 // ─── Profiles UI ─────────────────────────────────────────────────────────────
 
-// Avatar tiers: common = free, rare = 800 coins, unique = 200 gems
+// Avatar tiers: common = free, rare = 800 coins, epic = 200 gems
 const PROFILE_AVATAR_TIERS = {
     common: [
         '🎮','💥','🎲','🎯','⚙️','🔧','💀','👻','👾','🎪',
@@ -5967,7 +6013,15 @@ function openProfileEditModal(mode, idx) {
 function _updateEditAvatarPreview(av) {
     _profileEditAvatar = av;
     const el = document.getElementById('profileEditAvatarPreview');
-    if (el) el.textContent = av;
+    if (el) {
+        el.textContent = av;
+        // Background color reflects tier
+        const tier = _getAvatarTier(av);
+        const bg = tier === 'rare'   ? 'linear-gradient(135deg,#1a5c35,#27ae60)'
+                 : tier === 'unique' ? 'linear-gradient(135deg,#4a1a7c,#7d3c98)'
+                 :                    'linear-gradient(135deg,#1a3a5c,#2c5282)';
+        el.style.background = bg;
+    }
     // Highlight selected in grid
     const btns = document.querySelectorAll('.profile-avatar-opt');
     btns.forEach(b => {
@@ -5984,7 +6038,7 @@ function _buildAvatarGrid() {
     const tierCfg = {
         common: { bg: 'rgba(100,100,100,0.28)', border: 'rgba(180,180,180,0.35)', label: 'Обычные · бесплатно',    labelColor: '#aaa' },
         rare:   { bg: 'rgba(46,204,113,0.15)',  border: 'rgba(46,204,113,0.45)',  label: 'Редкие · 800 🪙',        labelColor: '#2ecc71' },
-        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Уникальные · 200 💎',   labelColor: '#9b59b6' }
+        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Эпические · 200 💎',   labelColor: '#9b59b6' }
     };
 
     ['common', 'rare', 'unique'].forEach(tier => {
@@ -6026,10 +6080,13 @@ function _showAvatarBuyPanel(av, tier) {
     const panel = document.getElementById('avatarBuyPanel');
     const info  = document.getElementById('avatarBuyInfo');
     if (!panel || !info) return;
-    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Уникальная · 200 кристаллов 💎';
-    info.innerHTML = '<span style="font-size:26px;vertical-align:middle;">' + av + '</span>&nbsp; <strong style="color:#fff;">' + tierLabel + '</strong>';
+    // Reset buttons to default state
     const buyBtn = document.getElementById('avatarBuyConfirmBtn');
-    if (buyBtn) buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 200';
+    const cancelBtn = document.getElementById('avatarBuyCancelBtn');
+    if (buyBtn) { buyBtn.style.display = ''; buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 200'; }
+    if (cancelBtn) cancelBtn.textContent = '✕ Отмена';
+    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Эпическая · 200 кристаллов 💎';
+    info.innerHTML = '<span style="font-size:26px;vertical-align:middle;">' + av + '</span>&nbsp; <strong style="color:#fff;">' + tierLabel + '</strong>';
     panel.style.display = 'block';
 }
 
@@ -6089,6 +6146,10 @@ if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
     if (tier === 'rare') {
         if (coins < 800) {
             if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно монет! Нужно 800 🪙</span>';
+            const bb = document.getElementById('avatarBuyConfirmBtn');
+            const cb = document.getElementById('avatarBuyCancelBtn');
+            if (bb) bb.style.display = 'none';
+            if (cb) cb.textContent = '✕ Закрыть';
             return;
         }
         coins -= 800;
@@ -6096,6 +6157,10 @@ if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
     } else if (tier === 'unique') {
         if (gems < 200) {
             if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно кристаллов! Нужно 200 💎</span>';
+            const bb = document.getElementById('avatarBuyConfirmBtn');
+            const cb = document.getElementById('avatarBuyCancelBtn');
+            if (bb) bb.style.display = 'none';
+            if (cb) cb.textContent = '✕ Закрыть';
             return;
         }
         gems -= 200;
@@ -6114,6 +6179,10 @@ const avatarBuyCancelBtn = document.getElementById('avatarBuyCancelBtn');
 if (avatarBuyCancelBtn) avatarBuyCancelBtn.addEventListener('click', () => {
     const panel = document.getElementById('avatarBuyPanel');
     if (panel) panel.style.display = 'none';
+    // Reset buttons for next open
+    const buyBtn = document.getElementById('avatarBuyConfirmBtn');
+    if (buyBtn) buyBtn.style.display = '';
+    avatarBuyCancelBtn.textContent = '✕ Отмена';
     _avatarBuyTarget = null;
 });
 

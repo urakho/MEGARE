@@ -184,6 +184,17 @@
                 <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
+
+            <!-- Promo codes section -->
+            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px 16px;width:80%;flex-shrink:0;box-sizing:border-box;">
+                <p style="margin:0 0 10px;font-size:15px;font-weight:bold;color:#f1c40f;">🎟️ Промокод</p>
+                <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                    <input id="promoCodeInput" type="text" maxlength="16" placeholder="Введите промокод"
+                        style="flex:1;min-width:0;max-width:220px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:14px;outline:none;font-family:monospace;">
+                    <button id="promoActivateBtn" class="btn" style="background:linear-gradient(135deg,#e67e22,#d35400);color:#fff;padding:8px 16px;font-size:14px;border-radius:8px;white-space:nowrap;">✅ Активировать</button>
+                </div>
+                <div id="promoResult" style="margin-top:8px;font-size:13px;min-height:18px;"></div>
+            </div>
         </div>
         <div style="margin-top: 15px; text-align: center;">
             <button id="shopCancel" class="btn btn-secondary">Закрыть</button>
