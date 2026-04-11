@@ -2580,11 +2580,9 @@ function drawCharacterPreviews() {
         
         if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === type) {
             ctx.save();
-            ctx.shadowColor = '#f1c40f';
-            ctx.shadowBlur = 14;
-            ctx.strokeStyle = '#f1c40f';
-            ctx.lineWidth = 5;
-            ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
             ctx.restore();
         } else if (!isUnlocked) {
              // Рисуем замок
@@ -2657,6 +2655,19 @@ function drawCharacterPreviews() {
             ctx.restore();
 
             // Selection Border or Lock
+            // Draw trophy counter
+            if (isUnlocked && typeof getTankTrophies === 'function') {
+                const _tw = getTankTrophies('illuminat');
+                if (_tw > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                    ctx.fillStyle = '#e67e22';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('\uD83C\uDFC6 ' + _tw, canvas.width/2, canvas.height - 12);
+                }
+            }
             if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'illuminat') {
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4;
@@ -2722,7 +2733,20 @@ function drawCharacterPreviews() {
             ctx.restore();
 
             // Selection Border or Lock
-             if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'time') {
+            // Draw trophy counter
+            if (isUnlocked && typeof getTankTrophies === 'function') {
+                const _tw = getTankTrophies('time');
+                if (_tw > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                    ctx.fillStyle = '#e67e22';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('\uD83C\uDFC6 ' + _tw, canvas.width/2, canvas.height - 12);
+                }
+            }
+            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'time') {
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4;
                 ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
@@ -2779,6 +2803,20 @@ function drawCharacterPreviews() {
             if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
             drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a3e', 0, 1, 'imitator');
             ctx.restore();
+
+            // Draw trophy counter
+            if (isUnlocked && typeof getTankTrophies === 'function') {
+                const _tw = getTankTrophies('imitator');
+                if (_tw > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                    ctx.fillStyle = '#e67e22';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🏆 ' + _tw, canvas.width/2, canvas.height - 12);
+                }
+            }
 
             // Selection Border or Lock
             if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'imitator') {
@@ -2838,6 +2876,19 @@ function drawCharacterPreviews() {
             if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
             drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#1a1a2e', 0, 1, 'roman');
             ctx.restore();
+            // Draw trophy counter
+            if (isUnlocked && typeof getTankTrophies === 'function') {
+                const _tw = getTankTrophies('roman');
+                if (_tw > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                    ctx.fillStyle = '#e67e22';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('\uD83C\uDFC6 ' + _tw, canvas.width/2, canvas.height - 12);
+                }
+            }
             if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'roman') {
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth   = 4;

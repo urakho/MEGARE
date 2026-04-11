@@ -113,6 +113,20 @@ b { color: #ffcc00; }
 .btn-trophy:hover {
     background: linear-gradient(135deg, #d35400, #e67e22);
 }
+/* Special unique icon buttons — yellow background */
+.btn-special-icon {
+    background: linear-gradient(135deg, #f1c40f, #f39c12) !important;
+    border: 2px solid #e67e22 !important;
+    box-shadow: 0 0 8px rgba(241,196,15,0.5);
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-special-icon:hover {
+    background: linear-gradient(135deg, #f39c12, #f1c40f) !important;
+    box-shadow: 0 0 14px rgba(241,196,15,0.8);
+}
 
 .btn-settings {
     background: linear-gradient(180deg,#636e72,#2d3436);

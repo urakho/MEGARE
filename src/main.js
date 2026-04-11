@@ -1957,7 +1957,14 @@ if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () =>
 const _PROMO_CODES = {
     'gyth6-0%99^#8/*0': { reward: function() { gems += 20; localStorage.setItem('tankGems', gems); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 20 💎' },
     'hypt98yh&|)?pon6':  { reward: function() { coins += 200; localStorage.setItem('tankCoins', coins); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 200 🪙' },
-    'megrui89)-+*_}]{':  { reward: function() { parts += 50; localStorage.setItem('tankParts', parts); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 50 🔧' }
+    'megrui89)-+*_}]{':  { reward: function() { parts += 50; localStorage.setItem('tankParts', parts); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 50 🔧' },
+    'tank8(0)+-_&54$3':  { reward: function() {
+        if (!achievementData.claimed) achievementData.claimed = {};
+        achievementData.claimed['icon_tank'] = true;
+        saveAchievements();
+        _refreshSpecialIconButtons();
+        updateCoinDisplay();
+    }, msg: '✅ Промокод активирован! Получена уникальная иконка «Tank» 💎' }
 };
 function _getUsedPromos() {
     try { return JSON.parse(localStorage.getItem('tankPromoUsed') || '[]'); } catch(e) { return []; }
@@ -5662,6 +5669,14 @@ const ACHIEVEMENT_DEFS = [
     { id: 'trio_base',    group: 'trio', name: 'Базовое трио',      desc: 'Собери: Обычный + Ледяной + Водомёт',              icon: '🛡️', trioMembers: ['normal','ice','waterjet'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_control', group: 'trio', name: 'Контролирующее трио', desc: 'Собери: Мина + Буратино + Токсик',               icon: '☢️', trioMembers: ['mine','buratino','toxic'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_support', group: 'trio', name: 'Поддерживающее трио', desc: 'Собери: Музыкальный + Медик + Зеркало',          icon: '💫', trioMembers: ['musical','medical','mirror'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    // Special icon unlock achievements
+    { id: 'icon_rome', group: 'icon', name: 'Легион Рима',      desc: 'Победи 20 раз на танке "Роман"',     icon: '🏛', reward: { type: 'icon', icon: 'rome' }, rewardDesc: 'Уникальная иконка "Рим"',      tankKey: 'roman' },
+    { id: 'icon_time', group: 'icon', name: 'Мастер Времени',   desc: 'Победи 20 раз на танке "Временной"', icon: '⏰', reward: { type: 'icon', icon: 'time' }, rewardDesc: 'Уникальная иконка "Часы"',    tankKey: 'time' },
+    { id: 'icon_imit', group: 'icon', name: 'Великий Имитатор', desc: 'Победи 20 раз на танке "Имитатор"',  icon: '🌈', reward: { type: 'icon', icon: 'imit' }, rewardDesc: 'Уникальная иконка "Имитатор"', tankKey: 'imitator' },
+    // Mythic tank achievements (reward: legendary container)
+    { id: 'mythic_illuminat', group: 'mythic', name: 'Мастер Иллюмината', desc: 'Победи 20 раз на танке "Иллюминат"',    icon: '👁️', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер', tankKey: 'illuminat' },
+    { id: 'mythic_plasma',    group: 'mythic', name: 'Плазменный Мастер', desc: 'Победи 20 раз на танке "Плазменный"',   icon: '🔮', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер', tankKey: 'plasma' },
+    { id: 'mythic_electric',  group: 'mythic', name: 'Гром и Молния',     desc: 'Победи 20 раз на танке "Электрический"', icon: '🌩️', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер', tankKey: 'electric' },
 ];
 
 let achievementData = (function() {
@@ -5716,10 +5731,60 @@ function checkAchievements() {
     saveAchievements();
 }
 
+// ── Special icon achievements ────────────────────────────────────────────────
+// Check and unlock special icon achievements based on tank wins
+function checkIconAchievements() {
+    if (!achievementData.tankWins) return;
+    if (!achievementData.completed) achievementData.completed = {};
+    if (!achievementData.claimed)   achievementData.claimed   = {};
+    const tw = achievementData.tankWins;
+    // Check all achievements tied to a specific tank (icon and mythic groups)
+    for (const a of ACHIEVEMENT_DEFS.filter(d => d.tankKey)) {
+        if (!achievementData.completed[a.id] && (tw[a.tankKey] || 0) >= 20) {
+            achievementData.completed[a.id] = true;
+        }
+    }
+    saveAchievements();
+}
+
+function _getUnlockedSpecialIcons() {
+    if (!achievementData.claimed) return [];
+    const result = [];
+    // From achievement defs (e.g. icon_rome)
+    Object.keys(achievementData.claimed).forEach(id => {
+        const def = ACHIEVEMENT_DEFS.find(a => a.id === id);
+        if (def && def.group === 'icon' && def.reward && def.reward.icon) {
+            result.push(def.reward.icon);
+        }
+    });
+    // Direct icon keys set by promo codes (e.g. icon_tank)
+    if (achievementData.claimed['icon_tank']) result.push('tank');
+    return result;
+}
+
+function _refreshSpecialIconButtons() {
+    // Sidebar buttons removed — icons are used only in profile avatar selection
+}
+
+// Run on load and patch checkAchievements to also check icon achievements
+(function() {
+    const _origCheck = checkAchievements;
+    checkAchievements = function() {
+        _origCheck();
+        checkIconAchievements();
+        _refreshSpecialIconButtons();
+    };
+    _refreshSpecialIconButtons();
+})();
+
 // Called from win-lose.js after every battle win
 window.onBattleWin = function() {
     if (!achievementData.totalWins) achievementData.totalWins = 0;
     achievementData.totalWins++;
+    // Track per-tank wins
+    const curTank = localStorage.getItem('tankSelected') || tankType;
+    if (!achievementData.tankWins) achievementData.tankWins = {};
+    achievementData.tankWins[curTank] = (achievementData.tankWins[curTank] || 0) + 1;
     checkAchievements();
     saveAchievements();
 };
@@ -5734,6 +5799,14 @@ window.claimAchievement = function(id) {
 
     achievementData.claimed[id] = true;
     saveAchievements();
+
+    // Icon reward — just unlock the button, no container
+    if (def.reward.type === 'icon') {
+        _refreshSpecialIconButtons();
+        showNotification('🏆 Получена уникальная иконка «' + (def.reward.icon) + '»!', '#f1c40f');
+        renderAchievementsModal();
+        return;
+    }
 
     // Grant rewards — show full container flow animation for each container
     // mini=мини, normal=bronze(обычный), super=legendary(супер/легендарный)
@@ -5790,6 +5863,18 @@ function buildAchievementCard(a, wins, claimed, completed, activeWinsStep) {
         } else if (isLocked) {
             progressHtml = `<div class="achievement-progress-text">0 / ${target} побед</div>`;
         }
+    } else if (a.tankKey) {
+        const target = 20;
+        const tankWins = (achievementData.tankWins && achievementData.tankWins[a.tankKey]) || 0;
+        const cur = Math.min(tankWins, target);
+        const pct = Math.round((cur / target) * 100);
+        if (!isCompleted) {
+            progressHtml = `
+                <div class="achievement-progress-wrap"><div class="achievement-progress-bar" style="width:${pct}%"></div></div>
+                <div class="achievement-progress-text">${cur} / ${target} побед</div>`;
+        } else if (!isClaimed) {
+            progressHtml = `<div class="achievement-progress-text" style="color:#f1c40f;">✔ Условие выполнено!</div>`;
+        }
     }
 
     // Action HTML
@@ -5838,6 +5923,18 @@ function renderAchievementsModal() {
     const winsGroup = ACHIEVEMENT_DEFS.filter(a => a.group === 'wins');
     for (const a of winsGroup) {
         container.appendChild(buildAchievementCard(a, wins, claimed, completed, activeWinsStep));
+    }
+
+    // Section: Tank wins (icon achievements)
+    const tankWinsTitle = document.createElement('div');
+    tankWinsTitle.className = 'achievement-section-title';
+    tankWinsTitle.style.marginTop = '16px';
+    tankWinsTitle.textContent = '💎 Победы на танках';
+    container.appendChild(tankWinsTitle);
+
+    const iconAndMythicAchievements = ACHIEVEMENT_DEFS.filter(a => a.group === 'icon' || a.group === 'mythic');
+    for (const a of iconAndMythicAchievements) {
+        container.appendChild(buildAchievementCard(a, wins, claimed, completed, null));
     }
 
     // Section: Trio achievements
@@ -5892,8 +5989,9 @@ const PROFILE_AVATAR_TIERS = {
     ]
 };
 
-// Get the tier of a preset avatar ('common' | 'rare' | 'unique' | null)
+// Get the tier of a preset avatar ('common' | 'rare' | 'unique' | 'special' | null)
 function _getAvatarTier(av) {
+    if (av && av.startsWith('img:'))              return 'special';
     if (PROFILE_AVATAR_TIERS.common.includes(av)) return 'common';
     if (PROFILE_AVATAR_TIERS.rare.includes(av))   return 'rare';
     if (PROFILE_AVATAR_TIERS.unique.includes(av)) return 'unique';
@@ -5933,7 +6031,12 @@ function renderProfilesList() {
         // Avatar circle
         const avatar = document.createElement('div');
         avatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2c5282);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.2)') + ';';
-        avatar.textContent = p.avatar || '🎮';
+        const pAv = p.avatar || '🎮';
+        if (pAv.startsWith('img:')) {
+            avatar.innerHTML = '<img src="icon-png/' + pAv.slice(4) + '.png" style="width:36px;height:36px;object-fit:contain;">';
+        } else {
+            avatar.textContent = pAv;
+        }
         row.appendChild(avatar);
 
         // Name + trophies
@@ -6014,12 +6117,19 @@ function _updateEditAvatarPreview(av) {
     _profileEditAvatar = av;
     const el = document.getElementById('profileEditAvatarPreview');
     if (el) {
-        el.textContent = av;
-        // Background color reflects tier
         const tier = _getAvatarTier(av);
-        const bg = tier === 'rare'   ? 'linear-gradient(135deg,#1a5c35,#27ae60)'
-                 : tier === 'unique' ? 'linear-gradient(135deg,#4a1a7c,#7d3c98)'
-                 :                    'linear-gradient(135deg,#1a3a5c,#2c5282)';
+        if (tier === 'special') {
+            const name = av.slice(4);
+            el.textContent = '';
+            el.innerHTML = '<img src="icon-png/' + name + '.png" style="width:56px;height:56px;object-fit:contain;">';
+        } else {
+            el.textContent = av;
+        }
+        // Background color reflects tier
+        const bg = tier === 'rare'    ? 'linear-gradient(135deg,#1a5c35,#27ae60)'
+                 : tier === 'unique'  ? 'linear-gradient(135deg,#4a1a7c,#7d3c98)'
+                 : tier === 'special' ? 'linear-gradient(135deg,#7c4a1a,#c8791f)'
+                 :                     'linear-gradient(135deg,#1a3a5c,#2c5282)';
         el.style.background = bg;
     }
     // Highlight selected in grid
@@ -6070,6 +6180,30 @@ function _buildAvatarGrid() {
         });
         grid.appendChild(row);
     });
+
+    // Special (unique) icons — unlocked via achievements or promo codes
+    const specialIcons = _getUnlockedSpecialIcons();
+    if (specialIcons.length > 0) {
+        const shdr = document.createElement('div');
+        shdr.style.cssText = 'width:100%;font-size:11px;color:#f1c40f;text-align:left;padding:2px 2px 4px;letter-spacing:0.03em;font-weight:600;';
+        shdr.textContent = '⭐ Уникальные · достижения';
+        grid.appendChild(shdr);
+
+        const srow = document.createElement('div');
+        srow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
+        specialIcons.forEach(name => {
+            const av = 'img:' + name;
+            const isSelected = (av === _profileEditAvatar);
+            const btn = document.createElement('button');
+            btn.className = 'profile-avatar-opt';
+            btn.dataset.av = av;
+            btn.style.cssText = 'position:relative;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
+            btn.innerHTML = '<img src="icon-png/' + name + '.png" style="width:28px;height:28px;object-fit:contain;">';
+            btn.onclick = () => _updateEditAvatarPreview(av);
+            srow.appendChild(btn);
+        });
+        grid.appendChild(srow);
+    }
 }
 
 // ── Avatar purchase ───────────────────────────────────────────────────────────
@@ -6226,7 +6360,11 @@ if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () 
     const prof = profiles[idx];
     const av = (prof && prof.avatar) || '🎮';
     const nm = (prof && prof.name) || 'Игрок';
-    nameEl.textContent = av + ' ' + nm;
+    if (av.startsWith('img:')) {
+        nameEl.innerHTML = '<img src="icon-png/' + av.slice(4) + '.png" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
+    } else {
+        nameEl.textContent = av + ' ' + nm;
+    }
     header.appendChild(nameEl);
 })();
 // ─────────────────────────────────────────────────────────────────────────────
