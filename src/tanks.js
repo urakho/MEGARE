@@ -5632,6 +5632,7 @@ function renderTankUpgradesUI(tt) {
             const stat = btn.dataset.stat;
             const cost = parseInt(btn.dataset.cost);
             if (typeof parts === 'undefined' || parts < cost) return;
+            if (window._isProfileSwitching) return;
             // Deduct parts
             parts -= cost;
             localStorage.setItem('tankParts', parts);
@@ -5862,6 +5863,7 @@ function showTankDetail(tankType) {
                 const stat = btn.dataset.stat;
                 const cost = parseInt(btn.dataset.cost) || 0;
                 if (typeof parts === 'undefined' || parts < cost) return;
+                if (window._isProfileSwitching) return;
                 // Deduct parts
                 parts -= cost;
                 localStorage.setItem('tankParts', parts);

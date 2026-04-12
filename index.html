@@ -155,6 +155,11 @@
         
         <!-- Shop items container with scroll -->
         <div style="display:flex; flex-direction:column; gap:15px; align-items:center; max-height: 400px; overflow-y: auto; padding-right: 5px; width: 100%;">
+            <!-- КОНТЕЙНЕРЫ section header -->
+            <div style="width:80%; text-align:center; margin-top:10px; margin-bottom:5px;">
+                <p style="margin:0; font-size:20px; font-weight:bold; color:#3498db; text-shadow:0 0 5px rgba(52,152,219,0.5);">📦 КОНТЕЙНЕРЫ</p>
+            </div>
+            
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
@@ -186,8 +191,35 @@
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
 
-            <!-- Promo codes section -->
-            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px 16px;width:80%;flex-shrink:0;box-sizing:border-box;">
+            <!-- ЛИМИТИРОВАННОЕ section header -->
+            <div style="width:80%; text-align:center; margin-top:15px; margin-bottom:5px;">
+                <div style="display:inline-flex; align-items:center; gap:8px;">
+                    <svg width="28" height="28" viewBox="0 0 28 28" style="vertical-align:middle;">
+                        <style>
+                            @keyframes rotateClock { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                            .clock-hand { transform-origin: 50% 50%; animation: rotateClock 4s linear infinite; }
+                        </style>
+                        <!-- Clock circle -->
+                        <circle cx="14" cy="14" r="12" fill="none" stroke="#e91e63" stroke-width="1.5"/>
+                        <!-- Center dot -->
+                        <circle cx="14" cy="14" r="1.5" fill="#e91e63"/>
+                        <!-- Hour markers -->
+                        <line x1="14" y1="3" x2="14" y2="5" stroke="#e91e63" stroke-width="1"/>
+                        <line x1="14" y1="23" x2="14" y2="25" stroke="#e91e63" stroke-width="1"/>
+                        <line x1="3" y1="14" x2="5" y2="14" stroke="#e91e63" stroke-width="1"/>
+                        <line x1="23" y1="14" x2="25" y2="14" stroke="#e91e63" stroke-width="1"/>
+                        <!-- Rotating hand -->
+                        <g class="clock-hand">
+                            <line x1="14" y1="14" x2="14" y2="7" stroke="#e91e63" stroke-width="1.5" stroke-linecap="round"/>
+                        </g>
+                    </svg>
+                    <p style="margin:0; font-size:20px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px rgba(233,30,99,0.5);">ЛИМИТИРОВАННОЕ</p>
+                </div>
+            </div>
+            <div id="limitedItemsContainer" style="width:80%;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;"></div>
+
+            <!-- Promo codes section (no header) -->
+            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px 16px;width:80%;flex-shrink:0;box-sizing:border-box;margin-top:10px;">
                 <p style="margin:0 0 10px;font-size:15px;font-weight:bold;color:#f1c40f;">🎟️ Промокод</p>
                 <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
                     <input id="promoCodeInput" type="text" maxlength="16" placeholder="Введите промокод"
@@ -492,13 +524,17 @@
         <div style="display:flex; justify-content:center; gap:20px; margin:20px 0;">
             <!-- Option 1 -->
             <div id="choiceOption1" style="background:#334; padding:15px; border-radius:8px; width:220px; cursor:pointer; border:2px solid transparent; transition: all 0.2s;" onclick="selectChoiceOption(0)">
-                <canvas id="choiceCanvas1" width="100" height="100" style="margin-bottom:10px;"></canvas>
+                <div style="display:flex; justify-content:center; margin-bottom:10px;">
+                    <canvas id="choiceCanvas1" width="100" height="100"></canvas>
+                </div>
                 <h3 id="choiceName1" style="margin:5px 0; color:#fff;">Ледяной танк</h3>
                 <button class="btn btn-secondary" style="margin-top:10px; width:100%;">Посмотреть</button>
             </div>
             <!-- Option 2 -->
             <div id="choiceOption2" style="background:#334; padding:15px; border-radius:8px; width:220px; cursor:pointer; border:2px solid transparent; transition: all 0.2s;" onclick="selectChoiceOption(1)">
-                <canvas id="choiceCanvas2" width="100" height="100" style="margin-bottom:10px;"></canvas>
+                <div style="display:flex; justify-content:center; margin-bottom:10px;">
+                    <canvas id="choiceCanvas2" width="100" height="100"></canvas>
+                </div>
                 <h3 id="choiceName2" style="margin:5px 0; color:#fff;">Пулеметчик</h3>
                 <button class="btn btn-secondary" style="margin-top:10px; width:100%;">Посмотреть</button>
             </div>

@@ -49,13 +49,18 @@ function clearanceAhead(entity, angle, maxDist, step = 8) {
 
 // Подруливание: выбираем угол с наибольшей свободной дистанцией рядом с целевым
 function steerAroundObstacles(entity, desiredAngle, dist) {
-    const samples = [0, Math.PI / 8, -Math.PI / 8, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2];
+    // Always look at least navCell ahead so clearanceAhead actually samples something
+    // (tanks move ~2.5px/tick but clearanceAhead step is 8px, so without this fix
+    //  the loop never executes and all angles appear equally clear)
+    const lookDist = Math.max(dist, navCell);
+    const samples = [0, Math.PI / 8, -Math.PI / 8, Math.PI / 4, -Math.PI / 4,
+                     3 * Math.PI / 8, -3 * Math.PI / 8, Math.PI / 2, -Math.PI / 2];
     let bestAng = desiredAngle;
     let bestScore = -Infinity;
     let bestClear = 0;
     for (const off of samples) {
         const a = desiredAngle + off;
-        const clear = clearanceAhead(entity, a, dist);
+        const clear = clearanceAhead(entity, a, lookDist);
         const devPenalty = Math.abs(off) * navCell * 0.25;
         const score = clear - devPenalty;
         if (score > bestScore) {
@@ -64,7 +69,8 @@ function steerAroundObstacles(entity, desiredAngle, dist) {
             bestClear = clear;
         }
     }
-    const trimmedDist = bestClear < dist ? Math.max(bestClear * 0.9, dist * 0.4) : dist;
+    // Slow down when the best direction has a wall within half the lookahead
+    const trimmedDist = bestClear < lookDist * 0.5 ? Math.max(bestClear * 0.8, dist * 0.3) : dist;
     return { angle: bestAng, dist: trimmedDist };
 }
 
@@ -812,7 +818,13 @@ function updateEnemyAI() {
                 moveDist = steering.dist;
                 // If direct path to waypoint is blocked, attempt local sidestep avoidance
                 if (!pathClearFor(enemy, ang, moveDist) && !invertAI) { // Don't block inversion escape if pathblocked (actually inversion just goes backwards so it might go into wall)
-                    const sideAngles = [ang + Math.PI/2, ang - Math.PI/2, ang + Math.PI/3, ang - Math.PI/3];
+                    const sideAngles = [
+                        ang + Math.PI/6, ang - Math.PI/6,
+                        ang + Math.PI/4, ang - Math.PI/4,
+                        ang + Math.PI/2, ang - Math.PI/2,
+                        ang + Math.PI*2/3, ang - Math.PI*2/3,
+                        ang + Math.PI*3/4, ang - Math.PI*3/4
+                    ];
                     let avoided = false;
                     for (const a of sideAngles) {
                         if (moveSmallSteps(enemy, a, moveDist * 0.9)) { 
@@ -837,7 +849,7 @@ function updateEnemyAI() {
                     }
                 }
                 if (movedAlongPath) {
-                    if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) {
+                    if (distToWp < navCell * 0.6 || distToWp < moveDist * 1.2) {
                          if (!invertAI) enemy.pathIndex++; // Only advance path if moving towards it
                     }
                 } else {
@@ -1366,7 +1378,13 @@ function updateAllyAI() {
                 moveDist = steering.dist;
                     // Local avoidance: if blocked, try sidesteps before forcing path recalculation
                     if (!pathClearFor(ally, moveAng, moveDist)) {
-                        const sideAngles = [moveAng + Math.PI/2, moveAng - Math.PI/2, moveAng + Math.PI/3, moveAng - Math.PI/3];
+                        const sideAngles = [
+                            moveAng + Math.PI/6, moveAng - Math.PI/6,
+                            moveAng + Math.PI/4, moveAng - Math.PI/4,
+                            moveAng + Math.PI/2, moveAng - Math.PI/2,
+                            moveAng + Math.PI*2/3, moveAng - Math.PI*2/3,
+                            moveAng + Math.PI*3/4, moveAng - Math.PI*3/4
+                        ];
                         let avoided = false;
                         for (const a of sideAngles) {
                             if (moveSmallSteps(ally, a, moveDist * 0.9)) { 
@@ -1389,7 +1407,7 @@ function updateAllyAI() {
                     }
                 }
                 if (movedAlongPath) {
-                    if (distToWp < navCell * 0.35 || distToWp < moveDist * 1.1) ally.pathIndex++;
+                    if (distToWp < navCell * 0.6 || distToWp < moveDist * 1.2) ally.pathIndex++;
                 } else { ally.stuckCount = (ally.stuckCount || 0) + 1; if (ally.stuckCount > 2) ally.pathRecalc = 0; }
             } else {
                 // fallback local sampling

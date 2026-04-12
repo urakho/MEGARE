@@ -76,7 +76,7 @@ let battleEnemyCount = 0;
 let globalPathBudget = 0;
 const MAX_PATH_BUDGET = 2; // max A* searches per frame
 const MAX_PATH_BUDGET_ONEVSALL = 1; // reduced for one vs all mode
-const MAX_STEPS_FALLBACK = 8; // was 24, severely reduced for performance
+const MAX_STEPS_FALLBACK = 16; // increased from 8 — more angle coverage for wall avoidance
 // Показать отладочные линии AI (true — показать отладочные трассы)
 const SHOW_AI_DEBUG = false;
 
@@ -109,7 +109,7 @@ const PROFILE_SAVE_KEYS = [
     'tankCoins','tankGems','tankParts','tankTrophies',
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
-    'tankAvatarUnlocks','tankPromoUsed'
+    'tankAvatarUnlocks','tankPromoUsed','tankSelectedAvatars'
 ];
 
 function _profilesLoad() {
@@ -145,6 +145,21 @@ function _restoreProfileData(data) {
             localStorage.removeItem(k);
         }
     }
+    // Ensure tankTrophies is a number
+    const trophiesStr = localStorage.getItem('tankTrophies');
+    if (!trophiesStr || isNaN(parseInt(trophiesStr))) {
+        localStorage.setItem('tankTrophies', '0');
+    }
+    // Ensure tankTrophiesData is valid JSON
+    const trophiesData = localStorage.getItem('tankTrophiesData');
+    if (!trophiesData || !trophiesData.startsWith('{')) {
+        localStorage.setItem('tankTrophiesData', '{}');
+    }
+    try {
+        JSON.parse(localStorage.getItem('tankTrophiesData'));
+    } catch (e) {
+        localStorage.setItem('tankTrophiesData', '{}');
+    }
 }
 
 // Initialise profiles on startup: migrate legacy data if needed
@@ -154,9 +169,37 @@ function _restoreProfileData(data) {
         // First run — migrate existing flat data into profile 0
         const snap = _snapshotCurrentData();
         const name = snap['tankPlayerName'] || 'Игрок 1';
-        profiles = [{ name: 'Игрок 1', createdAt: Date.now(), data: snap }];
+        profiles = [{ name: 'Игрок 1', avatar: '🎮', createdAt: Date.now(), data: snap }];
         _profilesSave(profiles);
         _setActiveIdx(0);
+    } else {
+        // Verify each profile has proper trophy data
+        profiles.forEach(profile => {
+            if (profile.data) {
+                if (profile.data.tankTrophies === undefined || profile.data.tankTrophies === null) {
+                    profile.data.tankTrophies = '0';
+                }
+                if (profile.data.tankTrophiesData === undefined || profile.data.tankTrophiesData === null) {
+                    profile.data.tankTrophiesData = '{}';
+                } else {
+                    try { JSON.parse(profile.data.tankTrophiesData); }
+                    catch (e) { profile.data.tankTrophiesData = '{}'; }
+                }
+                if (profile.data.tankSelectedAvatars === undefined || profile.data.tankSelectedAvatars === null) {
+                    profile.data.tankSelectedAvatars = '{}';
+                }
+            }
+        });
+        _profilesSave(profiles);
+
+        // CRITICAL FIX: always overwrite flat localStorage keys from the active profile.
+        // This ensures that even if clearance failed on mobile before reload,
+        // the correct profile data is loaded.
+        const activeIdx = _getActiveIdx();
+        const activeProfile = profiles[activeIdx] || profiles[0];
+        if (activeProfile && activeProfile.data) {
+            _restoreProfileData(activeProfile.data);
+        }
     }
 })();
 
@@ -164,6 +207,7 @@ function _restoreProfileData(data) {
 
 /** Save current flat keys into the active profile slot */
 window.saveActiveProfile = function() {
+    if (window._isProfileSwitching) return;
     const profiles = _profilesLoad() || [];
     const idx = _getActiveIdx();
     if (!profiles[idx]) return;
@@ -173,42 +217,91 @@ window.saveActiveProfile = function() {
 
 /** Switch to profile at index, persisting current first */
 window.switchProfile = function(idx) {
+    if (window._isProfileSwitching) return false;
     // Flush current state to in-memory first (saveProgress called by caller)
     const profiles = _profilesLoad() || [];
     if (!profiles[idx]) return false;
+    
+    window._isProfileSwitching = true;
+    
     // Save current profile data
     const curIdx = _getActiveIdx();
     if (profiles[curIdx]) {
         profiles[curIdx].data = _snapshotCurrentData();
         _profilesSave(profiles);
     }
-    // Restore new profile
-    _restoreProfileData(profiles[idx].data);
+    // Clear ALL profile-related localStorage keys completely before restoring new profile
+    for (const k of PROFILE_SAVE_KEYS) {
+        localStorage.removeItem(k);
+    }
+    // Restore new profile with full validation
+    if (profiles[idx].data) {
+        _restoreProfileData(profiles[idx].data);
+    } else {
+        // Fallback for corrupted profiles
+        localStorage.setItem('tankTrophies', '0');
+        localStorage.setItem('tankTrophiesData', '{}');
+    }
     _setActiveIdx(idx);
-    // Reload page so all JS globals re-init from the new flat keys
-    location.reload();
+    // Hard reload bypassing bfcache (fixes mobile browsers where location.reload()
+    // restores JS variable state from memory instead of re-executing scripts)
+    window.location.replace(window.location.pathname + '?_p=' + Date.now());
     return true;
 };
 
 /** Create a new profile with given name and avatar */
 window.createProfile = function(name, avatar) {
+    if (window._isProfileSwitching) return;
+    
+    // Save current first BEFORE we set the flag, but we already know _isProfileSwitching is false
     const profiles = _profilesLoad() || [];
-    // Save current first
     const curIdx = _getActiveIdx();
     if (profiles[curIdx]) profiles[curIdx].data = _snapshotCurrentData();
+    
+    window._isProfileSwitching = true;
+    
     // New blank profile — absolutely no resources, only normal tank unlocked
     const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
                     tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
                     tankUpgrades:'{}', tankTrophiesData:'{}',
                     tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
-                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]' };
+                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
     profiles.push({ name: name || ('Игрок ' + (profiles.length + 1)), avatar: avatar || '🎮', createdAt: Date.now(), data: blank });
     _profilesSave(profiles);
-    // Switch to new profile
+    
+    // Aggressive localStorage cleanup: clear ALL keys that might contain game data
+    // Delete all profile-related keys
+    for (const k of PROFILE_SAVE_KEYS) {
+        localStorage.removeItem(k);
+    }
+    // Delete any remaining game data keys (backup cleanup)
+    const keysToDelete = ['tankCoins', 'tankGems', 'tankParts', 'tankTrophies', 'tankClaimedRewards',
+                          'tankUnlockedTanks', 'tankUpgrades', 'tankTrophiesData', 'tankSelected', 
+                          'achievementData', 'tankDevUnlocked', 'tankAvatarUnlocks', 'tankPromoUsed',
+                          'tankSelectedAvatars', 'containerQueue', 'savedMapName', 'savedMapData'];
+    keysToDelete.forEach(k => localStorage.removeItem(k));
+    
+    // Verify cleanup worked
+    for (const k of PROFILE_SAVE_KEYS) {
+        if (localStorage.getItem(k) !== null) {
+            localStorage.removeItem(k);
+        }
+    }
+    
+    // Now restore ONLY blank profile data for new profile
     const newIdx = profiles.length - 1;
-    _restoreProfileData(blank);
+    for (const k of PROFILE_SAVE_KEYS) {
+        if (blank[k] !== undefined) {
+            localStorage.setItem(k, blank[k]);
+        }
+    }
     _setActiveIdx(newIdx);
-    location.reload();
+    
+    // Save profiles one more time to ensure it's saved
+    _profilesSave(profiles);
+    
+    // Hard reload bypassing bfcache (fixes mobile browsers)
+    window.location.replace(window.location.pathname + '?_p=' + Date.now());
 };
 
 /** Edit profile name and/or avatar at index */
@@ -227,8 +320,10 @@ window.renameProfile = function(idx, newName) {
 
 /** Delete profile at index (cannot delete if only one left) */
 window.deleteProfile = function(idx) {
+    if (window._isProfileSwitching) return false;
     const profiles = _profilesLoad() || [];
     if (profiles.length <= 1) return false;
+    window._isProfileSwitching = true;
     const curIdx = _getActiveIdx();
     profiles.splice(idx, 1);
     _profilesSave(profiles);
@@ -236,7 +331,8 @@ window.deleteProfile = function(idx) {
     const nextIdx = Math.min(0, profiles.length - 1);
     _restoreProfileData(profiles[nextIdx].data);
     _setActiveIdx(nextIdx);
-    location.reload();
+    // Hard reload bypassing bfcache (fixes mobile browsers)
+    window.location.replace(window.location.pathname + '?_p=' + Date.now());
     return true;
 };
 
@@ -244,14 +340,20 @@ window.deleteProfile = function(idx) {
 window.getProfileList = function() {
     const profiles = _profilesLoad() || [];
     const activeIdx = _getActiveIdx();
-    return profiles.map((p, i) => ({
-        idx: i,
-        name: p.name,
-        avatar: p.avatar || '🎮',
-        trophies: parseInt((p.data && p.data.tankTrophies) || '0') || 0,
-        active: i === activeIdx,
-        createdAt: p.createdAt || 0
-    }));
+    return profiles.map((p, i) => {
+        // Ensure profile data is present and has trophy info
+        if (!p.data) {
+            p.data = { tankTrophies: '0', tankTrophiesData: '{}' };
+        }
+        return {
+            idx: i,
+            name: p.name,
+            avatar: p.avatar || '🎮',
+            trophies: parseInt((p.data.tankTrophies) || '0') || 0,
+            active: i === activeIdx,
+            createdAt: p.createdAt || 0
+        };
+    });
 };
 
 /** Get active profile index */
@@ -280,6 +382,7 @@ function getTankUpgrade(type, stat) {
     return (tankUpgrades[type] && tankUpgrades[type][stat]) || 0;
 }
 function saveTankUpgrades() {
+    if (window._isProfileSwitching) return;
     localStorage.setItem('tankUpgrades', JSON.stringify(tankUpgrades));
 }
 // Returns damage multiplier for the player's current tank type
@@ -390,6 +493,7 @@ function getMinimumTrophyLevel() {
 
 // Функция для безопасного снятия трофеев (с защитой от опускания ниже полученных наград)
 function loseTrophies(amount = 1) {
+    if (window._isProfileSwitching) return;
     const minLevel = getMinimumTrophyLevel();
     const newTrophyCount = Math.max(minLevel, trophies - amount);
     
@@ -413,6 +517,7 @@ function getTankTrophies(tankType) {
 
 // Add trophies to a specific tank
 function addIndividualTankTrophies(tankType, amount) {
+    if (window._isProfileSwitching) return;
     try {
         const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData')) || {};
         tankTrophiesData[tankType] = (tankTrophiesData[tankType] || 0) + amount;
@@ -439,6 +544,7 @@ function loseModeTrophies() {
 }
 
 function saveProgress() {
+    if (window._isProfileSwitching) return;
     localStorage.setItem('tankCoins', coins);
     localStorage.setItem('tankGems', gems);
     localStorage.setItem('tankTrophies', trophies);
@@ -1606,7 +1712,7 @@ function _quickResourceScan() {
     return false;
 }
 
-if (shopBtn) shopBtn.addEventListener('click', () => { if (_quickResourceScan()) return; if (shopModal) shopModal.style.display = 'flex'; });
+if (shopBtn) shopBtn.addEventListener('click', () => { if (_quickResourceScan()) return; if (shopModal) shopModal.style.display = 'flex'; _renderLimitedShopItems(); });
 if (characterBtn) characterBtn.addEventListener('click', () => { 
     if (_quickResourceScan()) return;
     if (characterModal) { 
@@ -1809,6 +1915,29 @@ function processDevCommand(rawCommand) {
         if (typeof setTankHP    === 'function') setTankHP(tankType);
         if (typeof setTankSpeed === 'function') setTankSpeed(tankType);
         console.log('All tank upgrades cleared.');
+    } else if (command === '/clear ic') {
+        // Remove ALL non-common icon unlocks: clear tankAvatarUnlocks entirely
+        // (common avatars are free by default and don't need entries in this array)
+        localStorage.setItem('tankAvatarUnlocks', JSON.stringify([]));
+        // Clear all icon/promo claims from achievementData
+        if (!achievementData.claimed) achievementData.claimed = {};
+        Object.keys(achievementData.claimed).forEach(k => {
+            const def = ACHIEVEMENT_DEFS.find(a => a.id === k);
+            if ((def && def.group === 'icon') || k === 'icon_tank' || k.startsWith('easter_')) delete achievementData.claimed[k];
+        });
+        // Assign random common avatars to each tank
+        const commonAvatars = PROFILE_AVATAR_TIERS.common;
+        const selectedAvatars = {};
+        const allTankTypes = unlockedTanks || ['normal'];
+        allTankTypes.forEach(tType => {
+            selectedAvatars[tType] = commonAvatars[Math.floor(Math.random() * commonAvatars.length)];
+        });
+        localStorage.setItem('tankSelectedAvatars', JSON.stringify(selectedAvatars));
+        saveAchievements();
+        if (typeof saveProgress === 'function') saveProgress();
+        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
+        console.log('All non-common icon unlocks cleared. Random common avatars assigned.');
+        showNotification('🎲 Все иконки очищены, выданы обычные аватары', '#27ae60');
     } else if (command.startsWith('/uncoin')) {
         // Set coins to negative value
         const valStr = command.substring(7).trim();
@@ -1875,6 +2004,7 @@ function processDevCommand(rawCommand) {
             '  ── Прочее ──',
             '  /clear t   Сбросить все танки (кроме обычного)',
             '  /clear en  Сбросить все улучшения',
+            '  /clear ic  Сбросить все иконки профиля',
             '  /help      Показать этот список',
             '╚══════════════════════════════════════╝',
         ].join('\n');
@@ -2004,6 +2134,130 @@ function _markPromoUsed(code) {
     input.addEventListener('keydown', function(e) { if (e.key === 'Enter') activate(); });
 })();
 // ────────────────────────────────────────────────────────────────────────────
+
+// ── Easter egg limited shop items ────────────────────────────────────────────
+const EASTER_EGG_PACKS = [
+    {
+        id: 'easter_basic',
+        name: 'Комплект: Пасхальные яйца',
+        desc: 'Красное, Зелёное и Синее пасхальное яйцо',
+        icons: ['img:red-egg', 'img:gre-egg', 'img:blu-egg'],
+        price: 200
+    },
+    {
+        id: 'easter_gold',
+        name: 'Золотое пасхальное яйцо',
+        desc: 'Уникальная иконка для профиля',
+        icons: ['img:gold-egg'],
+        price: 120
+    },
+    {
+        id: 'easter_chik',
+        name: 'Пасхальное яйцо с цыплёнком',
+        desc: 'Уникальная иконка для профиля',
+        icons: ['img:chik-egg'],
+        price: 150
+    },
+    {
+        id: 'easter_full',
+        name: 'Полный пасхальный комплект',
+        desc: 'Все 5 пасхальных иконок: красное, зелёное, синее, золотое и яйцо с цыплёнком',
+        icons: ['img:red-egg', 'img:gre-egg', 'img:blu-egg', 'img:gold-egg', 'img:chik-egg'],
+        price: 350,
+        badge: '💰 Выгоднее!'
+    }
+];
+
+function _renderLimitedShopItems() {
+    const container = document.getElementById('limitedItemsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    for (const pack of EASTER_EGG_PACKS) {
+        // Check if all icons in this pack are already purchased
+        const allOwned = pack.icons.every(ic => {
+            const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
+            return achievementData.claimed && achievementData.claimed['easter_' + iconName];
+        });
+        const card = document.createElement('div');
+        card.style.cssText = 'position:relative;background:rgba(255,255,255,0.08);border:1px solid rgba(233,30,99,0.35);border-radius:10px;padding:14px;text-align:center;min-width:220px;flex:0 1 auto;';
+        
+        // Add badge if pack has one
+        if (pack.badge) {
+            const badge = document.createElement('div');
+            badge.style.cssText = 'position:absolute;top:-8px;right:-8px;background:linear-gradient(135deg,#f1c40f,#e67e22);color:#000;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.4);white-space:nowrap;';
+            badge.textContent = pack.badge;
+            card.appendChild(badge);
+        }
+        // Icon previews
+        const previewRow = document.createElement('div');
+        previewRow.style.cssText = 'display:flex;justify-content:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
+        for (const ic of pack.icons) {
+            const name = ic.slice(4);
+            const img = document.createElement('img');
+            img.src = 'icon-png/' + name + '.png';
+            img.style.cssText = 'width:52px;height:52px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.08);padding:4px;';
+            previewRow.appendChild(img);
+        }
+        card.appendChild(previewRow);
+        // Title
+        const title = document.createElement('p');
+        title.style.cssText = 'margin:0 0 4px;font-size:15px;font-weight:bold;color:#e91e63;';
+        title.textContent = pack.name;
+        card.appendChild(title);
+        // Description
+        const desc = document.createElement('p');
+        desc.style.cssText = 'margin:0 0 10px;font-size:12px;color:#bbb;';
+        desc.textContent = pack.desc;
+        card.appendChild(desc);
+        // Buy button
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-buy';
+        if (allOwned) {
+            btn.style.cssText = 'background:#555;cursor:default;';
+            btn.textContent = '✅ Куплено';
+            btn.disabled = true;
+        } else {
+            btn.textContent = '💎 Купить за ' + pack.price;
+            btn.onclick = (function(pid) { return function() { _buyEasterEggPack(pid); }; })(pack.id);
+        }
+        card.appendChild(btn);
+        container.appendChild(card);
+    }
+}
+
+function _buyEasterEggPack(packId) {
+    const pack = EASTER_EGG_PACKS.find(p => p.id === packId);
+    if (!pack) return;
+    
+    // Check if pack is already fully purchased
+    const alreadyBought = pack.icons.every(ic => {
+        const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
+        return achievementData.claimed && achievementData.claimed['easter_' + iconName];
+    });
+    
+    if (alreadyBought) {
+        showNotification('🔒 Этот комплект уже куплен!', '#f39c12');
+        return;
+    }
+    
+    if (gems < pack.price) {
+        showNotification('❌ Недостаточно 💎! Нужно ' + pack.price + ' кристаллов', '#e74c3c');
+        return;
+    }
+    gems -= pack.price;
+    localStorage.setItem('tankGems', gems);
+    updateCoinDisplay();
+    // Add Easter eggs to special icons in achievementData
+    if (!achievementData.claimed) achievementData.claimed = {};
+    for (const ic of pack.icons) {
+        const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
+        achievementData.claimed['easter_' + iconName] = true;
+    }
+    saveAchievements();
+    if (typeof saveProgress === 'function') saveProgress();
+    showNotification('✅ Куплено: ' + pack.name + '!', '#2ecc71');
+    _renderLimitedShopItems();
+}
 
 const containerFlowModal = document.getElementById('containerFlowModal');
 const containerFlowPreview = document.getElementById('containerFlowPreview');
@@ -2152,7 +2406,7 @@ function showContainerFlow(type) {
     if (containerFlowType) return;
     const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : 1000)));
     if (coins < price) {
-        alert('Недостаточно монет!');
+        showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
         return;
     }
     containerFlowType = type;
@@ -2276,7 +2530,7 @@ function handleContainerConfirm() {
     const currentType = containerFlowType;
     const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : 1000)));
     if (coins < price) {
-        alert('Недостаточно монет!');
+        showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
         closeContainerFlow();
         return;
     }
@@ -3870,9 +4124,9 @@ function update() {
     // Reset AI budget for this frame (reduced for onevsall)
     globalPathBudget = (currentMode === 'onevsall') ? MAX_PATH_BUDGET_ONEVSALL : MAX_PATH_BUDGET;
 
-    // Throttle nav rebuild - only once every few frames max if needed (skip for onevsall)
+    // Optimization: Throttle nav rebuild - only once every 4 frames (skip for onevsall)
     if (navNeedsRebuild && currentMode !== 'onevsall') { 
-        if ((window.frameCount || 0) % 3 === 0) {
+        if ((window.frameCount || 0) % 4 === 0) {
             buildNavGrid(); 
             navNeedsRebuild = false; 
         }
@@ -4817,31 +5071,23 @@ function update() {
 }
 
 function updateCoinDisplay() {
+    // Optimization: Cache DOM elements
+    _ensureDOMCache();
+    
     // Game HUD
-    const coinDisplay = document.getElementById('coinDisplay');
-    if (coinDisplay) coinDisplay.textContent = coins;
-    const gemDisplay = document.getElementById('gemDisplay');
-    if (gemDisplay) gemDisplay.textContent = gems;
-    const trophyDisplay = document.getElementById('trophyDisplay');
-    if (trophyDisplay) trophyDisplay.textContent = trophies;
-    const partDisplay = document.getElementById('partDisplay');
-    if (partDisplay) partDisplay.textContent = parts;
+    if (_domCache.coinDisplay) _domCache.coinDisplay.textContent = coins;
+    if (_domCache.gemDisplay) _domCache.gemDisplay.textContent = gems;
+    if (_domCache.trophyDisplay) _domCache.trophyDisplay.textContent = trophies;
+    if (_domCache.partDisplay) _domCache.partDisplay.textContent = parts;
 
-    // Menu Displays (IDs: menuCoinDisplay, menuGemDisplay, shopCoinDisplay, etc)
-    const elementsToUpdate = document.querySelectorAll('.currency-coin');
-    elementsToUpdate.forEach(el => el.textContent = coins);
-    
-    const gemElements = document.querySelectorAll('.currency-gem');
-    gemElements.forEach(el => el.textContent = gems);
-    
-    const trophyElements = document.querySelectorAll('.currency-trophy');
-    trophyElements.forEach(el => el.textContent = trophies);
-    
-    const partElements = document.querySelectorAll('.currency-part');
-    partElements.forEach(el => el.textContent = parts);
+    // Menu Displays (using cached elements)
+    _domCache.currencyCoins.forEach(el => el.textContent = coins);
+    _domCache.currencyGems.forEach(el => el.textContent = gems);
+    _domCache.currencyTrophies.forEach(el => el.textContent = trophies);
+    _domCache.currencyParts.forEach(el => el.textContent = parts);
 
     // Update trophy progress bar if present (progress toward next milestone)
-    const trophyBarFill = document.getElementById('trophyBarFill');
+    const trophyBarFill = _domCache.trophyBarFill;
     if (trophyBarFill) {
         let prev = 0;
         let next = trophyRoadRewards.length ? trophyRoadRewards[trophyRoadRewards.length - 1].trophies : 100;
@@ -5245,6 +5491,35 @@ function showNotification(text, color = '#ffffff') {
     }, 3000);
 }
 
+
+// ─ Optimization: Cache DOM elements to avoid repeated queries
+const _domCache = {
+    coinDisplay: null,
+    gemDisplay: null,
+    trophyDisplay: null,
+    partDisplay: null,
+    trophyBarFill: null,
+    currencyCoins: [],
+    currencyGems: [],
+    currencyTrophies: [],
+    currencyParts: []
+};
+function _ensureDOMCache() {
+    _domCache.coinDisplay = _domCache.coinDisplay || document.getElementById('coinDisplay');
+    _domCache.gemDisplay = _domCache.gemDisplay || document.getElementById('gemDisplay');
+    _domCache.trophyDisplay = _domCache.trophyDisplay || document.getElementById('trophyDisplay');
+    _domCache.partDisplay = _domCache.partDisplay || document.getElementById('partDisplay');
+    _domCache.trophyBarFill = _domCache.trophyBarFill || document.getElementById('trophyBarFill');
+    if (_domCache.currencyCoins.length === 0) {
+        _domCache.currencyCoins = Array.from(document.querySelectorAll('.currency-coin'));
+        _domCache.currencyGems = Array.from(document.querySelectorAll('.currency-gem'));
+        _domCache.currencyTrophies = Array.from(document.querySelectorAll('.currency-trophy'));
+        _domCache.currencyParts = Array.from(document.querySelectorAll('.currency-part'));
+    }
+}
+
+// Optimization: Limit max particles to prevent performance degradation
+const MAX_PARTICLES = 200;
 
 // Постоянный цикл обновления физики
 window.frameCount = 0;
@@ -5670,9 +5945,9 @@ const ACHIEVEMENT_DEFS = [
     { id: 'trio_control', group: 'trio', name: 'Контролирующее трио', desc: 'Собери: Мина + Буратино + Токсик',               icon: '☢️', trioMembers: ['mine','buratino','toxic'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_support', group: 'trio', name: 'Поддерживающее трио', desc: 'Собери: Музыкальный + Медик + Зеркало',          icon: '💫', trioMembers: ['musical','medical','mirror'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     // Special icon unlock achievements
-    { id: 'icon_rome', group: 'icon', name: 'Легион Рима',      desc: 'Победи 20 раз на танке "Роман"',     icon: '🏛', reward: { type: 'icon', icon: 'rome' }, rewardDesc: 'Уникальная иконка "Рим"',      tankKey: 'roman' },
-    { id: 'icon_time', group: 'icon', name: 'Мастер Времени',   desc: 'Победи 20 раз на танке "Временной"', icon: '⏰', reward: { type: 'icon', icon: 'time' }, rewardDesc: 'Уникальная иконка "Часы"',    tankKey: 'time' },
-    { id: 'icon_imit', group: 'icon', name: 'Великий Имитатор', desc: 'Победи 20 раз на танке "Имитатор"',  icon: '🌈', reward: { type: 'icon', icon: 'imit' }, rewardDesc: 'Уникальная иконка "Имитатор"', tankKey: 'imitator' },
+    { id: 'icon_rome', group: 'icon', name: 'Легион Рима',      desc: 'Победи 20 раз на танке "Римский"',     icon: '🏛', reward: { type: 'icon', icon: 'rome' }, rewardDesc: 'Уникальная иконка «Щит»',      tankKey: 'roman' },
+    { id: 'icon_time', group: 'icon', name: 'Мастер Времени',   desc: 'Победи 20 раз на танке "Временной"',  icon: '⏰', reward: { type: 'icon', icon: 'time' }, rewardDesc: 'Уникальная иконка «Часы»',     tankKey: 'time' },
+    { id: 'icon_imit', group: 'icon', name: 'Великий Имитатор', desc: 'Победи 20 раз на танке "Имитатор"',   icon: '🌈', reward: { type: 'icon', icon: 'imit' }, rewardDesc: 'Уникальная иконка «Имитация»', tankKey: 'imitator' },
     // Mythic tank achievements (reward: legendary container)
     { id: 'mythic_illuminat', group: 'mythic', name: 'Мастер Иллюмината', desc: 'Победи 20 раз на танке "Иллюминат"',    icon: '👁️', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер', tankKey: 'illuminat' },
     { id: 'mythic_plasma',    group: 'mythic', name: 'Плазменный Мастер', desc: 'Победи 20 раз на танке "Плазменный"',   icon: '🔮', reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер', tankKey: 'plasma' },
@@ -5684,6 +5959,7 @@ let achievementData = (function() {
 })();
 
 function saveAchievements() {
+    if (window._isProfileSwitching) return;
     try { localStorage.setItem('achievementData', JSON.stringify(achievementData)); } catch(e) {}
 }
 
@@ -5756,6 +6032,10 @@ function _getUnlockedSpecialIcons() {
         if (def && def.group === 'icon' && def.reward && def.reward.icon) {
             result.push(def.reward.icon);
         }
+        // Easter eggs from shop (e.g. easter_red-egg)
+        if (id.startsWith('easter_')) {
+            result.push(id.slice(7)); // 'red-egg' from 'easter_red-egg'
+        }
     });
     // Direct icon keys set by promo codes (e.g. icon_tank)
     if (achievementData.claimed['icon_tank']) result.push('tank');
@@ -5803,7 +6083,8 @@ window.claimAchievement = function(id) {
     // Icon reward — just unlock the button, no container
     if (def.reward.type === 'icon') {
         _refreshSpecialIconButtons();
-        showNotification('🏆 Получена уникальная иконка «' + (def.reward.icon) + '»!', '#f1c40f');
+        const _iconPrettyNames = { rome: 'Щит', time: 'Часы', imit: 'Имитация', tank: 'Tank' };
+        showNotification('🏆 Получена уникальная иконка «' + (_iconPrettyNames[def.reward.icon] || def.reward.icon) + '»!', '#f1c40f');
         renderAchievementsModal();
         return;
     }
@@ -5971,7 +6252,12 @@ if (achievementsModalClose) achievementsModalClose.addEventListener('click', () 
 
 // ─── Profiles UI ─────────────────────────────────────────────────────────────
 
-// Avatar tiers: common = free, rare = 800 coins, epic = 200 gems
+// Returns true for the 3 small Easter eggs that need 1.5x scale when displayed as avatar
+function _isSmallEgg(av) {
+    return av === 'img:red-egg' || av === 'img:gre-egg' || av === 'img:blu-egg';
+}
+
+// Avatar tiers: common = free, rare = 800 coins, epic = 50 gems
 const PROFILE_AVATAR_TIERS = {
     common: [
         '🎮','💥','🎲','🎯','⚙️','🔧','💀','👻','👾','🎪',
@@ -6016,6 +6302,21 @@ function _unlockAvatar(av) {
     }
 }
 
+// Get/set selected avatars per tank
+function _getTankSelectedAvatars() {
+    try { return JSON.parse(localStorage.getItem('tankSelectedAvatars') || '{}'); } catch(e) { return {}; }
+}
+function _getTankAvatar(tankType) {
+    const avatars = _getTankSelectedAvatars();
+    return avatars[tankType] || '🎮'; // default fallback
+}
+function _setTankAvatar(tankType, avatar) {
+    const avatars = _getTankSelectedAvatars();
+    avatars[tankType] = avatar;
+    localStorage.setItem('tankSelectedAvatars', JSON.stringify(avatars));
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
+}
+
 function renderProfilesList() {
     const container = document.getElementById('profilesList');
     if (!container) return;
@@ -6033,7 +6334,8 @@ function renderProfilesList() {
         avatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2c5282);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.2)') + ';';
         const pAv = p.avatar || '🎮';
         if (pAv.startsWith('img:')) {
-            avatar.innerHTML = '<img src="icon-png/' + pAv.slice(4) + '.png" style="width:36px;height:36px;object-fit:contain;">';
+            const sz = _isSmallEgg(pAv) ? '54px' : '36px';
+            avatar.innerHTML = '<img src="icon-png/' + pAv.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
         } else {
             avatar.textContent = pAv;
         }
@@ -6060,13 +6362,16 @@ function renderProfilesList() {
             btns.appendChild(selBtn);
         }
 
-        const renBtn = document.createElement('button');
-        renBtn.className = 'btn btn-secondary';
-        renBtn.style.cssText = 'padding:6px 10px;font-size:13px;border-radius:8px;';
-        renBtn.textContent = '✏️';
-        renBtn.title = 'Редактировать профиль';
-        renBtn.onclick = () => openProfileEditModal('edit', p.idx);
-        btns.appendChild(renBtn);
+        // Edit button — only for active profile
+        if (p.active) {
+            const renBtn = document.createElement('button');
+            renBtn.className = 'btn btn-secondary';
+            renBtn.style.cssText = 'padding:6px 10px;font-size:13px;border-radius:8px;';
+            renBtn.textContent = '✏️';
+            renBtn.title = 'Редактировать профиль';
+            renBtn.onclick = () => openProfileEditModal('edit', p.idx);
+            btns.appendChild(renBtn);
+        }
 
         if (list.length > 1) {
             const delBtn = document.createElement('button');
@@ -6090,11 +6395,13 @@ function escapeHtml(s) {
 // ── Profile edit modal ────────────────────────────────────────────────────────
 let _profileEditIdx = -1;  // -1 = create mode
 let _profileEditAvatar = '🎮';
+let _profileEditTankType = 'normal'; // track which tank we're customizing
 
 function openProfileEditModal(mode, idx) {
     const modal = document.getElementById('profileEditModal');
     if (!modal) return;
     _profileEditIdx = (mode === 'edit') ? idx : -1;
+    _profileEditTankType = localStorage.getItem('tankSelected') || 'normal';
     // Hide buy panel
     const buyPanel = document.getElementById('avatarBuyPanel');
     if (buyPanel) buyPanel.style.display = 'none';
@@ -6115,13 +6422,16 @@ function openProfileEditModal(mode, idx) {
 
 function _updateEditAvatarPreview(av) {
     _profileEditAvatar = av;
+    // Also set the avatar for the current tank
+    _setTankAvatar(_profileEditTankType, av);
     const el = document.getElementById('profileEditAvatarPreview');
     if (el) {
         const tier = _getAvatarTier(av);
         if (tier === 'special') {
             const name = av.slice(4);
             el.textContent = '';
-            el.innerHTML = '<img src="icon-png/' + name + '.png" style="width:56px;height:56px;object-fit:contain;">';
+            const sz = _isSmallEgg(av) ? '84px' : '56px';
+            el.innerHTML = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
         } else {
             el.textContent = av;
         }
@@ -6144,14 +6454,25 @@ function _buildAvatarGrid() {
     if (!grid) return;
     grid.innerHTML = '';
 
+    // Show current tank type
+    const tankHeader = document.createElement('div');
+    tankHeader.style.cssText = 'width:100%;font-size:12px;color:#3498db;text-align:center;padding:8px;background:rgba(52,152,219,0.15);border-radius:6px;margin-bottom:8px;font-weight:600;';
+    tankHeader.textContent = '🎮 Выбранный танк: ' + _profileEditTankType;
+    grid.appendChild(tankHeader);
+
     // Tier visual config
     const tierCfg = {
         common: { bg: 'rgba(100,100,100,0.28)', border: 'rgba(180,180,180,0.35)', label: 'Обычные · бесплатно',    labelColor: '#aaa' },
         rare:   { bg: 'rgba(46,204,113,0.15)',  border: 'rgba(46,204,113,0.45)',  label: 'Редкие · 800 🪙',        labelColor: '#2ecc71' },
-        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Эпические · 200 💎',   labelColor: '#9b59b6' }
+        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Эпические · 25 💎',    labelColor: '#9b59b6' }
     };
 
     ['common', 'rare', 'unique'].forEach(tier => {
+        // Skip rare and unique for new profiles (only show common)
+        if (_profileEditIdx === -1 && tier !== 'common') {
+            return;
+        }
+        
         // Section header
         const cfg = tierCfg[tier];
         const hdr = document.createElement('div');
@@ -6168,8 +6489,19 @@ function _buildAvatarGrid() {
             const btn = document.createElement('button');
             btn.className = 'profile-avatar-opt';
             btn.dataset.av = av;
-            btn.style.cssText = 'position:relative;width:40px;height:40px;background:' + cfg.bg + ';border:1px solid ' + cfg.border + ';border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';opacity:' + (unlocked ? '1' : '0.55') + ';';
-            if (unlocked) {
+            btn.style.cssText = 'position:relative;width:40px;height:40px;background:' + cfg.bg + ';border:1px solid ' + cfg.border + ';border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';opacity:' + (unlocked ? '1' : '0.55') + ';overflow:hidden;';
+            if (av.startsWith('img:')) {
+                const name = av.slice(4);
+                const sz = _isSmallEgg(av) ? '42px' : '28px';
+                const imgHtml = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+                if (unlocked) {
+                    btn.innerHTML = imgHtml;
+                    btn.onclick = () => _updateEditAvatarPreview(av);
+                } else {
+                    btn.innerHTML = imgHtml + '<span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
+                    btn.onclick = () => _showAvatarBuyPanel(av, tier);
+                }
+            } else if (unlocked) {
                 btn.innerHTML = '<span style="font-size:22px;">' + av + '</span>';
                 btn.onclick = () => _updateEditAvatarPreview(av);
             } else {
@@ -6182,27 +6514,31 @@ function _buildAvatarGrid() {
     });
 
     // Special (unique) icons — unlocked via achievements or promo codes
-    const specialIcons = _getUnlockedSpecialIcons();
-    if (specialIcons.length > 0) {
-        const shdr = document.createElement('div');
-        shdr.style.cssText = 'width:100%;font-size:11px;color:#f1c40f;text-align:left;padding:2px 2px 4px;letter-spacing:0.03em;font-weight:600;';
-        shdr.textContent = '⭐ Уникальные · достижения';
-        grid.appendChild(shdr);
+    // Only show for existing profiles (not for new ones)
+    if (_profileEditIdx !== -1) {
+        const specialIcons = _getUnlockedSpecialIcons();
+        if (specialIcons.length > 0) {
+            const shdr = document.createElement('div');
+            shdr.style.cssText = 'width:100%;font-size:11px;color:#f1c40f;text-align:left;padding:2px 2px 4px;letter-spacing:0.03em;font-weight:600;';
+            shdr.textContent = '⭐ Уникальные · достижения';
+            grid.appendChild(shdr);
 
-        const srow = document.createElement('div');
-        srow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
-        specialIcons.forEach(name => {
+            const srow = document.createElement('div');
+            srow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
+            specialIcons.forEach(name => {
             const av = 'img:' + name;
             const isSelected = (av === _profileEditAvatar);
             const btn = document.createElement('button');
             btn.className = 'profile-avatar-opt';
             btn.dataset.av = av;
-            btn.style.cssText = 'position:relative;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
-            btn.innerHTML = '<img src="icon-png/' + name + '.png" style="width:28px;height:28px;object-fit:contain;">';
+            btn.style.cssText = 'position:relative;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;overflow:hidden;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
+            const sz = _isSmallEgg(av) ? '42px' : '28px';
+            btn.innerHTML = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
             btn.onclick = () => _updateEditAvatarPreview(av);
             srow.appendChild(btn);
         });
         grid.appendChild(srow);
+        }
     }
 }
 
@@ -6217,9 +6553,9 @@ function _showAvatarBuyPanel(av, tier) {
     // Reset buttons to default state
     const buyBtn = document.getElementById('avatarBuyConfirmBtn');
     const cancelBtn = document.getElementById('avatarBuyCancelBtn');
-    if (buyBtn) { buyBtn.style.display = ''; buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 200'; }
+    if (buyBtn) { buyBtn.style.display = ''; buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 25'; }
     if (cancelBtn) cancelBtn.textContent = '✕ Отмена';
-    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Эпическая · 200 кристаллов 💎';
+    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Эпическая · 25 кристаллов 💎';
     info.innerHTML = '<span style="font-size:26px;vertical-align:middle;">' + av + '</span>&nbsp; <strong style="color:#fff;">' + tierLabel + '</strong>';
     panel.style.display = 'block';
 }
@@ -6289,15 +6625,15 @@ if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
         coins -= 800;
         localStorage.setItem('tankCoins', coins);
     } else if (tier === 'unique') {
-        if (gems < 200) {
-            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно кристаллов! Нужно 200 💎</span>';
+        if (gems < 25) {
+            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно кристаллов! Нужно 25 💎</span>';
             const bb = document.getElementById('avatarBuyConfirmBtn');
             const cb = document.getElementById('avatarBuyCancelBtn');
             if (bb) bb.style.display = 'none';
             if (cb) cb.textContent = '✕ Закрыть';
             return;
         }
-        gems -= 200;
+        gems -= 25;
         localStorage.setItem('tankGems', gems);
     }
     _unlockAvatar(_avatarBuyTarget);
@@ -6361,7 +6697,8 @@ if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () 
     const av = (prof && prof.avatar) || '🎮';
     const nm = (prof && prof.name) || 'Игрок';
     if (av.startsWith('img:')) {
-        nameEl.innerHTML = '<img src="icon-png/' + av.slice(4) + '.png" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
+        const sz = _isSmallEgg(av) ? '27px' : '18px';
+        nameEl.innerHTML = '<img src="icon-png/' + av.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
     } else {
         nameEl.textContent = av + ' ' + nm;
     }
