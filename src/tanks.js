@@ -102,6 +102,11 @@ const tankDescriptions = {
         name: "Зажигательный",
         description: "Стреляет зажигательными снарядами, поджигающими врагов при попадании. Горящая цель получает урон каждые 0.5 сек на протяжении 3 секунд. Медленный, но хорошо бронированный — компенсирует скорость стрельбы постепенным уроном от ожога.",
         rarity: "Редкий"
+    },
+    spartan: {
+        name: "Спартанский танк",
+        description: "Боевой дух Спарты. Метает боевыми копьями, пробивающими врагов насквозь и наносящими 80 урона каждому. При снижении HP ниже 50% спартанец охвачывает адреналин и ускоряется. Чем ближе к гибели — тем опаснее.",
+        rarity: "Сверхредкий"
     }
 };
 
@@ -123,6 +128,7 @@ const tankBgGradients = {
     mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     roman: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - animated like time
+    spartan: ['#3498db', '#5dade2'],       // Сверхредкий - blue
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     pyro: ['#2ecc71', '#27ae60'],        // Редкий - green
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
@@ -151,6 +157,7 @@ const tankBaseColors = {
     medical: '#0033ff',    // Bright blue for medical tank
     mine: '#3d4c18',       // Dark olive for mine tank
     roman: '#8B6914',      // Dark gold for Roman tank
+    spartan: '#b87333',    // Bronze for Spartan tank
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
     // sport removed
 };
@@ -171,8 +178,8 @@ const _trioFire = {
     members: [['buckshot','🔱'],['machinegun','🔫'],['fire','🔥']]
 };
 const _trioTactic = {
-    icon: '🏛', name: 'Тактическое трио', color: '#d4a017',
-    members: [['roman','🏛'],['time','⏰'],['imitator','🌈']]
+    icon: '🏛', name: 'Древнейшее трио', color: '#d4a017',
+    members: [['roman','🏛'],['time','⏰'],['spartan','⚔️']]
 };
 const _trioBase = {
     icon: '🛡️', name: 'Базовое трио', color: '#5dade2',
@@ -189,7 +196,7 @@ const _trioSupport = {
 const tankTrios = {
     electric: _trioTechno, robot: _trioTechno, plasma: _trioTechno,
     buckshot: _trioFire, machinegun: _trioFire, fire: _trioFire,
-    roman: _trioTactic, time: _trioTactic, imitator: _trioTactic,
+    roman: _trioTactic, time: _trioTactic, spartan: _trioTactic,
     normal: _trioBase, ice: _trioBase, waterjet: _trioBase,
     mine: _trioControl, buratino: _trioControl, toxic: _trioControl,
     musical: _trioSupport, medical: _trioSupport, mirror: _trioSupport,
@@ -846,6 +853,42 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
 
             // Dark border
             ctx.strokeStyle = '#2a0800';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'spartan') {
+            // Spartan tank body — bronze armour plates with red war cloak stripe
+            const spBG = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            spBG.addColorStop(0,   '#c8722a');
+            spBG.addColorStop(0.45, '#b87333');
+            spBG.addColorStop(1,   '#7a4a1e');
+            ctx.fillStyle = spBG;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            // Horizontal armour ridges
+            ctx.strokeStyle = 'rgba(60,20,0,0.55)';
+            ctx.lineWidth = 1.2;
+            for (let ri = -1; ri <= 1; ri++) {
+                ctx.beginPath();
+                ctx.moveTo(-bodyW/2 + 3, ri * bodyH * 0.26);
+                ctx.lineTo(bodyW/2 - 3,  ri * bodyH * 0.26);
+                ctx.stroke();
+            }
+
+            // Red war cloak stripe down the centre
+            ctx.fillStyle = 'rgba(180,0,0,0.45)';
+            ctx.fillRect(-bodyW * 0.08, -bodyH/2, bodyW * 0.16, bodyH);
+
+            // Bronze highlight sheen
+            ctx.fillStyle = 'rgba(255,200,100,0.12)';
+            ctx.beginPath();
+            ctx.moveTo(-bodyW/2, -bodyH/2);
+            ctx.lineTo(bodyW * 0.2, -bodyH/2);
+            ctx.lineTo(-bodyW/2, bodyH * 0.3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dark border
+            ctx.strokeStyle = '#3a1a00';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'mine') {
@@ -1643,6 +1686,29 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.strokeStyle = '#2a0800';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
+    } else if (type === 'spartan') {
+        // Spartan turret — Corinthian helmet silhouette
+        const spT = ctx.createRadialGradient(-tSize*0.12, -tSize*0.12, 0, 0, 0, tSize*0.65);
+        spT.addColorStop(0,   '#d4892a');
+        spT.addColorStop(0.55, '#b87333');
+        spT.addColorStop(1,   '#6b3e10');
+        ctx.fillStyle = spT;
+        // Rounded helm-dome
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        // Red crest stripe (top of helmet)
+        ctx.fillStyle = 'rgba(200,0,0,0.6)';
+        ctx.fillRect(-tSize*0.07, -tSize*0.52, tSize*0.14, tSize*0.52);
+        // Eye slit
+        ctx.fillStyle = 'rgba(20,0,0,0.7)';
+        ctx.fillRect(-tSize*0.22, -tSize*0.1, tSize*0.44, tSize*0.12);
+        // Border
+        ctx.strokeStyle = '#3a1a00';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
+        ctx.stroke();
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -2206,6 +2272,43 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(255,110,0,0.80)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
+        } else if (type === 'spartan') {
+            // Spartan barrel — long bronze spear shaft with forged iron tip
+            const spBarLen = Math.min(W, H) * 0.78 * turretScale;
+            const spBarH   = Math.min(W, H) * 0.075 * turretScale;
+            // Wooden shaft (dark tan)
+            const shaftGrad = ctx.createLinearGradient(0, -spBarH/2, 0, spBarH/2);
+            shaftGrad.addColorStop(0, '#8b5a2b');
+            shaftGrad.addColorStop(0.5, '#a0693a');
+            shaftGrad.addColorStop(1, '#6b3f18');
+            ctx.fillStyle = shaftGrad;
+            ctx.fillRect(tSize/2, -spBarH/2, spBarLen * 0.72, spBarH);
+            // Bronze grip wrap
+            ctx.strokeStyle = 'rgba(184,115,51,0.7)';
+            ctx.lineWidth = 1.3;
+            for (let wi = 0; wi < 3; wi++) {
+                const wx = tSize/2 + spBarLen * (0.1 + wi * 0.2);
+                ctx.beginPath();
+                ctx.moveTo(wx, -spBarH/2);
+                ctx.lineTo(wx,  spBarH/2);
+                ctx.stroke();
+            }
+            // Iron spear tip
+            const tipX = tSize/2 + spBarLen * 0.72;
+            const tipGrad = ctx.createLinearGradient(tipX, -spBarH, tipX + spBarLen*0.28, 0);
+            tipGrad.addColorStop(0, '#9aa0a8');
+            tipGrad.addColorStop(0.4, '#d8dde2');
+            tipGrad.addColorStop(1, '#5c6870');
+            ctx.fillStyle = tipGrad;
+            ctx.beginPath();
+            ctx.moveTo(tipX,                    -spBarH * 1.2);
+            ctx.lineTo(tSize/2 + spBarLen,       0);
+            ctx.lineTo(tipX,                     spBarH * 1.2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#3a4a54';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2612,6 +2715,9 @@ function drawCharacterPreviews() {
     drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
     drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
     drawItem(medicalTankCtx, medicalTankPreview, 'medical', '#0033ff', tankBgGradients.medical);
+    if (typeof spartanTankCtx !== 'undefined' && spartanTankCtx && spartanTankPreview) {
+        drawItem(spartanTankCtx, spartanTankPreview, 'spartan', '#b87333', tankBgGradients.spartan);
+    }
     // MINE
     if (typeof mineTankCtx !== 'undefined' && mineTankCtx && mineTankPreview) {
         drawItem(mineTankCtx, mineTankPreview, 'mine', '#3d4c18', tankBgGradients.mine);
@@ -3558,6 +3664,44 @@ function draw() {
             ctx.fill();
             ctx.strokeStyle = '#8B6914';
             ctx.lineWidth = 0.6;
+            ctx.stroke();
+
+            ctx.restore();
+
+        } else if (b.type === 'spartanSpear') {
+            // Spartan spear bullet — elongated bronze shaft with iron tip
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(Math.atan2(b.vy, b.vx));
+
+            const sLen = 22;  // half-length from center to tip
+            const sH   = 3;   // half-height
+
+            // Wooden shaft
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(-sLen, -sH/2, sLen * 1.35, sH);
+
+            // Bronze wrap bands
+            ctx.strokeStyle = '#c89050';
+            ctx.lineWidth = 1;
+            for (let bi = 0; bi < 2; bi++) {
+                const bx = -sLen + sLen * (0.3 + bi * 0.45);
+                ctx.beginPath();
+                ctx.moveTo(bx, -sH/2);
+                ctx.lineTo(bx,  sH/2);
+                ctx.stroke();
+            }
+
+            // Iron tip (triangle)
+            ctx.fillStyle = '#c8d0d8';
+            ctx.beginPath();
+            ctx.moveTo(sLen * 0.35, -sH * 1.5);
+            ctx.lineTo(sLen,         0);
+            ctx.lineTo(sLen * 0.35,  sH * 1.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#6a7880';
+            ctx.lineWidth = 0.7;
             ctx.stroke();
 
             ctx.restore();

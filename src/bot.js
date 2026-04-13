@@ -670,7 +670,7 @@ function updateEnemyAI() {
                             maxBounces: 8
                         });
                     }
-                    enemy.soundRicochetCooldown = 720;
+                    enemy.soundRicochetCooldown = 1200;
                     enemy.fireCooldown = 60;
                 }
             }
@@ -1234,6 +1234,20 @@ function updateEnemyAI() {
                     type: 'pyroBullet',
                     damage: 70
                 };
+            } else if (tt === 'spartan') {
+                // Spartan: piercing spear
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 26,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 26,
+                    w: 5, h: 5,
+                    vx: Math.cos(enemy.turretAngle) * 8,
+                    vy: Math.sin(enemy.turretAngle) * 8,
+                    life: 130,
+                    owner: 'enemy', team: enemy.team,
+                    type: 'spartanSpear',
+                    damage: 80,
+                    hitEntities: []
+                };
             } else {
                 // normal or ice and other types default to normal shell
                 const w = (tt === 'ice') ? 8 : 9;
@@ -1241,7 +1255,12 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : FIRE_COOLDOWN;
+            // Spartan speed boost when below 50% HP
+            if (tt === 'spartan') {
+                const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
+                enemy.speed = (enemy.hp < (enemy.maxHp || 320) * 0.5) ? spartanBaseSpd + 0.3 : spartanBaseSpd;
+            }
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
@@ -1640,9 +1659,23 @@ function updateAllyAI() {
                             damage: 125,
                             bounces: 0, maxBounces: 1, spinAngle: 0
                         };
+                    } else if (tt === 'spartan') {
+                        // Ally spartan: piercing spear
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 26,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 26,
+                            w: 5, h: 5,
+                            vx: Math.cos(ally.turretAngle) * 8,
+                            vy: Math.sin(ally.turretAngle) * 8,
+                            life: 130,
+                            owner: 'ally', team: ally.team,
+                            type: 'spartanSpear',
+                            damage: 80,
+                            hitEntities: []
+                        };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'spartan') ? 40 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

@@ -462,6 +462,7 @@ const tankGemPrices = {
     'machinegun': 100,// Редкий
     'buckshot': 100,  // Редкий
     'pyro': 100,      // Редкий
+    'spartan': 200,   // Сверхредкий
     'fire': 200,      // Сверхредкий
     'waterjet': 200,  // Сверхредкий
     'mine': 200,      // Сверхредкий
@@ -592,6 +593,7 @@ const tankMaxHpByType = {
     'mine': 350,
     'roman': 350,
     'pyro': 420,
+    'spartan': 320,
     'boss_hell': 7500
 };
 
@@ -624,7 +626,8 @@ const tankMaxSpeedByType = {
     'medical': 3.4,
     'mine': 3.1,
     'roman': 3.0,
-    'pyro': 2.75
+    'pyro': 2.75,
+    'spartan': 3.0
 };
 
 function setTankSpeed(type) {
@@ -1278,6 +1281,8 @@ const romanTankPreview = document.getElementById('romanTankPreview');
 const romanTankCtx = romanTankPreview && romanTankPreview.getContext ? romanTankPreview.getContext('2d') : null;
 const pyroTankPreview = document.getElementById('pyroTankPreview');
 const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
+const spartanTankPreview = document.getElementById('spartanTankPreview');
+const spartanTankCtx = spartanTankPreview && spartanTankPreview.getContext ? spartanTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -1295,6 +1300,15 @@ const modeCancel = document.getElementById('modeCancel');
 const modeOneVsAll = document.getElementById('modeOneVsAll');
 
 function startGame(mode) {
+    // Security check: if selected tank is not owned, reset to normal
+    // Skip for trial/training — those modes are meant to test any tank
+    if (mode !== 'trial' && mode !== 'training') {
+        if (tankType !== 'normal' && !unlockedTanks.includes(tankType)) {
+            tankType = 'normal';
+            localStorage.setItem('tankSelected', 'normal');
+        }
+    }
+
     // Recalculate canvas size for current orientation (handles portrait→landscape rotation before launch)
     DISPLAY_W = window.innerWidth;
     DISPLAY_H = window.innerHeight;
@@ -1938,6 +1952,15 @@ function processDevCommand(rawCommand) {
         if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
         console.log('All non-common icon unlocks cleared. Random common avatars assigned.');
         showNotification('🎲 Все иконки очищены, выданы обычные аватары', '#27ae60');
+    } else if (command === '/clear ac') {
+        // Clear all achievements
+        achievementData = {};
+        localStorage.setItem('achievementData', JSON.stringify(achievementData));
+        saveAchievements();
+        if (typeof saveProgress === 'function') saveProgress();
+        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
+        console.log('All achievements cleared.');
+        showNotification('✓ Все достижения очищены', '#27ae60');
     } else if (command.startsWith('/uncoin')) {
         // Set coins to negative value
         const valStr = command.substring(7).trim();
@@ -2001,10 +2024,11 @@ function processDevCommand(rawCommand) {
             '  /ungem [число]    Установить отриц. гемы',
             '  /unpart [число]   Установить отриц. части',
             '',
-            '  ── Прочее ──',
+            '  ── Прочое ──',
             '  /clear t   Сбросить все танки (кроме обычного)',
             '  /clear en  Сбросить все улучшения',
             '  /clear ic  Сбросить все иконки профиля',
+            '  /clear ac  Сбросить все достижения',
             '  /help      Показать этот список',
             '╚══════════════════════════════════════╝',
         ].join('\n');
@@ -2669,6 +2693,10 @@ const selectPyroTank = document.getElementById('selectPyroTank');
 if (selectPyroTank) selectPyroTank.addEventListener('click', () => {
     showTankDetail('pyro');
 });
+const selectSpartanTank = document.getElementById('selectSpartanTank');
+if (selectSpartanTank) selectSpartanTank.addEventListener('click', () => {
+    showTankDetail('spartan');
+});
 
 // По умолчанию показываем главное меню
 if (mainMenu) mainMenu.style.display = 'flex';
@@ -2766,9 +2794,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -2868,9 +2896,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro','spartan'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500', spartan: '#b87333' };
             // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
             // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
@@ -2912,9 +2940,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine','pyro'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -2968,7 +2996,7 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro'];
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan'];
     const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
@@ -3255,7 +3283,7 @@ function spawnLeaderHuntMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
+    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
     const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
@@ -3422,7 +3450,7 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro'];
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
     const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
     
     for (let i = 0; i < 7; i++) {
@@ -3481,7 +3509,7 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'pyro', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman'];
+const allTanksList = ['ice', 'machinegun', 'buckshot', 'pyro', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman', 'spartan'];
 const tankRarityMap = {
     'ice': 'rare',
     'machinegun': 'rare',
@@ -3501,7 +3529,8 @@ const tankRarityMap = {
     'electric': 'mythic',
     'time': 'imitator',
     'imitator': 'imitator',
-    'roman': 'imitator'
+    'roman': 'imitator',
+    'spartan': 'super_rare'
 };
 
 const rarityChances = {
@@ -3893,31 +3922,31 @@ function openOmegaContainer(options = {}) {
     const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
     
-    if (r < 30) { // 30% coins small
-        const val = getRandomInt(600, 1200);
+    if (r < 35) { // 35% coins small
+        const val = getRandomInt(500, 1000);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (600–1200)');
-        return { type: 'coins', amount: val, desc: 'Монеты (600–1200)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (500–1000)');
+        return { type: 'coins', amount: val, desc: 'Монеты (500–1000)', icon: '💰' };
     
-    } else if (r < 50) { // 20% coins big (30 + 20 = 50)
-        const val = getRandomInt(1200, 2000);
+    } else if (r < 55) { // 20% coins big (35 + 20 = 55)
+        const val = getRandomInt(1000, 1500);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (1200–2000)');
-        return { type: 'coins', amount: val, desc: 'Монеты (1200–2000)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (1000–1500)');
+        return { type: 'coins', amount: val, desc: 'Монеты (1000–1500)', icon: '💰' };
     
-    } else if (r < 70) { // 20% gems small (50 + 20 = 70)
-        const val = getRandomInt(25, 50);
+    } else if (r < 75) { // 20% gems small (55 + 20 = 75)
+        const val = getRandomInt(25, 40);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (25–50)');
-        return { type: 'gems', amount: val, desc: 'Гемы (25–50)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (25–40)');
+        return { type: 'gems', amount: val, desc: 'Гемы (25–40)', icon: '💎' };
     
-    } else if (r < 80) { // 10% gems big (70 + 10 = 80)
-        const val = getRandomInt(50, 80);
+    } else if (r < 85) { // 10% gems big (75 + 10 = 85)
+        const val = getRandomInt(40, 60);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (50–80)');
-        return { type: 'gems', amount: val, desc: 'Гемы (50–80)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (40–60)');
+        return { type: 'gems', amount: val, desc: 'Гемы (40–60)', icon: '💎' };
     
-    } else { // Remaining 20% (80 -> 100) is Tank
+    } else { // Remaining 15% (85 -> 100) is Tank
         // Reuse unlockRandomTank but maybe prioritize unlocked ones? 
         // Logic says "any tank". unlockRandomTank handles duplicate logic.
         // We pass fromSuper=true to get higher gem refund if duplicate.
@@ -4153,6 +4182,12 @@ function update() {
         let dx = 0, dy = 0;
         let isW = keys['KeyW'], isS = keys['KeyS'], isA = keys['KeyA'], isD = keys['KeyD'];
         
+        // Spartan speed boost when below 50% HP (adrenaline mechanic)
+        if (tankType === 'spartan') {
+            const spartanBase = (tankMaxSpeedByType['spartan'] || 3.0) + ((typeof getTankSpeedBonus === 'function') ? getTankSpeedBonus('spartan') : 0);
+            tank.speed = parseFloat((tank.hp < tank.maxHp * 0.5 ? spartanBase + 0.3 : spartanBase).toFixed(2));
+        }
+        
         // Block player controls during autopilot or ultimate charge
         if (tank.isAutopilotActive || tank.isUltimateActive) {
             isW = isS = isA = isD = false;
@@ -4352,7 +4387,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro','spartan'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -5204,11 +5239,12 @@ function updateShopButtonStyles() {
         'plasma': 'selectPlasmaTank',
         'electric': 'selectElectricTank',
         'roman': 'selectRomanTank',
-        'pyro': 'selectPyroTank'
+        'pyro': 'selectPyroTank',
+        'spartan': 'selectSpartanTank'
     };
     
     const tankRarityMap = {
-        'fire': 'super', 'waterjet': 'super', 'mine': 'super',
+        'fire': 'super', 'waterjet': 'super', 'mine': 'super', 'spartan': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
@@ -5615,7 +5651,8 @@ function updateTankDetailButton(type) {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator'
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator',
+        'spartan': 'super'
     };
 
     // If player has enough gems, color the buy button by rarity
@@ -5940,7 +5977,7 @@ const ACHIEVEMENT_DEFS = [
     // Specific trio achievements
     { id: 'trio_techno',  group: 'trio', name: 'Техно-трио',        desc: 'Собери: Электрический + Робот + Плазма',            icon: '⚡', trioMembers: ['electric','robot','plasma'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_fire',    group: 'trio', name: 'Огневое трио',      desc: 'Собери: Дробовик + Пулемёт + Огнемёт',             icon: '🔥', trioMembers: ['buckshot','machinegun','fire'], reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
-    { id: 'trio_tactic',  group: 'trio', name: 'Тактическое трио',  desc: 'Собери: Роман + Временной + Имитатор',             icon: '🏛', trioMembers: ['roman','time','imitator'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
+    { id: 'trio_tactic',  group: 'trio', name: 'Древнейшее трио',   desc: 'Собери: Римский + Временной + Спартанский',          icon: '🏛', trioMembers: ['roman','time','spartan'],       reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_base',    group: 'trio', name: 'Базовое трио',      desc: 'Собери: Обычный + Ледяной + Водомёт',              icon: '🛡️', trioMembers: ['normal','ice','waterjet'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_control', group: 'trio', name: 'Контролирующее трио', desc: 'Собери: Мина + Буратино + Токсик',               icon: '☢️', trioMembers: ['mine','buratino','toxic'],      reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },
     { id: 'trio_support', group: 'trio', name: 'Поддерживающее трио', desc: 'Собери: Музыкальный + Медик + Зеркало',          icon: '💫', trioMembers: ['musical','medical','mirror'],   reward: { type: 'normal', count: 1 }, rewardDesc: '1 контейнер' },

@@ -698,7 +698,7 @@ function shoot() {
             bounces: 0,
             maxBounces: 3
         });
-        tank.fireCooldown = 45; // 0.75 seconds
+        tank.fireCooldown = 80; // 1.33 seconds (slower)
     } else if (tankType === 'waterjet') {
         // Waterjet: continuous stream while Space held
         tank.waterjetActive = true;
@@ -758,6 +758,8 @@ function shoot() {
             props.damage = 100; props.w = 8; props.h = 8; // specialized mirror shard
         } else if (pType === 'romanBlade') {
             props.type = 'romanBlade'; props.damage = 125; props.w = 14; props.h = 14; props.bounces = 0; props.maxBounces = 1; props.spinAngle = 0; props.life = 130; props.vx = Math.cos(tank.turretAngle) * 6.5; props.vy = Math.sin(tank.turretAngle) * 6.5;
+        } else if (pType === 'spartanSpear') {
+            props.type = 'spartanSpear'; props.damage = 80; props.w = 5; props.h = 5; props.life = 130; props.hitEntities = []; props.vx = Math.cos(tank.turretAngle) * 8; props.vy = Math.sin(tank.turretAngle) * 8;
         } else if (pType === 'pyroBullet') {
             props.type = 'pyroBullet'; props.damage = 70; props.w = 9; props.h = 9;
         } else if (pType === 'buckshot') {
@@ -919,6 +921,24 @@ function shoot() {
             });
         }
         tank.fireCooldown = 90; // 1.5s between mine placements
+    } else if (tankType === 'spartan') {
+        // Spartan spear: pierces through all enemies, 80 damage
+        const ang = tank.turretAngle;
+        const speed = 8;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 26,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 26,
+            w: 5, h: 5,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 130,
+            owner: 'player',
+            team: 0,
+            type: 'spartanSpear',
+            damage: 80,
+            hitEntities: [] // tracking for pierce
+        });
+        tank.fireCooldown = 40;
     } else if (tankType === 'roman') {
         // Throwing blade: 125 dmg, spins visually, ricochets 1 time
         bullets.push({
@@ -968,7 +988,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1401,6 +1421,15 @@ function updatePhysics() {
                         for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
                     }
                     // Don't remove
+                } else if (b.type === 'spartanSpear') {
+                    // Spartan spear pierces player too — hit once then continue flying
+                    if (!b.hitEntities) b.hitEntities = [];
+                    if (!b.hitEntities.includes('player')) {
+                        tank.hp -= Math.round((b.damage || 80) * _romanShieldMult);
+                        b.hitEntities.push('player');
+                        for (let k = 0; k < 4; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#b87333', 0.7);
+                    }
+                    // Don't remove — keeps flying through
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      dmg = Math.round(dmg * _romanShieldMult);
@@ -1629,6 +1658,17 @@ function updatePhysics() {
                             for (let k = 0; k < 5; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#00e5ff', 0.6);
                         }
                         // Don't remove — keeps flying
+                    } else if (b.type === 'spartanSpear') {
+                        // Spartan spear: pierce through all enemies, hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        if (!b.hitEntities.includes(j)) {
+                            let dmgSpear = b.damage || 80;
+                            if (b.owner === 'player') dmgSpear = applyPlayerDamage(dmgSpear);
+                            e.hp -= dmgSpear;
+                            b.hitEntities.push(j);
+                            for (let k = 0; k < 4; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#b87333', 0.7);
+                        }
+                        // Don't remove — keeps flying through
                     } else if (b.type === 'droneBullet') {
                         // Drone bullet: damage and remove
                         e.hp -= b.damage || 25;
@@ -1702,6 +1742,15 @@ function updatePhysics() {
                                 for (let k = 0; k < 5; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#00e5ff', 0.6);
                             }
                             // Don't remove — keeps flying
+                        } else if (b.type === 'spartanSpear') {
+                            // Spartan spear: pierce through all drones, hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            if (!b.hitEntities.includes('drone_' + j)) {
+                                d.hp -= b.damage || 80;
+                                b.hitEntities.push('drone_' + j);
+                                for (let k = 0; k < 4; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#b87333', 0.7);
+                            }
+                            // Don't remove — keeps flying
                         } else if (b.type === 'droneBullet') {
                             // Drone bullets don't hurt other drones (same team)
                             continue;
@@ -1750,6 +1799,15 @@ function updatePhysics() {
                                 d.hp -= b.damage || 75;
                                 b.hitEntities.push('enemyDrone_' + j);
                                 for (let k = 0; k < 5; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#00e5ff', 0.6);
+                            }
+                            // Don't remove — keeps flying
+                        } else if (b.type === 'spartanSpear') {
+                            // Spartan spear: pierce through all drones, hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            if (!b.hitEntities.includes('enemyDrone_' + j)) {
+                                d.hp -= b.damage || 80;
+                                b.hitEntities.push('enemyDrone_' + j);
+                                for (let k = 0; k < 4; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#b87333', 0.7);
                             }
                             // Don't remove — keeps flying
                         } else if (b.type === 'droneBullet') {
@@ -2225,10 +2283,8 @@ function updatePhysics() {
         if (!ent || !ent.poisonTimer) return;
         if (ent.alive === false) return; // Don't poison dead entities
         if (ent.poisonTimer > 0) {
-            // damage = (maxHp or 300) / 6 per second -> per tick divide by 60
-            const maxHp = ent.maxHp || 300;
-            const dmgPerSec = maxHp / 6;
-            const dmgPerTick = dmgPerSec / 60;
+            // Fixed 40 HP/sec poison damage regardless of max HP
+            const dmgPerTick = 40 / 60;
 
               // Mirror Tank Logic: Poison counts as hit type 'toxic' (for any mirror tank)
               if (ent.tankType === 'mirror') {
