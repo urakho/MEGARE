@@ -93,6 +93,30 @@ b { color: #ffcc00; }
     text-shadow: 0.125rem 0.125rem 0 #000;
 }
 .modal-box img { border-radius: 0; box-shadow: none; }
+/* Modal close button (X) — shown only on mobile */
+.modal-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+.modal-close-btn:hover {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.5);
+}
 /* Resource icon used in headers (coins/gems/trophies) */
 .res-icon { width: 2.25rem; height: 2.25rem; vertical-align: middle; margin-right: 0.5rem; }
 
@@ -568,6 +592,37 @@ b { color: #ffcc00; }
     align-items: stretch;
     background: #120020;
 }
+/* Character tab bar */
+.char-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+}
+.char-tab-btn {
+    background: rgba(255,140,0,0.12);
+    color: #e8a14e;
+    border: 2px solid rgba(255,140,0,0.24);
+    border-radius: 8px;
+    padding: 8px 32px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    letter-spacing: 0.03em;
+}
+.char-tab-btn:hover {
+    background: rgba(255,140,0,0.22);
+    color: #ffb860;
+    border-color: #ff8c00;
+}
+.char-tab-btn.char-tab-active {
+    background: linear-gradient(135deg, rgba(255,140,0,0.32), rgba(255,165,0,0.24));
+    color: #fff;
+    border-color: #ff8c00;
+    box-shadow: 0 0 12px rgba(255,140,0,0.42);
+}
 /* Character grid: 4 per row desktop, 3 on mobile */
 .char-grid {
     display: grid;
@@ -797,6 +852,7 @@ b { color: #ffcc00; }
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 0 3.125rem #f39c12, inset 0 0 1.25rem rgba(243, 156, 18, 0.5);
     min-width: 18.75rem;
+    position: relative;
 }
 .reward-overlay.visible .reward-box {
     transform: scale(1);
@@ -1144,9 +1200,13 @@ canvas.tank-display {
     .modal-overlay {
         flex-direction: column;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: safe center;
         padding: 0.5rem 0 calc(env(safe-area-inset-bottom, 0.75rem) + 0.75rem) 0;
         overflow-y: auto;
+    }
+    /* Полноэкранные модалки — контент от верха */
+    #characterModal, #shopModal {
+        justify-content: flex-start;
     }
     .modal-box {
         width: 97vw;
@@ -1363,6 +1423,36 @@ canvas.tank-display {
     #resultOverlay .modal-box { padding: 0.875rem; }
     #resultEmblem { font-size: 2.75rem; }
     #buyConfirmModal .modal-box { padding: 1rem; }
+
+    /* ════════════════════════════════════════
+       ЯЩИК И НАГРАДА — всегда по центру
+       ════════════════════════════════════════ */
+    #containerFlowModal {
+        justify-content: safe center;
+        align-items: center;
+        padding: 0.5rem;
+    }
+    .container-flow-box {
+        width: min(26.25rem, 96vw);
+        max-height: 96dvh;
+        overflow-y: auto;
+        box-sizing: border-box;
+        position: relative;
+    }
+    .reward-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .reward-box {
+        width: min(20rem, 90vw);
+        max-height: 90dvh;
+        overflow-y: auto;
+        box-sizing: border-box;
+        position: relative;
+    }
 }
 
 /* ═════════════════════════════════════

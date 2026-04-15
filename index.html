@@ -244,7 +244,13 @@
             <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
             <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
             </div>
-        <div class="char-grid">
+        <!-- Tab bar -->
+        <div class="char-tabs">
+            <button id="charTabTanks" class="char-tab-btn char-tab-active">🛡️ Танки</button>
+            <button id="charTabMechs"  class="char-tab-btn">🤖 Мехи</button>
+        </div>
+        <!-- Tanks panel -->
+        <div id="charGridTanks" class="char-grid">
             <!-- COMMON -->
             <div>
                 <canvas id="normalTankPreview" width="150" height="150" style="border:2px solid #e74c3c; border-radius:8px;"></canvas>
@@ -320,7 +326,7 @@
                 <button id="selectPlasmaTank" class="btn btn-blood">Плазменный</button>
             </div>
             <div>
-                <canvas id="electricTankPreview" width="150" height="150" style="border:3px solid #e74c3c; border-radius:8px; background:#1a1a2e;"></canvas>
+                <canvas id="electricTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
                 <button id="selectElectricTank" class="btn btn-blood">Электрический</button>
             </div>
             <!-- CHROMATIC -->
@@ -337,11 +343,17 @@
                 <button id="selectRomanTank" class="btn btn-rainbow">Римский</button>
             </div>
         </div>
+        <!-- Mechs panel (coming soon) -->
+        <div id="charGridMechs" class="char-grid" style="display:none; align-items:center; justify-items:center;">
+            <div class="char-coming-soon" style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center;">
+                <span style="font-size:64px; margin-bottom:16px;">🤖</span>
+                <h3 style="color:#5dade2; font-size:22px; margin:0 0 10px;">Мехи</h3>
+                <p style="color:#7f8c8d; font-size:15px; max-width:280px;">Скоро здесь появятся мехи. Следите за обновлениям!</p>
+            </div>
+        </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
     </div>
 </div>
-
-<!-- Version Modal -->
 <div id="versionModal" class="modal-overlay">
     <div class="modal-box">
         <h2 class="modal-title">MEGARE</h2>
@@ -647,9 +659,10 @@
         <button id="meSaveBtn"   class="btn me-btn me-btn-gold">💾 Сохранить</button>
         <button id="meMapsBtn"   class="btn me-btn me-btn-blue">📂 Мои карты</button>
         <button id="meImportBtn" class="btn me-btn me-btn-gold">📥 Импорт .meg</button>
+        <button id="meCloseBtnMobile" class="btn me-btn me-btn-gray" style="display:none;">✕ Закрыть</button>
         <button id="meExportBtn" class="btn me-btn me-btn-orange">📤 Экспорт .meg</button>
         <button id="mePlayBtn"   class="btn me-btn me-btn-red">▶ Играть</button>
-        <button id="meCloseBtn"  class="btn me-btn me-btn-gray">✕</button>
+        <button id="meCloseBtn"  class="btn me-btn me-btn-gray me-close-desktop">✕</button>
       </div>
     </div>
 

@@ -64,6 +64,7 @@ let angryBossMusic = new Audio('music/mp3/angryboss.mp3');
 angryBossMusic.loop = true;
 angryBossMusic.volume = 0.5;
 let currentMode = 'menu';
+window.currentMode = currentMode;
 let duelState = null;
 
 // Battle metrics tracking
@@ -865,6 +866,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
         teamMusic.volume = window.musicVolume;
         tankMusic.volume = window.musicVolume;
         updateCmdBtnVisibility();
+        if (typeof _updateMobileCloseButtons === 'function') _updateMobileCloseButtons();
         modal.style.display = 'none';
     });
 })();
@@ -1730,7 +1732,18 @@ if (shopBtn) shopBtn.addEventListener('click', () => { if (_quickResourceScan())
 if (characterBtn) characterBtn.addEventListener('click', () => { 
     if (_quickResourceScan()) return;
     if (characterModal) { 
-        characterModal.style.display = 'flex'; 
+        characterModal.style.display = 'flex';
+        // Reset to Tanks tab
+        const charGridTanks = document.getElementById('charGridTanks');
+        const charGridMechs = document.getElementById('charGridMechs');
+        const charTabTanks = document.getElementById('charTabTanks');
+        const charTabMechs = document.getElementById('charTabMechs');
+        if (charGridTanks && charGridMechs && charTabTanks && charTabMechs) {
+            charGridTanks.style.display = 'grid';
+            charGridMechs.style.display = 'none';
+            charTabTanks.classList.add('char-tab-active');
+            charTabMechs.classList.remove('char-tab-active');
+        }
         drawCharacterPreviews(); 
         updateShopButtonStyles();
     } 
@@ -1738,6 +1751,28 @@ if (characterBtn) characterBtn.addEventListener('click', () => {
 if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
 if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
 if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+
+// Character tabs switching
+const charTabTanks = document.getElementById('charTabTanks');
+const charTabMechs = document.getElementById('charTabMechs');
+const charGridTanks = document.getElementById('charGridTanks');
+const charGridMechs = document.getElementById('charGridMechs');
+
+if (charTabTanks && charTabMechs && charGridTanks && charGridMechs) {
+    charTabTanks.addEventListener('click', () => {
+        charGridTanks.style.display = 'grid';
+        charGridMechs.style.display = 'none';
+        charTabTanks.classList.add('char-tab-active');
+        charTabMechs.classList.remove('char-tab-active');
+    });
+    charTabMechs.addEventListener('click', () => {
+        charGridTanks.style.display = 'none';
+        charGridMechs.style.display = 'grid';
+        charTabMechs.classList.add('char-tab-active');
+        charTabTanks.classList.remove('char-tab-active');
+    });
+}
+
 if (closeTrophyRoad) closeTrophyRoad.addEventListener('click', () => { if (trophyRoadModal) trophyRoadModal.style.display = 'none'; });
 
 // Command modal handlers
@@ -2162,33 +2197,20 @@ function _markPromoUsed(code) {
 // ── Easter egg limited shop items ────────────────────────────────────────────
 const EASTER_EGG_PACKS = [
     {
-        id: 'easter_basic',
-        name: 'Комплект: Пасхальные яйца',
-        desc: 'Красное, Зелёное и Синее пасхальное яйцо',
-        icons: ['img:red-egg', 'img:gre-egg', 'img:blu-egg'],
-        price: 200
-    },
-    {
-        id: 'easter_gold',
-        name: 'Золотое пасхальное яйцо',
-        desc: 'Уникальная иконка для профиля',
-        icons: ['img:gold-egg'],
-        price: 120
-    },
-    {
-        id: 'easter_chik',
-        name: 'Пасхальное яйцо с цыплёнком',
-        desc: 'Уникальная иконка для профиля',
-        icons: ['img:chik-egg'],
-        price: 150
-    },
-    {
         id: 'easter_full',
         name: 'Полный пасхальный комплект',
         desc: 'Все 5 пасхальных иконок: красное, зелёное, синее, золотое и яйцо с цыплёнком',
         icons: ['img:red-egg', 'img:gre-egg', 'img:blu-egg', 'img:gold-egg', 'img:chik-egg'],
         price: 350,
-        badge: '💰 Выгоднее!'
+        badge: '💰 ДЁШЕВО!'
+    },
+    {
+        id: 'easter_final',
+        name: 'Финальный пасхальный комплект',
+        desc: 'Уникальные иконки: Пасхальный кролик, Огненное яйцо, Кулич',
+        icons: ['img:eas-rabbit', 'img:fire-egg', 'img:kulich'],
+        price: 350,
+        badge: '⏰ Последний шанс!'
     }
 ];
 
@@ -3508,7 +3530,7 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → imitator
+// Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → chromatic
 const allTanksList = ['ice', 'machinegun', 'buckshot', 'pyro', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman', 'spartan'];
 const tankRarityMap = {
     'ice': 'rare',
@@ -3527,9 +3549,9 @@ const tankRarityMap = {
     'illuminat': 'mythic',
     'plasma': 'mythic',
     'electric': 'mythic',
-    'time': 'imitator',
-    'imitator': 'imitator',
-    'roman': 'imitator',
+    'time': 'chromatic',
+    'imitator': 'chromatic',
+    'roman': 'chromatic',
     'spartan': 'super_rare'
 };
 
@@ -3538,7 +3560,7 @@ const rarityChances = {
     'super_rare': 25,
     'epic': 15,
     'legendary': 10,
-    'imitator': 5,
+    'chromatic': 5,
     'mythic': 5
 };
 
@@ -3548,16 +3570,17 @@ const rarityChances = {
 // For now, ensuring we don't crash.
 
 // Helper to pick rarity based on weights
-function getRarity() {
+// Accepts optional override table {rarity: weight, ...}
+function getRarity(overrideChances) {
+    const chances = overrideChances || rarityChances;
     const r = Math.random() * 100;
     let acc = 0;
-    // Iterate in order to ensure correct accumulation
-    const order = ['rare', 'super_rare', 'epic', 'legendary', 'imitator', 'mythic'];
+    const order = Object.keys(chances);
     for (const rar of order) {
-        acc += rarityChances[rar];
+        acc += chances[rar];
         if (r < acc) return rar;
     }
-    return 'rare';
+    return order[0];
 }
 
 // Show reward modal
@@ -3769,7 +3792,7 @@ function unlockRandomTank(fromSuper = false, options = {}) {
         return { type: 'tank', tankType: t, desc: 'Unlocked permanently!', icon: '�' };
     } else {
         const price = tankGemPrices[t] || 0;
-        const comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
+        const comp = price > 0 ? Math.floor(price * 0.03) : (fromSuper ? 3 : 1);
         gems += comp;
         saveProgress();
         if (!suppressRewardModal) showReward('gems', comp, `Дубликат танка ${t.toUpperCase()} конвертирован в Гемы!`);
@@ -3840,7 +3863,11 @@ function openContainer(options = {}) {
         if (!suppressRewardModal) showReward('gems', val, 'Гемы (3–6)');
         return { type: 'gems', amount: val, desc: 'Гемы (3–6)', icon: '💎' };
     }
-    return unlockRandomTankNew(false, { suppressRewardModal });
+    return unlockRandomTankNew(false, { suppressRewardModal, rarityOverride: {
+        'rare': 70,
+        'super_rare': 20,
+        'epic': 10
+    } });
 }
 
 // Open super container
@@ -3868,7 +3895,12 @@ function openSuperContainer(options = {}) {
         if (!suppressRewardModal) showReward('gems', val, 'Гемы (12–25)');
         return { type: 'gems', amount: val, desc: 'Гемы (12–25)', icon: '💎' };
     }
-    return unlockRandomTankNew(true, { suppressRewardModal });
+    return unlockRandomTankNew(true, { suppressRewardModal, rarityOverride: {
+        'rare': 50,
+        'super_rare': 30,
+        'epic': 15,
+        'legendary': 5
+    } });
 }
 
 // Open Mechanic Parts Container (Ящик деталей)
@@ -5792,10 +5824,10 @@ window.addEventListener('load', () => {
     }
 });
 function unlockRandomTankNew(fromSuper = false, options = {}) {
-    const { suppressRewardModal = false } = options;
+    const { suppressRewardModal = false, rarityOverride = null } = options;
     
-    // 1. Pick rarity
-    const rarity = getRarity();
+    // 1. Pick rarity (use per-container override if provided)
+    const rarity = getRarity(rarityOverride);
     
     // 2. Pick tank from that rarity
     const tanksInRarity = allTanksList.filter(t => tankRarityMap[t] === rarity);
@@ -5814,10 +5846,7 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
         return { type: 'tank', tankType: t, desc: `${tDesc} разблокирован!`, icon: '🚜', rarity: rarity };
     } else {
         const price = tankGemPrices[t] || 0;
-        let comp = price > 0 ? Math.floor(price * 0.5) : (fromSuper ? 50 : 25);
-        if (rarity === 'legendary') comp = Math.max(comp, 100);
-        if (rarity === 'imitator') comp = Math.max(comp, 150);
-        if (rarity === 'mythic') comp = Math.max(comp, 200);
+        let comp = price > 0 ? Math.floor(price * 0.03) : 1;
 
         gems += comp;
         saveProgress();
@@ -6681,6 +6710,123 @@ if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
     _avatarBuyTarget = null;
     if (typeof saveProgress === 'function') saveProgress();
 });
+
+// ── Mobile modal close buttons (X) ─────────────────────────────────────────────
+function _initMobileCloseButtons() {
+    const excludeModals = ['modeModal', 'mainMenu', 'settingsModal', 'mapEditorModal', 'meSettingsModal', 'meMapsModal', 'meConfirmOverlay', 'containerFlowModal'];
+    const modals = document.querySelectorAll('.modal-overlay');
+    
+    modals.forEach(modal => {
+        // Skip excluded modals
+        if (excludeModals.includes(modal.id)) return;
+        
+        // Find the inner box (either .modal-box or .container-flow-box)
+        const modalBox = modal.querySelector('.modal-box, .container-flow-box');
+        if (!modalBox) return;
+        
+        // Check if close button already exists
+        if (modalBox.querySelector('.modal-close-btn')) return;
+        
+        // Create close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal-close-btn';
+        closeBtn.innerHTML = '×';
+        closeBtn.setAttribute('type', 'button');
+        
+        // Add click handler to close modal
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            modal.style.display = 'none';
+        });
+        
+        // Prepend to modal-box
+        modalBox.insertBefore(closeBtn, modalBox.firstChild);
+    });
+    
+    // Update visibility based on mobile mode
+    _updateMobileCloseButtons();
+}
+
+function _updateMobileCloseButtons() {
+    const isMobile = window.deviceModeMobile || false;
+    const modals = document.querySelectorAll('.modal-overlay');
+    
+    modals.forEach(modal => {
+        if (['modeModal', 'mainMenu'].includes(modal.id)) return;
+        
+        const closeBtn = modal.querySelector('.modal-close-btn');
+        const cancelBtn = modal.querySelector('[id*="Cancel"], [id*="Close"], .btn-secondary');
+        
+        // containerFlowModal: always hide close button
+        if (modal.id === 'containerFlowModal') {
+            if (closeBtn) closeBtn.style.display = 'none';
+            return;
+        }
+        
+        // For settingsModal and meMapsModal, always show cancel button regardless of mobile mode
+        if (modal.id === 'settingsModal' || modal.id === 'meMapsModal') {
+            if (cancelBtn) cancelBtn.style.display = '';
+            return;
+        }
+        
+        if (isMobile) {
+            // Show close button (X), hide cancel button
+            if (closeBtn) closeBtn.style.display = 'flex';
+            if (cancelBtn && !cancelBtn.id.includes('achievementsModalClose')) {
+                cancelBtn.style.display = 'none';
+            }
+        } else {
+            // Hide close button (X), show cancel button
+            if (closeBtn) closeBtn.style.display = 'none';
+            if (cancelBtn) cancelBtn.style.display = '';
+        }
+    });
+}
+
+function _updateMapEditorMobileCloseBtn() {
+    const isMobile = window.deviceModeMobile || false;
+    const mobileBtn = document.getElementById('meCloseBtnMobile');
+    const desktopBtn = document.getElementById('meCloseBtn');
+    if (mobileBtn) mobileBtn.style.display = isMobile ? '' : 'none';
+    if (desktopBtn) desktopBtn.style.display = isMobile ? 'none' : '';
+}
+
+// Initialize close buttons on load
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        _initMobileCloseButtons();
+        _updateMapEditorMobileCloseBtn();
+        // Map editor mobile close button handler
+        const meCloseBtnMobile = document.getElementById('meCloseBtnMobile');
+        if (meCloseBtnMobile) {
+            meCloseBtnMobile.addEventListener('click', () => {
+                const mapEditorModal = document.getElementById('mapEditorModal');
+                if (mapEditorModal) mapEditorModal.style.display = 'none';
+            });
+        }
+    }, 100);
+});
+
+// Update on mobile mode toggle
+const originalSetModeMobile = (function() {
+    return function(val) {
+        window.deviceModeMobile = val;
+        _updateMobileCloseButtons();
+    };
+})();
+
+// Hook into settings modal close logic
+(function() {
+    const chkMobile = document.getElementById('settingMobile');
+    if (chkMobile) {
+        const origChange = chkMobile.onchange;
+        chkMobile.onchange = function(e) {
+            if (origChange) origChange.call(this, e);
+            _updateMobileCloseButtons();
+            _updateMapEditorMobileCloseBtn();
+        };
+    }
+})();
 
 const avatarBuyCancelBtn = document.getElementById('avatarBuyCancelBtn');
 if (avatarBuyCancelBtn) avatarBuyCancelBtn.addEventListener('click', () => {

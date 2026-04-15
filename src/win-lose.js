@@ -508,7 +508,7 @@ function describeMode(mode) {
 
 function syncResultOverlay(state = gameState) {
     // Training mode: never show result overlays
-    if (currentMode === 'training') return;
+    if ((typeof currentMode !== 'undefined' ? currentMode : window.currentMode) === 'training') return;
     // Debug: log what state we're showing
     console.log('syncResultOverlay called with state:', state);
     
