@@ -678,7 +678,7 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'plasma',
-            damage: 350, // 350 damage
+            damage: 350, // 350 base damage (will be multiplied by upgrades separately)
             piercing: true // can hit multiple targets
         });
         tank.fireCooldown = 120; // 2 second cooldown
@@ -1383,13 +1383,16 @@ function updatePhysics() {
                     tank.hp -= Math.round(50 * _romanShieldMult);
                     // continue flying, don't remove bullet
                 } else if (b.type === 'plasma') {
-                    // Mirror tank resistance to plasma
-                    if (tankType === 'mirror') {
-                         tank.hp -= Math.round(175 * _romanShieldMult); // Reduced damage (half)
-                    } else {
-                         tank.hp -= Math.round((b.damage || 350) * _romanShieldMult);
+                    // Plasma bolt pierces — hit player only once
+                    if (!b.hitEntities) b.hitEntities = [];
+                    if (!b.hitEntities.includes('player')) {
+                        if (tankType === 'mirror') {
+                             tank.hp -= Math.round(Math.round(b.damage || 350) * 0.5 * _romanShieldMult);
+                        } else {
+                             tank.hp -= Math.round((b.damage || 350) * _romanShieldMult);
+                        }
+                        b.hitEntities.push('player');
                     }
-                    bullets.splice(i, 1); // Remove bullet on hit
                 } else if (b.type === 'plasmaBlast') {
                     // Plasma blast logic
                     // Ensure it only hits once per entity by tracking
@@ -1527,12 +1530,22 @@ function updatePhysics() {
                         a.hp = (a.hp || 300) - 50;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
-                        // Plasma bolt pierces through allies
-                        a.hp = (a.hp || 300) - (b.damage || 350);
+                        // Plasma bolt pierces through allies — hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        const _allyKey = 'ally_' + j;
+                        if (!b.hitEntities.includes(_allyKey)) {
+                            a.hp = (a.hp || 300) - (b.damage || 350);
+                            b.hitEntities.push(_allyKey);
+                        }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasmaBlast') {
-                        // Plasma blast pierces and damages all in line
-                        a.hp = (a.hp || 300) - (b.damage || 350);
+                        // Plasma blast pierces through allies — hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        const _allyKeyPB = 'ally_' + j;
+                        if (!b.hitEntities.includes(_allyKeyPB)) {
+                            a.hp = (a.hp || 300) - (b.damage || 600);
+                            b.hitEntities.push(_allyKeyPB);
+                        }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'machinegun') {
                         // Machinegun: rapid fire with consistent damage
@@ -1615,16 +1628,24 @@ function updatePhysics() {
                         e.hp -= dmgToxic;
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
-                        // Plasma bolt pierces through enemies
-                        let dmgPlasma = b.damage || 350;
-                        if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
-                        e.hp -= dmgPlasma;
+                        // Plasma bolt pierces through enemies — hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        if (!b.hitEntities.includes(j)) {
+                            let dmgPlasma = b.damage || 350;
+                            if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
+                            e.hp -= dmgPlasma;
+                            b.hitEntities.push(j);
+                        }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasmaBlast') {
-                        // Plasma blast pierces and damages all in line
-                        let dmgPBlast = b.damage || 350;
-                        if (b.owner === 'player') dmgPBlast = applyPlayerDamage(dmgPBlast);
-                        e.hp -= dmgPBlast;
+                        // Plasma blast pierces and damages all in line — hit each only once
+                        if (!b.hitEntities) b.hitEntities = [];
+                        if (!b.hitEntities.includes('pb_' + j)) {
+                            let dmgPBlast = b.damage || 600;
+                            if (b.owner === 'player') dmgPBlast = applyPlayerDamage(dmgPBlast);
+                            e.hp -= dmgPBlast;
+                            b.hitEntities.push('pb_' + j);
+                        }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'electricBall') {
                         // Electric ball: damage enemy, add to chain, continue flying to track other enemies
@@ -1726,12 +1747,22 @@ function updatePhysics() {
                             d.hp -= 50;
                             // continue flying, don't remove bullet
                         } else if (b.type === 'plasma') {
-                            // Plasma bolt pierces through drones
-                            d.hp -= b.damage || 350;
+                            // Plasma bolt pierces through drones — hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            const _pdKey = 'pdrone_' + j;
+                            if (!b.hitEntities.includes(_pdKey)) {
+                                d.hp -= b.damage || 350;
+                                b.hitEntities.push(_pdKey);
+                            }
                             // continue flying, don't remove bullet
                         } else if (b.type === 'plasmaBlast') {
-                            // Plasma blast pierces and damages all in line
-                            d.hp -= b.damage || 350;
+                            // Plasma blast pierces through drones — hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            const _pdKeyPB = 'pdronePB_' + j;
+                            if (!b.hitEntities.includes(_pdKeyPB)) {
+                                d.hp -= b.damage || 600;
+                                b.hitEntities.push(_pdKeyPB);
+                            }
                             // continue flying, don't remove bullet
                         } else if (b.type === 'railgun') {
                             // Railgun: pierce through all drones, hit each only once
@@ -1785,22 +1816,23 @@ function updatePhysics() {
                             d.hp -= 50;
                             // continue flying, don't remove bullet
                         } else if (b.type === 'plasma') {
-                            // Plasma bolt pierces through drones
-                            d.hp -= b.damage || 350;
+                            // Plasma bolt pierces through enemy drones — hit each only once
+                            if (!b.hitEntities) b.hitEntities = [];
+                            const _edKey = 'edrone_' + j;
+                            if (!b.hitEntities.includes(_edKey)) {
+                                d.hp -= b.damage || 350;
+                                b.hitEntities.push(_edKey);
+                            }
                             // continue flying, don't remove bullet
                         } else if (b.type === 'plasmaBlast') {
-                            // Plasma blast pierces and damages all in line
-                            d.hp -= b.damage || 350;
-                            // continue flying, don't remove bullet
-                        } else if (b.type === 'railgun') {
-                            // Railgun: pierce through all drones, hit each only once
+                            // Plasma blast pierces through enemy drones — hit each only once
                             if (!b.hitEntities) b.hitEntities = [];
-                            if (!b.hitEntities.includes('enemyDrone_' + j)) {
-                                d.hp -= b.damage || 75;
-                                b.hitEntities.push('enemyDrone_' + j);
-                                for (let k = 0; k < 5; k++) spawnParticle(d.x+d.w/2+(Math.random()-0.5)*d.w, d.y+d.h/2+(Math.random()-0.5)*d.h, '#00e5ff', 0.6);
+                            const _edKeyPB = 'edronePB_' + j;
+                            if (!b.hitEntities.includes(_edKeyPB)) {
+                                d.hp -= b.damage || 600;
+                                b.hitEntities.push(_edKeyPB);
                             }
-                            // Don't remove — keeps flying
+                            // continue flying, don't remove bullet
                         } else if (b.type === 'spartanSpear') {
                             // Spartan spear: pierce through all drones, hit each only once
                             if (!b.hitEntities) b.hitEntities = [];
