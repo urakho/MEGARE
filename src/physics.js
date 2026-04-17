@@ -1633,6 +1633,7 @@ function updatePhysics() {
                         if (!b.hitEntities.includes(j)) {
                             let dmgPlasma = b.damage || 350;
                             if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
+                            if (e.isBoss) dmgPlasma = Math.round(dmgPlasma * 0.5); // 50% less vs boss
                             e.hp -= dmgPlasma;
                             b.hitEntities.push(j);
                         }
@@ -1643,6 +1644,7 @@ function updatePhysics() {
                         if (!b.hitEntities.includes('pb_' + j)) {
                             let dmgPBlast = b.damage || 600;
                             if (b.owner === 'player') dmgPBlast = applyPlayerDamage(dmgPBlast);
+                            if (e.isBoss) dmgPBlast = Math.round(dmgPBlast * 0.5); // 50% less vs boss
                             e.hp -= dmgPBlast;
                             b.hitEntities.push('pb_' + j);
                         }
