@@ -503,7 +503,7 @@ function updateEnemyAI() {
                 const ang = enemy.turretAngle;
                 const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 25;
                 const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 25;
-                bullets.push({ x: sx, y: sy, w: 10, h: 10, vx: Math.cos(ang) * 10, vy: Math.sin(ang) * 10, life: 300, owner: 'enemy', team: enemy.team, type: 'plasmaBlast', damage: 350, piercing: true, destroysWalls: true });
+                bullets.push({ x: sx, y: sy, w: 10, h: 10, vx: Math.cos(ang) * 10, vy: Math.sin(ang) * 10, life: 300, owner: 'enemy', team: enemy.team, type: 'plasmaBlast', damage: 600, piercing: true, destroysWalls: true });
                 enemy.plasmaBlastUsed = (enemy.plasmaBlastUsed || 0) + 1;
                 enemy.fireCooldown = 60;
             }
@@ -729,7 +729,7 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time','mechDiy','mechShield'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
@@ -737,6 +737,21 @@ function updateEnemyAI() {
                 enemy.tankType = copiedType;
                 const newMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[copiedType]) || 300;
                 enemy.hp = Math.min(enemy.hp, newMaxHp);
+                // Initialize mech energy when copying mechs
+                if (copiedType === 'mechDiy') {
+                    enemy.mechMaxEnergy = 110;
+                    enemy.mechEnergy = 110;
+                    enemy.mechBurstShots = 0;
+                    enemy.mechBurstDelay = 0;
+                    enemy.mechBurstCannon = 0;
+                } else if (copiedType === 'mechShield') {
+                    enemy.mechMaxEnergy = 130;
+                    enemy.mechEnergy = 130;
+                    enemy.mechShieldActive = true;
+                    enemy.mechShieldHP = 300;
+                    enemy.mechShieldMaxHP = 300;
+                    enemy.mechShieldDamagePercent = 0;
+                }
             }
             if (enemy.imitatorActive) {
                 enemy.imitatorTimer--;
@@ -744,6 +759,93 @@ function updateEnemyAI() {
                     enemy.imitatorActive = false;
                     enemy.tankType = 'imitator';
                 }
+            }
+        }
+
+        // mechDiy: energy regen and per-frame burst processing
+        if (enemy.tankType === 'mechDiy') {
+            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 110;
+            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 110;
+            
+            // Trigger 1-second paralysis when energy hits 5 or below
+            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
+                enemy.paralyzed = true;
+                enemy.paralyzedTime = 60;
+            }
+            
+            // Energy restoration
+            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
+            
+            // Mech burst attack AI (when paralysis not active)
+            if (!enemy.paralyzed) {
+                if ((enemy.mechBurstShots || 0) === 0 && (enemy.mechBurstCooldown || 0) <= 0 && (enemy.mechEnergy || 0) >= 20) {
+                    // Decide to fire burst
+                    if (Math.random() < 0.02) { // 2% chance per frame to initiate burst
+                        enemy.mechEnergy -= 20;
+                        enemy.mechBurstShots = 3;
+                        enemy.mechBurstDelay = 0;
+                        enemy.mechBurstCannon = 0;
+                        enemy.mechBurstCooldown = 60; // 1 second cooldown
+                    }
+                }
+            }
+            
+            // Decrease burst cooldown
+            if ((enemy.mechBurstCooldown || 0) > 0) {
+                enemy.mechBurstCooldown--;
+            }
+            
+            // Process queued burst shots
+            if ((enemy.mechBurstShots || 0) > 0) {
+                if ((enemy.mechBurstDelay || 0) <= 0) {
+                    const _bc = (enemy.mechBurstCannon || 0) % 2;
+                    const _pX = Math.cos(enemy.turretAngle + Math.PI / 2);
+                    const _pY = Math.sin(enemy.turretAngle + Math.PI / 2);
+                    const _off = (_bc === 0 ? 1 : -1) * 5;
+                    bullets.push({
+                        x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 22 + _pX * _off,
+                        y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 22 + _pY * _off,
+                        w: 10, h: 10,
+                        vx: Math.cos(enemy.turretAngle) * 10,
+                        vy: Math.sin(enemy.turretAngle) * 10,
+                        life: 80, owner: 'enemy', team: enemy.team,
+                        type: 'mechDiy', damage: 40
+                    });
+                    enemy.mechBurstShots--;
+                    enemy.mechBurstCannon = (_bc + 1) % 2;
+                    enemy.mechBurstDelay = 25;
+                } else {
+                    enemy.mechBurstDelay--;
+                }
+            }
+        }
+
+        // mechShield: energy regen and shield state tracking
+        if (enemy.tankType === 'mechShield') {
+            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 130;
+            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 130;
+
+            // Energy restoration
+            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
+
+            // Shield active when energy >= 100
+            const _prevShield = enemy.mechShieldActive;
+            enemy.mechShieldActive = enemy.mechEnergy >= 100;
+            if (_prevShield && !enemy.mechShieldActive) {
+                enemy.mechShieldFadeTimer = 30;
+            }
+            if ((enemy.mechShieldFadeTimer || 0) > 0) enemy.mechShieldFadeTimer--;
+
+            // Gradually decay shield damage visual over 60 frames
+            if ((enemy.mechShieldDamagePercent || 0) > 0) {
+                enemy.mechShieldDamagePercent -= 1.67;
+                if (enemy.mechShieldDamagePercent < 0) enemy.mechShieldDamagePercent = 0;
+            }
+
+            // Paralysis at low energy
+            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
+                enemy.paralyzed = true;
+                enemy.paralyzedTime = 60;
             }
         }
 
@@ -1234,6 +1336,33 @@ function updateEnemyAI() {
                     type: 'pyroBullet',
                     damage: 70
                 };
+            } else if (tt === 'mechDiy') {
+                // mechDiy: trigger energy burst if energy allows (burst executed per-frame above)
+                // Be conservative: only shoot if energy > 35 to avoid paralysis
+                if ((enemy.mechEnergy || 0) > 35) {
+                    enemy.mechEnergy -= 20;
+                    enemy.mechBurstShots = 3;
+                    enemy.mechBurstDelay = 0;
+                    enemy.mechBurstCannon = 0;
+                }
+                b = null; // burst shots fired via per-frame mechDiy processing
+            } else if (tt === 'mechShield') {
+                // mechShield: fire single dense slow shot if energy > 30
+                // Be conservative: only shoot if energy > 30 to avoid paralysis
+                if ((enemy.mechEnergy || 0) > 30) {
+                    enemy.mechEnergy -= 20;
+                    b = {
+                        x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 26,
+                        y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 26,
+                        w: 14, h: 14,
+                        vx: Math.cos(enemy.turretAngle) * 5.5,
+                        vy: Math.sin(enemy.turretAngle) * 5.5,
+                        life: 110, owner: 'enemy', team: enemy.team,
+                        type: 'mechShield', damage: 120
+                    };
+                } else {
+                    b = null; // not enough energy
+                }
             } else if (tt === 'spartan') {
                 // Spartan: piercing spear
                 b = {
@@ -1255,7 +1384,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : FIRE_COOLDOWN;
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);

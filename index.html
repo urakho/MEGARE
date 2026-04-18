@@ -36,7 +36,7 @@
             <!-- Preview column -->
             <div class="menu-preview">
                 <canvas id="previewCanvas" width="300" height="220" style="border-radius:14px;box-shadow:0 10px 50px rgba(0,0,0,0.8);width:min(420px,90%);height:auto;"></canvas>
-                <div id="previewLabel" style="margin-top:14px;font-size:18px;font-weight:700;color:#f1c40f;letter-spacing:2px;text-transform:uppercase;text-shadow:0 0 12px #f39c12,2px 2px 0 #000;">&#9654; Ваш танк</div>
+                <div id="previewLabel" style="margin-top:14px;font-size:18px;font-weight:700;color:#f1c40f;letter-spacing:2px;text-transform:uppercase;text-shadow:0 0 12px #f39c12,2px 2px 0 #000;">&#9654; Ваша бронемашина</div>
             </div>
 
             <!-- Action buttons column -->
@@ -343,12 +343,15 @@
                 <button id="selectRomanTank" class="btn btn-rainbow">Римский</button>
             </div>
         </div>
-        <!-- Mechs panel (coming soon) -->
+        <!-- Mechs panel -->
         <div id="charGridMechs" class="char-grid" style="display:none; align-items:center; justify-items:center;">
-            <div class="char-coming-soon" style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center;">
-                <span style="font-size:64px; margin-bottom:16px;">🤖</span>
-                <h3 style="color:#5dade2; font-size:22px; margin:0 0 10px;">Мехи</h3>
-                <p style="color:#7f8c8d; font-size:15px; max-width:280px;">Скоро здесь появятся мехи. Следите за обновлениям!</p>
+            <div>
+                <canvas id="mechDiyPreview" width="150" height="150" style="border-radius:8px;"></canvas>
+                <button id="selectMechDiy" class="btn btn-mode">Штурмовой мех</button>
+            </div>
+            <div>
+                <canvas id="mechShieldPreview" width="150" height="150" style="border-radius:8px;"></canvas>
+                <button id="selectMechShield" class="btn btn-shop">Щитовой мех</button>
             </div>
         </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
@@ -774,6 +777,7 @@
 </div>
 
 <script src="src/main.js"></script>
+<script src="src/mechs.js"></script>
 <script src="src/tanks.js"></script>
 <script src="src/physics.js"></script>
 <script src="src/bot.js"></script>

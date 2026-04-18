@@ -478,7 +478,9 @@ const tankGemPrices = {
     'imitator': 750,  // Имитатор (same tier as Time)
     'electric': 750,  // Электрический (Шаровая молния с цепочкой хит)
     'robot': 500,     // Легендарный (Рельсотрон + дроны)
-    'roman': 750      // Хроматический
+    'roman': 750,     // Хроматический
+    'mechDiy': 200,    // Редкий (мех)
+    'mechShield': 400  // Сверхредкий (щитовой мех)
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -595,6 +597,8 @@ const tankMaxHpByType = {
     'roman': 350,
     'pyro': 420,
     'spartan': 320,
+    'mechDiy': 420,
+    'mechShield': 600,
     'boss_hell': 7500
 };
 
@@ -628,7 +632,9 @@ const tankMaxSpeedByType = {
     'mine': 3.1,
     'roman': 3.0,
     'pyro': 2.75,
-    'spartan': 3.0
+    'spartan': 3.0,
+    'mechDiy': 2.4,
+    'mechShield': 2.3
 };
 
 function setTankSpeed(type) {
@@ -712,6 +718,18 @@ const tank = {
     romanShieldActive: false,
     romanShieldTimer: 0,
     romanShieldCooldown: 0,
+    // mechDiy energy and burst
+    mechEnergy: 110,
+    mechMaxEnergy: 110,
+    mechBurstShots: 0,
+    mechBurstDelay: 0,
+    mechBurstCannon: 0,
+    // mechShield energy and shield state
+    mechShieldActive: false,
+    mechShieldFadeTimer: 0,
+    mechShieldHP: 300,
+    mechShieldMaxHP: 300,
+    mechShieldDamagePercent: 0,  // 0-100, for red color when damaged
 };
 
 // Apply saved tank type properties
@@ -1285,6 +1303,10 @@ const pyroTankPreview = document.getElementById('pyroTankPreview');
 const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
 const spartanTankPreview = document.getElementById('spartanTankPreview');
 const spartanTankCtx = spartanTankPreview && spartanTankPreview.getContext ? spartanTankPreview.getContext('2d') : null;
+const mechDiyTankPreview = document.getElementById('mechDiyPreview');
+const mechDiyTankCtx = mechDiyTankPreview && mechDiyTankPreview.getContext ? mechDiyTankPreview.getContext('2d') : null;
+const mechShieldTankPreview = document.getElementById('mechShieldPreview');
+const mechShieldTankCtx = mechShieldTankPreview && mechShieldTankPreview.getContext ? mechShieldTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -1371,6 +1393,27 @@ function startGame(mode) {
     // Reset burn effect
     tank.burning = false;
     tank.burnTimer = 0;
+    
+    // Reset mechDiy energy and burst state
+    const _eUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechDiy', 'energy') : 0;
+    tank.mechMaxEnergy = 110 + _eUpgLvl * 20;
+    tank.mechEnergy = tank.mechMaxEnergy;
+    tank.mechBurstShots = 0;
+    tank.mechBurstDelay = 0;
+    tank.mechBurstCannon = 0;
+    // Reset mechShield state
+    tank.mechShieldActive = false;
+    tank.mechShieldFadeTimer = 0;
+    tank.mechShieldHP = 300;
+    tank.mechShieldMaxHP = 300;
+    tank.mechShieldDamagePercent = 0;
+    // Re-initialise energy for whichever mech is active
+    if (tankType === 'mechShield') {
+        const _sUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechShield', 'energy') : 0;
+        tank.mechMaxEnergy = 130 + _sUpgLvl * 20;
+        tank.mechEnergy = tank.mechMaxEnergy;
+        tank.mechShieldActive = true;
+    }
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1601,7 +1644,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     // Full type pool matching other game modes
     const _allEnemyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical',
                             'illuminat','mirror','machinegun','waterjet','buckshot',
-                            'electric','robot','medical','mine','time','imitator','roman'];
+                            'electric','robot','medical','mine','time','imitator','roman','mechDiy','mechShield'];
     const _typeColorMap = {
         normal:'#e74c3c',   ice:'#54d1e8',    fire:'#e67e22',   buratino:'#9b59b6',
         toxic:'#2ecc71',    plasma:'#3498db',  musical:'#e91e63', illuminat:'#f1c40f',
@@ -2720,6 +2763,16 @@ if (selectSpartanTank) selectSpartanTank.addEventListener('click', () => {
     showTankDetail('spartan');
 });
 
+const selectMechDiy = document.getElementById('selectMechDiy');
+if (selectMechDiy) selectMechDiy.addEventListener('click', () => {
+    showTankDetail('mechDiy');
+});
+
+const selectMechShield = document.getElementById('selectMechShield');
+if (selectMechShield) selectMechShield.addEventListener('click', () => {
+    showTankDetail('mechShield');
+});
+
 // По умолчанию показываем главное меню
 if (mainMenu) mainMenu.style.display = 'flex';
 
@@ -2816,9 +2869,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -2964,7 +3017,7 @@ function spawnDuelMode() {
     
     const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333' };
+    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
     
     enemies.push({ 
         x: ex, y: ey, w:38, h:38, 
@@ -3472,8 +3525,8 @@ function spawnOneVsAllMode() {
     
     // 7 enemy bots spawn on right side (all allied to each other, team 1)
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e' };
     
     for (let i = 0; i < 7; i++) {
         // Spread bots vertically around right side
@@ -4198,6 +4251,46 @@ function update() {
     // player input only when alive
     if (tank.alive !== false) {
         if (tank.moveCooldown > 0) tank.moveCooldown--;
+        // mechDiy energy regen runs every frame (even while paralyzed)
+        if (tankType === 'mechDiy') {
+            const _eUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechDiy', 'energy') : 0;
+            tank.mechMaxEnergy = 110 + _eUpgLvl * 20;
+            if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
+            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            if (tank.mechEnergy >= 100 && tank.hp < tank.maxHp) {
+                tank.hp = Math.min(tank.maxHp, tank.hp + 0.08);
+            }
+            // Trigger 1-second paralysis when energy hits 5 or below
+            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
+                tank.paralyzed = true;
+                tank.paralyzedTime = 60;
+            }
+        }
+        // mechShield energy regen and shield activation
+        if (tankType === 'mechShield') {
+            const _sUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechShield', 'energy') : 0;
+            tank.mechMaxEnergy = 130 + _sUpgLvl * 20;
+            if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
+            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            // Shield active when energy >= 100
+            const _hadShield = tank.mechShieldActive;
+            tank.mechShieldActive = (tank.mechEnergy || 0) >= 100;
+            if (_hadShield && !tank.mechShieldActive) {
+                // Shield just dropped — start 30-frame (0.5s) fade
+                tank.mechShieldFadeTimer = 30;
+            }
+            if ((tank.mechShieldFadeTimer || 0) > 0) tank.mechShieldFadeTimer--;
+            // Gradually decay shield damage visual over 60 frames
+            if ((tank.mechShieldDamagePercent || 0) > 0) {
+                tank.mechShieldDamagePercent -= 1.67; // 100/60 = 1.67 per frame
+                if (tank.mechShieldDamagePercent < 0) tank.mechShieldDamagePercent = 0;
+            }
+            // Paralysis at low energy
+            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
+                tank.paralyzed = true;
+                tank.paralyzedTime = 60;
+            }
+        }
         // handle paralyze state for player tank
         if (tank.paralyzed) {
             tank.paralyzedTime = (tank.paralyzedTime || 0) - 1;
@@ -4219,6 +4312,8 @@ function update() {
             const spartanBase = (tankMaxSpeedByType['spartan'] || 3.0) + ((typeof getTankSpeedBonus === 'function') ? getTankSpeedBonus('spartan') : 0);
             tank.speed = parseFloat((tank.hp < tank.maxHp * 0.5 ? spartanBase + 0.3 : spartanBase).toFixed(2));
         }
+
+
         
         // Block player controls during autopilot or ultimate charge
         if (tank.isAutopilotActive || tank.isUltimateActive) {
@@ -4291,7 +4386,7 @@ function update() {
                     owner: 'player',
                     team: 0,
                     type: 'plasmaBlast',
-                    damage: 350, // high damage
+                    damage: 600, // 600 base damage (will be multiplied by upgrades separately)
                     piercing: true,
                     destroysWalls: true // will destroy walls it hits
                 });
@@ -4419,7 +4514,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro','spartan'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro','spartan','mechDiy','mechShield'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -4433,6 +4528,20 @@ function update() {
                         setTankSpeed(tankType);
                         setTankHP(tankType);
                         tank.hp = tank.maxHp; // Transform to full HP of copied tank
+                        // Initialize mech energy when copying mechs
+                        if (copiedType === 'mechDiy') {
+                            const _eUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechDiy', 'energy') : 0;
+                            tank.mechMaxEnergy = 110 + _eUpgLvl * 20;
+                            tank.mechEnergy = tank.mechMaxEnergy;
+                        } else if (copiedType === 'mechShield') {
+                            const _sUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechShield', 'energy') : 0;
+                            tank.mechMaxEnergy = 130 + _sUpgLvl * 20;
+                            tank.mechEnergy = tank.mechMaxEnergy;
+                            tank.mechShieldActive = true;
+                            tank.mechShieldHP = 300;
+                            tank.mechShieldMaxHP = 300;
+                            tank.mechShieldDamagePercent = 0;
+                        }
                         // Rainbow transformation particles
                         for (let i = 0; i < 35; i++) {
                             const hue = (i / 35) * 360;
@@ -4461,6 +4570,13 @@ function update() {
                 tank.beamActive = false;
                 tank.waterjetActive = false;
                 tank.history = [];
+                tank.mechEnergy = 0;
+                tank.mechMaxEnergy = 0;
+                tank.mechBurstShots = 0;
+                tank.mechShieldActive = false;
+                tank.mechShieldHP = 0;
+                tank.mechShieldMaxHP = 0;
+                tank.mechShieldDamagePercent = 0;
                 // Revert particle burst
                 const rx = tank.x + tank.w/2, ry = tank.y + tank.h/2;
                 for (let i = 0; i < 20; i++) {
@@ -5098,16 +5214,76 @@ function update() {
         tank.overheated = false;
     }
 
+        // mechDiy: activate burst on Space press (costs 20 energy, queues 3 shots)
+        if (tankType === 'mechDiy' && keys['Space'] && !(tank.mechBurstShots || 0) && (tank.mechEnergy || 0) >= 20 && !tank.isAutopilotActive && !tank.isUltimateActive && !(tank.mechBurstCooldown || 0)) {
+            tank.mechEnergy -= 20;
+            tank.mechBurstShots = 3;
+            tank.mechBurstDelay = 0;
+            tank.mechBurstCannon = 0;
+            tank.mechBurstCooldown = 60;
+            keys['Space'] = false;
+        }
+        // mechShield: fire single dense shot on Space (costs 20 energy)
+        if (tankType === 'mechShield' && keys['Space'] && tank.fireCooldown <= 0 && (tank.mechEnergy || 0) >= 20 && !tank.paralyzed) {
+            tank.mechEnergy -= 20;
+            const _dMult = getPlayerDmgMult();
+            const _ang = tank.turretAngle;
+            bullets.push({
+                x: tank.x + tank.w/2 + Math.cos(_ang) * 26,
+                y: tank.y + tank.h/2 + Math.sin(_ang) * 26,
+                w: 14, h: 14,
+                vx: Math.cos(_ang) * 5.5,
+                vy: Math.sin(_ang) * 5.5,
+                life: 110,
+                owner: 'player', team: 0,
+                type: 'mechShield',
+                damage: Math.round(120 * _dMult)
+            });
+            tank.fireCooldown = 45;
+            keys['Space'] = false;
+        }
+        // Decrease burst cooldown
+        if ((tank.mechBurstCooldown || 0) > 0) {
+            tank.mechBurstCooldown--;
+        }
+        // mechDiy: fire queued burst shots (one per trigger, 25 frames apart for visible delay)
+        if (tankType === 'mechDiy' && (tank.mechBurstShots || 0) > 0) {
+            if ((tank.mechBurstDelay || 0) <= 0) {
+                const _bc = (tank.mechBurstCannon || 0) % 2;
+                const _pX = Math.cos(tank.turretAngle + Math.PI / 2);
+                const _pY = Math.sin(tank.turretAngle + Math.PI / 2);
+                const _off = (_bc === 0 ? 1 : -1) * 5;
+                const _bx = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 22 + _pX * _off;
+                const _by = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 22 + _pY * _off;
+                const _dMult = getPlayerDmgMult();
+                bullets.push({
+                    x: _bx, y: _by,
+                    w: 10, h: 10,
+                    vx: Math.cos(tank.turretAngle) * 10.0,
+                    vy: Math.sin(tank.turretAngle) * 10.0,
+                    life: 80,
+                    owner: 'player', team: 0,
+                    type: 'mechDiy',
+                    damage: Math.round(40 * _dMult)
+                });
+                tank.mechBurstShots--;
+                tank.mechBurstCannon = (_bc + 1) % 2;
+                tank.mechBurstDelay = 25;
+            } else {
+                tank.mechBurstDelay--;
+            }
+        }
+
         // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
-        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive) {
+        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && tankType !== 'mechDiy' && tankType !== 'mechShield') {
             const _prevBLen = bullets.length, _prevFLen = flames.length;
             shoot();
-            // Apply player damage upgrade multiplier to newly created bullets/flames
+            // Apply player damage upgrade multiplier to newly created bullets/flames (except plasma which needs special handling)
             const _dMult = getPlayerDmgMult();
             if (_dMult > 1) {
                 for (let _i = _prevBLen; _i < bullets.length; _i++) {
                     const _b = bullets[_i];
-                    // assign default damage if bullet has none (e.g. normal/ice have no explicit property)
+                    // Apply multiplier to all bullet types including plasma
                     _b.damage = Math.round((_b.damage != null ? _b.damage : 100) * _dMult);
                 }
                 for (let _i = _prevFLen; _i < flames.length; _i++) {
@@ -5272,7 +5448,9 @@ function updateShopButtonStyles() {
         'electric': 'selectElectricTank',
         'roman': 'selectRomanTank',
         'pyro': 'selectPyroTank',
-        'spartan': 'selectSpartanTank'
+        'spartan': 'selectSpartanTank',
+        'mechDiy': 'selectMechDiy',
+        'mechShield': 'selectMechShield'
     };
     
     const tankRarityMap = {
@@ -5281,7 +5459,9 @@ function updateShopButtonStyles() {
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
         'roman': 'imitator',
-        'pyro': 'rare'
+        'pyro': 'rare',
+        'mechDiy': 'rare',
+        'mechShield': 'super'
     };
     
     Object.keys(tankButtonMap).forEach(tankType => {
@@ -5684,7 +5864,7 @@ function updateTankDetailButton(type) {
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator',
-        'spartan': 'super'
+        'spartan': 'super', 'mechDiy': 'rare', 'mechShield': 'super'
     };
 
     // If player has enough gems, color the buy button by rarity
@@ -5737,7 +5917,8 @@ if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
                 updateShopButtonStyles();
                 cleanup();
                 // show success reward: display the new tank card
-                if (typeof showReward === 'function') showReward('tank', 1, 'Танк успешно приобретен!', currentTankType);
+                const _isMechUnit = ['mechDiy', 'mechShield'].includes(currentTankType);
+                if (typeof showReward === 'function') showReward('tank', 1, _isMechUnit ? 'Мех успешно приобретён!' : 'Танк успешно приобретён!', currentTankType);
             };
             cancelBtn.onclick = () => { cleanup(); };
         };

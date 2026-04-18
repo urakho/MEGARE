@@ -107,7 +107,9 @@ const tankDescriptions = {
         name: "Спартанский танк",
         description: "Боевой дух Спарты. Метает боевыми копьями, пробивающими врагов насквозь и наносящими 80 урона каждому. При снижении HP ниже 50% спартанец охвачывает адреналин и ускоряется. Чем ближе к гибели — тем опаснее.",
         rarity: "Сверхредкий"
-    }
+    },
+    mechDiy: window.mechDiyMeta || { name: "Штурмовой мех", description: "Мощный боевой мех с двумя плазменными пушками.", rarity: "Редкий" },
+    mechShield: window.mechShieldMeta || { name: "Щитовой мех", description: "Тяжёлый мех с энергетическим щитом.", rarity: "Сверхредкий" }
 };
 
 // Background gradients for tank previews (menu & modal)
@@ -135,6 +137,8 @@ const tankBgGradients = {
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
     robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
     medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
+    mechDiy: window.mechDiyBgGradient || ['#2ecc71', '#27ae60'],   // Редкий - green (mech)
+    mechShield: window.mechShieldBgGradient || ['#3498db', '#5dade2'], // Сверхредкий - blue (mech)
     // sport removed
 };
 
@@ -159,6 +163,8 @@ const tankBaseColors = {
     roman: '#8B6914',      // Dark gold for Roman tank
     spartan: '#b87333',    // Bronze for Spartan tank
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
+    mechDiy: window.mechDiyBaseColor || '#1a8a3e',    // Dark green for mech body
+    mechShield: window.mechShieldBaseColor || '#1a3a6e', // Dark navy for shield mech
     // sport removed
 };
 
@@ -208,7 +214,7 @@ window.tankBgGradients = tankBgGradients;
 
 // Preview canvas global access (defined in main.js, used here)
 
-function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null) {
+function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null, moveAnimation = 0) {
     if (!isFinite(cx) || !isFinite(cy) || !W || !H || !isFinite(W) || !isFinite(H)) return;
     ctx.save();
     ctx.translate(cx, cy);
@@ -240,7 +246,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.restore();
         return;
     }
-    if (type === 'illuminat') {
+    if (type === 'illuminat' || type === 'mechDiy' || type === 'mechShield') {
          // See turret section for actual drawing
          // We do nothing here for body/tracks because the pyramid IS the body and turret united.
     } else {
@@ -916,6 +922,20 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#2a3510';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'mechDiy') {
+            // mechDiy uses a dedicated walker-mech renderer in mechs.js
+            if (typeof drawMechOn !== 'function') {
+                ctx.fillStyle = '#1a8a3e';
+                ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            }
+            // Actual drawing happens in the mechDiy turret block below (after ctx.rotate)
+        } else if (type === 'mechShield') {
+            // mechShield uses a dedicated renderer in mechs.js
+            if (typeof drawMechShieldOn !== 'function') {
+                ctx.fillStyle = '#1a3a6e';
+                ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            }
+            // Actual drawing happens in the mechShield turret block below
         } else {
             // Default
             ctx.fillStyle = color;
@@ -1709,6 +1729,20 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.beginPath();
         ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
         ctx.stroke();
+    } else if (type === 'mechDiy') {
+        // Entire mech rendering delegated to mechs.js drawMechOn.
+        ctx.restore();
+        if (typeof drawMechOn === 'function') {
+            drawMechOn(ctx, cx, cy, W, H, turretAngle, 'mechDiy', moveAnimation);
+        }
+        return; // skip normal barrel drawing
+    } else if (type === 'mechShield') {
+        // Entire shield-mech rendering delegated to mechs.js drawMechShieldOn.
+        ctx.restore();
+        if (typeof drawMechShieldOn === 'function') {
+            drawMechShieldOn(ctx, cx, cy, W, H, turretAngle, 'mechShield', moveAnimation);
+        }
+        return;
     } else {
         ctx.fillStyle = '#5c7041';
         ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
@@ -2309,6 +2343,26 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#3a4a54';
             ctx.lineWidth = 0.8;
             ctx.stroke();
+        } else if (type === 'mechShield') {
+            // mechShield: barrels drawn by drawMechShieldOn (already returned above)
+        } else if (type === 'mechDiy') {
+            // Dual barrels — two parallel thin cannons side-by-side
+            const dBarL = Math.min(W, H) * 0.65 * turretScale;
+            const dBarH = Math.min(W, H) * 0.08 * turretScale;
+            const gap = Math.min(W, H) * 0.11 * turretScale;
+            for (let ci = 0; ci < 2; ci++) {
+                const yOff = (ci === 0 ? -1 : 1) * gap;
+                const barGrad = ctx.createLinearGradient(tSize/2, yOff - dBarH/2, tSize/2 + dBarL, yOff + dBarH/2);
+                barGrad.addColorStop(0, '#27ae60');
+                barGrad.addColorStop(0.5, '#1a8a3e');
+                barGrad.addColorStop(1, '#145a32');
+                ctx.fillStyle = barGrad;
+                ctx.fillRect(tSize/2, yOff - dBarH/2, dBarL, dBarH);
+                // Muzzle tip ring
+                ctx.strokeStyle = '#00ff88';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(tSize/2 + dBarL - 3, yOff - dBarH/2 - 1, 3, dBarH + 2);
+            }
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -2571,8 +2625,45 @@ function drawPreview() {
     if (!previewCtx) return;
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
     const side = Math.min(previewCanvas.width, previewCanvas.height) / 2;
-    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 1, tankType);
+    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 1, tankType, null, 0);
 }
+
+function drawFrozenOverlay(ctx, x, y, w, h, life) {
+    const cx = x + w/2;
+    const cy = y + h/2;
+    const alpha = Math.max(0.12, Math.min(0.95, life / 180));
+    ctx.save();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, `rgba(200,230,255,${0.02 * alpha})`);
+    g.addColorStop(0.5, `rgba(180,215,240,${0.06 * alpha})`);
+    g.addColorStop(1, `rgba(220,245,255,${0.03 * alpha})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+
+    ctx.globalAlpha = 0.6 * alpha;
+    ctx.strokeStyle = 'rgba(220,240,255,0.6)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * (h * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(x - w * 0.1, y + h * 0.2 + off);
+        ctx.lineTo(x + w * 1.05, y + h * 0.05 + off);
+        ctx.stroke();
+    }
+
+    const t = (Date.now() % 1000) / 1000;
+    const shimmerX = x + (t * (w + 40)) - 20;
+    ctx.globalCompositeOperation = 'lighter';
+    const shimmerGrad = ctx.createLinearGradient(shimmerX - 20, y, shimmerX + 20, y + h);
+    shimmerGrad.addColorStop(0, `rgba(255,255,255,${0.0 * alpha})`);
+    shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${0.35 * alpha})`);
+    shimmerGrad.addColorStop(1, `rgba(255,255,255,${0.0 * alpha})`);
+    ctx.fillStyle = shimmerGrad;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+}
+
+// drawParalysisOverlay moved to mechs.js
 
 function drawFrozenOverlay(ctx, x, y, w, h, life) {
     const cx = x + w/2;
@@ -2657,7 +2748,9 @@ function drawCharacterPreviews() {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        const side = Math.min(canvas.width, canvas.height) / 2;
+        let side = Math.min(canvas.width, canvas.height) / 2;
+        // Make mech much smaller in character menu
+        if (type === 'mechDiy' || type === 'mechShield') side *= 0.2;
         
         ctx.save();
         if (!isUnlocked) {
@@ -2721,6 +2814,23 @@ function drawCharacterPreviews() {
     // MINE
     if (typeof mineTankCtx !== 'undefined' && mineTankCtx && mineTankPreview) {
         drawItem(mineTankCtx, mineTankPreview, 'mine', '#3d4c18', tankBgGradients.mine);
+    }
+    // MECHS
+    if (typeof mechDiyTankPreview !== 'undefined' && mechDiyTankPreview) {
+        const _mechDiyUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('mechDiy');
+        if (typeof drawMechDiyPreview === 'function') {
+            drawMechDiyPreview(mechDiyTankPreview, _mechDiyUnlocked);
+        } else if (mechDiyTankCtx) {
+            drawItem(mechDiyTankCtx, mechDiyTankPreview, 'mechDiy', '#1a8a3e', tankBgGradients.mechDiy);
+        }
+    }
+    if (typeof mechShieldTankPreview !== 'undefined' && mechShieldTankPreview) {
+        const _mechShieldUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('mechShield');
+        if (typeof drawMechShieldPreview === 'function') {
+            drawMechShieldPreview(mechShieldTankPreview, _mechShieldUnlocked);
+        } else if (mechShieldTankCtx) {
+            drawItem(mechShieldTankCtx, mechShieldTankPreview, 'mechShield', '#1a3a6e', tankBgGradients.mechShield);
+        }
     }
     // EPIC
     drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', tankBgGradients.buratino);
@@ -3131,6 +3241,47 @@ function draw() {
             ctx.moveTo(wx + 4, wy + 4); ctx.lineTo(wx + ww - 4, wy + wh - 4);
             ctx.moveTo(wx + ww - 4, wy + 4); ctx.lineTo(wx + 4, wy + wh - 4);
             ctx.stroke();
+            
+            // Cracks from mechShield bullets (wallDamageCount)
+            const dmgCount = obj.wallDamageCount || 0;
+            if (dmgCount > 0) {
+                // Seeded random for consistent crack patterns
+                const seededRandom = (seed) => {
+                    const x = Math.sin(seed) * 10000;
+                    return x - Math.floor(x);
+                };
+                
+                // Draw cracks - more cracks and deeper red as damage increases
+                ctx.lineWidth = 1.5 + dmgCount * 0.3;
+                for (let c = 0; c < dmgCount; c++) {
+                    const baseSeed = obj.x + obj.y + c * 1000;
+                    const rnd1 = seededRandom(baseSeed + 1.1);
+                    const rnd2 = seededRandom(baseSeed + 2.2);
+                    const rnd3 = seededRandom(baseSeed + 3.3);
+                    const rnd4 = seededRandom(baseSeed + 4.4);
+                    const rnd5 = seededRandom(baseSeed + 5.5);
+                    const rnd6 = seededRandom(baseSeed + 6.6);
+                    
+                    // Color shifts from orange to red as damage increases
+                    const redIntensity = 150 + (dmgCount / 6) * 105;
+                    const orangeIntensity = 200 - (dmgCount / 6) * 100;
+                    ctx.strokeStyle = `rgba(${Math.floor(redIntensity)}, ${Math.floor(orangeIntensity)}, 0, ${0.5 + dmgCount * 0.08})`;
+                    
+                    // Crack path across wall
+                    const startX = wx + rnd1 * ww;
+                    const startY = wy + rnd2 * wh;
+                    const midX = wx + rnd3 * ww + (rnd5 - 0.5) * 6;
+                    const midY = wy + rnd4 * wh + (rnd6 - 0.5) * 6;
+                    const endX = wx + (rnd1 + rnd3) / 2 * ww;
+                    const endY = wy + (rnd2 + rnd4) / 2 * wh;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(midX, midY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
+            }
 
         } else if (obj.type === 'barrel') {
             const cx = obj.x + obj.w/2;
@@ -4220,6 +4371,97 @@ function draw() {
             ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.28, 0, Math.PI * 2);
             ctx.fill();
 
+        } else if (b.type === 'mechDiy') {
+            // mechDiy energy slug — drawn via mechs.js
+            if (typeof drawMechBullet === 'function') {
+                drawMechBullet(ctx, b);
+            } else {
+                ctx.fillStyle = '#00ff88';
+                ctx.beginPath(); ctx.arc(b.x, b.y, (b.w || 10) / 2, 0, Math.PI * 2); ctx.fill();
+            }
+
+        } else if (b.type === 'mechShield') {
+            // mechShield dense slug — drawn via mechs.js
+            if (typeof drawMechShieldBullet === 'function') {
+                drawMechShieldBullet(ctx, b);
+            } else {
+                ctx.fillStyle = '#00aaff';
+                ctx.beginPath(); ctx.arc(b.x, b.y, (b.w || 14) / 2, 0, Math.PI * 2); ctx.fill();
+            }
+
+        } else if (b.type === 'time') {
+            // Time tank bullet — rotating watch with ticking effect
+            const radius = (b.w || 9) / 2;
+            const t = Date.now() * 0.008;  // Rotation speed
+            
+            // Outer watch case (gold/brass)
+            ctx.fillStyle = '#d4af37';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Watch rim (darker brass)
+            ctx.strokeStyle = '#8b6914';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Watch face (white)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius * 0.85, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hour markers (12 dots)
+            ctx.fillStyle = '#333';
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+                const mx = b.x + Math.cos(angle) * radius * 0.7;
+                const my = b.y + Math.sin(angle) * radius * 0.7;
+                ctx.beginPath();
+                ctx.arc(mx, my, 0.8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Hour hand (short, thick)
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = 'round';
+            const hourAngle = t + Math.PI * 1.5;
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(
+                b.x + Math.cos(hourAngle) * radius * 0.35,
+                b.y + Math.sin(hourAngle) * radius * 0.35
+            );
+            ctx.stroke();
+            
+            // Minute hand (long, thin, rotates faster)
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            const minAngle = t * 2.5 + Math.PI * 1.5;
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(
+                b.x + Math.cos(minAngle) * radius * 0.6,
+                b.y + Math.sin(minAngle) * radius * 0.6
+            );
+            ctx.stroke();
+            
+            // Center dot
+            ctx.fillStyle = '#d4af37';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 1, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Glow effect (slight shimmer)
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, radius + 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            
         } else {
             ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
@@ -4740,7 +4982,7 @@ function draw() {
             ctx.stroke();
             ctx.restore();
         }
-        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated });
+        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated }, 0);
         // Hit flash - radial impact burst
         const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
         if (_aFlashAge < 120) {
@@ -5058,7 +5300,15 @@ function draw() {
             drawBossOn(ctx, enemy.w, enemy.h, enemy.turretAngle || 0, enemy.phase || 1);
         } else {
             const _drawColor = enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222');
-            drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, enemy.tankType || 'normal', { heat: enemy.heat, overheated: enemy.overheated });
+            // Calculate movement animation for mech tanks
+            let _moveAnim = 0;
+            const _eTankType = enemy.tankType || 'normal';
+            if (_eTankType === 'mechDiy' && (enemy.speed || 0) > 0.1) {
+                _moveAnim = Math.min(1, Math.abs(enemy.speed) * 0.3);
+            } else if (_eTankType === 'mechShield' && (enemy.speed || 0) > 0.1) {
+                _moveAnim = Math.min(1, Math.abs(enemy.speed) * 0.25);
+            }
+            drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated }, _moveAnim);
         }
         // Hit flash - radial impact burst
         const _eFlashAge = Date.now() - (enemy.hitFlashTime || 0);
@@ -5078,6 +5328,11 @@ function draw() {
         // Boss phase 2 glow overlay is already baked into drawBossOn
         ctx.restore();
         if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
+        if ((enemy.tankType === 'mechShield') && typeof drawShieldActiveOverlay === 'function') {
+            const _eFadeR = enemy.mechShieldActive ? 1 : Math.max(0, (enemy.mechShieldFadeTimer || 0) / 30);
+            const _eDmgP = enemy.mechShieldDamagePercent || 0;
+            if (_eFadeR > 0) drawShieldActiveOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, _eFadeR, _eDmgP);
+        }
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
@@ -5091,6 +5346,10 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(enemy.hp) + '/' + maxHp, enemy.x + enemy.w / 2, enemy.y - 7);
+        // Draw energy bar for mech enemies
+        if ((enemy.tankType === 'mechDiy' || enemy.tankType === 'mechShield') && typeof drawMechEnergyBar === 'function') {
+            drawMechEnergyBar(ctx, enemy);
+        }
     });
 
     // 6. Иллюзии
@@ -5102,7 +5361,7 @@ function draw() {
         if (Math.random() > 0.8) {
              ctx.translate((Math.random()-0.5)*4, (Math.random()-0.5)*4);
         }
-        drawTankOn(ctx, 0, 0, 38, 38, ill.color, ill.turretAngle, 1, ill.tankType || 'normal');
+        drawTankOn(ctx, 0, 0, 38, 38, ill.color, ill.turretAngle, 1, ill.tankType || 'normal', null, 0);
         ctx.restore();
     });
 
@@ -5141,7 +5400,13 @@ function draw() {
             ctx.restore();
         }
 
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated });
+        // Calculate movement animation for mech tanks
+        let moveAnim = 0;
+        if (tankType === 'mechDiy' && tank.speed > 0.1) {
+            // More pronounced bobbing when moving
+            moveAnim = Math.min(1, Math.abs(tank.speed) * 0.3);
+        }
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated }, moveAnim);
 
         // Hit flash overlay - radial impact burst, red-tinted for player
         const _tFlashAge = Date.now() - (tank.hitFlashTime || 0);
@@ -5263,6 +5528,12 @@ function draw() {
         }
 
         ctx.restore();
+        if (tank.paralyzed && (tankType === 'mechDiy' || tankType === 'mechShield')) drawParalysisOverlay(ctx, tank.x, tank.y, tank.w, tank.h);
+        if ((tankType === 'mechShield') && typeof drawShieldActiveOverlay === 'function') {
+            const _fadeR = tank.mechShieldActive ? 1 : Math.max(0, (tank.mechShieldFadeTimer || 0) / 30);
+            const _dmgP = tank.mechShieldDamagePercent || 0;
+            if (_fadeR > 0) drawShieldActiveOverlay(ctx, tank.x, tank.y, tank.w, tank.h, _fadeR, _dmgP);
+        }
         if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
@@ -5277,6 +5548,10 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(tank.hp) + '/' + maxTankHp, tank.x + tank.w / 2, tank.y - 7);
+        // mech energy bars — rendered by mechs.js
+        if ((tankType === 'mechDiy' || tankType === 'mechShield') && typeof drawMechEnergyBar === 'function') {
+            drawMechEnergyBar(ctx, tank);
+        }
     }
     
     // Illuminat beam handled by drawUnitBeam above for all units including player
@@ -5739,6 +6014,10 @@ function renderTankUpgradesUI(tt) {
             return `+${s.toFixed(1)}`;
         } },
     ];
+    // mechDiy and mechShield get an additional max energy upgrade
+    if (tt === 'mechDiy' || tt === 'mechShield') {
+        statDefs.push({ stat: 'energy', icon: '', label: 'Энергия', bonusFn: (lvl) => lvl > 0 ? `+${lvl*20} макс.` : '' });
+    }
 
     let html = `<div style="font-size:11px; font-weight:bold; color:#f1c40f; margin-bottom:5px;">🔧 Улучшения</div>`;
     if (!isOwned) {
@@ -5788,6 +6067,17 @@ function renderTankUpgradesUI(tt) {
             // Always re-apply HP and speed immediately (in case player buys mid-session)
             if (typeof setTankHP    === 'function') setTankHP(type);
             if (typeof setTankSpeed === 'function') setTankSpeed(type);
+            // If energy upgrade bought for a mech and it's active, reset energy to full
+            if (stat === 'energy' && (type === 'mechDiy' || type === 'mechShield') && typeof tank !== 'undefined' && tank.tankType === type) {
+                const upLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade(type, 'energy') : 0;
+                if (type === 'mechDiy') {
+                    tank.mechMaxEnergy = 110 + upLvl * 20;
+                    tank.mechEnergy = tank.mechMaxEnergy;
+                } else if (type === 'mechShield') {
+                    tank.mechMaxEnergy = 130 + upLvl * 20;
+                    tank.mechEnergy = tank.mechMaxEnergy;
+                }
+            }
             // Refresh both panels
             showTankDetail(type);
         });
@@ -5926,7 +6216,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 22, buratino: 200, toxic: 100,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, mechDiy: 40, mechShield: 120
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
@@ -5938,7 +6228,7 @@ function showTankDetail(tankType) {
         // Prepare displayed values: for continuous/tick weapons (waterjet, illuminat) show per-second values in the modal
         let displayDmgBoosted = Math.round(dmgBoostedRaw);
         let displayDmgMaxPossible = dmgMaxPossible;
-        let displayDmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.' }[tankType] || '';
+        let displayDmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3' }[tankType] || '';
         if (tankType === 'waterjet' || tankType === 'illuminat') {
             // convert tick-based damage to per-second for display (60 ticks = 1s)
             displayDmgBoosted = Math.round(dmgBoostedRaw * 60);
@@ -5998,6 +6288,21 @@ function showTankDetail(tankType) {
                     <div style="flex:1;"></div>
                     <div style="flex-shrink:0;">${makeFar('spd')}</div>
                 </div>
+                ${(tankType === 'mechDiy' || tankType === 'mechShield') ? (() => {
+                    const _eBase = tankType === 'mechShield' ? 130 : 110;
+                    const energyLvl = getLvl('energy');
+                    const maxE = _eBase + energyLvl * 20;
+                    const maxEPossible = _eBase + UPGRADE_MAX * 20;
+                    const ePct = Math.round((maxE / maxEPossible) * 100);
+                    return `<div style="display:flex; align-items:center;">
+                        <div style="width:80px; font-weight:bold; flex-shrink:0;">Энергия</div>
+                        ${cssBar(ePct, '#3498db')}
+                        <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${maxE}</div>
+                        ${makeNear('energy')}
+                        <div style="flex:1;"></div>
+                        <div style="flex-shrink:0;">${makeFar('energy')}</div>
+                    </div>`;
+                })() : ''}
             </div>`;
 
         // Attach buy-button listeners inside statsEl
@@ -6092,6 +6397,13 @@ function showTankDetail(tankType) {
         };
         drawFrame();
         return;
+    } else if (tankType === 'mechDiy') {
+        // Modal animation delegated to mechs.js
+        if (typeof showMechDiyModal === 'function') showMechDiyModal(ctx, canvas, modal);
+        return;
+    } else if (tankType === 'mechShield') {
+        if (typeof showMechShieldModal === 'function') showMechShieldModal(ctx, canvas, modal);
+        return;
     } else if (tankBgGradients && tankBgGradients[tankType]) {
         const bg = tankBgGradients[tankType];
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -6102,7 +6414,7 @@ function showTankDetail(tankType) {
 
         const side = Math.min(canvas.width, canvas.height) / 2;
         const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
-        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType, null, 0);
 
         modal.style.display = 'flex';
         return;
@@ -6113,7 +6425,7 @@ function showTankDetail(tankType) {
     if (tankType !== 'time') {
         const side = Math.min(canvas.width, canvas.height) / 2;
         const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
-        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType, null, 0);
     }
 
     // Show modal
