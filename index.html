@@ -161,31 +161,31 @@
             </div>
             
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
+                <img src="png/cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Маленький контейнер с хорошим шансом на награды!</p>
                 <button id="buyMiniContainer" class="btn btn-buy">Купить (25 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="cont-png/cont1.png" alt="Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+                <img src="png/cont-png/cont1.png" alt="Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#f1c40f;">Бронзовый Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Содержит случайное количество монет (10-100) и шанс на обычного персонажа.</p>
                 <button id="buyContainer" class="btn btn-buy">Купить (100 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
+                <img src="png/cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
                 <p style="margin:5px 0; font-size:14px;">Контейнер с техническими деталями для улучшений. Содержит детали и монеты.</p>
                 <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+                <img src="png/cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px #ff00de;">Легендарный Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Высокий шанс получить Gems, редких персонажей!</p>
                 <button id="buySuperContainer" class="btn btn-buy">Купить (1000 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="cont-png/omega-cont.png" alt="Омега Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+                <img src="png/cont-png/omega-cont.png" alt="Омега Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#9b59b6; text-shadow:0 0 5px #8e44ad;">Омега Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
@@ -431,7 +431,7 @@
 <div id="containerFlowModal" class="modal-overlay" style="z-index: 170;">
     <div class="container-flow-box">
         <div class="container-flow-content">
-            <img id="containerFlowPreview" class="container-flow-img" src="cont-png/cont1.png" alt="Контейнер">
+            <img id="containerFlowPreview" class="container-flow-img" src="png/cont-png/cont1.png" alt="Контейнер">
             <div class="container-flow-text-group">
                 <p id="containerFlowText" class="container-flow-text"></p>
                 <p class="container-flow-hint">👆 Нажми на контейнер, чтобы его открыть</p>
@@ -776,6 +776,7 @@
   </div>
 </div>
 
+<script src="src/mode-map.js"></script>
 <script src="src/main.js"></script>
 <script src="src/mechs.js"></script>
 <script src="src/tanks.js"></script>

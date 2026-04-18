@@ -1,4 +1,4 @@
-﻿/**
+/**
  * КЛАССИЧЕСКИЕ ТАНКИ С ПРОЦЕДУРНЫМИ СТЕНАМИ
  * Логика: Генерация длинных препятствий с проверкой путей
  */
@@ -2283,7 +2283,7 @@ function _renderLimitedShopItems() {
         for (const ic of pack.icons) {
             const name = ic.slice(4);
             const img = document.createElement('img');
-            img.src = 'icon-png/' + name + '.png';
+            img.src = 'png/icon-png/' + name + '.png';
             img.style.cssText = 'width:52px;height:52px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.08);padding:4px;';
             previewRow.appendChild(img);
         }
@@ -2406,32 +2406,32 @@ function updateContainerFlowStage(stage) {
 
     if (stage === 'intro') {
         if (isOmega) {
-            containerFlowPreview.src = 'cont-png/omega-cont.png';
+            containerFlowPreview.src = 'png/cont-png/omega-cont.png';
             containerFlowText.textContent = 'Нажми на ОМЕГА контейнер!';
         } else if (isMini) {
-            containerFlowPreview.src = 'cont-png/mini-cont.png';
+            containerFlowPreview.src = 'png/cont-png/mini-cont.png';
             containerFlowText.textContent = 'Нажми на мини контейнер!';
         } else if (isMechParts) {
-            containerFlowPreview.src = 'cont-png/mech-cont.png';
+            containerFlowPreview.src = 'png/cont-png/mech-cont.png';
             containerFlowText.textContent = 'Нажми на ящик деталей!';
         } else {
-            containerFlowPreview.src = isBronze ? 'cont-png/cont1.png' : 'cont-png/super-cont.png';
+            containerFlowPreview.src = isBronze ? 'png/cont-png/cont1.png' : 'png/cont-png/super-cont.png';
             containerFlowText.textContent = isBronze
                 ? 'Нажми на контейнер, чтобы открыть'
                 : 'Нажми на контейнер, чтобы открыть';
         }
     } else {
         if (isOmega) {
-            containerFlowPreview.src = 'cont-png/omega-cont2.png';
+            containerFlowPreview.src = 'png/cont-png/omega-cont2.png';
             containerFlowText.textContent = 'ОМЕГА контейнер взрывается наградами!';
         } else if (isMini) {
-            containerFlowPreview.src = 'cont-png/mini-cont2.png';
+            containerFlowPreview.src = 'png/cont-png/mini-cont2.png';
             containerFlowText.textContent = 'Мини контейнер раскрывается!';
         } else if (isMechParts) {
-            containerFlowPreview.src = 'cont-png/mech-cont2.png';
+            containerFlowPreview.src = 'png/cont-png/mech-cont2.png';
             containerFlowText.textContent = 'Ящик деталей раскрывается!';
         } else {
-            containerFlowPreview.src = isBronze ? 'cont-png/cont2.png' : 'cont-png/super-cont2.png';
+            containerFlowPreview.src = isBronze ? 'png/cont-png/cont2.png' : 'png/cont-png/super-cont2.png';
             containerFlowText.textContent = isBronze
                 ? 'Из контейнера высыпаются награды!'
                 : 'Легендарный контейнер раскрывается!';
@@ -2778,792 +2778,7 @@ if (mainMenu) mainMenu.style.display = 'flex';
 
 // --- APPEND_POINT_3 ---
 
-/**
- * ГЕНЕРАЦИЯ КАРТЫ
- * Создаем длинные стены как в оригинале (вертикальные и горизонтальные)
- */
-function generateMap() {
-    objects = [];
-    const step = 50; // Шаг сетки (50px cells for tighter, tile-aligned placement)
-    
-    // Внешние границы (невидимые, чтобы не выезжать)
-    // Внутренние стены
-    for (let x = step; x < worldWidth - step; x += step) {
-        for (let y = step; y < worldHeight - step; y += step) {
-            
-            // reduce wall density further: spawn less frequently
-            if (Math.random() > 0.92) {
-                const isVertical = Math.random() > 0.5;
-                const length = Math.floor(Math.random() * 2) + 1; // Длина 1-2 блока
-                
-                // Create dense blocks for walls aligned to grid
-                const blockSize = 50;
-                // Center the wall within the 100x100 cell if possible, or just align top-left
-                // Let's align top-left to x,y but maybe center in the transverse direction?
-                // x, y are on 100px grid.
-                // If we want 50px walls centered in 100px grid: offset = 25.
-                
-                if (isVertical) {
-                    const blockCount = (length * step) / blockSize;
-                    for (let i = 0; i < blockCount; i++) {
-                       objects.push({
-                           x: x, 
-                           y: y + i * blockSize, 
-                           w: blockSize, h: blockSize, 
-                           type: 'wall', color: '#2b2b2b'
-                       });
-                    }
-                } else {
-                    const blockCount = (length * step) / blockSize;
-                    for (let i = 0; i < blockCount; i++) {
-                       objects.push({
-                           x: x + i * blockSize, 
-                           y: y, 
-                           w: blockSize, h: blockSize, 
-                           type: 'wall', color: '#2b2b2b'
-                       });
-                    }
-                }
-            }
-        }
-    }
-    
-    // Ящики в случайных местах, проверяя коллизии со стенами
-    for (let x = step; x < worldWidth - step; x += step) {
-        for (let y = step; y < worldHeight - step; y += step) {
-            // reduce box density further: spawn less frequently
-                if (Math.random() > 0.92) {
-                const newBox = {
-                    x: x, y: y, 
-                    w: 50, h: 50, 
-                    type: 'box', color: '#7a4a21'
-                };
-                // Проверяем, не пересекается ли с существующими стенами
-                let canPlace = true;
-                for (let obj of objects) {
-                    if (obj.type === 'wall' && checkRectCollision(newBox, obj)) {
-                        canPlace = false;
-                        break;
-                    }
-                }
-                if (canPlace) {
-                    objects.push(newBox);
-                }
-            }
-        }
-    }
-    
-    // Удаляем объекты, которые слишком близко к старту игрока
-    objects = objects.filter(obj => {
-        const dist = Math.hypot(obj.x - tank.x, obj.y - tank.y);
-        return dist > 100;
-    });
-
-    // Генерация врагов в углах
-    enemies = [];
-    const cornerPositions = [
-        {x: worldWidth - 50, y: 50},
-        {x: 50, y: worldHeight - 50},
-        {x: worldWidth - 50, y: worldHeight - 50}
-    ];
-    for (let i = 0; i < 3; i++) {
-        const cp = cornerPositions[i];
-        const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
-        const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
-        enemies.push({
-            x: p.x, y: p.y, w: 38, h: 38,
-            color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
-            tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: 0,
-            baseAngle: 0,
-            speed: 2.5,
-            trackOffset: 0,
-            alive: true,
-            stuckCount: 0,
-            fireCooldown: 0,
-            team: i+1,
-            dodgeAccuracy: 0.75 + Math.random() * 0.2,
-            paralyzed: false,
-            paralyzedTime: 0,
-            // ability flags
-            megaGasUsed: false,
-            plasmaBlastUsed: 0
-        });
-    }
-}
-
-// Spawn teams: numTeams teams, each of teamSize tanks
-function spawnAllies(numTeams, teamSize) {
-    allies = [];
-    const pads = [50, 50];
-    const corners = [
-        { x: 60, y: 60 },
-        { x: worldWidth - 60, y: 60 },
-        { x: 60, y: worldHeight - 60 },
-        { x: worldWidth - 60, y: worldHeight - 60 }
-    ];
-    for (let t = 0; t < numTeams; t++) {
-        const teamColor = ['#8B0000', '#006400', '#FFD700', '#00BFFF'][t % 4];
-        const base = corners[t % corners.length];
-        for (let s = 0; s < teamSize; s++) {
-            const offset = s * 44;
-            // ensure ally spawn is inside and not colliding
-            let pos = findFreeSpot(base.x + offset, base.y + offset, 38, 38);
-                allies.push({
-                x: pos.x, y: pos.y, w: 38, h: 38,
-                color: teamColor,
-                // choose random tank type for ally
-                tankType: (['normal','ice','fire','buratino','toxic','plasma','musical','illuminat', 'mirror', 'machinegun', 'waterjet','electric','robot','medical','pyro'])[Math.floor(Math.random()*15)],
-                hp: 100,
-                turretAngle: 0,
-                baseAngle: 0,
-                speed: 2.5,
-                trackOffset: 0,
-                alive: true,
-                team: t,
-                fireCooldown: 0,
-                stuckCount: 0,
-                dodgeAccuracy: 0.75 + Math.random() * 0.2,
-                paralyzed: false,
-                paralyzedTime: 0
-            });
-        }
-    }
-    navNeedsRebuild = true;
-}
-
-// Spawn team-mode: place player + 1 ally in one corner, spawn 6 enemies in other corners (total 8 players)
-function spawnTeamMode() {
-    enemies = [];
-    allies = [];
-    const corners = [
-        { x: 60, y: 60 },
-        { x: worldWidth - 60, y: 60 },
-        { x: 60, y: worldHeight - 60 },
-        { x: worldWidth - 60, y: worldHeight - 60 }
-    ];
-
-    // helper: remove objects overlapping a rectangle so spawn areas are free
-    function clearArea(x, y, w, h) {
-        objects = objects.filter(o => {
-            const ox = o.x, oy = o.y, ow = o.w || 40, oh = o.h || 40;
-            if (ox < x + w && ox + ow > x && oy < y + h && oy + oh > y) return false;
-            return true;
-        });
-    }
-
-    // choose corner 0 for player team
-    const playerCorner = corners[0];
-    tank.x = playerCorner.x; tank.y = playerCorner.y; tank.team = 0;
-    // clear around player spawn
-    clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
-    // spawn one ally near player (use player's color)
-                const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine','roman'];
-            const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
-            allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
-
-    const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
-    // spawn other corners with 2 enemies each; clear spawn areas first
-    for (let ci = 1; ci < 4; ci++) {
-        const base = corners[ci];
-        clearArea(base.x - 48, base.y - 48, 96, 96);
-        for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro','spartan'];
-            const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500', spartan: '#b87333' };
-            // Fix: Use findFreeSpot to ensure enemies spawn inside map boundaries (especially for corners)
-            // base.x/y might be near edge, and +k*44 might push out. findFreeSpot clamps efficiently.
-            let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44))); // try to offset inwards roughly
-            let sy = base.y + (k === 0 ? 0 : (ci===1 ? 28 : (ci===2 ? -28 : -28))); 
-            
-            const p = findFreeSpot(sx, sy, 38, 38, 200, 20);
-            if (p) {
-                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tankMaxHpByType[tt] || 300), turretAngle:0, baseAngle:0, speed:(tankMaxSpeedByType[tt] || 3.2), trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
-            }
-        }
-    }
-
-    // add explosive barrels for team mode only (place a few in free spots)
-    const barrelCount = 5;
-    for (let b = 0; b < barrelCount; b++) {
-        // try random positions near center area
-        const rx = 80 + Math.random() * (worldWidth - 160);
-        const ry = 80 + Math.random() * (worldHeight - 160);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 300, 16);
-        // avoid placing extremely close to player
-        if (Math.hypot(p.x - tank.x, p.y - tank.y) < 120) continue;
-        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#b33' });
-    }
-
-    navNeedsRebuild = true;
-}
-
-function spawnDuelMode() {
-    enemies = [];
-    allies = [];
-    objects = objects || [];
-
-    // Player in top-left corner
-    tank.x = 100; tank.y = 100;
-    tank.alive = true;
-    setTankHP(tankType);
-    
-    // 1 Bot in bottom-right corner
-    const ex = worldWidth - 100;
-    const ey = worldHeight - 100;
-    
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
-    const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', buckshot: '#455A64', imitator: '#6c3483', robot: '#263238', medical: '#0033ff', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
-    
-    enemies.push({ 
-        x: ex, y: ey, w:38, h:38, 
-        color: typeColor[tt] || '#B22222', 
-        tankType: tt, 
-        hp:(tt==='fire')?600:(tt==='musical')?400:(tt==='illuminat'||tt==='mirror')?300:300, 
-        turretAngle: Math.PI, 
-        baseAngle: Math.PI, 
-        speed: 2.5, 
-        trackOffset: 0, 
-        alive: true, 
-        team: 1, 
-        fireCooldown: 0, 
-        stuckCount: 0, 
-        dodgeAccuracy: 0.85, 
-        respawnCount: 0, 
-        paralyzed: false, 
-        paralyzedTime: 0 
-    });
-
-    // spawn some barrels
-    for (let b = 0; b < 8; b++) {
-        const rx = 200 + Math.random() * (worldWidth - 400);
-        const ry = 200 + Math.random() * (worldHeight - 400);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
-    }
-
-    navNeedsRebuild = true;
-}
-
-function spawnTrialMode() {
-    enemies = [];
-    allies = [];
-    objects = objects || [];
-
-    // Player at center-ish spawn
-    const cx = worldWidth / 2, cy = worldHeight / 2;
-    const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
-    tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    setTankHP(tankType);
-    tank.alive = true; tank.respawnTimer = 0;
-
-    // 7 bots spread around the map, each on its own team
-    const spreadPositions = [
-        { x: 120, y: 120 },
-        { x: worldWidth - 120, y: 120 },
-        { x: 120, y: worldHeight - 120 },
-        { x: worldWidth - 120, y: worldHeight - 120 },
-        { x: cx, y: 120 },
-        { x: 120, y: cy },
-        { x: worldWidth - 120, y: cy }
-    ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
-
-    for (let i = 0; i < 7; i++) {
-        const sp = spreadPositions[i];
-        const pos = findFreeSpot(sp.x - 19, sp.y - 19, 38, 38, 600, 32) || sp;
-        const tt = trialTankTypes[Math.floor(Math.random() * trialTankTypes.length)];
-        enemies.push({
-            x: pos.x, y: pos.y, w: 38, h: 38,
-            color: typeColor[tt] || '#B22222',
-            tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
-            alive: true,
-            team: i + 1, // each bot is its own team → FFA
-            fireCooldown: 0, stuckCount: 0,
-            dodgeAccuracy: 0.75 + Math.random() * 0.2,
-            respawnCount: 0, paralyzed: false, paralyzedTime: 0
-        });
-    }
-
-    // Some barrels/boxes for cover
-    for (let b = 0; b < 15; b++) {
-        const rx = 180 + Math.random() * (worldWidth - 360);
-        const ry = 180 + Math.random() * (worldHeight - 360);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
-    }
-
-    navNeedsRebuild = true;
-}
-
-// ── Boss Fight mode functions ──────────────────────────────────────────────────
-
-function generateBossFightMap() {
-    objects = [];
-    const W = 1800, H = 1400, B = 50;
-    const wall = (x, y, w, h) => objects.push({ x, y, w, h, type: 'wall', color: '#3d1a1a' });
-    const box  = (x, y) => objects.push({ x, y, w: 40, h: 40, type: 'box', color: '#6b3a1a' });
-    const brl  = (x, y) => objects.push({ x, y, w: 30, h: 30, type: 'barrel', color: '#5d4037' });
-
-    // Border walls
-    for (let x = 0; x < W; x += B) { wall(x, 0, B, B); wall(x, H - B, B, B); }
-    for (let y = B; y < H - B; y += B) { wall(0, y, B, B); wall(W - B, y, B, B); }
-
-    // Four corner L-structures (far from center corridor y=643..757)
-    wall(200, 150, 250, B);    wall(200, 200, B, 250);
-    wall(1350, 150, 250, B);   wall(1550, 200, B, 250);
-    wall(200, 1000, B, 250);   wall(200, 1200, 250, B);
-    wall(1550, 1000, B, 250);  wall(1350, 1200, 250, B);
-
-    // Inner vertical walls (above y=450 or below y=950 — clear of boss path)
-    wall(650, 200, B, 200);    wall(1100, 200, B, 200);
-    wall(650, 1000, B, 200);   wall(1100, 1000, B, 200);
-
-    // Horizontal cover walls at y=450 and y=900
-    wall(350, 450, 150, B);    wall(1300, 450, 150, B);
-    wall(350, 900, 150, B);    wall(1300, 900, 150, B);
-
-    // Top/bottom center accents
-    wall(800, 300, 200, B);    wall(800, 1100, 200, B);
-
-    // Symmetric boxes – all outside y=580..820 range (boss corridor is y≈643..757)
-    [   [160,150], [420,150], [700,150], [1100,150], [1380,150], [1640,150],
-        [160,1250],[420,1250],[700,1250],[1100,1250],[1380,1250],[1640,1250],
-        [160,430], [160,530],  [1640,430],[1640,530],
-        [160,870], [160,970],  [1640,870],[1640,970],
-        [500,380], [700,330], [1300,380],[1100,330],
-        [500,1020],[700,1070], [1300,1020],[1100,1070],
-        [870,350], [870,1050],
-    ].forEach(([x, y]) => box(x - 20, y - 20));
-
-    // Symmetric barrels – all outside y=580..820 range
-    [   [300,250],[900,250],[1500,250],  [300,1150],[900,1150],[1500,1150],
-        [560,430],[1240,430],[560,970],[1240,970],
-        [400,530],[1400,530],[400,870],[1400,870],
-        [900,200],[900,1200],
-    ].forEach(([x, y]) => brl(x - 15, y - 15));
-
-    navNeedsRebuild = true;
-}
-
-function spawnBossFightMode() {
-    enemies = [];
-    allies = [];
-    bossMeteors = [];
-
-    // Player spawns on left side, centered vertically
-    tank.x = 120;
-    tank.y = worldHeight / 2 - 19;
-    tank.team = 0;
-    setTankHP(tankType);
-    
-    // Apply god mode if enabled
-    if (godMode) {
-        tank.hp = 100000;
-        tank.maxHp = 100000;
-    }
-    
-    tank.alive = true; tank.respawnTimer = 0; tank.respawnCount = 0;
-
-    // Hell Tank boss: 3× size (114×114), 7500 HP, team 99
-    const boss = {
-        x: 1600, y: worldHeight / 2 - 57,
-        w: 114, h: 114,
-        color: '#8B0000',
-        tankType: 'boss_hell',
-        isBoss: true, phase: 1,
-        hp: 7500, maxHp: 7500,
-        turretAngle: Math.PI, baseAngle: Math.PI,
-        speed: 0.8, team: 99,
-        fireCooldown: 0, meteorTimer: 120, miniTimer: 0,
-        trackOffset: 0, alive: true, stuckCount: 0,
-        paralyzed: false, paralyzedTime: 0, dodgeAccuracy: 0, respawnCount: 0,
-        fireTrail: [] // Phase 3: огненный след
-    };
-    enemies.push(boss);
-    navNeedsRebuild = true;
-}
-
-function updateBossFight() {
-    const boss = enemies.find(e => e.isBoss && e.alive);
-    if (!boss) return;
-
-    // Phase transitions
-    if (boss.phase === 1 && boss.hp <= 5000) {
-        boss.phase = 2;
-        boss.speed = 1.0; // Increases slightly
-    }
-    if (boss.phase === 2 && boss.hp <= 2500) {
-        boss.phase = 3;
-        boss.speed = 1.2; // 1.5x speed as requested, but adjusted for gameplay
-        // Music will automatically switch via updateMusic() which calls _getTargetMusicKey()
-    }
-
-    // Boss pursues player slowly, stops at ~260px
-    if (tank.alive) {
-        const dx = (tank.x + 19) - (boss.x + 57);
-        const dy = (tank.y + 19) - (boss.y + 57);
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        boss.turretAngle = Math.atan2(dy, dx);
-        if (dist > 260) {
-            const nx = dx / dist, ny = dy / dist;
-            boss.x += nx * boss.speed;
-            boss.y += ny * boss.speed;
-            boss.baseAngle = Math.atan2(ny, nx);
-            
-            // Phase 3: leave fire trail
-            if (boss.phase === 3) {
-                boss.fireTrail.push({
-                    x: boss.x + 57,
-                    y: boss.y + 57,
-                    life: 300 // 5 seconds at 60fps
-                });
-            }
-        }
-    }
-
-    // Update and render fire trail (Phase 3 only)
-    if (boss.fireTrail) {
-        for (let i = boss.fireTrail.length - 1; i >= 0; i--) {
-            const trail = boss.fireTrail[i];
-            trail.life--;
-            if (trail.life <= 0) {
-                boss.fireTrail.splice(i, 1);
-            }
-        }
-    }
-
-    // Regular fire bullet
-    if (boss.fireCooldown > 0) boss.fireCooldown--;
-    if (boss.fireCooldown <= 0 && tank.alive) {
-        const ang = boss.turretAngle;
-        bullets.push({
-            x: boss.x + 57 + Math.cos(ang) * 60, y: boss.y + 57 + Math.sin(ang) * 60,
-            vx: Math.cos(ang) * 4.5, vy: Math.sin(ang) * 4.5,
-            damage: 80, owner: 'enemy', team: 99, type: 'fire', life: 220
-        });
-        // Faster cooldown in higher phases
-        if (boss.phase === 3) {
-            boss.fireCooldown = 50; // Faster
-        } else if (boss.phase === 2) {
-            boss.fireCooldown = 70;
-        } else {
-            boss.fireCooldown = 100;
-        }
-    }
-
-    // Drop meteors near player
-    if (boss.meteorTimer > 0) boss.meteorTimer--;
-    if (boss.meteorTimer <= 0 && tank.alive) {
-        const count = boss.phase === 3 ? 5 : (boss.phase === 2 ? 4 : 3);
-        for (let i = 0; i < count; i++) {
-            bossMeteors.push({
-                x: tank.x + 19 + (Math.random() - 0.5) * 320,
-                y: tank.y + 19 + (Math.random() - 0.5) * 320,
-                warningTimer: 90, landed: false, fireTimer: 0
-            });
-        }
-        // Faster meteor cooldown in higher phases
-        if (boss.phase === 3) {
-            boss.meteorTimer = 100; // Faster meteor drops
-        } else if (boss.phase === 2) {
-            boss.meteorTimer = 120;
-        } else {
-            boss.meteorTimer = 180;
-        }
-    }
-
-    // Phase 2+: burst 8-direction mini-meteors
-    if (boss.phase >= 2) {
-        if (boss.miniTimer > 0) boss.miniTimer--;
-        if (boss.miniTimer <= 0) {
-            const miniCount = boss.phase === 3 ? 12 : 8; // Phase 3: more mini-meteors
-            for (let i = 0; i < miniCount; i++) {
-                const ang = (Math.PI * 2 / miniCount) * i;
-                bullets.push({
-                    x: boss.x + 57, y: boss.y + 57,
-                    vx: Math.cos(ang) * 5, vy: Math.sin(ang) * 5,
-                    w: 14, h: 14,
-                    damage: 75, owner: 'enemy', team: 99,
-                    type: 'meteorMini', life: 150
-                });
-            }
-            boss.miniTimer = boss.phase === 3 ? 70 : 90;
-        }
-    }
-
-    // Update meteor warning / fire zones
-    for (let i = bossMeteors.length - 1; i >= 0; i--) {
-        const m = bossMeteors[i];
-        if (!m.landed) {
-            m.warningTimer--;
-            if (m.warningTimer <= 0) {
-                m.landed = true;
-                m.fireTimer = 300;
-                // Impact: increased damage in Phase 3
-                const damageAmount = boss.phase === 3 ? 200 : 150;
-                if (tank.alive) {
-                    const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
-                    if (Math.sqrt(ddx * ddx + ddy * ddy) < 80) {
-                        if (!tank.mirrorShieldActive)
-                            tank.hp = Math.max(0, tank.hp - damageAmount);
-                    }
-                }
-            }
-        } else {
-            m.fireTimer--;
-            // Fire DoT: increased in higher phases
-            const dotChance = boss.phase === 3 ? 0.15 : 0.10;
-            const dotDamage = boss.phase === 3 ? 12 : 8;
-            if (m.fireTimer > 0 && tank.alive && Math.random() < dotChance) {
-                const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
-                if (Math.sqrt(ddx * ddx + ddy * ddy) < 45) {
-                    if (!tank.mirrorShieldActive)
-                        tank.hp = Math.max(0, tank.hp - dotDamage);
-                }
-            }
-            if (m.fireTimer <= 0) bossMeteors.splice(i, 1);
-        }
-    }
-}
-
-// ── Legacy placeholder (replaced by Boss Fight) ───────────────────────────────
-function spawnLeaderHuntMode() {
-    enemies = [];
-    allies = [];
-    objects = objects || [];
-    leaderHuntLeader = null; // Reset leader
-
-    // Player at center-ish spawn
-    const cx = worldWidth / 2, cy = worldHeight / 2;
-    const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
-    tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    setTankHP(tankType);
-    tank.alive = true; tank.respawnTimer = 0;
-
-    // 7 bots spread around the map, each on its own team (FFA)
-    const spreadPositions = [
-        { x: 120, y: 120 },
-        { x: worldWidth - 120, y: 120 },
-        { x: 120, y: worldHeight - 120 },
-        { x: worldWidth - 120, y: worldHeight - 120 },
-        { x: cx, y: 120 },
-        { x: 120, y: cy },
-        { x: worldWidth - 120, y: cy }
-    ];
-    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
-
-    for (let i = 0; i < 7; i++) {
-        const sp = spreadPositions[i];
-        const pos = findFreeSpot(sp.x - 19, sp.y - 19, 38, 38, 600, 32) || sp;
-        const tt = leaderHuntTankTypes[Math.floor(Math.random() * leaderHuntTankTypes.length)];
-        const enemy = {
-            x: pos.x, y: pos.y, w: 38, h: 38,
-            color: typeColor[tt] || '#B22222',
-            tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
-            alive: true,
-            team: i + 1, // each bot is its own team → FFA
-            fireCooldown: 0, stuckCount: 0,
-            dodgeAccuracy: 0.75 + Math.random() * 0.2,
-            respawnCount: 0, paralyzed: false, paralyzedTime: 0
-        };
-        enemies.push(enemy);
-    }
-
-    // Choose random leader (not player)
-    const leaderIndex = Math.floor(Math.random() * enemies.length);
-    leaderHuntLeader = enemies[leaderIndex];
-    leaderHuntLeader.hp += 100; // +100 HP bonus
-    leaderHuntLeader.isLeader = true; // Mark as leader
-
-    // Some barrels/boxes for cover
-    for (let b = 0; b < 15; b++) {
-        const rx = 180 + Math.random() * (worldWidth - 360);
-        const ry = 180 + Math.random() * (worldHeight - 360);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
-    }
-
-    navNeedsRebuild = true;
-}
-
-// Training map: open field with decorative elements, no random walls
-function generateTrainingMap() {
-    objects = [];
-    const bw = 50;
-    // ── Border walls ───────────────────────────────────────────────
-    for (let y = 0; y < worldHeight; y += bw) {
-        objects.push({ x: 0, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
-        objects.push({ x: worldWidth - bw, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
-    }
-    for (let x = bw; x < worldWidth - bw; x += bw) {
-        objects.push({ x, y: 0, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
-        objects.push({ x, y: worldHeight - bw, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
-    }
-    // ── Divider wall at x=700 — full height, corridor gap centered at y=375..475 ──
-    for (let y = bw; y < worldHeight - bw; y += bw) {
-        if (y >= 375 && y < 475) continue; // centered corridor entrance
-        objects.push({ x: 700, y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
-    }
-    // ── Symmetric cover pillars inside boss room ──────────────────────
-    // Room occupies x=750..1150, y=50..850. Center = (950, 450).
-    // 4 pillars symmetric around center: (+/-150 x, +/-130 y)
-    const roomPillars = [
-        { x: 800, y: 300 }, { x: 1050, y: 300 },
-        { x: 800, y: 550 }, { x: 1050, y: 550 },
-    ];
-    for (const p of roomPillars) {
-        objects.push({ x: p.x, y: p.y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
-    }
-    // ── Decorative barrels ────────────────────────────────────────────
-    const barrelPos = [
-        { x: 100, y: 100 }, { x: 100, y: 750 },
-        { x: 200, y: 800 }, { x: 580, y: 70 },
-        { x: 580, y: 790 }, { x: 660, y: 240 },
-        { x: 660, y: 620 }, { x: 870, y: 200 },
-        { x: 870, y: 680 }, { x: 1090, y: 200 },
-        { x: 1090, y: 680 },
-    ];
-    for (const p of barrelPos) {
-        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#7a4a21' });
-    }
-    navNeedsRebuild = true;
-}
-
-// Training mode: dummy targets that don't move, respawn every 10 seconds
-let trainingDummies = [];
-let trainingRespawnTimers = [];  // per-dummy countdown
-let trainingShooterDummy = null;
-let trainingShooterTimer = 0;
-
-function spawnTrainingMode() {
-    enemies = [];
-    allies = [];
-    trainingDummies = [];
-    trainingRespawnTimers = [];
-
-    // Player starts center-left
-    tank.x = 150; tank.y = worldHeight / 2 - 19;
-    tank.team = 0;
-    setTankHP(tankType);
-    tank.alive = true;
-
-    // Dummy positions — split into 2 groups: upper (before corridor) and lower (after corridor)
-    // Corridor entrance at y=375..475, so dummies positioned well above and below it
-    const dummyPositions = [
-        // Upper group (above corridor entrance)
-        { x: 480, y: 130 }, { x: 570, y: 130 }, { x: 660, y: 130 },
-        { x: 480, y: 280 }, { x: 570, y: 280 }, { x: 660, y: 280 },
-        // Lower group (below corridor entrance)
-        { x: 480, y: 570 }, { x: 570, y: 570 }, { x: 660, y: 570 },
-        { x: 480, y: 720 }, { x: 570, y: 720 }, { x: 660, y: 720 },
-    ];
-
-    for (let i = 0; i < dummyPositions.length; i++) {
-        const pos = dummyPositions[i];
-        const dummy = {
-            x: pos.x, y: pos.y, w: 38, h: 38,
-            color: '#888888',
-            tankType: 'dummy',
-            hp: 300, maxHp: 300,
-            turretAngle: 0, baseAngle: 0, speed: 0,
-            alive: true,
-            team: 99, // neutral team
-            fireCooldown: 9999, stuckCount: 0,
-            dodgeAccuracy: 0,
-            isDummy: true,
-            dummyIndex: i,
-            spawnX: pos.x, spawnY: pos.y,
-        };
-        enemies.push(dummy);
-        trainingDummies.push(dummy);
-        trainingRespawnTimers.push(0);
-    }
-
-    // Armed shooter dummy — stationary boss tank, center of boss room (x=750..1150, y=50..850)
-    const shooterDummy = {
-        x: 930, y: 431, w: 38, h: 38,
-        color: '#880000',
-        tankType: 'boss_dummy',
-        hp: 1000, maxHp: 1000,
-        turretAngle: Math.PI, baseAngle: Math.PI,
-        speed: 0, alive: true,
-        team: 1,
-        fireCooldown: 80,
-        stuckCount: 0, dodgeAccuracy: 0,
-        isDummy: true, isShooterDummy: true,
-        spawnX: 930, spawnY: 431,
-    };
-    enemies.push(shooterDummy);
-    trainingShooterDummy = shooterDummy;
-    trainingShooterTimer = 0;
-
-    navNeedsRebuild = true;
-}
-
-// One vs All mode: Player (team 0) vs 7 allied enemy bots (all team 1)
-function spawnOneVsAllMode() {
-    enemies = [];
-    allies = [];
-    objects = objects || [];
-    
-    // Player spawns in top-left corner
-    const cx = 100;
-    const cy = 100;
-    const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 800, 32) || { x: cx, y: cy };
-    tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    
-    // 7 enemy bots spawn on right side (all allied to each other, team 1)
-    const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e' };
-    
-    for (let i = 0; i < 7; i++) {
-        // Spread bots vertically around right side
-        const angle = (i / 7) * Math.PI * 1.5 - Math.PI * 0.75; // spread from top-right to bottom-right
-        const radius = Math.min(worldWidth, worldHeight) * 0.25;
-        const bx = botStartX + Math.cos(angle) * (radius * 0.5);
-        const by = worldHeight / 2 + Math.sin(angle) * radius;
-        
-        const tt = botTankTypes[Math.floor(Math.random() * botTankTypes.length)];
-        const bp = findFreeSpot(bx - 19, by - 19, 38, 38, 600, 24) || { x: bx, y: by };
-        
-        enemies.push({
-            x: bp.x, y: bp.y, w: 38, h: 38,
-            color: typeColors[tt] || '#B22222',
-            tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: Math.random() * Math.PI * 2, baseAngle: 0, speed: 2.5, trackOffset: 0,
-            alive: true, team: 1,  // all allied with each other
-            fireCooldown: Math.floor(Math.random() * 60), stuckCount: 0,
-            dodgeAccuracy: 0.65 + Math.random() * 0.25,
-            respawnCount: 0, paralyzed: false, paralyzedTime: 0,
-            mirrorShieldActive: false, mirrorShieldTimer: 0, mirrorShieldCooldown: 0,
-            megaGasUsed: false, plasmaBlastUsed: 0
-        });
-    }
-    
-    // Scatter cover objects across large map (minimal for performance in one vs all)
-    const coverCount = currentMode === 'onevsall' ? 30 : 80;
-    for (let b = 0; b < coverCount; b++) {
-        const rx = 200 + Math.random() * (worldWidth - 400);
-        const ry = 200 + Math.random() * (worldHeight - 400);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 600, 20);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.7 ? 'barrel' : 'box', color: '#7a4a21' });
-    }
-    
-    navNeedsRebuild = true;
-}
+// Map generation and spawn functions moved to mode-map.js
 
 function teamHasAliveMember(team) {
     if (team === 0) {
@@ -6582,7 +5797,7 @@ function renderProfilesList() {
         const pAv = p.avatar || '🎮';
         if (pAv.startsWith('img:')) {
             const sz = _isSmallEgg(pAv) ? '54px' : '36px';
-            avatar.innerHTML = '<img src="icon-png/' + pAv.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+            avatar.innerHTML = '<img src="png/icon-png/' + pAv.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
         } else {
             avatar.textContent = pAv;
         }
@@ -6678,7 +5893,7 @@ function _updateEditAvatarPreview(av) {
             const name = av.slice(4);
             el.textContent = '';
             const sz = _isSmallEgg(av) ? '84px' : '56px';
-            el.innerHTML = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+            el.innerHTML = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
         } else {
             el.textContent = av;
         }
@@ -6740,7 +5955,7 @@ function _buildAvatarGrid() {
             if (av.startsWith('img:')) {
                 const name = av.slice(4);
                 const sz = _isSmallEgg(av) ? '42px' : '28px';
-                const imgHtml = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+                const imgHtml = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
                 if (unlocked) {
                     btn.innerHTML = imgHtml;
                     btn.onclick = () => _updateEditAvatarPreview(av);
@@ -6780,7 +5995,7 @@ function _buildAvatarGrid() {
             btn.dataset.av = av;
             btn.style.cssText = 'position:relative;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;overflow:hidden;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
             const sz = _isSmallEgg(av) ? '42px' : '28px';
-            btn.innerHTML = '<img src="icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+            btn.innerHTML = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
             btn.onclick = () => _updateEditAvatarPreview(av);
             srow.appendChild(btn);
         });
@@ -7062,7 +6277,7 @@ if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () 
     const nm = (prof && prof.name) || 'Игрок';
     if (av.startsWith('img:')) {
         const sz = _isSmallEgg(av) ? '27px' : '18px';
-        nameEl.innerHTML = '<img src="icon-png/' + av.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
+        nameEl.innerHTML = '<img src="png/icon-png/' + av.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
     } else {
         nameEl.textContent = av + ' ' + nm;
     }
