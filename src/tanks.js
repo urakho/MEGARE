@@ -5269,7 +5269,10 @@ function draw() {
     enemies.forEach(enemy => {
         if (!enemy || !enemy.alive || !isVisible(enemy.x, enemy.y, enemy.w, enemy.h)) return;
         ctx.save();
-        ctx.translate(enemy.x + enemy.w/2, enemy.y + enemy.h/2);
+        // Smooth movement interpolation: render at interpolated position
+        const renderX = enemy.x + enemy.w/2;
+        const renderY = enemy.y + enemy.h/2;
+        ctx.translate(renderX, renderY);
         // Draw mirror shield for bot enemies
         if (enemy.tankType === 'mirror' && enemy.mirrorShieldActive) {
             const shieldSize = Math.max(enemy.w, enemy.h) * 0.8;

@@ -1,5 +1,40 @@
 // bot.js  pathfinding, navigation grid, enemy AI, ally AI
 
+// ── Elite AI (активируется при >1000 кубков игрока) ─────────────────────────
+const ELITE_AI_TROPHY_THRESHOLD = 1000;
+
+// Returns true if player has enough trophies for elite AI threshold
+function isEliteAI() {
+    return (typeof trophies !== 'undefined') && trophies > ELITE_AI_TROPHY_THRESHOLD;
+}
+
+// Apply elite AI stats to a bot entity with 50% chance when above threshold
+function applyEliteAIStats(entity) {
+    if (!isEliteAI()) return;
+    // Mark that we attempted to apply elite AI
+    entity._eliteAIAttempted = true;
+    // 50% chance to get elite AI when above threshold
+    if (Math.random() > 0.5) return;
+    entity.dodgeAccuracy = 0.99;    // Almost never misses a dodge
+    entity._eliteAI = true;
+}
+
+// Smooth turret rotation: interpolate current angle toward target
+function smoothTurretRotation(entity, targetAngle, rotateSpeed = 0.12) {
+    if (!entity.turretAngle) entity.turretAngle = 0;
+    const current = entity.turretAngle;
+    let diff = targetAngle - current;
+    // Wrap diff to [-π, π] for shortest path
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    // Interpolate toward target
+    if (Math.abs(diff) < rotateSpeed) {
+        entity.turretAngle = targetAngle;
+    } else {
+        entity.turretAngle += Math.sign(diff) * rotateSpeed;
+    }
+}
+
 function pathClearFor(entity, angle, dist, samples = 4) {
     // use entity center for sampling so narrow passages are tested correctly
     const cx = entity.x + (entity.w || 0) / 2;
@@ -77,7 +112,7 @@ function steerAroundObstacles(entity, desiredAngle, dist) {
 // Проверяем, летят ли по сущности снаряды; если да — попробуем уклониться
 function tryDodgeIncoming(entity) {
     const ex = entity.x + (entity.w||0)/2; const ey = entity.y + (entity.h||0)/2;
-    const dangerLookahead = 30; // ticks to look ahead
+    const dangerLookahead = entity._eliteAI ? 50 : 30; // Elite AI sees bullets further ahead
     const accuracy = (entity.dodgeAccuracy !== undefined) ? entity.dodgeAccuracy : DODGE_BASE_ACCURACY;
     for (const b of bullets) {
         if (!b || b.team === undefined) continue;
@@ -88,26 +123,57 @@ function tryDodgeIncoming(entity) {
         const rx = ex - b.x, ry = ey - b.y;
         const vv = bvx*bvx + bvy*bvy;
         if (vv === 0) continue;
-        const t = (rx*bvx + ry*bvy) / vv; // time to closest approach in ticks (approx)
+        const t = (rx*bvx + ry*bvy) / vv;
         if (t < 0 || t > dangerLookahead) continue;
         const cx = b.x + bvx * t, cy = b.y + bvy * t;
         const dist = Math.hypot(cx - ex, cy - ey);
-        const safeDist = Math.max((entity.w||20), (entity.h||20)) * 0.9;
+        const safeDist = Math.max((entity.w||20), (entity.h||20)) * (entity._eliteAI ? 1.4 : 0.9);
         if (dist < safeDist) {
-            // try perpendicular dodge but add angle noise proportional to (1-accuracy)
             const bulletAng = Math.atan2(bvy, bvx);
-            const maxNoise = Math.PI * 0.45; // up to ~81 degrees
-            const noise = (1 - accuracy) * maxNoise * (Math.random() - 0.5) * 2;
-            const cand = [bulletAng + Math.PI/2 + noise, bulletAng - Math.PI/2 + noise, Math.atan2(ey - b.y, ex - b.x) + noise];
+            const maxNoise = Math.PI * 0.45;
+            const noise = entity._eliteAI ? 0 : (1 - accuracy) * maxNoise * (Math.random() - 0.5) * 2;
+            const perpA = bulletAng + Math.PI/2;
+            const perpB = bulletAng - Math.PI/2;
+            const backAng = Math.atan2(ey - b.y, ex - b.x);
+            let cand;
+            if (entity._eliteAI) {
+                // Elite AI: if already dodging in a direction, keep using it (avoid oscillation)
+                if (entity._dodgeDir !== undefined) {
+                    const keepDir = entity._dodgeDir;
+                    if (moveSmallSteps(entity, keepDir, (entity.speed || 2.5) * 1.1)) {
+                        entity.baseAngle = keepDir;
+                        entity._dodgeDirTimer = (entity._dodgeDirTimer || 0) - 1;
+                        if (entity._dodgeDirTimer <= 0) delete entity._dodgeDir;
+                        return true;
+                    } else {
+                        delete entity._dodgeDir; // blocked, pick new direction
+                    }
+                }
+                // Pick best perpendicular with most free space
+                const checkDist = (entity.w || 20) * 1.5;
+                const freeA = moveSmallSteps(entity, perpA, checkDist) ? 1 : 0;
+                const freeB = moveSmallSteps(entity, perpB, checkDist) ? 1 : 0;
+                const [bestPerp, altPerp] = (freeA >= freeB) ? [perpA, perpB] : [perpB, perpA];
+                cand = [bestPerp, altPerp, bulletAng + Math.PI*0.4, bulletAng - Math.PI*0.4, backAng];
+            } else {
+                // Normal AI: randomize which perpendicular to try first
+                const [p1, p2] = Math.random() < 0.5
+                    ? [perpA + noise, perpB + noise]
+                    : [perpB + noise, perpA + noise];
+                cand = [p1, p2, backAng + noise];
+            }
             for (const ang of cand) {
-                if (moveSmallSteps(entity, ang, (entity.speed || 2.5) * 1.3)) {
+                if (moveSmallSteps(entity, ang, (entity.speed || 2.5) * (entity._eliteAI ? 1.1 : 0.85))) {
                     entity.baseAngle = ang;
+                    if (entity._eliteAI) {
+                        // Persist this dodge direction for ~8 frames
+                        entity._dodgeDir = ang;
+                        entity._dodgeDirTimer = 8;
+                    }
                     return true;
                 }
             }
-            // if couldn't move, try small backward step (with chance to fail as well)
-            const backAng = Math.atan2(ey - b.y, ex - b.x) + ((1 - accuracy) * (Math.random() - 0.5));
-            if (moveSmallSteps(entity, backAng, (entity.speed || 2.5) * 0.9)) {
+            if (moveSmallSteps(entity, backAng, (entity.speed || 2.5) * 0.65)) {
                 entity.baseAngle = backAng;
                 return true;
             }
@@ -359,6 +425,14 @@ function updateEnemyAI() {
     for (let enemy of enemies) {
       try {
         if (!enemy || !enemy.alive) continue;
+        // Apply elite AI stats if player has >1000 trophies and not already attempted
+        if (isEliteAI() && !enemy._eliteAIAttempted) applyEliteAIStats(enemy);
+        // Reset elite AI if trophies drop below threshold
+        if (!isEliteAI() && enemy._eliteAI) { 
+            enemy._eliteAI = false; 
+            enemy._eliteAIAttempted = false;
+            enemy.dodgeAccuracy = DODGE_BASE_ACCURACY; 
+        }
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
@@ -420,21 +494,47 @@ function updateEnemyAI() {
             const ex = enemy.x + enemy.w/2;
             const ey = enemy.y + enemy.h/2;
             const escapeAngle = Math.atan2(ey - poisonGasPos.y, ex - poisonGasPos.x);
-            const tryDist = enemy.speed * 1.5; // move faster when escaping
             
-            // Try main escape direction
+            // Elite AI moves faster and more aggressively to escape
+            const baseDist = enemy._eliteAI ? (enemy.speed * 1.2) : (enemy.speed * 0.6);
             let escaped = false;
-            if (moveSmallSteps(enemy, escapeAngle, tryDist)) {
-                enemy.baseAngle = escapeAngle;
-                escaped = true;
+            
+            // For Elite AI, try more directions more aggressively
+            if (enemy._eliteAI) {
+                // Create 8 candidate directions for more thorough escape
+                const directions = [];
+                for (let i = 0; i < 8; i++) {
+                    const angle = escapeAngle + (i - 3.5) * (Math.PI / 8);
+                    directions.push(angle);
+                }
+                
+                // Try each direction with full escape distance
+                for (const angle of directions) {
+                    const checkDist = baseDist * 1.2;
+                    if (moveSmallSteps(enemy, angle, checkDist)) {
+                        // Verify we actually exited the gas
+                        const newDist = Math.hypot((enemy.x + enemy.w/2) - poisonGasPos.x, (enemy.y + enemy.h/2) - poisonGasPos.y);
+                        if (newDist > poisonGasPos.radius) {
+                            enemy.baseAngle = angle;
+                            escaped = true;
+                            break;
+                        }
+                    }
+                }
             } else {
-                // Try sidesteps if blocked
-                const sideAngles = [escapeAngle + Math.PI/3, escapeAngle - Math.PI/3, escapeAngle + Math.PI/6, escapeAngle - Math.PI/6];
-                for (const a of sideAngles) {
-                    if (moveSmallSteps(enemy, a, tryDist * 0.8)) {
-                        enemy.baseAngle = a;
-                        escaped = true;
-                        break;
+                // Normal escape logic
+                if (moveSmallSteps(enemy, escapeAngle, baseDist)) {
+                    enemy.baseAngle = escapeAngle;
+                    escaped = true;
+                } else {
+                    // Try sidesteps if blocked
+                    const sideAngles = [escapeAngle + Math.PI/3, escapeAngle - Math.PI/3, escapeAngle + Math.PI/6, escapeAngle - Math.PI/6];
+                    for (const a of sideAngles) {
+                        if (moveSmallSteps(enemy, a, baseDist * 0.7)) {
+                            enemy.baseAngle = a;
+                            escaped = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -465,13 +565,26 @@ function updateEnemyAI() {
             enemy.turretAngle += (Math.random() - 0.5) * 1.2;
             enemy.confused--;
         } else if (enemy.disoriented > 0 || (enemy.invertedControls && enemy.invertedControls > 0)) {
-            enemy.turretAngle = Math.atan2(enemy.y - nearest.y, enemy.x - nearest.x); // shoot backwards
+            smoothTurretRotation(enemy, Math.atan2(enemy.y - nearest.y, enemy.x - nearest.x), 0.15); // shoot backwards
             if (enemy.disoriented > 0) enemy.disoriented--;
             if (enemy.invertedControls && enemy.invertedControls > 0) enemy.invertedControls--;
+        } else if (enemy._eliteAI && (nearest._vx || nearest._vy)) {
+            // Elite AI: predictive aiming — lead the target based on bullet travel time
+            const bulletSpeed = 6;
+            const ex = enemy.x + enemy.w/2, ey = enemy.y + enemy.h/2;
+            const tx = nearest.x + (nearest.w||0)/2, ty = nearest.y + (nearest.h||0)/2;
+            const dist = Math.hypot(tx - ex, ty - ey);
+            const travelTime = dist / bulletSpeed;
+            const predictX = tx + (nearest._vx || 0) * travelTime;
+            const predictY = ty + (nearest._vy || 0) * travelTime;
+            smoothTurretRotation(enemy, Math.atan2(predictY - ey, predictX - ex), 0.15);
+        } else if (enemy._eliteAI) {
+            const ex = enemy.x + enemy.w/2, ey = enemy.y + enemy.h/2;
+            const tx = nearest.x + (nearest.w||0)/2, ty = nearest.y + (nearest.h||0)/2;
+            smoothTurretRotation(enemy, Math.atan2(ty - ey, tx - ex), 0.15);
         } else {
-            enemy.turretAngle = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
+            smoothTurretRotation(enemy, Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x), 0.12);
         }
-
         // Mirror shield — tick and cooldown always run (outside try/catch)
         if (enemy.mirrorShieldActive === undefined) enemy.mirrorShieldActive = false;
         if (enemy.mirrorShieldTimer === undefined) enemy.mirrorShieldTimer = 0;
@@ -778,7 +891,8 @@ function updateEnemyAI() {
             
             // Mech burst attack AI (when paralysis not active)
             if (!enemy.paralyzed) {
-                if ((enemy.mechBurstShots || 0) === 0 && (enemy.mechBurstCooldown || 0) <= 0 && (enemy.mechEnergy || 0) >= 20) {
+                const mechDiyBurstMin = enemy._eliteAI ? 50 : 20;
+                if ((enemy.mechBurstShots || 0) === 0 && (enemy.mechBurstCooldown || 0) <= 0 && (enemy.mechEnergy || 0) >= mechDiyBurstMin) {
                     // Decide to fire burst
                     if (Math.random() < 0.02) { // 2% chance per frame to initiate burst
                         enemy.mechEnergy -= 20;
@@ -883,16 +997,19 @@ function updateEnemyAI() {
                 if (globalPathBudget > 0) {
                     globalPathBudget--;
                     const sx = enemy.x + enemy.w/2, sy = enemy.y + enemy.h/2;
-                    const newPath = findPath(sx, sy, targetCx, targetCy);
+                    // Always track player's current position, no prediction
+                    let pathTargetX = targetCx, pathTargetY = targetCy;
+                    const newPath = findPath(sx, sy, pathTargetX, pathTargetY);
                     if (newPath && newPath.length) {
                         enemy.path = newPath;
                         enemy.pathIndex = 0;
-                        const recalcDelay = (currentMode === 'onevsall') ? 60 : 30;
-                        enemy.pathRecalc = recalcDelay + Math.floor(Math.random() * 30);
+                        // Elite AI recalculates path faster to keep up with player movement
+                        const recalcDelay = enemy._eliteAI ? 8 : (currentMode === 'onevsall') ? 60 : 30;
+                        enemy.pathRecalc = recalcDelay + Math.floor(Math.random() * 6);
                     } else {
                         enemy.path = [];
                         enemy.pathIndex = 0;
-                        enemy.pathRecalc = 15;
+                        enemy.pathRecalc = enemy._eliteAI ? 3 : 15;
                     }
                 } else {
                     enemy.pathRecalc = 1 + Math.floor(Math.random() * 2);
@@ -1338,8 +1455,9 @@ function updateEnemyAI() {
                 };
             } else if (tt === 'mechDiy') {
                 // mechDiy: trigger energy burst if energy allows (burst executed per-frame above)
-                // Be conservative: only shoot if energy > 35 to avoid paralysis
-                if ((enemy.mechEnergy || 0) > 35) {
+                // Elite AI keeps energy above 50; normal AI threshold is 35
+                const mechDiyThreshold = enemy._eliteAI ? 50 : 35;
+                if ((enemy.mechEnergy || 0) > mechDiyThreshold) {
                     enemy.mechEnergy -= 20;
                     enemy.mechBurstShots = 3;
                     enemy.mechBurstDelay = 0;
@@ -1348,8 +1466,9 @@ function updateEnemyAI() {
                 b = null; // burst shots fired via per-frame mechDiy processing
             } else if (tt === 'mechShield') {
                 // mechShield: fire single dense slow shot if energy > 30
-                // Be conservative: only shoot if energy > 30 to avoid paralysis
-                if ((enemy.mechEnergy || 0) > 30) {
+                // Elite AI keeps energy above 50; normal AI threshold is 30
+                const mechShieldThreshold = enemy._eliteAI ? 50 : 30;
+                if ((enemy.mechEnergy || 0) > mechShieldThreshold) {
                     enemy.mechEnergy -= 20;
                     b = {
                         x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 26,
