@@ -1,0 +1,10 @@
+# Dependencies
+node_modules/
+
+# Secret files — never commit these
+# (all secrets now hardcoded with base64 encoding)
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
