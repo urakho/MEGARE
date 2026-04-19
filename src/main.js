@@ -2237,115 +2237,16 @@ function _markPromoUsed(code) {
 })();
 // ────────────────────────────────────────────────────────────────────────────
 
-// ── Easter egg limited shop items ────────────────────────────────────────────
-const EASTER_EGG_PACKS = [
-    {
-        id: 'easter_full',
-        name: 'Полный пасхальный комплект',
-        desc: 'Все 5 пасхальных иконок: красное, зелёное, синее, золотое и яйцо с цыплёнком',
-        icons: ['img:red-egg', 'img:gre-egg', 'img:blu-egg', 'img:gold-egg', 'img:chik-egg'],
-        price: 350,
-        badge: '💰 ДЁШЕВО!'
-    },
-    {
-        id: 'easter_final',
-        name: 'Финальный пасхальный комплект',
-        desc: 'Уникальные иконки: Пасхальный кролик, Огненное яйцо, Кулич',
-        icons: ['img:eas-rabbit', 'img:fire-egg', 'img:kulich'],
-        price: 350,
-        badge: '⏰ Последний шанс!'
-    }
-];
-
 function _renderLimitedShopItems() {
     const container = document.getElementById('limitedItemsContainer');
     if (!container) return;
-    container.innerHTML = '';
-    for (const pack of EASTER_EGG_PACKS) {
-        // Check if all icons in this pack are already purchased
-        const allOwned = pack.icons.every(ic => {
-            const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
-            return achievementData.claimed && achievementData.claimed['easter_' + iconName];
-        });
-        const card = document.createElement('div');
-        card.style.cssText = 'position:relative;background:rgba(255,255,255,0.08);border:1px solid rgba(233,30,99,0.35);border-radius:10px;padding:14px;text-align:center;min-width:220px;flex:0 1 auto;';
-        
-        // Add badge if pack has one
-        if (pack.badge) {
-            const badge = document.createElement('div');
-            badge.style.cssText = 'position:absolute;top:-8px;right:-8px;background:linear-gradient(135deg,#f1c40f,#e67e22);color:#000;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.4);white-space:nowrap;';
-            badge.textContent = pack.badge;
-            card.appendChild(badge);
-        }
-        // Icon previews
-        const previewRow = document.createElement('div');
-        previewRow.style.cssText = 'display:flex;justify-content:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
-        for (const ic of pack.icons) {
-            const name = ic.slice(4);
-            const img = document.createElement('img');
-            img.src = 'png/icon-png/' + name + '.png';
-            img.style.cssText = 'width:52px;height:52px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.08);padding:4px;';
-            previewRow.appendChild(img);
-        }
-        card.appendChild(previewRow);
-        // Title
-        const title = document.createElement('p');
-        title.style.cssText = 'margin:0 0 4px;font-size:15px;font-weight:bold;color:#e91e63;';
-        title.textContent = pack.name;
-        card.appendChild(title);
-        // Description
-        const desc = document.createElement('p');
-        desc.style.cssText = 'margin:0 0 10px;font-size:12px;color:#bbb;';
-        desc.textContent = pack.desc;
-        card.appendChild(desc);
-        // Buy button
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-buy';
-        if (allOwned) {
-            btn.style.cssText = 'background:#555;cursor:default;';
-            btn.textContent = '✅ Куплено';
-            btn.disabled = true;
-        } else {
-            btn.textContent = '💎 Купить за ' + pack.price;
-            btn.onclick = (function(pid) { return function() { _buyEasterEggPack(pid); }; })(pack.id);
-        }
-        card.appendChild(btn);
-        container.appendChild(card);
-    }
+    // Limited shop items are disabled - show closed message
+    container.innerHTML = '<div style="text-align:center;color:#f1c40f;font-size:16px;font-weight:bold;padding:20px;width:100%;">🔒 Лимитированный магазин закрыт</div>';
 }
 
 function _buyEasterEggPack(packId) {
-    const pack = EASTER_EGG_PACKS.find(p => p.id === packId);
-    if (!pack) return;
-    
-    // Check if pack is already fully purchased
-    const alreadyBought = pack.icons.every(ic => {
-        const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
-        return achievementData.claimed && achievementData.claimed['easter_' + iconName];
-    });
-    
-    if (alreadyBought) {
-        showNotification('🔒 Этот комплект уже куплен!', '#f39c12');
-        return;
-    }
-    
-    if (gems < pack.price) {
-        showNotification('❌ Недостаточно 💎! Нужно ' + pack.price + ' кристаллов', '#e74c3c');
-        return;
-    }
-    gems -= pack.price;
-    localStorage.setItem('tankGems', gems);
-    updateCoinDisplay();
-    // Add Easter eggs to special icons in achievementData
-    if (!achievementData.claimed) achievementData.claimed = {};
-    for (const ic of pack.icons) {
-        const iconName = ic.slice(4); // 'red-egg' from 'img:red-egg'
-        achievementData.claimed['easter_' + iconName] = true;
-    }
-    saveAchievements();
-    if (typeof saveProgress === 'function') saveProgress();
-    showNotification('✅ Куплено: ' + pack.name + '!', '#2ecc71');
-    _renderLimitedShopItems();
+    // Limited shop packs are disabled
+    showNotification('🔒 Лимитированный магазин закрыт', '#f39c12');
 }
 
 const containerFlowModal = document.getElementById('containerFlowModal');
