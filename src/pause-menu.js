@@ -87,10 +87,14 @@
 // the normal main menu.  Set to 'off' to run the game as usual.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance screen
+const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance screen
 
 (function () {
-    if (MAINTENANCE_MODE !== 'on') return;
+    // If maintenance is OFF, clean up any leftover bypass flags
+    if (MAINTENANCE_MODE !== 'on') {
+        localStorage.removeItem('maintenanceBypassTime');
+        return;
+    }
 
     // Check if maintenance bypass is active and not expired
     const bypassTime = localStorage.getItem('maintenanceBypassTime');
