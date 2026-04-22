@@ -38,6 +38,7 @@ let medicalZones = []; // Healing zones from medical tank ability
 let buratinoBarrages = []; // Rocket barrage projectiles (buratino ultimate)
 let musicalSoundWaves = []; // Sound ricochet projectiles (musical tank ultimate)
 let mines = [];        // Placed landmines (landmine tank)
+let kamikazeGhosts = []; // Death ghosts from Kamikaze passive
 let gameState = 'menu';
 let menuMusic = new Audio('music/mp3/menu.mp3');
 menuMusic.loop = true;
@@ -373,8 +374,8 @@ let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
 // Новая валюта: детали (пока недоступны в наградах)
 let parts = parseInt(localStorage.getItem('tankParts')) || 0;
-// Developer commands unlock flag (persisted)
-let devCommandsUnlocked = localStorage.getItem('tankDevUnlocked') === 'true';
+// Developer commands unlock flag (persisted) — requires /MEGADURA on
+let devCommandsUnlocked = false; // Always reset on page load — must re-enter /MEGADURA on each session
 
 // ─── Tank characteristic upgrades ────────────────────────────────────────────
 // Structure: { [tankType]: { hp: 0-3, dmg: 0-3, spd: 0-3 } }
@@ -459,28 +460,30 @@ function initializeTrophySystem() {
 
 const tankGemPrices = {
     'normal': 0,
-    'ice': 100,       // Редкий
-    'machinegun': 100,// Редкий
-    'buckshot': 100,  // Редкий
-    'pyro': 100,      // Редкий
-    'spartan': 200,   // Сверхредкий
-    'fire': 200,      // Сверхредкий
-    'waterjet': 200,  // Сверхредкий
-    'mine': 200,      // Сверхредкий
-    'buratino': 300,  // Эпический
-    'medical': 300,   // Эпический
-    'musical': 300,   // Эпический
-    'toxic': 500,     // Легендарный
-    'mirror': 500,    // Легендарный
-    'illuminat': 750, // Мифический
-    'plasma': 750,    // Мифический
-    'time': 750,      // Хроматический
-    'imitator': 750,  // Имитатор (same tier as Time)
-    'electric': 750,  // Электрический (Шаровая молния с цепочкой хит)
-    'robot': 500,     // Легендарный (Рельсотрон + дроны)
-    'roman': 750,     // Хроматический
-    'mechDiy': 200,    // Редкий (мех)
-    'mechShield': 400  // Сверхредкий (щитовой мех)
+    'ice': 150,       // Редкий
+    'machinegun': 150,// Редкий
+    'buckshot': 150,  // Редкий
+    'pyro': 150,      // Редкий
+    'spartan': 300,   // Сверхредкий
+    'fire': 300,      // Сверхредкий
+    'waterjet': 300,  // Сверхредкий
+    'mine': 300,      // Сверхредкий
+    'buratino': 500,  // Эпический
+    'medical': 500,   // Эпический
+    'musical': 500,   // Эпический
+    'toxic': 650,     // Легендарный
+    'mirror': 650,    // Легендарный
+    'illuminat': 800, // Мифический
+    'plasma': 800,    // Мифический
+    'time': 800,      // Хроматический
+    'imitator': 800,  // Имитатор (same tier as Time)
+    'electric': 800,  // Электрический (Шаровая молния с цепочкой хит)
+    'robot': 650,     // Легендарный (Рельсотрон + дроны)
+    'roman': 800,     // Хроматический
+    'mechDiy': 150,   // Редкий (мех)
+    'mechShield': 300,// Сверхредкий (щитовой мех)
+    'mechRocket': 600, // Эпический (ракетный мех)
+    'kamikaze': 400   // Лимитированный
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -599,6 +602,8 @@ const tankMaxHpByType = {
     'spartan': 320,
     'mechDiy': 420,
     'mechShield': 600,
+    'mechRocket': 450,
+    'kamikaze': 300,
     'boss_hell': 7500
 };
 
@@ -634,7 +639,9 @@ const tankMaxSpeedByType = {
     'pyro': 2.75,
     'spartan': 3.0,
     'mechDiy': 2.4,
-    'mechShield': 2.3
+    'mechShield': 2.3,
+    'mechRocket': 2.1,
+    'kamikaze': 3.0
 };
 
 function setTankSpeed(type) {
@@ -730,6 +737,9 @@ const tank = {
     mechShieldHP: 300,
     mechShieldMaxHP: 300,
     mechShieldDamagePercent: 0,  // 0-100, for red color when damaged
+    // mechRocket state
+    mechRocketUltCooldown: 0,
+    mechRocketUltUses: 2,
 };
 
 // Apply saved tank type properties
@@ -908,7 +918,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
             const overlays = document.querySelectorAll('.modal-overlay');
             overlays.forEach(o => {
                 if (!o.id) return;
-                if (o.id === 'mainMenu' || o.id === 'settingsModal') return;
+                if (o.id === 'mainMenu' || o.id === 'settingsModal' || o.id === '_megWipeOverlay') return;
                 o.style.display = 'none';
             });
             const trainingExitBtn = document.getElementById('trainingExitBtn');
@@ -1096,7 +1106,7 @@ function updateMusic() {
 
     // ---- Attack joystick mode: 'attack' | 'ult' ----
     // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket'];
     let attackMode = 'attack';
     let attackTapStartTime = 0;
     let attackTapStartX = 0, attackTapStartY = 0;
@@ -1221,6 +1231,20 @@ function updateMusic() {
         attackBase.style.borderColor = attackMode === 'ult' ? 'rgba(243,200,50,0.55)' : '';
     });
 
+    // ---- Dedicated ULT button ----
+    const mobileUltBtn = document.getElementById('mobileUltBtn');
+    if (mobileUltBtn) {
+        mobileUltBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys['KeyE'] = true;
+        }, { passive: false });
+        mobileUltBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            setTimeout(() => { keys['KeyE'] = false; }, 120);
+        }, { passive: false });
+        mobileUltBtn.addEventListener('touchcancel', () => { keys['KeyE'] = false; });
+    }
+
     // ---- Show/hide: only on mobile, only when playing ----
     setInterval(() => {
         if (!mobileControls) return;
@@ -1232,6 +1256,10 @@ function updateMusic() {
         // If current tank has no ult and we're in ult mode — reset
         const tt = typeof tankType !== 'undefined' ? tankType : '';
         if (playing && attackMode === 'ult' && !TANKS_WITH_ULT.includes(tt)) setAttackMode('attack');
+        // Show/hide dedicated ult button
+        if (mobileUltBtn) {
+            mobileUltBtn.style.display = (isMob && playing && TANKS_WITH_ULT.includes(tt)) ? 'flex' : 'none';
+        }
     }, 80);
 })();
 
@@ -1303,10 +1331,14 @@ const pyroTankPreview = document.getElementById('pyroTankPreview');
 const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
 const spartanTankPreview = document.getElementById('spartanTankPreview');
 const spartanTankCtx = spartanTankPreview && spartanTankPreview.getContext ? spartanTankPreview.getContext('2d') : null;
+const kamikazeTankPreview = document.getElementById('kamikazeTankPreview');
+const kamikazeTankCtx = kamikazeTankPreview && kamikazeTankPreview.getContext ? kamikazeTankPreview.getContext('2d') : null;
 const mechDiyTankPreview = document.getElementById('mechDiyPreview');
 const mechDiyTankCtx = mechDiyTankPreview && mechDiyTankPreview.getContext ? mechDiyTankPreview.getContext('2d') : null;
 const mechShieldTankPreview = document.getElementById('mechShieldPreview');
 const mechShieldTankCtx = mechShieldTankPreview && mechShieldTankPreview.getContext ? mechShieldTankPreview.getContext('2d') : null;
+const mechRocketTankPreview = document.getElementById('mechRocketPreview');
+const mechRocketTankCtx = mechRocketTankPreview && mechRocketTankPreview.getContext ? mechRocketTankPreview.getContext('2d') : null;
 
 // --- APPEND_POINT_1 ---
 // Start button handler (open mode selection modal)
@@ -1348,7 +1380,7 @@ function startGame(mode) {
         tankType = 'imitator';
     }
     // reset basic state
-    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; tank.robotDroneCooldown = 0;
+    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; bullets = []; particles = []; objects = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; tank.robotDroneCooldown = 0; tank.kamikazeUltActive = false; tank.kamikazeUltCooldown = 0; tank.kamikazeInvincible = false; tank.kamikazeInvincibleTimer = 0;
     bossMeteors = [];
     
     // Apply god mode if enabled
@@ -1414,6 +1446,14 @@ function startGame(mode) {
         tank.mechEnergy = tank.mechMaxEnergy;
         tank.mechShieldActive = true;
     }
+    if (tankType === 'mechRocket') {
+        const _rUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechRocket', 'energy') : 0;
+        tank.mechMaxEnergy = 150 + _rUpgLvl * 20;
+        tank.mechEnergy = tank.mechMaxEnergy;
+    }
+    // Reset mechRocket ult uses (2 per battle)
+    tank.mechRocketUltCooldown = 0;
+    tank.mechRocketUltUses = 2;
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1789,6 +1829,9 @@ if (characterBtn) characterBtn.addEventListener('click', () => {
         }
         drawCharacterPreviews(); 
         updateShopButtonStyles();
+        // Show kamikaze entry only if owned
+        const _kEntry = document.getElementById('kamikazeTankEntry');
+        if (_kEntry) _kEntry.style.display = unlockedTanks.includes('kamikaze') ? '' : 'none';
     } 
 });
 if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
@@ -1840,28 +1883,87 @@ function processDevCommand(rawCommand) {
     const command = rawCommand.trim();
     if (!command) return;
 
-    // Control developer command gate: '/MEG on' or '/MEG off' (case-insensitive)
     const lc = command.toLowerCase();
-    if (lc === '/meg' || lc.startsWith('/meg ')) {
+
+    // /MEGADURA on|off — master gate for all developer commands
+    if (lc === '/megadura' || lc.startsWith('/megadura ')) {
         const parts = command.split(/\s+/);
         const arg = (parts[1] || '').toLowerCase();
         if (arg === 'on') {
             devCommandsUnlocked = true;
             try { localStorage.setItem('tankDevUnlocked', 'true'); } catch (e) {}
-            console.log('Developer commands enabled (/MEG on).');
+            console.log('Developer commands enabled (/MEGADURA on).');
         } else if (arg === 'off') {
             devCommandsUnlocked = false;
             try { localStorage.setItem('tankDevUnlocked', 'false'); } catch (e) {}
-            console.log('Developer commands disabled (/MEG off).');
+            console.log('Developer commands disabled (/MEGADURA off).');
         } else {
-            console.log('Usage: /MEG on|off');
+            console.log('Usage: /MEGADURA on|off');
+        }
+        return;
+    }
+
+    // /MEG on — wipes all profiles and creates a fresh empty account
+    if (lc === '/meg' || lc.startsWith('/meg ')) {
+        const parts = command.split(/\s+/);
+        const arg = (parts[1] || '').toLowerCase();
+        if (arg === 'on') {
+            // Show anti-cheat warning in game modal style, then wipe on dismiss
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.id = '_megWipeOverlay';
+            overlay.style.cssText = 'display:flex; z-index:99999;';
+            overlay.innerHTML = `
+                <div class="modal-box" style="background:#0d0000;border:2px solid #e74c3c;max-width:min(32rem,95vw);text-align:center;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;">⛔</div>
+                    <h2 class="modal-title" style="color:#e74c3c;font-size:1.3rem;letter-spacing:0.1rem;">
+                        Обнаружено использование читов
+                    </h2>
+                    <p style="color:#ddd;font-size:0.9rem;line-height:1.7;margin:0 0 0.75rem 0;">
+                        Использование читов разрушает <strong style="color:#e74c3c;">честную игру</strong>
+                        и опыт других игроков. Это нечестно по отношению к тем, кто играет честно.
+                    </p>
+                    <p style="color:#aaa;font-size:0.82rem;line-height:1.6;margin:0 0 1.5rem 0;
+                        border:1px solid rgba(231,76,60,0.25);border-radius:0.5rem;
+                        padding:0.75rem 1rem;background:rgba(231,76,60,0.07);">
+                        Все аккаунты будут удалены и создан новый пустой профиль.
+                        Весь прогресс, танки и ресурсы будут безвозвратно потеряны.
+                    </p>
+                    <button id="_megWipeBtn" class="btn btn-primary" style="width:100%;background:#e74c3c;border-color:#e74c3c;">
+                        Принять последствия
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#_megWipeBtn').addEventListener('click', () => {
+                // Delete all profiles and create one blank profile
+                const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
+                    tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
+                    tankUpgrades:'{}', tankTrophiesData:'{}',
+                    tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
+                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
+                const freshProfiles = [{ name: 'Игрок 1', avatar: '🎮', createdAt: Date.now(), data: blank }];
+                // Wipe all localStorage
+                try { localStorage.clear(); } catch (e) {}
+                // Save only the fresh single profile
+                try { localStorage.setItem('megare_profiles', JSON.stringify(freshProfiles)); } catch (e) {}
+                try { localStorage.setItem('megare_activeProfile', '0'); } catch (e) {}
+                for (const k of PROFILE_SAVE_KEYS) {
+                    if (blank[k] !== undefined) {
+                        try { localStorage.setItem(k, blank[k]); } catch (e) {}
+                    }
+                }
+                window.location.replace(window.location.pathname + '?_p=' + Date.now());
+            });
+        } else {
+            console.log('Invalid command.');
         }
         return;
     }
 
     // If not unlocked, skip remaining dev commands (including /god)
     if (!devCommandsUnlocked) {
-        console.log('Developer commands are disabled. Use /MEG on to enable.');
+        console.log('Developer commands are disabled. Use /MEGADURA on to enable.');
         return;
     }
 
@@ -1899,8 +2001,8 @@ function processDevCommand(rawCommand) {
         return;
     }
 
-    if (command.startsWith('/coins')) {
-        const parts = command.substring(6).trim().split(/\s+/);
+    if (command.startsWith('/cash')) {
+        const parts = command.substring(5).trim().split(/\s+/);
         let op = '+'; 
         let valStr = parts[0];
         
@@ -1919,8 +2021,8 @@ function processDevCommand(rawCommand) {
             saveProgress();
             console.log(`Coins updated: ${coins}`);
         }
-    } else if (command.startsWith('/gems')) {
-        const parts = command.substring(5).trim().split(/\s+/);
+    } else if (command.startsWith('/crystal')) {
+        const parts = command.substring(8).trim().split(/\s+/);
         let op = '+'; 
         let valStr = parts[0];
         
@@ -1939,7 +2041,7 @@ function processDevCommand(rawCommand) {
             saveProgress();
             console.log(`Gems updated: ${gems}`);
         }
-    } else if (command.startsWith('/parts')) {
+    } else if (command.startsWith('/scrap')) {
         const args = command.substring(6).trim().split(/\s+/);
         let op = '+'; 
         let valStr = args[0];
@@ -2076,23 +2178,28 @@ function processDevCommand(rawCommand) {
         } else {
             console.log('Usage: /unpart [number]');
         }
-    } else if (command === '/help' || command === '/commands') {
+    } else if (command === '/aid' || command === '/commands') {
+        if (!devCommandsUnlocked) {
+            console.log('Команда /aid доступна только при включённом /MEGADURA on.');
+            return;
+        }
         const helpText = [
             '╔══════════════════════════════════════╗',
             '║       ДОСТУПНЫЕ КОМАНДЫ              ║',
             '╠══════════════════════════════════════╣',
-            '  /MEG on|off',
+            '  ── Доступ к командам ──',
+            '  /MEGADURA on|off',
             '    Включить/отключить режим разработчика',
             '',
+            '  ── Только при /MEGADURA on ──',
             '  /god on|off',
             '    Режим бога (100000 HP, 1000x урон)',
             '',
-            '  ── Ресурсы (требует /MEG on) ──',
-            '  /coins [+/-/=] [число]',
+            '  /cash [+/-/=] [число]',
             '    Управление монетами',
-            '  /gems [+/-/=] [число]',
+            '  /crystal [+/-/=] [число]',
             '    Управление гемами',
-            '  /parts [+/-/=] [число]',
+            '  /scrap [+/-/=] [число]',
             '    Управление частями',
             '  /trophy [+/-/=] [число]',
             '    Управление трофеями (= сбрасывает награды)',
@@ -2102,12 +2209,13 @@ function processDevCommand(rawCommand) {
             '  /ungem [число]    Установить отриц. гемы',
             '  /unpart [число]   Установить отриц. части',
             '',
-            '  ── Прочое ──',
+            '  ── Особое ──',
+            '  /aid    Показать этот список',
+            '  ── Прочее(без команды /MEGADURA on) ──',
             '  /clear t   Сбросить все танки (кроме обычного)',
             '  /clear en  Сбросить все улучшения',
             '  /clear ic  Сбросить все иконки профиля',
             '  /clear ac  Сбросить все достижения',
-            '  /help      Показать этот список',
             '╚══════════════════════════════════════╝',
         ].join('\n');
         console.log(helpText);
@@ -2240,8 +2348,100 @@ function _markPromoUsed(code) {
 function _renderLimitedShopItems() {
     const container = document.getElementById('limitedItemsContainer');
     if (!container) return;
-    // Limited shop items are disabled - show closed message
-    container.innerHTML = '<div style="text-align:center;color:#f1c40f;font-size:16px;font-weight:bold;padding:20px;width:100%;">🔒 Лимитированный магазин закрыт</div>';
+    container.innerHTML = '';
+
+    const owned = (unlockedTanks || []).includes('kamikaze');
+    const price = (tankGemPrices || {})['kamikaze'] || 400;
+
+    // Card wrapper
+    const card = document.createElement('div');
+    card.style.cssText = [
+        'display:flex', 'flex-direction:column', 'align-items:center',
+        'background:linear-gradient(160deg,#1a0000,#3d0a00)',
+        'border:2px solid #ff4400',
+        'box-shadow:0 0 18px #ff4400, 0 0 40px rgba(255,68,0,0.35)',
+        'border-radius:14px', 'padding:18px 22px', 'width:220px',
+        'cursor:pointer', 'transition:transform 0.15s',
+    ].join(';');
+
+    // Preview canvas
+    const cvs = document.createElement('canvas');
+    cvs.width = 100; cvs.height = 100;
+    cvs.style.cssText = 'border-radius:8px;margin-bottom:10px;background:transparent;';
+    card.appendChild(cvs);
+    // Draw after DOM paint so drawTankOn is reachable
+    setTimeout(() => {
+        const cx = cvs.getContext('2d');
+        if (cx && typeof drawTankOn === 'function') {
+            cx.clearRect(0, 0, 100, 100);
+            drawTankOn(cx, 50, 50, 60, 60, '#ffffff', -Math.PI / 2, 1, 'kamikaze');
+        }
+    }, 0);
+
+    // Name
+    const nameEl = document.createElement('div');
+    nameEl.textContent = '☠️ Камикадзе';
+    nameEl.style.cssText = 'color:#ffffff;font-weight:bold;font-size:16px;margin-bottom:4px;text-align:center;';
+    card.appendChild(nameEl);
+
+    // Rarity label
+    const rarityEl = document.createElement('div');
+    rarityEl.textContent = 'ЛИМИТИРОВАННЫЙ';
+    rarityEl.style.cssText = [
+        'color:#ff4400', 'font-size:11px', 'font-weight:bold',
+        'letter-spacing:1px', 'margin-bottom:10px',
+        'text-shadow:0 0 8px #ff4400, 0 0 16px #ff6600',
+    ].join(';');
+    card.appendChild(rarityEl);
+
+    // Buy / Select button
+    const btn = document.createElement('button');
+    if (owned) {
+        btn.textContent = '✅ Выбрать';
+        btn.style.cssText = 'background:#228B22;color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:14px;cursor:pointer;width:100%;font-weight:bold;';
+        btn.onclick = (e) => { e.stopPropagation(); if (typeof showTankDetail === 'function') showTankDetail('kamikaze'); };
+    } else {
+        btn.textContent = `💎 ${price} гемов`;
+        btn.style.cssText = 'background:linear-gradient(90deg,#ff4400,#cc2200);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:14px;cursor:pointer;width:100%;font-weight:bold;box-shadow:0 0 8px #ff4400;';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const gems = parseInt(localStorage.getItem('tankGems') || '0', 10);
+            if (gems < price) {
+                showNotification('❌ Недостаточно гемов!', '#e74c3c');
+                return;
+            }
+            // Deduct gems using the global variable to keep state in sync
+            if (typeof window.gems !== 'undefined') {
+                window.gems -= price;
+            } else {
+                localStorage.setItem('tankGems', gems - price);
+            }
+            // Unlock tank
+            if (typeof unlockedTanks !== 'undefined' && !unlockedTanks.includes('kamikaze')) {
+                unlockedTanks.push('kamikaze');
+            }
+            if (typeof saveProgress === 'function') saveProgress();
+            if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
+            if (typeof updateShopButtonStyles === 'function') updateShopButtonStyles();
+            if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
+            // Show the kamikaze entry in character menu
+            const _kEntry = document.getElementById('kamikazeTankEntry');
+            if (_kEntry) _kEntry.style.display = '';
+            // Show acquisition card
+            if (typeof showReward === 'function') {
+                showReward('tank', 1, '☠️ Танк успешно приобретён!', 'kamikaze');
+            } else {
+                showNotification('☠️ Камикадзе открыт!', '#ff4400');
+            }
+            _renderLimitedShopItems();
+        };
+    }
+    card.appendChild(btn);
+
+    // Detail on card click
+    card.onclick = () => { if (typeof showTankDetail === 'function') showTankDetail('kamikaze'); };
+
+    container.appendChild(card);
 }
 
 function _buyEasterEggPack(packId) {
@@ -2664,6 +2864,11 @@ if (selectSpartanTank) selectSpartanTank.addEventListener('click', () => {
     showTankDetail('spartan');
 });
 
+const selectKamikazeTank = document.getElementById('selectKamikazeTank');
+if (selectKamikazeTank) selectKamikazeTank.addEventListener('click', () => {
+    showTankDetail('kamikaze');
+});
+
 const selectMechDiy = document.getElementById('selectMechDiy');
 if (selectMechDiy) selectMechDiy.addEventListener('click', () => {
     showTankDetail('mechDiy');
@@ -2672,6 +2877,10 @@ if (selectMechDiy) selectMechDiy.addEventListener('click', () => {
 const selectMechShield = document.getElementById('selectMechShield');
 if (selectMechShield) selectMechShield.addEventListener('click', () => {
     showTankDetail('mechShield');
+});
+const selectMechRocket = document.getElementById('selectMechRocket');
+if (selectMechRocket) selectMechRocket.addEventListener('click', () => {
+    showTankDetail('mechRocket');
 });
 
 // По умолчанию показываем главное меню
@@ -2721,7 +2930,8 @@ const tankRarityMap = {
     'time': 'chromatic',
     'imitator': 'chromatic',
     'roman': 'chromatic',
-    'spartan': 'super_rare'
+    'spartan': 'super_rare',
+    'kamikaze': 'limited'
 };
 
 const rarityChances = {
@@ -3382,6 +3592,22 @@ function update() {
                 tank.paralyzedTime = 60;
             }
         }
+        // mechRocket energy regen and ult cooldown tick
+        if (tankType === 'mechRocket') {
+            const _rUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechRocket', 'energy') : 0;
+            tank.mechMaxEnergy = 150 + _rUpgLvl * 20;
+            if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
+            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            if ((tank.mechRocketUltCooldown || 0) > 0) tank.mechRocketUltCooldown--;
+            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
+                tank.paralyzed = true;
+                tank.paralyzedTime = 60;
+            }
+        }
+        // Kamikaze ult cooldown tick
+        if (tankType === 'kamikaze') {
+            if ((tank.kamikazeUltCooldown || 0) > 0) tank.kamikazeUltCooldown--;
+        }
         // mechShield energy regen and shield activation
         if (tankType === 'mechShield') {
             const _sUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechShield', 'energy') : 0;
@@ -3432,7 +3658,7 @@ function update() {
 
         
         // Block player controls during autopilot or ultimate charge
-        if (tank.isAutopilotActive || tank.isUltimateActive) {
+        if (tank.isAutopilotActive || tank.isUltimateActive || tank.kamikazeUltActive) {
             isW = isS = isA = isD = false;
         }
         
@@ -3453,6 +3679,76 @@ function update() {
                 tank.trackOffset = (tank.trackOffset + 0.2) % 10;
                 moveWithCollision(dx, 0);
                 moveWithCollision(0, dy);
+            }
+        }
+        // Kamikaze ult "Разгон": dash straight, break walls, deal 150 dmg on enemy hit
+        if (tankType === 'kamikaze' && tank.kamikazeUltActive) {
+            tank.kamikazeDashTimer = (tank.kamikazeDashTimer || 0) - 1;
+            const dashSpd = 9.0;
+            const dvx = Math.cos(tank.kamikazeDashAngle) * dashSpd;
+            const dvy = Math.sin(tank.kamikazeDashAngle) * dashSpd;
+            tank.x += dvx;
+            tank.y += dvy;
+            // Spawn speed trail particles
+            if (Math.random() > 0.3) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#ff6600');
+            // Break destructible objects
+            for (let _oi = objects.length - 1; _oi >= 0; _oi--) {
+                const _obj = objects[_oi];
+                if (checkRectCollision(tank, _obj)) {
+                    if (_obj.type === 'woodenWall' || _obj.type === 'wall' || _obj.type === 'box' || _obj.type === 'barrel') {
+                        // Break all wall types during kamikaze dash
+                        spawnExplosion(_obj.x + (_obj.w||0)/2, _obj.y + (_obj.h||0)/2, 32);
+                        objects.splice(_oi, 1);
+                        if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
+                    }
+                }
+            }
+            // Damage enemies on collision
+            if (tank.kamikazeUltActive) {
+                for (const _ke of enemies) {
+                    if (!_ke || !_ke.alive) continue;
+                    if (checkRectCollision(tank, _ke)) {
+                        _ke.hp -= 150;
+                        _ke.hitFlashTime = Date.now();
+                        // Knockback — but don't push enemy into a wall
+                        const _kbDx = Math.cos(tank.kamikazeDashAngle) * 80;
+                        const _kbDy = Math.sin(tank.kamikazeDashAngle) * 80;
+                        const _kbProbe = { x: _ke.x + _kbDx, y: _ke.y + _kbDy, w: _ke.w, h: _ke.h };
+                        let _kbBlocked = false;
+                        for (const _kbObj of objects) {
+                            if (!_kbObj) continue;
+                            if ((_kbObj.type === 'wall' || _kbObj.type === 'woodenWall') && checkRectCollision(_kbProbe, _kbObj)) {
+                                _kbBlocked = true; break;
+                            }
+                        }
+                        if (!_kbBlocked) {
+                            _ke.x += _kbDx;
+                            _ke.y += _kbDy;
+                            _ke.x = Math.max(0, Math.min(worldWidth - _ke.w, _ke.x));
+                            _ke.y = Math.max(0, Math.min(worldHeight - _ke.h, _ke.y));
+                        }
+                        spawnExplosion(tank.x + tank.w/2, tank.y + tank.h/2, 45);
+                        tank.kamikazeUltActive = false;
+                        break;
+                    }
+                }
+            }
+            if ((tank.kamikazeDashTimer || 0) <= 0) {
+                tank.kamikazeUltActive = false;
+                // Start 1-second post-dash invincibility window
+                if (tank.kamikazeInvincible && !tank.kamikazeInvincibleTimer) {
+                    tank.kamikazeInvincibleTimer = 60;
+                }
+            }
+            tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
+            tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
+        }
+        // Tick post-dash invincibility timer
+        if (tankType === 'kamikaze' && !tank.kamikazeUltActive && tank.kamikazeInvincible) {
+            if ((tank.kamikazeInvincibleTimer || 0) > 0) {
+                tank.kamikazeInvincibleTimer--;
+            } else {
+                tank.kamikazeInvincible = false;
             }
         }
         // turret rotation with arrow keys (same effect as mouse wheel)
@@ -3630,7 +3926,7 @@ function update() {
                     if (nearest) {
                         let copiedType = nearest.tankType || 'normal';
                         // Can't copy dummy tanks or another imitator — but mirror is allowed
-                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro','spartan','mechDiy','mechShield'];
+                        const validCopyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','medical','roman','time','mine','pyro','spartan','mechDiy','mechShield','mechRocket'];
                         if (!validCopyTypes.includes(copiedType)) {
                             copiedType = 'normal'; // Default to normal tank if invalid
                         }
@@ -3657,6 +3953,15 @@ function update() {
                             tank.mechShieldHP = 300;
                             tank.mechShieldMaxHP = 300;
                             tank.mechShieldDamagePercent = 0;
+                        } else if (copiedType === 'mechRocket') {
+                            const _rUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechRocket', 'energy') : 0;
+                            tank.mechMaxEnergy = 150 + _rUpgLvl * 20;
+                            tank.mechEnergy = tank.mechMaxEnergy;
+                            tank.mechRocketUltUses = 2;
+                            tank.mechRocketUltCooldown = 0;
+                        } else if (copiedType === 'time') {
+                            // Initialize time tank history for rewind ability
+                            if (!tank.history) tank.history = [];
                         }
                         // Rainbow transformation particles
                         for (let i = 0; i < 35; i++) {
@@ -3693,6 +3998,8 @@ function update() {
                 tank.mechShieldHP = 0;
                 tank.mechShieldMaxHP = 0;
                 tank.mechShieldDamagePercent = 0;
+                tank.mechRocketUltUses = 0;
+                tank.mechRocketUltCooldown = 0;
                 // Revert particle burst
                 const rx = tank.x + tank.w/2, ry = tank.y + tank.h/2;
                 for (let i = 0; i < 20; i++) {
@@ -3749,6 +4056,24 @@ function update() {
             }
         }
         if (tank.medicalZoneCooldown > 0) tank.medicalZoneCooldown--;
+
+        // Kamikaze: E key activates "Разгон" dash in turret direction
+        if (tankType === 'kamikaze' && keys['KeyE']) {
+            if ((tank.kamikazeUltCooldown || 0) === 0 && !tank.kamikazeUltActive) {
+                tank.kamikazeUltActive = true;
+                tank.kamikazeDashAngle = tank.turretAngle;
+                tank.kamikazeDashTimer = 90; // 1.5 seconds at 60fps
+                tank.kamikazeUltCooldown = 480; // 8 second cooldown
+                tank.kamikazeInvincible = true;
+                tank.kamikazeInvincibleTimer = 0;
+                for (let _kp = 0; _kp < 14; _kp++) {
+                    const _ka = Math.random() * Math.PI * 2;
+                    spawnParticle(tank.x + tank.w/2 + Math.cos(_ka)*18, tank.y + tank.h/2 + Math.sin(_ka)*18, '#ff4400');
+                }
+            }
+            keys['KeyE'] = false;
+        }
+
 
         // Buratino: E key ultra barrage - same artillery mode but bigger area + more rockets
         if (tankType === 'buratino') {
@@ -3975,6 +4300,7 @@ function update() {
         for (let bi = enemies.length - 1; bi >= 0; bi--) {
             const be = enemies[bi];
             if (!be || !be.alive || !be.burning) continue;
+            if (be.isBoss) { be.burning = false; be.burnTimer = 0; continue; } // Boss immune to burn
             be.burnTimer = (be.burnTimer || 0) - 1;
             // Deal 10 HP/sec at 60fps = 10/60 per frame
             be.hp -= (be.burnDps || 10) / 60;
@@ -3996,6 +4322,23 @@ function update() {
                 if (Math.random() > 0.6) spawnParticle(tank.x + Math.random() * tank.w, tank.y + Math.random() * tank.h, '#ff6600', 0.5);
             }
             if (tank.burnTimer <= 0) { tank.burning = false; tank.burnTimer = 0; }
+        }
+
+        // Burn DoT on wooden walls (2x damage per second vs tanks)
+        for (let wi = objects.length - 1; wi >= 0; wi--) {
+            const wo = objects[wi];
+            if (!wo || wo.type !== 'woodenWall' || !wo.burning) continue;
+            wo.burnTimer = (wo.burnTimer || 0) - 1;
+            // 20 HP/sec at 60fps = 20/60 per frame (2x normal burn)
+            wo.hp = (wo.hp ?? 300) - (wo.burnDps || 20) / 60;
+            if (Math.random() > 0.5) spawnParticle(wo.x + Math.random() * wo.w, wo.y + Math.random() * wo.h, '#ff6600', 0.5);
+            if (wo.burnTimer <= 0) { wo.burning = false; wo.burnTimer = 0; }
+            if (wo.hp <= 0) {
+                spawnParticle(wo.x + wo.w/2, wo.y + wo.h/2, '#ff4400', 1);
+                for (let k = 0; k < 6; k++) spawnParticle(wo.x + Math.random() * wo.w, wo.y + Math.random() * wo.h, '#ff6600', 0.7);
+                objects.splice(wi, 1);
+                if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
+            }
         }
 
         // Universal death sweep: catch any tank that reached 0 HP without being removed
@@ -4214,7 +4557,7 @@ function update() {
                         const dRect = { x: newX, y: newY, w: d.w, h: d.h };
                         let blocked = false;
                         for (const o of objects) {
-                            if ((o.type === 'wall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(dRect, o)) {
+                            if ((o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(dRect, o)) {
                                 blocked = true; break;
                             }
                         }
@@ -4226,7 +4569,7 @@ function update() {
                             const ryRect = { x: d.x, y: d.y + stepY, w: d.w, h: d.h };
                             let slideX = true, slideY = true;
                             for (const o of objects) {
-                                if (o.type !== 'wall' && o.type !== 'box' && o.type !== 'barrel') continue;
+                                if (o.type !== 'wall' && o.type !== 'woodenWall' && o.type !== 'box' && o.type !== 'barrel') continue;
                                 if (checkRectCollision(rxRect, o)) slideX = false;
                                 if (checkRectCollision(ryRect, o)) slideY = false;
                             }
@@ -4240,7 +4583,7 @@ function update() {
                                 const wrRect = { x: d.x + wx, y: d.y + wy, w: d.w, h: d.h };
                                 let wBlocked = false;
                                 for (const o of objects) {
-                                    if ((o.type === 'wall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(wrRect, o)) {
+                                    if ((o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(wrRect, o)) {
                                         wBlocked = true; break;
                                     }
                                 }
@@ -4330,6 +4673,56 @@ function update() {
         tank.overheated = false;
     }
 
+        // mechRocket: fire single rocket on Space (costs 20 energy)
+        if (tankType === 'mechRocket' && keys['Space'] && tank.fireCooldown <= 0 && (tank.mechEnergy || 0) >= 20 && !tank.paralyzed) {
+            tank.mechEnergy -= 20;
+            const _dMult = getPlayerDmgMult();
+            const _ang = tank.turretAngle;
+            bullets.push({
+                x: tank.x + tank.w/2 + Math.cos(_ang) * 26,
+                y: tank.y + tank.h/2 + Math.sin(_ang) * 26,
+                w: 12, h: 12,
+                vx: Math.cos(_ang) * 5.5,
+                vy: Math.sin(_ang) * 5.5,
+                life: 110,
+                owner: 'player', team: 0,
+                type: 'mechRocketBullet',
+                damage: Math.round(150 * _dMult),
+                explodeRadius: 50
+            });
+            tank.fireCooldown = 50;
+            keys['Space'] = false;
+        }
+        // mechRocket ultimate (E): 4 rockets in 4 directions, 80 energy, 8s cooldown, 2 uses/battle
+        if (tankType === 'mechRocket' && keys['KeyE']) {
+            if ((tank.mechRocketUltUses || 0) > 0 && (tank.mechEnergy || 0) >= 80 && (!tank.mechRocketUltCooldown || tank.mechRocketUltCooldown <= 0)) {
+                tank.mechEnergy -= 80;
+                tank.mechRocketUltUses--;
+                tank.mechRocketUltCooldown = 480; // 8 seconds
+                const _dMult = getPlayerDmgMult();
+                const cx = tank.x + tank.w/2;
+                const cy = tank.y + tank.h/2;
+                for (let k = 0; k < 4; k++) {
+                    const ang = tank.turretAngle + k * (Math.PI / 2);
+                    bullets.push({
+                        x: cx + Math.cos(ang) * 26,
+                        y: cy + Math.sin(ang) * 26,
+                        w: 14, h: 14,
+                        vx: Math.cos(ang) * 5,
+                        vy: Math.sin(ang) * 5,
+                        life: 130,
+                        owner: 'player', team: 0,
+                        type: 'mechRocketBullet',
+                        damage: Math.round(220 * _dMult),
+                        explodeRadius: 55,
+                        isUlt: true
+                    });
+                }
+                // visual smoke burst
+                for (let k = 0; k < 16; k++) spawnParticle(cx, cy, '#888888', 12);
+            }
+            keys['KeyE'] = false;
+        }
         // mechDiy: activate burst on Space press (costs 20 energy, queues 3 shots)
         if (tankType === 'mechDiy' && keys['Space'] && !(tank.mechBurstShots || 0) && (tank.mechEnergy || 0) >= 20 && !tank.isAutopilotActive && !tank.isUltimateActive && !(tank.mechBurstCooldown || 0)) {
             tank.mechEnergy -= 20;
@@ -4391,7 +4784,7 @@ function update() {
         }
 
         // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
-        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && tankType !== 'mechDiy' && tankType !== 'mechShield') {
+        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket') {
             const _prevBLen = bullets.length, _prevFLen = flames.length;
             shoot();
             // Apply player damage upgrade multiplier to newly created bullets/flames (except plasma which needs special handling)
@@ -4404,7 +4797,8 @@ function update() {
                 }
                 for (let _i = _prevFLen; _i < flames.length; _i++) {
                     const _f = flames[_i];
-                    _f.damage = Math.round((_f.damage != null ? _f.damage : 22) * _dMult);
+                    // Don't round — base damage is low (2), rounding kills level 1 effect
+                    _f.damage = (_f.damage != null ? _f.damage : 2) * _dMult;
                 }
             }
             if (tankType !== 'fire' && tankType !== 'machinegun' && tankType !== 'waterjet') {
@@ -4426,7 +4820,14 @@ function update() {
 // --- APPEND_POINT_UPDATE_AI_ALLIES ---
     updateAllyAI();
 // --- APPEND_POINT_UPDATE_REST ---
+    // Save HP before physics to restore if kamikaze is invincible
+    const _kamiInvinHP = (typeof tank !== 'undefined' && tank.kamikazeInvincible) ? tank.hp : -1;
     updatePhysics();
+    // Restore HP and cancel lose if kamikaze was invincible this frame
+    if (_kamiInvinHP >= 0 && typeof tank !== 'undefined' && tank.kamikazeInvincible) {
+        if (tank.hp < _kamiInvinHP) tank.hp = _kamiInvinHP;
+        if (gameState === 'lose') gameState = 'playing';
+    }
 }
 
 function updateCoinDisplay() {
@@ -4566,7 +4967,8 @@ function updateShopButtonStyles() {
         'pyro': 'selectPyroTank',
         'spartan': 'selectSpartanTank',
         'mechDiy': 'selectMechDiy',
-        'mechShield': 'selectMechShield'
+        'mechShield': 'selectMechShield',
+        'mechRocket': 'selectMechRocket'
     };
     
     const tankRarityMap = {
@@ -4577,7 +4979,8 @@ function updateShopButtonStyles() {
         'roman': 'imitator',
         'pyro': 'rare',
         'mechDiy': 'rare',
-        'mechShield': 'super'
+        'mechShield': 'super',
+        'mechRocket': 'epic'
     };
     
     Object.keys(tankButtonMap).forEach(tankType => {
@@ -4980,7 +5383,8 @@ function updateTankDetailButton(type) {
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator',
-        'spartan': 'super', 'mechDiy': 'rare', 'mechShield': 'super'
+        'spartan': 'super', 'mechDiy': 'rare', 'mechShield': 'super', 'mechRocket': 'epic',
+        'kamikaze': 'limited'
     };
 
     // If player has enough gems, color the buy button by rarity
@@ -5033,7 +5437,7 @@ if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
                 updateShopButtonStyles();
                 cleanup();
                 // show success reward: display the new tank card
-                const _isMechUnit = ['mechDiy', 'mechShield'].includes(currentTankType);
+                const _isMechUnit = ['mechDiy', 'mechShield', 'mechRocket'].includes(currentTankType);
                 if (typeof showReward === 'function') showReward('tank', 1, _isMechUnit ? 'Мех успешно приобретён!' : 'Танк успешно приобретён!', currentTankType);
             };
             cancelBtn.onclick = () => { cleanup(); };

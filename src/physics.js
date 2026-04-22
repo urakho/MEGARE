@@ -404,6 +404,45 @@ function explodeRocket(bullet) {
     }
 }
 
+// Mech-rocket explosion: smaller radius, configurable damage, no friendly-fire to player team
+// directHit: entity that was directly struck — always takes full damage regardless of size
+function explodeMechRocket(bullet, directHit = null) {
+    const R = bullet.explodeRadius || 50;
+    const dmgMax = bullet.damage || 150;
+    spawnExplosion(bullet.x, bullet.y, R);
+    function applyDmg(t) {
+        if (!t) return;
+        if (t.mirrorShieldActive) return;
+        const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
+        const dist = Math.hypot(tx - bullet.x, ty - bullet.y);
+        // Direct hit entity always takes full damage (large hitboxes won't miss)
+        const inRange = dist <= R || t === directHit;
+        if (inRange) {
+            if (t === tank && t.romanShieldActive) return;
+            const damage = (t === directHit && dist > R)
+                ? dmgMax
+                : Math.max(Math.round(dmgMax * 0.4), Math.round((1 - dist / R) * dmgMax));
+            t.hp = (t.hp || 0) - damage;
+            if (t === tank && t.hp <= 0) {
+                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 60);
+                gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
+            }
+        }
+    }
+    // Damage based on team
+    if (bullet.team !== 0) applyDmg(tank);
+    for (let i = allies.length - 1; i >= 0; i--) {
+        const a = allies[i];
+        if (bullet.team !== (a.team ?? 0)) applyDmg(a);
+        if (a.hp <= 0) { allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 55); }
+    }
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (bullet.team !== (e.team ?? 1)) applyDmg(e);
+        if (e.hp <= 0) { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 55); }
+    }
+}
+
 // Spawn gas cloud at (x,y). If mega=true, larger radius and longer duration.
 function explodeGas(bullet, mega = false) {
     // small visual explosion
@@ -485,7 +524,7 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
 function canPlaceAt(entity, nx, ny) {
     const rect = { x: nx, y: ny, w: entity.w, h: entity.h };
     for (const obj of objects) {
-        if (obj.type === 'wall' && checkRectCollision(rect, obj)) return false;
+        if ((obj.type === 'wall' || obj.type === 'woodenWall') && checkRectCollision(rect, obj)) return false;
     }
     if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > worldWidth || rect.y + rect.h > worldHeight) return false;
     return true;
@@ -581,7 +620,7 @@ function shoot() {
                 vx: Math.cos(ang) * speed + tvx,
                 vy: Math.sin(ang) * speed + tvy,
                 life: 20 + Math.floor(Math.random() * 8),
-                damage: 22,
+                damage: 2,
                 team: 0
             });
         }
@@ -664,7 +703,8 @@ function shoot() {
             team: 0,
             type: 'toxic',
             explodeTimer: 45, // explode after 45 ticks (~0.75 seconds)
-            spawned: 5 // spawn protection for 5 ticks
+            spawned: 5, // spawn protection for 5 ticks
+            damage: 50
         });
         tank.fireCooldown = 35; // moderate cooldown
     } else if (tankType === 'plasma') {
@@ -684,7 +724,7 @@ function shoot() {
             damage: 350, // 350 base damage (will be multiplied by upgrades separately)
             piercing: true // can hit multiple targets
         });
-        tank.fireCooldown = 120; // 2 second cooldown
+        tank.fireCooldown = 180; // 3 second cooldown
     } else if (tankType === 'musical') {
         // Musical tank: sound wave projectile that ricochets
         const speed = 6;
@@ -751,7 +791,7 @@ function shoot() {
         if (pType === 'purple' || pType === 'plasma') {
             props.damage = 350; props.w = 10; props.h = 10; props.piercing = true;
         } else if (pType === 'fire') {
-            props.damage = 22; props.w = 5; props.h = 5; // flame
+            props.damage = 2; props.w = 5; props.h = 5; // flame
         } else if (pType === 'toxic') {
             props = { ...props, type:'toxic', explodeTimer: 45, spawned: 5 }; // mini toxic bomb
         } else if (pType === 'musical') {
@@ -765,6 +805,10 @@ function shoot() {
             props.type = 'spartanSpear'; props.damage = 80; props.w = 5; props.h = 5; props.life = 130; props.hitEntities = []; props.vx = Math.cos(tank.turretAngle) * 8; props.vy = Math.sin(tank.turretAngle) * 8;
         } else if (pType === 'pyroBullet') {
             props.type = 'pyroBullet'; props.damage = 70; props.w = 9; props.h = 9;
+        } else if (pType === 'mechRocketBullet') {
+            props.type = 'mechRocketBullet'; props.damage = 150; props.w = 12; props.h = 12;
+            props.explodeRadius = 50;
+            props.vx = Math.cos(tank.turretAngle) * 9; props.vy = Math.sin(tank.turretAngle) * 9;
         } else if (pType === 'buckshot') {
             props.type = 'buckshot'; props.damage = 125; props.w = 6; props.h = 6;
         } else if (pType === 'railgun') {
@@ -942,6 +986,22 @@ function shoot() {
             hitEntities: [] // tracking for pierce
         });
         tank.fireCooldown = 40;
+    } else if (tankType === 'kamikaze') {
+        // Kamikaze: white bullet with red dot (Japanese flag)
+        const ang = tank.turretAngle;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 25,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 25,
+            w: 10, h: 10,
+            vx: Math.cos(ang) * 6,
+            vy: Math.sin(ang) * 6,
+            life: 110,
+            owner: 'player',
+            team: 0,
+            type: 'kamikazeBullet',
+            damage: 100
+        });
+        tank.fireCooldown = 35;
     } else if (tankType === 'roman') {
         // Throwing blade: 125 dmg, spins visually, ricochets 1 time
         bullets.push({
@@ -994,6 +1054,22 @@ function shoot() {
             wallHits: 0  // Count hits on walls for breaking
         });
         tank.fireCooldown = FIRE_COOLDOWN;
+    } else if (tankType === 'mechRocket') {
+        // Rocket mech: AOE rocket
+        const ang = tank.turretAngle;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 26,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 26,
+            w: 12, h: 12,
+            vx: Math.cos(ang) * 9,
+            vy: Math.sin(ang) * 9,
+            life: 110,
+            owner: 'player', team: 0,
+            type: 'mechRocketBullet',
+            damage: 150,
+            explodeRadius: 50
+        });
+        tank.fireCooldown = 50;
     } else {
         const speed = 5;
         const life = 100;
@@ -1009,7 +1085,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'mechShield') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
     }
 }
@@ -1023,7 +1099,7 @@ function updatePhysics() {
         const tRect = { x: tank.x, y: tank.y, w: tank.w, h: tank.h };
         let stuck = false;
         for (const o of objects) {
-            if (o.type === 'wall' || o.type === 'box' || o.type === 'barrel') {
+            if (o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') {
                 if (checkRectCollision(tRect, o)) { stuck = true; break; }
             }
         }
@@ -1127,6 +1203,7 @@ function updatePhysics() {
         
         if (b.life <= 0) {
             if (b.type === 'rocket' || b.type === 'smallRocket') explodeRocket(b);
+            else if (b.type === 'mechRocketBullet') explodeMechRocket(b);
             else if (b.type === 'toxic' || b.type === 'megabomb') explodeGas(b, b.type === 'megabomb');
             else if (b.hasExplosion) {
                 // Buratino enhanced shot: large explosion
@@ -1158,13 +1235,33 @@ function updatePhysics() {
                         // pass through walls, don't explode
                         continue;
                     }
+                    // mechRocket bullet explodes on contact with walls/objects
+                    if (b.type === 'mechRocketBullet' && (obj.type === 'wall' || obj.type === 'woodenWall' || obj.type === 'box' || obj.type === 'barrel')) {
+                        explodeMechRocket(b);
+                    }
                     // Other bullets explode on collision, but toxic/megabomb only explode by timer
                     if (b.type !== 'toxic' && b.type !== 'megabomb') {
                         // regular explosion logic for non-toxic bullets
                     }
                     bullets.splice(i, 1);
                     hit = true;
-                    if (obj.type === 'box') {
+                    if (obj.type === 'woodenWall') {
+                        // Damage wooden wall by bullet's damage value
+                        const dmg = b.damage || 100;
+                        obj.hp = (obj.hp ?? 300) - dmg;
+                        for (let k = 0; k < 3; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#a0652a');
+                        // Pyro bullets ignite wooden walls
+                        if (b.type === 'pyroBullet') {
+                            obj.burning = true;
+                            obj.burnTimer = obj.burnTimer ? Math.max(obj.burnTimer, 300) : 300;
+                            obj.burnDps = 20;
+                        }
+                        if (obj.hp <= 0) {
+                            objects.splice(objects.indexOf(obj), 1);
+                            navNeedsRebuild = true;
+                            for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#8B5E3C');
+                        }
+                    } else if (obj.type === 'box') {
                         objects.splice(objects.indexOf(obj), 1);
                         for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
                         navNeedsRebuild = true;
@@ -1273,13 +1370,13 @@ function updatePhysics() {
             let mHit = false;
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
-                if (checkRectCollision(bRect, obj) && obj.type === 'wall') {
+                if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall')) {
                     objects.splice(j, 1);
                     navNeedsRebuild = true;
                     for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
                     mHit = true;
                 }
-                if (checkRectCollision(bRect, obj) && obj.type !== 'wall') {
+                if (checkRectCollision(bRect, obj) && obj.type !== 'wall' && obj.type !== 'woodenWall') {
                     objects.splice(j, 1);
                     mHit = true;
                 }
@@ -1302,7 +1399,7 @@ function updatePhysics() {
         if (b.type === 'plasmaBlast') {
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
-                if (checkRectCollision(bRect, obj) && obj.type === 'wall') {
+                if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall')) {
                     // Destroy wall permanently
                     objects.splice(j, 1);
                     navNeedsRebuild = true;
@@ -1311,20 +1408,27 @@ function updatePhysics() {
                 }
             }
         }
-        // Special handling for mechShield: damages walls, 6 hits to destroy
+        // Special handling for mechShield: one-shots wooden walls, 6 hits to destroy stone walls
         if (b.type === 'mechShield') {
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
-                if (checkRectCollision(bRect, obj) && obj.type === 'wall') {
-                    // Count hits on this wall
-                    obj.wallDamageCount = (obj.wallDamageCount || 0) + 1;
-                    // Add orange particle for each hit
-                    for (let k = 0; k < 3; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF6F00');
-                    // Destroy wall after 6 hits
-                    if (obj.wallDamageCount >= 6) {
+                if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall')) {
+                    if (obj.type === 'woodenWall') {
+                        // One-shot wooden wall (without touching damage value)
+                        for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#a0652a');
                         objects.splice(j, 1);
                         navNeedsRebuild = true;
-                        for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
+                    } else {
+                        // Count hits on stone wall
+                        obj.wallDamageCount = (obj.wallDamageCount || 0) + 1;
+                        // Add orange particle for each hit
+                        for (let k = 0; k < 3; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF6F00');
+                        // Destroy wall after 6 hits
+                        if (obj.wallDamageCount >= 6) {
+                            objects.splice(j, 1);
+                            navNeedsRebuild = true;
+                            for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
+                        }
                     }
                     // Continue flying, don't remove bullet
                 }
@@ -1425,9 +1529,16 @@ function updatePhysics() {
                 if (b.type === 'rocket' || b.type === 'smallRocket') {
                     explodeRocket(b);
                     bullets.splice(i, 1);
+                } else if (b.type === 'mechRocketBullet') {
+                    explodeMechRocket(b, tank); // tank is direct hit
+                    bullets.splice(i, 1);
                 } else if (b.type === 'toxic' || b.type === 'megabomb') {
-                    // Toxic bombs only damage, don't stop or explode on contact
-                    tank.hp -= Math.round(50 * _shieldMult);
+                    // Toxic bombs only damage once per target, don't stop or explode on contact
+                    if (!b.hitEntities) b.hitEntities = [];
+                    if (!b.hitEntities.includes('player')) {
+                        tank.hp -= Math.round((b.damage || 50) * _shieldMult);
+                        b.hitEntities.push('player');
+                    }
                     // continue flying, don't remove bullet
                 } else if (b.type === 'plasma') {
                     // Plasma bolt pierces — hit player only once
@@ -1570,6 +1681,9 @@ function updatePhysics() {
                     if (b.type === 'rocket' || b.type === 'smallRocket') {
                         explodeRocket(b);
                         bullets.splice(i, 1);
+                    } else if (b.type === 'mechRocketBullet') {
+                        explodeMechRocket(b, a); // ally is direct hit
+                        bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
                         // Toxic bombs only damage, don't stop or explode on contact
                         a.hp = (a.hp || 300) - 50;
@@ -1666,11 +1780,18 @@ function updatePhysics() {
                     if (b.type === 'rocket' || b.type === 'smallRocket') {
                         explodeRocket(b);
                         bullets.splice(i, 1);
+                    } else if (b.type === 'mechRocketBullet') {
+                        explodeMechRocket(b, e); // enemy is direct hit — guarantees full damage
+                        bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
-                        // Toxic bombs only damage, don't stop or explode on contact
-                        let dmgToxic = 50;
-                        if (b.owner === 'player') dmgToxic = applyPlayerDamage(dmgToxic);
-                        e.hp -= dmgToxic;
+                        // Toxic bombs only damage once per target, don't stop or explode on contact
+                        if (!b.hitEntities) b.hitEntities = [];
+                        if (!b.hitEntities.includes(j)) {
+                            let dmgToxic = b.damage || 50;
+                            if (b.owner === 'player') dmgToxic = applyPlayerDamage(dmgToxic);
+                            e.hp -= dmgToxic;
+                            b.hitEntities.push(j);
+                        }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through enemies — hit each only once
@@ -1678,7 +1799,7 @@ function updatePhysics() {
                         if (!b.hitEntities.includes(j)) {
                             let dmgPlasma = b.damage || 350;
                             if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
-                            if (e.isBoss) dmgPlasma = Math.round(dmgPlasma * 0.5); // 50% less vs boss
+                            if (e.isBoss) dmgPlasma = Math.round(dmgPlasma * 0.25); // 75% less vs boss
                             e.hp -= dmgPlasma;
                             b.hitEntities.push(j);
                         }
@@ -1765,7 +1886,9 @@ function updatePhysics() {
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         // Pyro bullet: apply burn DoT (10 HP/sec for 5 sec)
-                        if (b.type === 'pyroBullet') { e.burning = true; e.burnTimer = 300; e.burnDps = 10; }
+                        if (b.type === 'pyroBullet') { 
+                            if (!e.isBoss) { e.burning = true; e.burnTimer = 300; e.burnDps = 10; }
+                        }
                         bullets.splice(i, 1);
                     }
                     e.hitFlashTime = Date.now();
@@ -2084,7 +2207,18 @@ function updatePhysics() {
             if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, obj)) {
                 flames.splice(i, 1);
                 hit = true;
-                if (obj.type === 'box') {
+                if (obj.type === 'woodenWall') {
+                    // Flames deal 2x damage to wooden walls and set them on fire
+                    obj.hp = (obj.hp ?? 300) - (f.damage || 22) * 2;
+                    obj.burning = true;
+                    obj.burnTimer = obj.burnTimer ? Math.max(obj.burnTimer, 300) : 300;
+                    obj.burnDps = 20; // 2x normal burn (10 * 2)
+                    if (obj.hp <= 0) {
+                        objects.splice(objects.indexOf(obj), 1);
+                        navNeedsRebuild = true;
+                        for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#ff6600');
+                    }
+                } else if (obj.type === 'box') {
                     objects.splice(objects.indexOf(obj), 1);
                     for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
                     navNeedsRebuild = true;
@@ -2160,7 +2294,8 @@ function updatePhysics() {
                 const e = enemies[j];
                 if (!e || !e.alive) continue;
                 if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, e) && f.team !== e.team) {
-                    e.hp -= f.damage;
+                    const flameDmg = e.isBoss ? f.damage * 0.25 : f.damage; // 75% less vs boss
+                    e.hp -= flameDmg;
                     flames.splice(i, 1);
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
@@ -2298,6 +2433,8 @@ function updatePhysics() {
 
     // Apply gas effects: check entities entering gas clouds and apply poison timers
     const GAS_DEBUFF_TICKS = 3 * 60; // 3 seconds
+    // Toxic player tank is completely immune to poison gas
+    const playerIsToxic = tank && tank.tankType === 'toxic';
     for (const obj of objects) {
         if (obj.type !== 'gas') continue;
         const ownerTeam = typeof obj.ownerTeam !== 'undefined' ? obj.ownerTeam : null;
@@ -2308,13 +2445,14 @@ function updatePhysics() {
             for (const e of enemies) {
                 if (!e || !e.alive) continue;
                 if (e.team === ownerTeam) continue;
+                if (e.isBoss || e.tankType === 'toxic') continue; // immune
                 const dist = Math.hypot((e.x + (e.w||0)/2) - obj.x, (e.y + (e.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!e.poisonTimer || e.poisonTimer <= 0) e.poisonTimer = GAS_DEBUFF_TICKS;
                 }
             }
             // Poison player if not on same team
-            if (tank && tank.alive !== false && tank.team !== ownerTeam) {
+            if (!playerIsToxic && tank && tank.alive !== false && tank.team !== ownerTeam && tank.tankType !== 'toxic') {
                 const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
@@ -2324,6 +2462,7 @@ function updatePhysics() {
             for (const a of allies) {
                 if (!a || !a.alive) continue;
                 if (a.team === ownerTeam) continue;
+                if (a.tankType === 'toxic') continue; // immune
                 const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
                 if (dist <= obj.radius) {
                     if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
@@ -2340,7 +2479,7 @@ function updatePhysics() {
                     }
                 }
             } else if (obj.owner === 'enemy') {
-                if (tank.alive !== false) {
+                if (!playerIsToxic && tank.alive !== false && tank.tankType !== 'toxic') {
                     const dist = Math.hypot((tank.x + tank.w/2) - obj.x, (tank.y + tank.h/2) - obj.y);
                     if (dist <= obj.radius) {
                         if (!tank.poisonTimer || tank.poisonTimer <= 0) tank.poisonTimer = GAS_DEBUFF_TICKS;
@@ -2348,6 +2487,7 @@ function updatePhysics() {
                 }
                 for (const a of allies) {
                     if (!a || !a.alive) continue;
+                    if (a.tankType === 'toxic') continue; // immune
                     const dist = Math.hypot((a.x + (a.w||0)/2) - obj.x, (a.y + (a.h||0)/2) - obj.y);
                     if (dist <= obj.radius) {
                         if (!a.poisonTimer || a.poisonTimer <= 0) a.poisonTimer = GAS_DEBUFF_TICKS;
@@ -2361,6 +2501,8 @@ function updatePhysics() {
     const applyPoisonTick = (ent) => {
         if (!ent || !ent.poisonTimer) return;
         if (ent.alive === false) return; // Don't poison dead entities
+        if (ent.isBoss) { ent.poisonTimer = 0; return; } // Boss is immune to poison
+        if (ent.tankType === 'toxic') { ent.poisonTimer = 0; return; } // Toxic tank is immune to poison
         if (ent.poisonTimer > 0) {
             // Fixed 40 HP/sec poison damage regardless of max HP
             const dmgPerTick = 40 / 60;
@@ -2373,6 +2515,12 @@ function updatePhysics() {
 
             ent.hp = (ent.hp || 0) - dmgPerTick;
             ent.poisonTimer--;
+            // Emit green toxic particles from poisoned entity
+            if (typeof spawnParticle === 'function' && Math.random() > 0.5) {
+                const px = (ent.x || 0) + Math.random() * (ent.w || 20);
+                const py = (ent.y || 0) + Math.random() * (ent.h || 20);
+                spawnParticle(px, py, '#39d353', 0.6);
+            }
             if (ent.hp <= 0) {
                 ent.hp = 0;
                 ent.alive = false;

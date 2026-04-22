@@ -87,7 +87,7 @@
 // the normal main menu.  Set to 'off' to run the game as usual.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance screen
+const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance screen
 
 (function () {
     // If maintenance is OFF, clean up any leftover bypass flags

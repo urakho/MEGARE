@@ -20,17 +20,26 @@ function generateMap() {
                 if (isVertical) {
                     const blockCount = (length * step) / blockSize;
                     for (let i = 0; i < blockCount; i++) {
+                        // 30% chance this wall segment is wooden
+                        const isWooden = Math.random() < 0.3;
                        objects.push({
                            x: x, y: y + i * blockSize, w: blockSize, h: blockSize, 
-                           type: 'wall', color: '#2b2b2b'
+                           type: isWooden ? 'woodenWall' : 'wall',
+                           color: isWooden ? '#8B5E3C' : '#2b2b2b',
+                           hp: isWooden ? 300 : undefined,
+                           maxHp: isWooden ? 300 : undefined
                        });
                     }
                 } else {
                     const blockCount = (length * step) / blockSize;
                     for (let i = 0; i < blockCount; i++) {
+                        const isWooden = Math.random() < 0.3;
                        objects.push({
                            x: x + i * blockSize, y: y, w: blockSize, h: blockSize, 
-                           type: 'wall', color: '#2b2b2b'
+                           type: isWooden ? 'woodenWall' : 'wall',
+                           color: isWooden ? '#8B5E3C' : '#2b2b2b',
+                           hp: isWooden ? 300 : undefined,
+                           maxHp: isWooden ? 300 : undefined
                        });
                     }
                 }
@@ -68,9 +77,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield','mechRocket'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -242,9 +251,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     const enemyPos = findFreeSpot(ex - 19, ey - 19, 38, 38, 600, 24);
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan','mechDiy','mechShield'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan','mechDiy','mechShield','mechRocket'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e' };
+    const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
     enemies.push({
         x: enemyPos.x, y: enemyPos.y, w: 38, h: 38,
         color: typeColors[tt] || '#B22222',
@@ -329,8 +338,8 @@ function spawnOneVsAllMode() {
     tank.x = ps.x; tank.y = ps.y; tank.team = 0;
     
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield','mechRocket'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e', mechRocket:'#7d1f1f' };
     
     for (let i = 0; i < 7; i++) {
         const angle = (i / 7) * Math.PI * 1.5 - Math.PI * 0.75;

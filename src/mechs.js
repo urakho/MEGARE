@@ -831,3 +831,252 @@ window.drawMechShieldBullet     = drawMechShieldBullet;
 window.drawMechShieldPreview    = drawMechShieldPreview;
 window.drawShieldActiveOverlay  = drawShieldActiveOverlay;
 window.showMechShieldModal      = showMechShieldModal;
+
+// ─── Rocket Mech (mechRocket) ────────────────────────────────────────────────
+window.mechRocketMeta = {
+    name: "Ракетный мех",
+    description: "Эпический ракетный мех. Главное орудие — ракета с осколочным взрывом, наносящим урон по площади. Ульта - Мега-бум (E) запускает залп из 4-х ракет в стороны (220 урона каждая, требует 80 энергии, 2 заряда за бой, перезарядка 8 секунд).",
+    rarity: "Эпический"
+};
+window.mechRocketBgGradient = ['#9b59b6', '#8e44ad'];
+window.mechRocketBaseColor  = '#7d1f1f';
+
+function drawMechRocketOn(ctx, cx, cy, W, H, turretAngle, mechType, moveAnimation = 0) {
+    if (mechType !== 'mechRocket') return;
+    const s = Math.min(W, H);
+    const now = Date.now();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(turretAngle);
+
+    const pulse = Math.sin(now * 0.005) * 0.5 + 0.5;
+    const moveWave = Math.sin(now * 0.008) * moveAnimation * 1.0;
+
+    // Scale up the mech body for better visibility
+    ctx.scale(1.15, 1.15);
+
+    // ── SHOULDER ROCKET PODS (top + bottom, like mechShield's cannons) ──────
+    const podLen = s * 0.50;
+    const podW   = s * 0.20;
+    const podX   = -s * 0.10;
+
+    function drawPod(podY, side) {
+        // Pod body — dark red metal with gradient
+        const pGrad = ctx.createLinearGradient(podX, 0, podX + podLen, 0);
+        pGrad.addColorStop(0, '#2a0606');
+        pGrad.addColorStop(0.5, '#7d1f1f');
+        pGrad.addColorStop(1, '#2a0606');
+        ctx.fillStyle = pGrad;
+        ctx.beginPath();
+        ctx.roundRect(podX, podY, podLen, podW, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#1a0303';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // 2x3 rocket tube grid at the front of the pod
+        const tubeAreaX = podX + podLen * 0.55;
+        const tubeAreaW = podLen * 0.40;
+        const cellW = tubeAreaW / 3;
+        const cellH = podW / 2;
+        for (let row = 0; row < 2; row++) {
+            for (let col = 0; col < 3; col++) {
+                const tx = tubeAreaX + cellW * (col + 0.5);
+                const ty = podY + cellH * (row + 0.5);
+                ctx.fillStyle = '#0a0202';
+                ctx.beginPath();
+                ctx.arc(tx, ty, Math.min(cellW, cellH) * 0.32, 0, Math.PI * 2);
+                ctx.fill();
+                // Glowing tip
+                ctx.fillStyle = `rgba(255, ${100 + 100 * pulse}, 0, ${0.7 + 0.3 * pulse})`;
+                ctx.beginPath();
+                ctx.arc(tx, ty, Math.min(cellW, cellH) * 0.16, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        // Cooling fins on the rear half
+        ctx.fillStyle = '#1a0303';
+        for (let i = 0; i < 3; i++) {
+            ctx.fillRect(podX + podLen * (0.08 + i * 0.13), podY - 1, podLen * 0.06, podW + 2);
+        }
+        // Mech-arm joint connecting to body
+        ctx.fillStyle = '#3a0a0a';
+        ctx.beginPath();
+        ctx.arc(podX + s * 0.02, podY + podW / 2, podW * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#1a0303';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    // Top pod (slight bob up)
+    drawPod(-s * 0.34 + moveWave * 0.5, -1);
+    // Bottom pod (slight bob down)
+    drawPod( s * 0.14 - moveWave * 0.5,  1);
+
+    // ── REAR EXHAUST (jet thruster) ─────────────────────────────────────────
+    ctx.fillStyle = '#1a0303';
+    ctx.fillRect(-s * 0.46, -s * 0.10, s * 0.10, s * 0.20);
+    ctx.fillStyle = `rgba(255, ${100 + 80 * pulse}, 0, ${0.5 + 0.3 * pulse})`;
+    ctx.fillRect(-s * 0.50, -s * 0.07, s * 0.07, s * 0.14);
+
+    // ── MAIN HULL (mech torso) ─────────────────────────────────────────────
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.36, -s * 0.22);
+    ctx.lineTo( s * 0.18, -s * 0.26);
+    ctx.lineTo( s * 0.30, -s * 0.12);
+    ctx.lineTo( s * 0.30,  s * 0.12);
+    ctx.lineTo( s * 0.18,  s * 0.26);
+    ctx.lineTo(-s * 0.36,  s * 0.22);
+    ctx.closePath();
+    const hullGrad = ctx.createLinearGradient(-s * 0.36, -s * 0.22, s * 0.30, s * 0.22);
+    hullGrad.addColorStop(0, '#3a0a0a');
+    hullGrad.addColorStop(0.45, '#7d1f1f');
+    hullGrad.addColorStop(1, '#280707');
+    ctx.fillStyle = hullGrad;
+    ctx.fill();
+    ctx.strokeStyle = '#1a0303';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Armor plate detail lines
+    ctx.strokeStyle = 'rgba(255, 100, 80, 0.3)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.10, -s * 0.20); ctx.lineTo(-s * 0.10,  s * 0.20);
+    ctx.moveTo( s * 0.05, -s * 0.18); ctx.lineTo( s * 0.05,  s * 0.18);
+    ctx.stroke();
+
+    // ── COCKPIT / VISOR (front) ────────────────────────────────────────────
+    const visorX = s * 0.10;
+    const visorW = s * 0.14;
+    const visorH = s * 0.18;
+    const visorGrad = ctx.createLinearGradient(visorX, -visorH/2, visorX + visorW, visorH/2);
+    visorGrad.addColorStop(0, '#0a0202');
+    visorGrad.addColorStop(0.5, '#3a0a0a');
+    visorGrad.addColorStop(1, '#0a0202');
+    ctx.fillStyle = visorGrad;
+    ctx.beginPath();
+    ctx.roundRect(visorX, -visorH/2, visorW, visorH, 4);
+    ctx.fill();
+    ctx.strokeStyle = '#ff6633';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    // Glowing red eye slit
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ff3300';
+    ctx.fillStyle = `rgba(255, ${80 + 100 * pulse}, 0, ${0.85 + 0.15 * pulse})`;
+    ctx.fillRect(visorX + visorW * 0.18, -visorH * 0.12, visorW * 0.64, visorH * 0.25);
+    ctx.shadowBlur = 0;
+
+    // ── CENTRAL REACTOR CORE ───────────────────────────────────────────────
+    const rxX = -s * 0.10;
+    ctx.fillStyle = '#1a0303';
+    ctx.beginPath(); ctx.arc(rxX, 0, s * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ff5500'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.shadowBlur = 14; ctx.shadowColor = '#ff5500';
+    const coreG = ctx.createRadialGradient(rxX, 0, 0, rxX, 0, s * 0.10);
+    coreG.addColorStop(0, '#ffffcc');
+    coreG.addColorStop(0.4, '#ff9900');
+    coreG.addColorStop(1, '#aa2200');
+    const coreR = s * (0.055 + 0.035 * pulse);
+    ctx.fillStyle = coreG;
+    ctx.beginPath(); ctx.arc(rxX, 0, coreR, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Reactor spokes (rotating)
+    ctx.strokeStyle = '#1a0303';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+        const ang = (i * Math.PI / 2) + now * 0.0008;
+        ctx.beginPath();
+        ctx.moveTo(rxX, 0);
+        ctx.lineTo(rxX + Math.cos(ang) * s * 0.13, Math.sin(ang) * s * 0.13);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawMechRocketPreview(canvasEl, isUnlocked) {
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext('2d');
+    if (!ctx) return;
+    if (window.mechRocketAnimId) cancelAnimationFrame(window.mechRocketAnimId);
+    const W = canvasEl.width;
+    const H = canvasEl.height;
+    const drawFrame = () => {
+        ctx.clearRect(0, 0, W, H);
+        if (isUnlocked) {
+            const bg = ctx.createLinearGradient(0, 0, 0, H);
+            bg.addColorStop(0, '#9b59b6');
+            bg.addColorStop(1, '#8e44ad');
+            ctx.fillStyle = bg;
+        } else {
+            ctx.fillStyle = '#444';
+        }
+        ctx.fillRect(0, 0, W, H);
+        const side = Math.min(W, H) * 0.68;
+        ctx.save();
+        if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
+        drawMechRocketOn(ctx, W / 2, H / 2, side, side, 0, 'mechRocket', 0.4);
+        ctx.restore();
+        if (isUnlocked && typeof getTankTrophies === 'function') {
+            const tw = getTankTrophies('mechRocket');
+            if (tw > 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(0, H - 24, W, 24);
+                ctx.fillStyle = '#e67e22';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🏆 ' + tw, W / 2, H - 12);
+            }
+        }
+        if (isUnlocked && typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'mechRocket') {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, W - 4, H - 4);
+        } else if (!isUnlocked) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, W, H);
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('🔒', W / 2, H / 2);
+        }
+        window.mechRocketAnimId = requestAnimationFrame(drawFrame);
+    };
+    drawFrame();
+}
+
+function showMechRocketModal(ctx, canvas, modal) {
+    if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
+    modal.style.display = 'flex';
+    const drawFrame = () => {
+        if (modal.style.display === 'none') {
+            window.tankDetailAnimId = null;
+            return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#9b59b6');
+        grad.addColorStop(1, '#8e44ad');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const side = Math.min(canvas.width, canvas.height) / 2;
+        const baseColor = window.mechRocketBaseColor || '#7d1f1f';
+        if (typeof drawTankOn === 'function') {
+            drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, 'mechRocket', null, 0.6);
+        }
+        window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+    };
+    drawFrame();
+}
+
+window.drawMechRocketOn      = drawMechRocketOn;
+window.drawMechRocketPreview = drawMechRocketPreview;
+window.showMechRocketModal   = showMechRocketModal;

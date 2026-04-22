@@ -391,6 +391,11 @@
                 <canvas id="romanTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
                 <button id="selectRomanTank" class="btn btn-rainbow">Римский</button>
             </div>
+            <!-- LIMITED -->
+            <div id="kamikazeTankEntry" style="display:none;">
+                <canvas id="kamikazeTankPreview" width="150" height="150" style="border:2px solid #ff4400; border-radius:8px; box-shadow:0 0 10px #ff4400;"></canvas>
+                <button id="selectKamikazeTank" class="btn btn-shop" style="background:linear-gradient(90deg,#ff4400,#cc2200);border-color:#ff4400;box-shadow:0 0.375rem 0 rgba(120,20,0,0.85);">☠️ Камикадзе</button>
+            </div>
         </div>
         <!-- Mechs panel -->
         <div id="charGridMechs" class="char-grid" style="display:none; align-items:center; justify-items:center;">
@@ -401,6 +406,10 @@
             <div>
                 <canvas id="mechShieldPreview" width="150" height="150" style="border-radius:8px;"></canvas>
                 <button id="selectMechShield" class="btn btn-shop">Щитовой мех</button>
+            </div>
+            <div>
+                <canvas id="mechRocketPreview" width="150" height="150" style="border-radius:8px;"></canvas>
+                <button id="selectMechRocket" class="btn btn-shop">Ракетный мех</button>
             </div>
         </div>
         <button id="characterCancel" class="btn btn-secondary" style="margin-top:20px;">Закрыть</button>
@@ -496,7 +505,7 @@
     <div class="modal-box">
         <h2 class="modal-title">Командная строка</h2>
         <p style="text-align:center; margin-bottom:15px;">Введите команду, начинающуюся с /</p>
-        <input type="text" id="commandInput" placeholder="/coins 100" style="width:100%; padding:10px; margin-bottom:15px; background:rgba(0,0,0,0.8); color:white; border:1px solid #fff; border-radius:4px; font-size:16px;">
+        <input type="text" id="commandInput" placeholder="/cash 100" style="width:100%; padding:10px; margin-bottom:15px; background:rgba(0,0,0,0.8); color:white; border:1px solid #fff; border-radius:4px; font-size:16px;">
         <div style="display:flex; justify-content:space-between;">
             <button id="commandExecute" class="btn btn-primary">Выполнить</button>
             <button id="commandCancel" class="btn btn-secondary">Отмена</button>
@@ -696,6 +705,11 @@
             <div id="attackArrow"></div>
         </div>
         <span id="attackLabel" class="attack-label">АТАКА</span>
+    </div>
+    <!-- Ult button: visible only for tanks with E ability -->
+    <div id="mobileUltBtn" style="display:none;">
+        <span id="mobileUltIcon">⚡</span>
+        <span id="mobileUltLabel">УЛТ</span>
     </div>
 </div>
 
