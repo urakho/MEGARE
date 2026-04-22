@@ -1231,20 +1231,6 @@ function updateMusic() {
         attackBase.style.borderColor = attackMode === 'ult' ? 'rgba(243,200,50,0.55)' : '';
     });
 
-    // ---- Dedicated ULT button ----
-    const mobileUltBtn = document.getElementById('mobileUltBtn');
-    if (mobileUltBtn) {
-        mobileUltBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            keys['KeyE'] = true;
-        }, { passive: false });
-        mobileUltBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            setTimeout(() => { keys['KeyE'] = false; }, 120);
-        }, { passive: false });
-        mobileUltBtn.addEventListener('touchcancel', () => { keys['KeyE'] = false; });
-    }
-
     // ---- Show/hide: only on mobile, only when playing ----
     setInterval(() => {
         if (!mobileControls) return;
@@ -1256,10 +1242,6 @@ function updateMusic() {
         // If current tank has no ult and we're in ult mode — reset
         const tt = typeof tankType !== 'undefined' ? tankType : '';
         if (playing && attackMode === 'ult' && !TANKS_WITH_ULT.includes(tt)) setAttackMode('attack');
-        // Show/hide dedicated ult button
-        if (mobileUltBtn) {
-            mobileUltBtn.style.display = (isMob && playing && TANKS_WITH_ULT.includes(tt)) ? 'flex' : 'none';
-        }
     }, 80);
 })();
 

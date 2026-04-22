@@ -1846,42 +1846,6 @@ canvas.tank-display {
     letter-spacing: 0.06rem;
 }
 
-/* Dedicated mobile ult button */
-#mobileUltBtn {
-    position: absolute;
-    right: 2.5rem;
-    bottom: 42%;
-    margin-bottom: 1rem;
-    width: 4rem;
-    height: 4rem;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #ffe060, #d35400);
-    border: 3px solid rgba(255,220,80,0.8);
-    box-shadow: 0 3px 12px rgba(0,0,0,0.6), 0 0 16px rgba(243,156,18,0.65);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.1rem;
-    touch-action: none;
-    cursor: pointer;
-    z-index: 510;
-    transition: transform 0.08s, filter 0.08s;
-}
-#mobileUltBtn:active { transform: scale(0.88); filter: brightness(1.15); }
-#mobileUltIcon { font-size: 1.3rem; line-height: 1; pointer-events: none; user-select: none; }
-#mobileUltLabel {
-    font-size: 0.55rem;
-    font-family: 'Courier New', Courier, monospace;
-    font-weight: 700;
-    color: #fff;
-    text-transform: uppercase;
-    letter-spacing: 0.05rem;
-    pointer-events: none;
-    user-select: none;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
-}
-
 /* ════════════════════════════════
    MAP EDITOR
    ════════════════════════════════ */
