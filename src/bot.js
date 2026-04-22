@@ -1,24 +1,5 @@
 // bot.js  pathfinding, navigation grid, enemy AI, ally AI
 
-// ── Elite AI (активируется при >1000 кубков игрока) ─────────────────────────
-const ELITE_AI_TROPHY_THRESHOLD = 1000;
-
-// Returns true if player has enough trophies for elite AI threshold
-function isEliteAI() {
-    return (typeof trophies !== 'undefined') && trophies > ELITE_AI_TROPHY_THRESHOLD;
-}
-
-// Apply elite AI stats to a bot entity with 50% chance when above threshold
-function applyEliteAIStats(entity) {
-    if (!isEliteAI()) return;
-    // Mark that we attempted to apply elite AI
-    entity._eliteAIAttempted = true;
-    // 50% chance to get elite AI when above threshold
-    if (Math.random() > 0.5) return;
-    entity.dodgeAccuracy = 0.99;    // Almost never misses a dodge
-    entity._eliteAI = true;
-}
-
 // Smooth turret rotation: interpolate current angle toward target
 function smoothTurretRotation(entity, targetAngle, rotateSpeed = 0.12) {
     if (!entity.turretAngle) entity.turretAngle = 0;
@@ -84,19 +65,21 @@ function clearanceAhead(entity, angle, maxDist, step = 8) {
 
 // Подруливание: выбираем угол с наибольшей свободной дистанцией рядом с целевым
 function steerAroundObstacles(entity, desiredAngle, dist) {
-    // Always look at least navCell ahead so clearanceAhead actually samples something
-    // (tanks move ~2.5px/tick but clearanceAhead step is 8px, so without this fix
-    //  the loop never executes and all angles appear equally clear)
-    const lookDist = Math.max(dist, navCell);
-    const samples = [0, Math.PI / 8, -Math.PI / 8, Math.PI / 4, -Math.PI / 4,
-                     3 * Math.PI / 8, -3 * Math.PI / 8, Math.PI / 2, -Math.PI / 2];
+    // Always look at least 2 navCells ahead so steering can anticipate walls early
+    const lookDist = Math.max(dist * 4, navCell * 2);
+    // Denser sampling for smoother avoidance
+    const samples = [0, Math.PI/12, -Math.PI/12, Math.PI/8, -Math.PI/8,
+                     Math.PI/6, -Math.PI/6, Math.PI/4, -Math.PI/4,
+                     Math.PI/3, -Math.PI/3, Math.PI/2, -Math.PI/2,
+                     2*Math.PI/3, -2*Math.PI/3];
     let bestAng = desiredAngle;
     let bestScore = -Infinity;
     let bestClear = 0;
     for (const off of samples) {
         const a = desiredAngle + off;
         const clear = clearanceAhead(entity, a, lookDist);
-        const devPenalty = Math.abs(off) * navCell * 0.25;
+        // Prefer angles close to desired direction
+        const devPenalty = Math.abs(off) * navCell * 0.4;
         const score = clear - devPenalty;
         if (score > bestScore) {
             bestScore = score;
@@ -104,80 +87,79 @@ function steerAroundObstacles(entity, desiredAngle, dist) {
             bestClear = clear;
         }
     }
-    // Slow down when the best direction has a wall within half the lookahead
-    const trimmedDist = bestClear < lookDist * 0.5 ? Math.max(bestClear * 0.8, dist * 0.3) : dist;
+    // Slow down only when very close to a wall
+    const trimmedDist = bestClear < lookDist * 0.3 ? Math.max(bestClear * 0.6, dist * 0.4) : dist;
     return { angle: bestAng, dist: trimmedDist };
 }
 
 // Проверяем, летят ли по сущности снаряды; если да — попробуем уклониться
 function tryDodgeIncoming(entity) {
     const ex = entity.x + (entity.w||0)/2; const ey = entity.y + (entity.h||0)/2;
-    const dangerLookahead = entity._eliteAI ? 50 : 30; // Elite AI sees bullets further ahead
+    const dangerLookahead = 45;
     const accuracy = (entity.dodgeAccuracy !== undefined) ? entity.dodgeAccuracy : DODGE_BASE_ACCURACY;
+    let mostUrgent = null;
+    let urgentT = Infinity;
+    // Find the most urgent (closest in time) incoming bullet
     for (const b of bullets) {
         if (!b || b.team === undefined) continue;
-        if (b.team === entity.team) continue; // ignore friendly
-        // probabilistic: sometimes AI fails to notice or react
+        if (b.team === entity.team) continue;
         if (Math.random() > accuracy) continue;
         const bvx = b.vx, bvy = b.vy;
         const rx = ex - b.x, ry = ey - b.y;
         const vv = bvx*bvx + bvy*bvy;
         if (vv === 0) continue;
         const t = (rx*bvx + ry*bvy) / vv;
-        if (t < 0 || t > dangerLookahead) continue;
+        // Explosive projectiles are dangerous over a wider area and need earlier reaction
+        const isExplosive = (b.type === 'mechRocketBullet' || b.type === 'rocket' || b.type === 'pyroBullet');
+        const lookT = isExplosive ? dangerLookahead * 1.6 : dangerLookahead;
+        if (t < 0 || t > lookT) continue;
         const cx = b.x + bvx * t, cy = b.y + bvy * t;
         const dist = Math.hypot(cx - ex, cy - ey);
-        const safeDist = Math.max((entity.w||20), (entity.h||20)) * (entity._eliteAI ? 1.4 : 0.9);
-        if (dist < safeDist) {
-            const bulletAng = Math.atan2(bvy, bvx);
-            const maxNoise = Math.PI * 0.45;
-            const noise = entity._eliteAI ? 0 : (1 - accuracy) * maxNoise * (Math.random() - 0.5) * 2;
-            const perpA = bulletAng + Math.PI/2;
-            const perpB = bulletAng - Math.PI/2;
-            const backAng = Math.atan2(ey - b.y, ex - b.x);
-            let cand;
-            if (entity._eliteAI) {
-                // Elite AI: if already dodging in a direction, keep using it (avoid oscillation)
-                if (entity._dodgeDir !== undefined) {
-                    const keepDir = entity._dodgeDir;
-                    if (moveSmallSteps(entity, keepDir, (entity.speed || 2.5) * 1.1)) {
-                        entity.baseAngle = keepDir;
-                        entity._dodgeDirTimer = (entity._dodgeDirTimer || 0) - 1;
-                        if (entity._dodgeDirTimer <= 0) delete entity._dodgeDir;
-                        return true;
-                    } else {
-                        delete entity._dodgeDir; // blocked, pick new direction
-                    }
-                }
-                // Pick best perpendicular with most free space
-                const checkDist = (entity.w || 20) * 1.5;
-                const freeA = moveSmallSteps(entity, perpA, checkDist) ? 1 : 0;
-                const freeB = moveSmallSteps(entity, perpB, checkDist) ? 1 : 0;
-                const [bestPerp, altPerp] = (freeA >= freeB) ? [perpA, perpB] : [perpB, perpA];
-                cand = [bestPerp, altPerp, bulletAng + Math.PI*0.4, bulletAng - Math.PI*0.4, backAng];
-            } else {
-                // Normal AI: randomize which perpendicular to try first
-                const [p1, p2] = Math.random() < 0.5
-                    ? [perpA + noise, perpB + noise]
-                    : [perpB + noise, perpA + noise];
-                cand = [p1, p2, backAng + noise];
-            }
-            for (const ang of cand) {
-                if (moveSmallSteps(entity, ang, (entity.speed || 2.5) * (entity._eliteAI ? 1.1 : 0.85))) {
-                    entity.baseAngle = ang;
-                    if (entity._eliteAI) {
-                        // Persist this dodge direction for ~8 frames
-                        entity._dodgeDir = ang;
-                        entity._dodgeDirTimer = 8;
-                    }
-                    return true;
-                }
-            }
-            if (moveSmallSteps(entity, backAng, (entity.speed || 2.5) * 0.65)) {
-                entity.baseAngle = backAng;
-                return true;
-            }
+        const baseSafe = Math.max((entity.w||20), (entity.h||20)) * 1.2;
+        const safeDist = isExplosive ? baseSafe + 80 : baseSafe;
+        if (dist < safeDist && t < urgentT) {
+            urgentT = t;
+            mostUrgent = b;
         }
+    }
+    if (!mostUrgent) return false;
+
+    const b = mostUrgent;
+    const bulletAng = Math.atan2(b.vy, b.vx);
+    const perpA = bulletAng + Math.PI/2;
+    const perpB = bulletAng - Math.PI/2;
+    const backAng = Math.atan2(ey - b.y, ex - b.x);
+    const dodgeSpeed = (entity.speed || 2.5) * 1.15; // smooth but fast dodge
+
+    // If already committed to a dodge direction recently, keep it (avoid jitter)
+    if (entity._dodgeDir !== undefined && (entity._dodgeDirTimer || 0) > 0) {
+        if (moveSmallSteps(entity, entity._dodgeDir, dodgeSpeed)) {
+            entity.baseAngle = entity._dodgeDir;
+            entity._dodgeDirTimer--;
+            return true;
+        }
+        delete entity._dodgeDir;
+        entity._dodgeDirTimer = 0;
+    }
+
+    // Pick perpendicular with most free space (smooth, predictable dodge)
+    const checkDist = (entity.w || 20) * 2.2;
+    const freeA = clearanceAhead(entity, perpA, checkDist);
+    const freeB = clearanceAhead(entity, perpB, checkDist);
+    const [bestPerp, altPerp] = (freeA >= freeB) ? [perpA, perpB] : [perpB, perpA];
+    const cand = [bestPerp, altPerp, bulletAng + Math.PI*0.4, bulletAng - Math.PI*0.4, backAng];
+
+    for (const ang of cand) {
+        if (moveSmallSteps(entity, ang, dodgeSpeed)) {
+            entity.baseAngle = ang;
+            entity._dodgeDir = ang;
+            entity._dodgeDirTimer = 6; // commit for ~6 frames
+            return true;
+        }
+    }
+    if (moveSmallSteps(entity, backAng, dodgeSpeed * 0.7)) {
+        entity.baseAngle = backAng;
+        return true;
     }
     return false;
 }
@@ -196,7 +178,7 @@ function buildNavGrid(cellSize = navCell) {
             const agentRect = { x: center.x - navAgentW/2, y: center.y - navAgentH/2, w: navAgentW, h: navAgentH };
             let blocked = false;
             for (const o of objects) {
-                if (o.type === 'wall') {
+                if (o.type === 'wall' || o.type === 'woodenWall') {
                     if (checkRectCollision(agentRect, o)) { blocked = true; break; }
                 }
                 // Для ящиков считаем клетку блокированной, если ящик занимает значительную часть клетки
@@ -347,7 +329,7 @@ function moveSmallSteps(entity, angle, dist) {
             // Check collision with wall or box
             if (nx < obj.x + obj.w && nx + entity.w > obj.x &&
                 ny < obj.y + obj.h && ny + entity.h > obj.y) {
-                    if (obj.type === 'wall') { blocked = true; break; }
+                    if (obj.type === 'wall' || obj.type === 'woodenWall') { blocked = true; break; }
                     if (obj.type === 'box') { collider = obj; break; } // Hit first box and handle
             }
         }
@@ -381,6 +363,9 @@ function moveSmallSteps(entity, angle, dist) {
                 }
             }
             if (boxBlocked) {
+                // Cannot push box — mark it so AI can shoot to break it
+                entity._blockingBox = collider;
+                entity._blockingBoxTimer = 30;
                 return false;
             }
 
@@ -425,17 +410,12 @@ function updateEnemyAI() {
     for (let enemy of enemies) {
       try {
         if (!enemy || !enemy.alive) continue;
-        // Apply elite AI stats if player has >1000 trophies and not already attempted
-        if (isEliteAI() && !enemy._eliteAIAttempted) applyEliteAIStats(enemy);
-        // Reset elite AI if trophies drop below threshold
-        if (!isEliteAI() && enemy._eliteAI) { 
-            enemy._eliteAI = false; 
-            enemy._eliteAIAttempted = false;
-            enemy.dodgeAccuracy = DODGE_BASE_ACCURACY; 
-        }
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
+        
+        // Try dodge incoming projectiles first (all enemy types should dodge)
+        if (tryDodgeIncoming(enemy)) continue;
         
         // Handle Inverted Controls (AI) and disorientation affecting movement
         let invertAI = false;
@@ -495,46 +475,20 @@ function updateEnemyAI() {
             const ey = enemy.y + enemy.h/2;
             const escapeAngle = Math.atan2(ey - poisonGasPos.y, ex - poisonGasPos.x);
             
-            // Elite AI moves faster and more aggressively to escape
-            const baseDist = enemy._eliteAI ? (enemy.speed * 1.2) : (enemy.speed * 0.6);
+            const baseDist = enemy.speed * 0.6;
             let escaped = false;
             
-            // For Elite AI, try more directions more aggressively
-            if (enemy._eliteAI) {
-                // Create 8 candidate directions for more thorough escape
-                const directions = [];
-                for (let i = 0; i < 8; i++) {
-                    const angle = escapeAngle + (i - 3.5) * (Math.PI / 8);
-                    directions.push(angle);
-                }
-                
-                // Try each direction with full escape distance
-                for (const angle of directions) {
-                    const checkDist = baseDist * 1.2;
-                    if (moveSmallSteps(enemy, angle, checkDist)) {
-                        // Verify we actually exited the gas
-                        const newDist = Math.hypot((enemy.x + enemy.w/2) - poisonGasPos.x, (enemy.y + enemy.h/2) - poisonGasPos.y);
-                        if (newDist > poisonGasPos.radius) {
-                            enemy.baseAngle = angle;
-                            escaped = true;
-                            break;
-                        }
-                    }
-                }
+            if (moveSmallSteps(enemy, escapeAngle, baseDist)) {
+                enemy.baseAngle = escapeAngle;
+                escaped = true;
             } else {
-                // Normal escape logic
-                if (moveSmallSteps(enemy, escapeAngle, baseDist)) {
-                    enemy.baseAngle = escapeAngle;
-                    escaped = true;
-                } else {
-                    // Try sidesteps if blocked
-                    const sideAngles = [escapeAngle + Math.PI/3, escapeAngle - Math.PI/3, escapeAngle + Math.PI/6, escapeAngle - Math.PI/6];
-                    for (const a of sideAngles) {
-                        if (moveSmallSteps(enemy, a, baseDist * 0.7)) {
-                            enemy.baseAngle = a;
-                            escaped = true;
-                            break;
-                        }
+                // Try sidesteps if blocked
+                const sideAngles = [escapeAngle + Math.PI/3, escapeAngle - Math.PI/3, escapeAngle + Math.PI/6, escapeAngle - Math.PI/6];
+                for (const a of sideAngles) {
+                    if (moveSmallSteps(enemy, a, baseDist * 0.7)) {
+                        enemy.baseAngle = a;
+                        escaped = true;
+                        break;
                     }
                 }
             }
@@ -568,22 +522,20 @@ function updateEnemyAI() {
             smoothTurretRotation(enemy, Math.atan2(enemy.y - nearest.y, enemy.x - nearest.x), 0.15); // shoot backwards
             if (enemy.disoriented > 0) enemy.disoriented--;
             if (enemy.invertedControls && enemy.invertedControls > 0) enemy.invertedControls--;
-        } else if (enemy._eliteAI && (nearest._vx || nearest._vy)) {
-            // Elite AI: predictive aiming — lead the target based on bullet travel time
-            const bulletSpeed = 6;
-            const ex = enemy.x + enemy.w/2, ey = enemy.y + enemy.h/2;
-            const tx = nearest.x + (nearest.w||0)/2, ty = nearest.y + (nearest.h||0)/2;
-            const dist = Math.hypot(tx - ex, ty - ey);
-            const travelTime = dist / bulletSpeed;
-            const predictX = tx + (nearest._vx || 0) * travelTime;
-            const predictY = ty + (nearest._vy || 0) * travelTime;
-            smoothTurretRotation(enemy, Math.atan2(predictY - ey, predictX - ex), 0.15);
-        } else if (enemy._eliteAI) {
-            const ex = enemy.x + enemy.w/2, ey = enemy.y + enemy.h/2;
-            const tx = nearest.x + (nearest.w||0)/2, ty = nearest.y + (nearest.h||0)/2;
-            smoothTurretRotation(enemy, Math.atan2(ty - ey, tx - ex), 0.15);
         } else {
             smoothTurretRotation(enemy, Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x), 0.12);
+        }
+        // If a box is blocking the path, override turret to break it
+        if (enemy._blockingBox && enemy._blockingBoxTimer > 0) {
+            const bb = enemy._blockingBox;
+            if (objects.indexOf(bb) !== -1) {
+                const bcx = bb.x + bb.w/2, bcy = bb.y + bb.h/2;
+                smoothTurretRotation(enemy, Math.atan2(bcy - (enemy.y + enemy.h/2), bcx - (enemy.x + enemy.w/2)), 0.25);
+                enemy._blockingBoxTimer--;
+            } else {
+                delete enemy._blockingBox;
+                enemy._blockingBoxTimer = 0;
+            }
         }
         // Mirror shield — tick and cooldown always run (outside try/catch)
         if (enemy.mirrorShieldActive === undefined) enemy.mirrorShieldActive = false;
@@ -842,7 +794,7 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time','mechDiy','mechShield'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time','mechDiy','mechShield','mechRocket'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
@@ -891,7 +843,7 @@ function updateEnemyAI() {
             
             // Mech burst attack AI (when paralysis not active)
             if (!enemy.paralyzed) {
-                const mechDiyBurstMin = enemy._eliteAI ? 50 : 20;
+                const mechDiyBurstMin = 20;
                 if ((enemy.mechBurstShots || 0) === 0 && (enemy.mechBurstCooldown || 0) <= 0 && (enemy.mechEnergy || 0) >= mechDiyBurstMin) {
                     // Decide to fire burst
                     if (Math.random() < 0.02) { // 2% chance per frame to initiate burst
@@ -963,6 +915,17 @@ function updateEnemyAI() {
             }
         }
 
+        // mechRocket: energy regen for bot
+        if (enemy.tankType === 'mechRocket') {
+            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 150;
+            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 150;
+            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
+            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
+                enemy.paralyzed = true;
+                enemy.paralyzedTime = 60;
+            }
+        }
+
         // Mirror: proactive shield activation (outside try/catch so errors are visible)
         if (enemy.tankType === 'mirror' && !enemy.mirrorShieldActive && enemy.mirrorShieldCooldown <= 0) {
             const ex = enemy.x + enemy.w / 2;
@@ -1004,12 +967,12 @@ function updateEnemyAI() {
                         enemy.path = newPath;
                         enemy.pathIndex = 0;
                         // Elite AI recalculates path faster to keep up with player movement
-                        const recalcDelay = enemy._eliteAI ? 8 : (currentMode === 'onevsall') ? 60 : 30;
+                        const recalcDelay = (currentMode === 'onevsall') ? 60 : 30;
                         enemy.pathRecalc = recalcDelay + Math.floor(Math.random() * 6);
                     } else {
                         enemy.path = [];
                         enemy.pathIndex = 0;
-                        enemy.pathRecalc = enemy._eliteAI ? 3 : 15;
+                        enemy.pathRecalc = 15;
                     }
                 } else {
                     enemy.pathRecalc = 1 + Math.floor(Math.random() * 2);
@@ -1019,9 +982,7 @@ function updateEnemyAI() {
             }
 
             // Если есть путь — следуем по waypoints
-            // If incoming bullet detected, attempt dodge and skip normal pathing for this tick
-            if (tryDodgeIncoming(enemy)) continue;
-
+            // Dodge was already checked at the top of the loop
             if (enemy.path && enemy.path.length) {
                 const wp = enemy.path[Math.min(enemy.pathIndex, enemy.path.length - 1)];
                 const cx = enemy.x + enemy.w/2, cy = enemy.y + enemy.h/2;
@@ -1235,7 +1196,7 @@ function updateEnemyAI() {
                     const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 18;
                     const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 18;
                     const speed = 3.5 + Math.random() * 1.2;
-                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 28, team: enemy.team, owner: 'enemy' });
+                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 2, team: enemy.team, owner: 'enemy' });
                 }
             } else if (tt === 'buratino') {
                 // Enemy buratino: enter artillery mode, spawn target circle and visual rockets (like player)
@@ -1360,6 +1321,10 @@ function updateEnemyAI() {
                     props.damage = 100; props.w = 8; props.h = 8;
                 } else if (pType === 'ice') {
                     props.type = 'ice'; props.w = 8; props.h = 8; props.speed = 5;
+                } else if (pType === 'mechRocketBullet') {
+                    props.type = 'mechRocketBullet'; props.damage = 150; props.w = 12; props.h = 12;
+                    props.explodeRadius = 50;
+                    props.vx = Math.cos(enemy.turretAngle) * 9; props.vy = Math.sin(enemy.turretAngle) * 9;
                 } else {
                     props.damage = 100; props.w = 6; props.h = 6;
                 }
@@ -1374,6 +1339,9 @@ function updateEnemyAI() {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 180, team: enemy.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+            } else if (tt === 'time') {
+                // Time tank: regular high-damage shot
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'time', damage: 100 };
             } else if (tt === 'imitator') {
                 // imitator base form: prismatic bullet, damage 2 (same as player)
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'imitator', damage: 200 };
@@ -1454,9 +1422,8 @@ function updateEnemyAI() {
                     damage: 70
                 };
             } else if (tt === 'mechDiy') {
-                // mechDiy: trigger energy burst if energy allows (burst executed per-frame above)
-                // Elite AI keeps energy above 50; normal AI threshold is 35
-                const mechDiyThreshold = enemy._eliteAI ? 50 : 35;
+                // mechDiy: trigger energy burst only if energy > 50 (conserve below that)
+                const mechDiyThreshold = 50;
                 if ((enemy.mechEnergy || 0) > mechDiyThreshold) {
                     enemy.mechEnergy -= 20;
                     enemy.mechBurstShots = 3;
@@ -1465,9 +1432,8 @@ function updateEnemyAI() {
                 }
                 b = null; // burst shots fired via per-frame mechDiy processing
             } else if (tt === 'mechShield') {
-                // mechShield: fire single dense slow shot if energy > 30
-                // Elite AI keeps energy above 50; normal AI threshold is 30
-                const mechShieldThreshold = enemy._eliteAI ? 50 : 30;
+                // mechShield: fire single dense slow shot only if energy > 50
+                const mechShieldThreshold = 50;
                 if ((enemy.mechEnergy || 0) > mechShieldThreshold) {
                     enemy.mechEnergy -= 20;
                     b = {
@@ -1481,6 +1447,23 @@ function updateEnemyAI() {
                     };
                 } else {
                     b = null; // not enough energy
+                }
+            } else if (tt === 'mechRocket') {
+                // mechRocket: fire AOE rocket only if energy > 50
+                const mechRocketThreshold = 50;
+                if ((enemy.mechEnergy || 0) > mechRocketThreshold) {
+                    enemy.mechEnergy -= 20;
+                    b = {
+                        x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 26,
+                        y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 26,
+                        w: 12, h: 12,
+                        vx: Math.cos(enemy.turretAngle) * 5.5,
+                        vy: Math.sin(enemy.turretAngle) * 5.5,
+                        life: 110, owner: 'enemy', team: enemy.team,
+                        type: 'mechRocketBullet', damage: 150, explodeRadius: 50
+                    };
+                } else {
+                    b = null;
                 }
             } else if (tt === 'spartan') {
                 // Spartan: piercing spear
@@ -1503,7 +1486,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : FIRE_COOLDOWN;
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
@@ -1523,6 +1506,8 @@ function updateAllyAI() {
       try {
         if (!ally || !ally.alive) continue;
         if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; if (ally.frozenEffect) ally.frozenEffect--; continue; }
+        // Try dodge incoming projectiles first (all ally types should dodge)
+        if (tryDodgeIncoming(ally)) continue;
         // If in artillery mode, countdown and skip normal AI movement/actions
         if (ally.artilleryMode) {
             ally.artilleryTimer = (ally.artilleryTimer || 0) - 1;
@@ -1547,6 +1532,18 @@ function updateAllyAI() {
             if (ally.invertedControls && ally.invertedControls > 0) ally.invertedControls--;
         } else {
             ally.turretAngle = Math.atan2(nearest.y - ally.y, nearest.x - ally.x);
+        }
+        // If a box is blocking the path, override turret to break it
+        if (ally._blockingBox && ally._blockingBoxTimer > 0) {
+            const bb = ally._blockingBox;
+            if (objects.indexOf(bb) !== -1) {
+                const bcx = bb.x + bb.w/2, bcy = bb.y + bb.h/2;
+                ally.turretAngle = Math.atan2(bcy - (ally.y + ally.h/2), bcx - (ally.x + ally.w/2));
+                ally._blockingBoxTimer--;
+            } else {
+                delete ally._blockingBox;
+                ally._blockingBoxTimer = 0;
+            }
         }
         if (ally.confused > 0) {
             ally.turretAngle += (Math.random() - 0.5) * 0.5;
@@ -1628,9 +1625,7 @@ function updateAllyAI() {
                 } else { ally.path = []; ally.pathIndex = 0; ally.pathRecalc = 10; }
             } else ally.pathRecalc--;
 
-            // If incoming bullet detected, attempt dodge and skip normal pathing for this tick
-            if (tryDodgeIncoming(ally)) continue;
-
+            // Dodge was already checked at the top of the loop
             if (ally.path && ally.path.length) {
                 const wp = ally.path[Math.min(ally.pathIndex, ally.path.length - 1)];
                 const cx = ally.x + ally.w/2, cy = ally.y + ally.h/2;
@@ -1769,7 +1764,7 @@ function updateAllyAI() {
                         const sx = ally.x + ally.w/2 + Math.cos(ang) * 18;
                         const sy = ally.y + ally.h/2 + Math.sin(ang) * 18;
                         const speed = 3.5 + Math.random() * 1.2;
-                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 28, team: ally.team, owner: 'ally' });
+                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 2, team: ally.team, owner: 'ally' });
                     }
                 } else if (tt === 'buratino') {
                     // Ally buratino: enter artillery mode, spawn target circle and visual rockets (like player and enemy)
@@ -2123,7 +2118,7 @@ function updateAllyAI() {
         let beamLen = maxLen;
         let hitBox = null;
         for (const obj of objects) {
-            if (obj.type !== 'box' && obj.type !== 'barrel' && obj.type !== 'wall') continue;
+            if (obj.type !== 'box' && obj.type !== 'barrel' && obj.type !== 'wall' && obj.type !== 'woodenWall') continue;
             if (lineIntersectsRect(startX, startY, rayEndX, rayEndY, obj.x, obj.y, obj.w, obj.h)) {
                 const d = getRayRectDistance(startX, startY, angle, maxLen, obj);
                 if (d < beamLen) {
