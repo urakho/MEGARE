@@ -25,10 +25,11 @@
 
     // Object type definitions: colour, label
     const OBJ_TYPES = {
-        wall:   { color: '#3a3a3a', stroke: '#666666', label: 'Стена'    },
-        box:    { color: '#8b5a2b', stroke: '#c0803a', label: 'Ящик'     },
-        barrel: { color: '#7a4d2a', stroke: '#c87d40', label: 'Бочка'    },
-        enemy:  { color: '#c0392b', stroke: '#e74c3c', label: 'Враг'     },
+        wall:       { color: '#3a3a3a', stroke: '#666666', label: 'Стена'      },
+        woodenWall: { color: '#6e4f35', stroke: '#8c6849', label: 'Дер. стена' },
+        box:        { color: '#8b5a2b', stroke: '#c0803a', label: 'Ящик'       },
+        barrel:     { color: '#7a4d2a', stroke: '#c87d40', label: 'Бочка'      },
+        enemy:      { color: '#c0392b', stroke: '#e74c3c', label: 'Враг'       },
         ally:   { color: '#2980b9', stroke: '#3498db', label: 'Союзник'  },
         player: { color: '#00cc44', stroke: '#00ff55', label: 'Игрок'    },
     };
@@ -90,7 +91,7 @@
         if (!Array.isArray(data.objects))      return 'Нет данных объектов';
         const ww = data.worldW || 900;
         const wh = data.worldH || 700;
-        const physObjs = data.objects.filter(o => o.type === 'wall' || o.type === 'box' || o.type === 'barrel');
+        const physObjs = data.objects.filter(o => o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel');
         const enemyObjs = data.objects.filter(o => o.type === 'enemy');
         const allyObjs = data.objects.filter(o => o.type === 'ally');
         if (physObjs.length > MAX_OBJECTS) return `Слишком много объектов (макс. ${MAX_OBJECTS})`;
@@ -129,7 +130,7 @@
 
     function updateHUD() {
         if (!objectCountEl) return;
-        const physCount  = meObjects.filter(o => o.type === 'wall' || o.type === 'box' || o.type === 'barrel').length;
+        const physCount  = meObjects.filter(o => o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel').length;
         const enemyCount = meObjects.filter(o => o.type === 'enemy').length;
         const allyCount  = meObjects.filter(o => o.type === 'ally').length;
         const hasPlayer  = meObjects.some(o => o.type === 'player');
@@ -379,7 +380,7 @@
                 return;
             }
         } else {
-            if (meObjects.filter(o => o.type === 'wall' || o.type === 'box' || o.type === 'barrel').length >= MAX_OBJECTS) {
+            if (meObjects.filter(o => o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel').length >= MAX_OBJECTS) {
                 showEditorToast(`Лимит объектов: ${MAX_OBJECTS}`);
                 return;
             }
@@ -592,7 +593,7 @@
     function launchCustomMap(objList, worldW, worldH) {
         worldW = worldW || curWorldW;
         worldH = worldH || curWorldH;
-        const physicsObjs = objList.filter(o => o.type === 'wall' || o.type === 'box' || o.type === 'barrel');
+        const physicsObjs = objList.filter(o => o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel');
         const enemySpawns = objList.filter(o => o.type === 'enemy');
         const allySpawns = objList.filter(o => o.type === 'ally');
         const playerSpawns = objList.filter(o => o.type === 'player');
@@ -955,14 +956,17 @@
         // Keyboard shortcut: Ctrl+Z
         document.addEventListener('keydown', (e) => {
             if (modal.style.display === 'none') return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
             if (e.key === 'Escape') closeEditor();
             if (e.key === '1') setTool('wall');
+            if (e.key.toLowerCase() === 'w') setTool('woodenWall');
             if (e.key === '2') setTool('box');
             if (e.key === '3') setTool('barrel');
             if (e.key === '4') setTool('enemy');
-            if (e.key === '5') setTool('player');
-            if (e.key === '6') setTool('erase');
+            if (e.key === '5') setTool('ally');
+            if (e.key === '6') setTool('player');
+            if (e.key === '7') setTool('erase');
         });
 
         updateHUD();

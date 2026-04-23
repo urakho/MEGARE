@@ -1653,7 +1653,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     cameraFollow = true;
 
     // Inject custom objects (with correct colors)
-    const OBJ_COLORS = { wall: '#3a3a3a', box: '#8b5a2b', barrel: '#7a4d2a' };
+    const OBJ_COLORS = { wall: '#3a3a3a', woodenWall: '#6e4f35', box: '#8b5a2b', barrel: '#7a4d2a' };
     objects = customObjects.map(o => ({ ...o, color: OBJ_COLORS[o.type] || '#888' }));
 
     // Ensure player spawn area is clear
@@ -1887,8 +1887,8 @@ function processDevCommand(rawCommand) {
 
     // /MEG on — wipes all profiles and creates a fresh empty account
     if (lc === '/meg' || lc.startsWith('/meg ')) {
-        const parts = command.split(/\s+/);
-        const arg = (parts[1] || '').toLowerCase();
+        const cmdParts = command.split(/\s+/);
+        const arg = (cmdParts[1] || '').toLowerCase();
         if (arg === 'on') {
             // Show anti-cheat warning in game modal style, then wipe on dismiss
             const overlay = document.createElement('div');
@@ -1908,8 +1908,11 @@ function processDevCommand(rawCommand) {
                     <p style="color:#aaa;font-size:0.82rem;line-height:1.6;margin:0 0 1.5rem 0;
                         border:1px solid rgba(231,76,60,0.25);border-radius:0.5rem;
                         padding:0.75rem 1rem;background:rgba(231,76,60,0.07);">
-                        Все аккаунты будут удалены и создан новый пустой профиль.
-                        Весь прогресс, танки и ресурсы будут безвозвратно потеряны.
+                        Будет сброшено <strong style="color:#e74c3c;">всё</strong>:<br>
+                        💰 Монеты, гемы, запчасти, трофеи<br>
+                        🚫 Все разблокированные танки (включая лимитированные)<br>
+                        ⚙️ Все улучшения и достижения<br>
+                        Останется только стандартный танк.
                     </p>
                     <button id="_megWipeBtn" class="btn btn-primary" style="width:100%;background:#e74c3c;border-color:#e74c3c;">
                         Принять последствия
@@ -1919,15 +1922,32 @@ function processDevCommand(rawCommand) {
             document.body.appendChild(overlay);
             overlay.querySelector('#_megWipeBtn').addEventListener('click', () => {
                 // Delete all profiles and create one blank profile
+                // Block saves during wipe
+                window._isProfileSwitching = true;
+                if (typeof clearInterval === 'function') {
+                    // Safety measure to stop immediate loops
+                    let id = window.setTimeout(function() {}, 0);
+                    while (id--) window.clearTimeout(id);
+                }
+                
+                // Clear RAM variables so if anything tries to save, it saves blank
+                if (typeof coins !== 'undefined') coins = 0;
+                if (typeof gems !== 'undefined') gems = 0;
+                if (typeof parts !== 'undefined') parts = 0;
+                if (typeof trophies !== 'undefined') trophies = 0;
+                if (typeof unlockedTanks !== 'undefined') unlockedTanks = ['normal'];
+                if (typeof tankUpgrades !== 'undefined') tankUpgrades = {};
+                if (typeof claimedRewards !== 'undefined') claimedRewards = [];
+                
                 const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
                     tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
                     tankUpgrades:'{}', tankTrophiesData:'{}',
                     tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
                     tankAvatarUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
                 const freshProfiles = [{ name: 'Игрок 1', avatar: '🎮', createdAt: Date.now(), data: blank }];
-                // Wipe all localStorage
+                // Wipe all localStorage completely
                 try { localStorage.clear(); } catch (e) {}
-                // Save only the fresh single profile
+                // Save only the fresh single blank profile
                 try { localStorage.setItem('megare_profiles', JSON.stringify(freshProfiles)); } catch (e) {}
                 try { localStorage.setItem('megare_activeProfile', '0'); } catch (e) {}
                 for (const k of PROFILE_SAVE_KEYS) {
@@ -1935,7 +1955,7 @@ function processDevCommand(rawCommand) {
                         try { localStorage.setItem(k, blank[k]); } catch (e) {}
                     }
                 }
-                window.location.replace(window.location.pathname + '?_p=' + Date.now());
+                window.location.replace(window.location.href.split('?')[0] + '?_p=' + Date.now());
             });
         } else {
             console.log('Invalid command.');
@@ -2387,17 +2407,12 @@ function _renderLimitedShopItems() {
         btn.style.cssText = 'background:linear-gradient(90deg,#ff4400,#cc2200);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:14px;cursor:pointer;width:100%;font-weight:bold;box-shadow:0 0 8px #ff4400;';
         btn.onclick = (e) => {
             e.stopPropagation();
-            const gems = parseInt(localStorage.getItem('tankGems') || '0', 10);
             if (gems < price) {
                 showNotification('❌ Недостаточно гемов!', '#e74c3c');
                 return;
             }
             // Deduct gems using the global variable to keep state in sync
-            if (typeof window.gems !== 'undefined') {
-                window.gems -= price;
-            } else {
-                localStorage.setItem('tankGems', gems - price);
-            }
+            gems -= price;
             // Unlock tank
             if (typeof unlockedTanks !== 'undefined' && !unlockedTanks.includes('kamikaze')) {
                 unlockedTanks.push('kamikaze');
@@ -2421,7 +2436,10 @@ function _renderLimitedShopItems() {
     card.appendChild(btn);
 
     // Detail on card click
-    card.onclick = () => { if (typeof showTankDetail === 'function') showTankDetail('kamikaze'); };
+    card.onclick = () => { 
+        if (!owned) return;
+        if (typeof showTankDetail === 'function') showTankDetail('kamikaze'); 
+    };
 
     container.appendChild(card);
 }
@@ -4448,7 +4466,7 @@ function update() {
                         const dRect = { x: newX, y: newY, w: d.w, h: d.h };
                         let blocked = false;
                         for (const o of objects) {
-                            if ((o.type === 'wall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(dRect, o)) {
+                            if ((o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(dRect, o)) {
                                 blocked = true; break;
                             }
                         }
@@ -4460,7 +4478,7 @@ function update() {
                             const ryRect = { x: d.x, y: d.y + stepY, w: d.w, h: d.h };
                             let slideX = true, slideY = true;
                             for (const o of objects) {
-                                if (o.type !== 'wall' && o.type !== 'box' && o.type !== 'barrel') continue;
+                                if (o.type !== 'wall' && o.type !== 'woodenWall' && o.type !== 'box' && o.type !== 'barrel') continue;
                                 if (checkRectCollision(rxRect, o)) slideX = false;
                                 if (checkRectCollision(ryRect, o)) slideY = false;
                             }
@@ -4474,7 +4492,7 @@ function update() {
                                 const wrRect = { x: d.x + wx, y: d.y + wy, w: d.w, h: d.h };
                                 let wBlocked = false;
                                 for (const o of objects) {
-                                    if ((o.type === 'wall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(wrRect, o)) {
+                                    if ((o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && checkRectCollision(wrRect, o)) {
                                         wBlocked = true; break;
                                     }
                                 }
