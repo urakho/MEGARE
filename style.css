@@ -1232,7 +1232,7 @@ canvas.tank-display {
         overflow-y: auto;
     }
     /* Полноэкранные модалки — контент от верха */
-    #characterModal, #shopModal {
+    #characterModal, #shopModal, #trophyRoadModal {
         justify-content: flex-start;
     }
     .modal-box {
@@ -1244,7 +1244,7 @@ canvas.tank-display {
         padding: 1rem 0.875rem;
         border-radius: 0.75rem;
         box-sizing: border-box;
-        margin: auto;
+        margin: 1rem auto auto auto; /* Fixes top-cutoff for tall modals by preventing flex from distributing negative space upwards */
         flex-shrink: 0;
     }
 
@@ -1398,6 +1398,7 @@ canvas.tank-display {
         flex-direction: column;
         overflow: hidden;
         padding: 0.625rem;
+        padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
         margin: 0;
     }
     .char-grid {
@@ -1433,12 +1434,15 @@ canvas.tank-display {
     #trophyRoadModal .modal-box {
         display: flex;
         flex-direction: column;
-        max-height: 92vh;
+        height: auto;
+        max-height: none;
+        overflow: visible;
     }
     #trophyRoadModal #trophyRoadContainer {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
+        height: auto;
         min-height: 0;
-        overflow-y: auto;
+        overflow: visible;
     }
     #trophyRoadModal > .modal-box > div:last-child { flex-shrink: 0; padding-top: 0.625rem; }
     .trophy-milestone { min-width: 3.44rem; font-size: 0.94rem; }
@@ -1647,16 +1651,18 @@ canvas.tank-display {
     /* ════════════════════
        ТРОФЕЙНАЯ ДОРОГА
        ════════════════════ */
-    #trophyRoadContainer { max-height: 55svh; }
     /* Трофейная дорога в пейзаже: кнопка всегда видна */
     #trophyRoadModal .modal-box {
         display: flex;
         flex-direction: column;
+        height: auto;
+        max-height: none;
+        overflow: visible;
     }
     #trophyRoadModal #trophyRoadContainer {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
+        flex: 0 0 auto;
+        height: auto;
+        overflow: visible;
     }
     #trophyRoadModal > .modal-box > div:last-child {
         flex-shrink: 0;

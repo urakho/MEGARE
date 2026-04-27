@@ -210,6 +210,62 @@ function updateNovaZones() {
 }
 
 // Create an instant electric nova that hits ALL enemies in radius and ignores walls
+// Ice Wave Ultimate: completely freezes (paralyzes) all enemies/allies on opposing teams within radius
+function createIceNova(centerX, centerY, radius = 280, ownerTeam = 0) {
+    // Freeze enemies (skip other ice tanks — they're immune)
+    if (typeof enemies !== 'undefined') {
+        for (let i = 0; i < enemies.length; i++) {
+            const e = enemies[i];
+            if (!e || !e.alive || e.team === ownerTeam) continue;
+            if (e.tankType === 'ice') continue;
+            const ex = e.x + e.w / 2;
+            const ey = e.y + e.h / 2;
+            const d = Math.hypot(ex - centerX, ey - centerY);
+            if (d <= radius) {
+                e.paralyzed = true;
+                e.paralyzedTime = 240; // 4 seconds full freeze
+                e.frozenEffect = 240;
+                for (let k = 0; k < 8; k++) spawnParticle(ex + (Math.random()-0.5)*e.w, ey + (Math.random()-0.5)*e.h, '#a8e6ff', 1.0);
+            }
+        }
+    }
+    // Freeze allied bots only if from opposing team (rarely happens, but for completeness)
+    if (typeof allies !== 'undefined') {
+        for (let i = 0; i < allies.length; i++) {
+            const a = allies[i];
+            if (!a || !a.alive || a.team === ownerTeam) continue;
+            if (a.tankType === 'ice') continue;
+            const ax = a.x + a.w / 2;
+            const ay = a.y + a.h / 2;
+            const d = Math.hypot(ax - centerX, ay - centerY);
+            if (d <= radius) {
+                a.paralyzed = true;
+                a.paralyzedTime = 240;
+                a.frozenEffect = 240;
+                for (let k = 0; k < 8; k++) spawnParticle(ax + (Math.random()-0.5)*a.w, ay + (Math.random()-0.5)*a.h, '#a8e6ff', 1.0);
+            }
+        }
+    }
+    // Player tank: skip if ice tank, otherwise freeze if on opposing team
+    if (typeof tank !== 'undefined' && tank.alive && tank.team !== ownerTeam && (typeof tankType === 'undefined' || tankType !== 'ice')) {
+        const tx = tank.x + tank.w / 2;
+        const ty = tank.y + tank.h / 2;
+        const d = Math.hypot(tx - centerX, ty - centerY);
+        if (d <= radius) {
+            tank.paralyzed = true;
+            tank.paralyzedTime = 240;
+            tank.frozenEffect = 240;
+        }
+    }
+    // Expanding ring particles
+    for (let p = 0; p < 60; p++) {
+        const ang = (p / 60) * Math.PI * 2;
+        spawnParticle(centerX + Math.cos(ang)*radius*0.7, centerY + Math.sin(ang)*radius*0.7, '#cef2ff', 1.2);
+    }
+    // Center burst
+    for (let p = 0; p < 30; p++) spawnParticle(centerX + (Math.random()-0.5)*radius*0.5, centerY + (Math.random()-0.5)*radius*0.5, '#aef0ff', 0.8);
+}
+
 function createElectricNova(centerX, centerY, radius = 200, damage = 200, ownerTeam = 0) {
     // Add nova damage zone (enemies take damage while rays are visible)
     if (typeof novaZones !== 'undefined') {
@@ -710,7 +766,7 @@ function shoot() {
     } else if (tankType === 'plasma') {
         // Plasma tank: fires a single piercing plasma bolt
         const speed = 8;
-        const life = 200; // long range
+        const life = 219; // ~35 cells range
         bullets.push({
             x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
             y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
@@ -724,7 +780,7 @@ function shoot() {
             damage: 350, // 350 base damage (will be multiplied by upgrades separately)
             piercing: true // can hit multiple targets
         });
-        tank.fireCooldown = 180; // 3 second cooldown
+        tank.fireCooldown = 300; // 0.2 shots per second
     } else if (tankType === 'musical') {
         // Musical tank: sound wave projectile that ricochets
         const speed = 6;
@@ -734,7 +790,7 @@ function shoot() {
             w: 12, h: 12,
             vx: Math.cos(tank.turretAngle) * speed,
             vy: Math.sin(tank.turretAngle) * speed,
-            life: 180,
+            life: 167,
             team: 0,
             type: 'musical',
             damage: 200, // 200 damage
@@ -767,6 +823,7 @@ function shoot() {
             team: 0,
             type: 'ice'
         });
+        tank.fireCooldown = 30; // 2 shots per second
     } else if (tankType === 'mirror') {
         // Mirror tank: check if hit recently
         let pType = 'mirror';
@@ -930,7 +987,7 @@ function shoot() {
             w: 6, h: 6,
             vx: Math.cos(ang) * speed,
             vy: Math.sin(ang) * speed,
-            life: 110,
+            life: 70,
             owner: 'player',
             team: 0,
             type: 'railgun',
@@ -955,7 +1012,7 @@ function shoot() {
             damage: 75,  // Damage to enemies
             healAmount: 30  // Healing to allies
         });
-        tank.fireCooldown = 45; // ~0.75 sec
+        tank.fireCooldown = 60; // 1 shot per second
     } else if (tankType === 'mine') {
         // Place a landmine at the tank's current centre position
         if (typeof mines !== 'undefined') {
@@ -995,13 +1052,13 @@ function shoot() {
             w: 10, h: 10,
             vx: Math.cos(ang) * 6,
             vy: Math.sin(ang) * 6,
-            life: 110,
+            life: 100,
             owner: 'player',
             team: 0,
             type: 'kamikazeBullet',
             damage: 100
         });
-        tank.fireCooldown = 35;
+        tank.fireCooldown = 30; // 2 shots per second
     } else if (tankType === 'roman') {
         // Throwing blade: 125 dmg, spins visually, ricochets 1 time
         bullets.push({
@@ -1018,7 +1075,7 @@ function shoot() {
             maxBounces: 1,
             spinAngle: 0
         });
-        tank.fireCooldown = 65;
+        tank.fireCooldown = 60; // 1 shot per second
     } else if (tankType === 'pyro') {
         // Incendiary shell: deals 70 impact damage and applies burn DoT on hit
         const ang = tank.turretAngle;
@@ -1035,7 +1092,24 @@ function shoot() {
             type: 'pyroBullet',
             damage: 70
         });
-        tank.fireCooldown = 35;
+        tank.fireCooldown = 40; // 1.5 shots per second
+    } else if (tankType === 'air') {
+        // Air tank: knockback projectile, 15 cell range, 80 damage
+        const ang = tank.turretAngle;
+        const speed = 6;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 22,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 22,
+            w: 10, h: 10,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            life: 125, // 6 * 125 / 50 = 15 cells
+            owner: 'player',
+            team: 0,
+            type: 'airBullet',
+            damage: 80
+        });
+        tank.fireCooldown = 40; // 1.5 shots per second
     } else if (tankType === 'mechShield') {
         // Shield mech: 120 damage projectile that can break walls with 6 hits
         const speed = 5;
@@ -1085,8 +1159,8 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket') {
-        tank.fireCooldown = (tankType === 'mirror' ? 90 : FIRE_COOLDOWN); // 1.5sec for mirror
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical') {
+        tank.fireCooldown = (tankType === 'mirror' ? 90 : (tankType === 'normal' ? 30 : FIRE_COOLDOWN)); // 1.5sec for mirror, normal 2 shots/s
     }
 }
 // --- APPEND_POINT_UPDATE ---
@@ -1593,8 +1667,18 @@ function updatePhysics() {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      dmg = Math.round(dmg * _shieldMult);
                      tank.hp -= dmg;
-                     if (b.type === 'ice' && tankType !== 'ice') { tank.paralyzed = true; tank.paralyzedTime = 180; tank.frozenEffect = 180; }
+                     if (b.type === 'ice' && tankType !== 'ice') { tank.iceSlowed = true; tank.iceSlowedTime = 240; tank.frozenEffect = 240; }
                      if (b.type === 'pyroBullet') { tank.burning = true; tank.burnTimer = 300; tank.burnDps = 10; }
+                     // Air bullet: apply smooth wind knockback to player
+                     if (b.type === 'airBullet') {
+                         const kbAng = Math.atan2(b.vy, b.vx);
+                         tank.windPushVx = Math.cos(kbAng) * 10;
+                         tank.windPushVy = Math.sin(kbAng) * 10;
+                         for (let k = 0; k < 6; k++) {
+                             const pa = kbAng + (Math.random() - 0.5) * 1.2;
+                             spawnParticle(tank.x + tank.w/2 + Math.cos(pa)*8, tank.y + tank.h/2 + Math.sin(pa)*8, '#a0ffe8', 0.7);
+                         }
+                     }
                      bullets.splice(i, 1);
                 }
                 tank.hitFlashTime = Date.now();
@@ -1712,7 +1796,7 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                     } else {
                         a.hp = (a.hp || 300) - (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
-                        if (b.type === 'ice' && a.tankType !== 'ice') { a.paralyzed = true; a.paralyzedTime = 180; a.frozenEffect = 180; }
+                        if (b.type === 'ice' && a.tankType !== 'ice') { a.iceSlowed = true; a.iceSlowedTime = 240; a.frozenEffect = 240; }
                         bullets.splice(i, 1);
                     }
                     if (a.hp <= 0) {
@@ -1883,11 +1967,23 @@ function updatePhysics() {
                         let dmgDefault = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.owner === 'player') dmgDefault = applyPlayerDamage(dmgDefault);
                         e.hp -= dmgDefault;
-                        if (b.type === 'ice' && e.tankType !== 'ice') { e.paralyzed = true; e.paralyzedTime = 180; e.frozenEffect = 180; }
+                        if (b.type === 'ice' && e.tankType !== 'ice') { e.iceSlowed = true; e.iceSlowedTime = 240; e.frozenEffect = 240; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         // Pyro bullet: apply burn DoT (10 HP/sec for 5 sec)
                         if (b.type === 'pyroBullet') { 
                             if (!e.isBoss) { e.burning = true; e.burnTimer = 300; e.burnDps = 10; }
+                        }
+                        // Air bullet: apply smooth wind knockback
+                        if (b.type === 'airBullet') {
+                            const kbAng = Math.atan2(b.vy, b.vx);
+                            const kbStr = e.isBoss ? 4 : 10;
+                            e.windPushVx = Math.cos(kbAng) * kbStr;
+                            e.windPushVy = Math.sin(kbAng) * kbStr;
+                            // Wind burst particles
+                            for (let k = 0; k < 6; k++) {
+                                const pa = kbAng + (Math.random() - 0.5) * 1.2;
+                                spawnParticle(e.x + e.w/2 + Math.cos(pa)*8, e.y + e.h/2 + Math.sin(pa)*8, '#a0ffe8', 0.7);
+                            }
                         }
                         bullets.splice(i, 1);
                     }

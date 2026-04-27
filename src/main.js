@@ -374,8 +374,7 @@ let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
 // Новая валюта: детали (пока недоступны в наградах)
 let parts = parseInt(localStorage.getItem('tankParts')) || 0;
-// Developer commands unlock flag (persisted) — requires /MEGADURA on
-let devCommandsUnlocked = false; // Always reset on page load — must re-enter /MEGADURA on each session
+// Developer commands unlock flag — managed by src/admin.js (devCommandsUnlocked is declared there)
 
 // ─── Tank characteristic upgrades ────────────────────────────────────────────
 // Structure: { [tankType]: { hp: 0-3, dmg: 0-3, spd: 0-3 } }
@@ -460,10 +459,11 @@ function initializeTrophySystem() {
 
 const tankGemPrices = {
     'normal': 0,
-    'ice': 150,       // Редкий
+    'ice': 500,       // Эпический
     'machinegun': 150,// Редкий
     'buckshot': 150,  // Редкий
     'pyro': 150,      // Редкий
+    'air': 150,       // Редкий
     'spartan': 300,   // Сверхредкий
     'fire': 300,      // Сверхредкий
     'waterjet': 300,  // Сверхредкий
@@ -498,17 +498,46 @@ function getMinimumTrophyLevel() {
     return maxClaimedLevel;
 }
 
-// Функция для безопасного снятия трофеев (с защитой от опускания ниже полученных наград)
+// Функция для безопасного снятия глобальных трофеев (с защитой от опускания ниже полученных наград)
 function loseTrophies(amount = 1) {
     if (window._isProfileSwitching) return;
     const minLevel = getMinimumTrophyLevel();
     const newTrophyCount = Math.max(minLevel, trophies - amount);
+    let changed = false;
     
     if (newTrophyCount < trophies) {
         trophies = newTrophyCount;
-        saveProgress();
+        changed = true;
         console.log(`Трофеи снижены до ${trophies} (минимум: ${minLevel})`);
     }
+    
+    if (loseIndividualTankTrophies(tankType, amount)) {
+        changed = true;
+    }
+    
+    if (changed) {
+        saveProgress();
+    }
+}
+
+// Снятие трофеев с конкретного танка (возвращает true если трофеи убавились)
+function loseIndividualTankTrophies(tType, amount) {
+    if (window._isProfileSwitching) return false;
+    try {
+        const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData')) || {};
+        let currentTankTrophies = tankTrophiesData[tType] || 0;
+        let newTankTrophies = Math.max(0, currentTankTrophies - amount);
+        
+        if (newTankTrophies < currentTankTrophies) {
+            tankTrophiesData[tType] = newTankTrophies;
+            localStorage.setItem('tankTrophiesData', JSON.stringify(tankTrophiesData));
+            console.log(`Танку ${tType} снято ${currentTankTrophies - newTankTrophies} трофеев (всего: ${newTankTrophies})`);
+            return true;
+        }
+    } catch (e) {
+        console.error('Error saving tank trophies:', e);
+    }
+    return false;
 }
 
 // Get per-tank trophies from localStorage
@@ -538,6 +567,7 @@ function addIndividualTankTrophies(tankType, amount) {
 // Mode-aware trophy loss: 3 for team, 5 for onevsall, 1 for single and duel
 function loseModeTrophies() {
     if (currentMode === 'training') return;
+    if (currentMode === 'trial') return; // no trophy loss on trial
     if (window._customMapActive) return; // no trophy loss on custom maps
     if (currentMode === 'team') {
         loseTrophies(3);
@@ -604,6 +634,7 @@ const tankMaxHpByType = {
     'mechShield': 600,
     'mechRocket': 450,
     'kamikaze': 300,
+    'air': 200,
     'boss_hell': 7500
 };
 
@@ -641,7 +672,8 @@ const tankMaxSpeedByType = {
     'mechDiy': 2.4,
     'mechShield': 2.3,
     'mechRocket': 2.1,
-    'kamikaze': 3.0
+    'kamikaze': 3.0,
+    'air': 3.4
 };
 
 function setTankSpeed(type) {
@@ -760,8 +792,8 @@ window.onkeydown = (e) => {
             versionModal.style.display = 'flex';
         }
     }
-    // Command input toggle with /
-    if (e.code === 'Slash' && !e.shiftKey && gameState === 'menu') {
+    // Command input toggle with / (only when admin console is enabled)
+    if (e.code === 'Slash' && !e.shiftKey && gameState === 'menu' && typeof ADMIN_ENABLED !== 'undefined' && ADMIN_ENABLED === 'on') {
         e.preventDefault();
         const commandModal = document.getElementById('commandModal');
         if (commandModal) {
@@ -862,9 +894,9 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
 
     btn.addEventListener('click', () => { modal.style.display = 'flex'; });
 
-    // Commands button inside settings modal
+    // Commands button inside settings modal (only when admin console is enabled)
     const settingsCommandBtn = document.getElementById('settingsCommandBtn');
-    if (settingsCommandBtn) {
+    if (settingsCommandBtn && (typeof ADMIN_ENABLED === 'undefined' || ADMIN_ENABLED === 'on')) {
         settingsCommandBtn.addEventListener('click', () => {
             modal.style.display = 'none';
             const commandModal = document.getElementById('commandModal');
@@ -1106,7 +1138,7 @@ function updateMusic() {
 
     // ---- Attack joystick mode: 'attack' | 'ult' ----
     // Quick tap (<200ms, no drag) toggles between attack and ult mode (if tank has ult)
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket', 'ice'];
     let attackMode = 'attack';
     let attackTapStartTime = 0;
     let attackTapStartX = 0, attackTapStartY = 0;
@@ -1249,23 +1281,7 @@ window.addEventListener('wheel', (e) => {
     tank.turretAngle += e.deltaY * 0.0015;
 });
 
-// Command input handling
-if (commandInput) {
-    commandInput.addEventListener('keydown', (e) => {
-        if (e.code === 'Enter') {
-            const command = commandInput.value.trim();
-            processDevCommand(command);
-            commandInput.value = '';
-            commandInput.style.display = 'none';
-            commandInput.blur();
-            e.stopImmediatePropagation();
-        } else if (e.code === 'Escape') {
-            commandInput.value = '';
-            commandInput.style.display = 'none';
-            commandInput.blur();
-        }
-    });
-}
+// Command input keydown is handled in src/admin.js
 
 // Preview canvas drawing
 const previewCanvas = document.getElementById('previewCanvas');
@@ -1311,6 +1327,8 @@ const romanTankPreview = document.getElementById('romanTankPreview');
 const romanTankCtx = romanTankPreview && romanTankPreview.getContext ? romanTankPreview.getContext('2d') : null;
 const pyroTankPreview = document.getElementById('pyroTankPreview');
 const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
+const airTankPreview = document.getElementById('airTankPreview');
+const airTankCtx = airTankPreview && airTankPreview.getContext ? airTankPreview.getContext('2d') : null;
 const spartanTankPreview = document.getElementById('spartanTankPreview');
 const spartanTankCtx = spartanTankPreview && spartanTankPreview.getContext ? spartanTankPreview.getContext('2d') : null;
 const kamikazeTankPreview = document.getElementById('kamikazeTankPreview');
@@ -1843,15 +1861,7 @@ if (charTabTanks && charTabMechs && charGridTanks && charGridMechs) {
 
 if (closeTrophyRoad) closeTrophyRoad.addEventListener('click', () => { if (trophyRoadModal) trophyRoadModal.style.display = 'none'; });
 
-// Command modal handlers
-const commandModal = document.getElementById('commandModal');
-const commandExecute = document.getElementById('commandExecute');
-const commandCancel = document.getElementById('commandCancel');
-if (commandExecute) commandExecute.addEventListener('click', () => {
-    processDevCommand(commandInput.value);
-    commandInput.value = '';
-    if (commandModal) commandModal.style.display = 'none';
-});
+// Command modal handlers (commandExecute/commandCancel/helpClose) are wired in src/admin.js
 
 // Duel mode handler
 const modeDuel = document.getElementById('modeDuel');
@@ -1861,416 +1871,7 @@ if (modeDuel) modeDuel.addEventListener('click', () => startGame('duel'));
 const modeBossFight = document.getElementById('modeBossFight');
 if (modeBossFight) modeBossFight.addEventListener('click', () => startGame('bossfight'));
 
-function processDevCommand(rawCommand) {
-    const command = rawCommand.trim();
-    if (!command) return;
-
-    const lc = command.toLowerCase();
-
-    // /MEGADURA on|off — master gate for all developer commands
-    if (lc === '/megadura' || lc.startsWith('/megadura ')) {
-        const parts = command.split(/\s+/);
-        const arg = (parts[1] || '').toLowerCase();
-        if (arg === 'on') {
-            devCommandsUnlocked = true;
-            try { localStorage.setItem('tankDevUnlocked', 'true'); } catch (e) {}
-            console.log('Developer commands enabled (/MEGADURA on).');
-        } else if (arg === 'off') {
-            devCommandsUnlocked = false;
-            try { localStorage.setItem('tankDevUnlocked', 'false'); } catch (e) {}
-            console.log('Developer commands disabled (/MEGADURA off).');
-        } else {
-            console.log('Usage: /MEGADURA on|off');
-        }
-        return;
-    }
-
-    // /MEG on — wipes all profiles and creates a fresh empty account
-    if (lc === '/meg' || lc.startsWith('/meg ')) {
-        const cmdParts = command.split(/\s+/);
-        const arg = (cmdParts[1] || '').toLowerCase();
-        if (arg === 'on') {
-            // Show anti-cheat warning in game modal style, then wipe on dismiss
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-overlay';
-            overlay.id = '_megWipeOverlay';
-            overlay.style.cssText = 'display:flex; z-index:99999;';
-            overlay.innerHTML = `
-                <div class="modal-box" style="background:#0d0000;border:2px solid #e74c3c;max-width:min(32rem,95vw);text-align:center;">
-                    <div style="font-size:2.5rem;margin-bottom:1rem;">⛔</div>
-                    <h2 class="modal-title" style="color:#e74c3c;font-size:1.3rem;letter-spacing:0.1rem;">
-                        Обнаружено использование читов
-                    </h2>
-                    <p style="color:#ddd;font-size:0.9rem;line-height:1.7;margin:0 0 0.75rem 0;">
-                        Использование читов разрушает <strong style="color:#e74c3c;">честную игру</strong>
-                        и опыт других игроков. Это нечестно по отношению к тем, кто играет честно.
-                    </p>
-                    <p style="color:#aaa;font-size:0.82rem;line-height:1.6;margin:0 0 1.5rem 0;
-                        border:1px solid rgba(231,76,60,0.25);border-radius:0.5rem;
-                        padding:0.75rem 1rem;background:rgba(231,76,60,0.07);">
-                        Будет сброшено <strong style="color:#e74c3c;">всё</strong>:<br>
-                        💰 Монеты, гемы, запчасти, трофеи<br>
-                        🚫 Все разблокированные танки (включая лимитированные)<br>
-                        ⚙️ Все улучшения и достижения<br>
-                        Останется только стандартный танк.
-                    </p>
-                    <button id="_megWipeBtn" class="btn btn-primary" style="width:100%;background:#e74c3c;border-color:#e74c3c;">
-                        Принять последствия
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-            overlay.querySelector('#_megWipeBtn').addEventListener('click', () => {
-                // Delete all profiles and create one blank profile
-                // Block saves during wipe
-                window._isProfileSwitching = true;
-                if (typeof clearInterval === 'function') {
-                    // Safety measure to stop immediate loops
-                    let id = window.setTimeout(function() {}, 0);
-                    while (id--) window.clearTimeout(id);
-                }
-                
-                // Clear RAM variables so if anything tries to save, it saves blank
-                if (typeof coins !== 'undefined') coins = 0;
-                if (typeof gems !== 'undefined') gems = 0;
-                if (typeof parts !== 'undefined') parts = 0;
-                if (typeof trophies !== 'undefined') trophies = 0;
-                if (typeof unlockedTanks !== 'undefined') unlockedTanks = ['normal'];
-                if (typeof tankUpgrades !== 'undefined') tankUpgrades = {};
-                if (typeof claimedRewards !== 'undefined') claimedRewards = [];
-                
-                const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
-                    tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
-                    tankUpgrades:'{}', tankTrophiesData:'{}',
-                    tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
-                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
-                const freshProfiles = [{ name: 'Игрок 1', avatar: '🎮', createdAt: Date.now(), data: blank }];
-                // Wipe all localStorage completely
-                try { localStorage.clear(); } catch (e) {}
-                // Save only the fresh single blank profile
-                try { localStorage.setItem('megare_profiles', JSON.stringify(freshProfiles)); } catch (e) {}
-                try { localStorage.setItem('megare_activeProfile', '0'); } catch (e) {}
-                for (const k of PROFILE_SAVE_KEYS) {
-                    if (blank[k] !== undefined) {
-                        try { localStorage.setItem(k, blank[k]); } catch (e) {}
-                    }
-                }
-                window.location.replace(window.location.href.split('?')[0] + '?_p=' + Date.now());
-            });
-        } else {
-            console.log('Invalid command.');
-        }
-        return;
-    }
-
-    // If not unlocked, skip remaining dev commands (including /god)
-    if (!devCommandsUnlocked) {
-        console.log('Developer commands are disabled. Use /MEGADURA on to enable.');
-        return;
-    }
-
-    // God mode requires dev commands to be unlocked
-    if (command.toLowerCase().startsWith('/god')) {
-        console.log('[DEBUG] God command triggered:', command);
-        const parts = command.split(/\s+/);
-        const arg = (parts[1] || '').toLowerCase();
-        console.log('[DEBUG] God arg:', arg);
-        
-        if (arg === 'on') {
-            godMode = true;
-            console.log('[DEBUG] godMode variable set to:', godMode);
-            
-            // Try to apply immediately even if tank doesn't exist
-            if (typeof tank !== 'undefined' && tank) {
-                console.log('[DEBUG] Tank exists, applying 100000 HP');
-                tank.hp = 100000;
-                tank.maxHp = 100000;
-                console.log('✓ God mode ENABLED: 100000 HP, 1000x damage');
-            } else {
-                console.log('[DEBUG] Tank does not exist yet');
-                console.log('✓ God mode flag enabled. Start a game to apply 100000 HP.');
-            }
-        } else if (arg === 'off') {
-            godMode = false;
-            console.log('[DEBUG] godMode variable set to:', godMode);
-            if (typeof tank !== 'undefined' && tank && typeof setTankHP === 'function') {
-                setTankHP(tankType);
-            }
-            console.log('✓ God mode DISABLED');
-        } else {
-            console.log('Usage: /god on|off');
-        }
-        return;
-    }
-
-    if (command.startsWith('/cash')) {
-        const parts = command.substring(5).trim().split(/\s+/);
-        let op = '+'; 
-        let valStr = parts[0];
-        
-        if (['+', '-', '='].includes(parts[0])) {
-            op = parts[0];
-            valStr = parts[1];
-        }
-        
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount >= 0) {
-            if (op === '+') coins += amount;
-            else if (op === '-') coins = Math.max(0, coins - amount);
-            else if (op === '=') coins = amount;
-            
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Coins updated: ${coins}`);
-        }
-    } else if (command.startsWith('/crystal')) {
-        const parts = command.substring(8).trim().split(/\s+/);
-        let op = '+'; 
-        let valStr = parts[0];
-        
-        if (['+', '-', '='].includes(parts[0])) {
-            op = parts[0];
-            valStr = parts[1];
-        }
-        
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount >= 0) {
-            if (op === '+') gems += amount;
-            else if (op === '-') gems = Math.max(0, gems - amount);
-            else if (op === '=') gems = amount;
-            
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Gems updated: ${gems}`);
-        }
-    } else if (command.startsWith('/scrap')) {
-        const args = command.substring(6).trim().split(/\s+/);
-        let op = '+'; 
-        let valStr = args[0];
-        
-        if (['+', '-', '='].includes(args[0])) {
-            op = args[0];
-            valStr = args[1];
-        }
-        
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount >= 0) {
-            if (op === '+') parts += amount;
-            else if (op === '-') parts = Math.max(0, parts - amount);
-            else if (op === '=') parts = amount;
-            
-            localStorage.setItem('tankParts', parts);
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Parts updated: ${parts}`);
-        }
-    } else if (command.startsWith('/trophy')) {
-        const trophyParts = command.substring(7).trim().split(/\s+/);
-        let op = '='; 
-        let valStr = trophyParts[0];
-        
-        if (['+', '-', '='].includes(trophyParts[0])) {
-            op = trophyParts[0];
-            valStr = trophyParts[1];
-        }
-        
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount >= 0) {
-            if (op === '+') trophies += amount;
-            else if (op === '-') trophies = Math.max(0, trophies - amount);
-            else if (op === '=') {
-                trophies = amount;
-                // Reset claimed rewards when setting trophies
-                claimedRewards = [];
-                console.log('Trophy rewards reset!');
-            }
-            
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Trophies updated: ${trophies}`);
-            
-            // Refresh trophy road if it's open
-            if (trophyRoadModal && trophyRoadModal.style.display === 'flex') {
-                generateTrophyRoad();
-            }
-        }
-    } else if (command === '/clear t') {
-        unlockedTanks = ['normal'];
-        saveProgress();
-        // Force switch to normal tank
-        if (typeof window.setSelectedTank === 'function') window.setSelectedTank('normal');
-        console.log('All tanks except normal are locked.');
-        // Update UI if character modal is open
-        if (typeof drawCharacterPreviews === 'function' && characterModal && characterModal.style.display === 'flex') {
-            drawCharacterPreviews();
-        }
-    } else if (command === '/clear en') {
-        tankUpgrades = {};
-        saveTankUpgrades();
-        // Re-apply stats for current tank immediately
-        if (typeof setTankHP    === 'function') setTankHP(tankType);
-        if (typeof setTankSpeed === 'function') setTankSpeed(tankType);
-        console.log('All tank upgrades cleared.');
-    } else if (command === '/clear ic') {
-        // Remove ALL non-common icon unlocks: clear tankAvatarUnlocks entirely
-        // (common avatars are free by default and don't need entries in this array)
-        localStorage.setItem('tankAvatarUnlocks', JSON.stringify([]));
-        // Clear all icon/promo claims from achievementData
-        if (!achievementData.claimed) achievementData.claimed = {};
-        Object.keys(achievementData.claimed).forEach(k => {
-            const def = ACHIEVEMENT_DEFS.find(a => a.id === k);
-            if ((def && def.group === 'icon') || k === 'icon_tank' || k.startsWith('easter_')) delete achievementData.claimed[k];
-        });
-        // Assign random common avatars to each tank
-        const commonAvatars = PROFILE_AVATAR_TIERS.common;
-        const selectedAvatars = {};
-        const allTankTypes = unlockedTanks || ['normal'];
-        allTankTypes.forEach(tType => {
-            selectedAvatars[tType] = commonAvatars[Math.floor(Math.random() * commonAvatars.length)];
-        });
-        localStorage.setItem('tankSelectedAvatars', JSON.stringify(selectedAvatars));
-        saveAchievements();
-        if (typeof saveProgress === 'function') saveProgress();
-        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
-        console.log('All non-common icon unlocks cleared. Random common avatars assigned.');
-        showNotification('🎲 Все иконки очищены, выданы обычные аватары', '#27ae60');
-    } else if (command === '/clear ac') {
-        // Clear all achievements
-        achievementData = {};
-        localStorage.setItem('achievementData', JSON.stringify(achievementData));
-        saveAchievements();
-        if (typeof saveProgress === 'function') saveProgress();
-        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
-        console.log('All achievements cleared.');
-        showNotification('✓ Все достижения очищены', '#27ae60');
-    } else if (command.startsWith('/uncoin')) {
-        // Set coins to negative value
-        const valStr = command.substring(7).trim();
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount > 0) {
-            coins = -amount;
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Coins set to: ${coins}`);
-        } else {
-            console.log('Usage: /uncoin [number]');
-        }
-    } else if (command.startsWith('/ungem')) {
-        // Set gems to negative value
-        const valStr = command.substring(6).trim();
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount > 0) {
-            gems = -amount;
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Gems set to: ${gems}`);
-        } else {
-            console.log('Usage: /ungem [number]');
-        }
-    } else if (command.startsWith('/unpart')) {
-        // Set parts to negative value
-        const valStr = command.substring(7).trim();
-        const amount = parseInt(valStr);
-        if (!isNaN(amount) && amount > 0) {
-            parts = -amount;
-            localStorage.setItem('tankParts', parts);
-            updateCoinDisplay();
-            saveProgress();
-            console.log(`Parts set to: ${parts}`);
-        } else {
-            console.log('Usage: /unpart [number]');
-        }
-    } else if (command === '/aid' || command === '/commands') {
-        if (!devCommandsUnlocked) {
-            console.log('Команда /aid доступна только при включённом /MEGADURA on.');
-            return;
-        }
-        const helpText = [
-            '╔══════════════════════════════════════╗',
-            '║       ДОСТУПНЫЕ КОМАНДЫ              ║',
-            '╠══════════════════════════════════════╣',
-            '  ── Доступ к командам ──',
-            '  /MEGADURA on|off',
-            '    Включить/отключить режим разработчика',
-            '',
-            '  ── Только при /MEGADURA on ──',
-            '  /god on|off',
-            '    Режим бога (100000 HP, 1000x урон)',
-            '',
-            '  /cash [+/-/=] [число]',
-            '    Управление монетами',
-            '  /crystal [+/-/=] [число]',
-            '    Управление гемами',
-            '  /scrap [+/-/=] [число]',
-            '    Управление частями',
-            '  /trophy [+/-/=] [число]',
-            '    Управление трофеями (= сбрасывает награды)',
-            '',
-            '  ── Отрицательные ресурсы ──',
-            '  /uncoin [число]   Установить отриц. монеты',
-            '  /ungem [число]    Установить отриц. гемы',
-            '  /unpart [число]   Установить отриц. части',
-            '',
-            '  ── Особое ──',
-            '  /aid    Показать этот список',
-            '  ── Прочее(без команды /MEGADURA on) ──',
-            '  /clear t   Сбросить все танки (кроме обычного)',
-            '  /clear en  Сбросить все улучшения',
-            '  /clear ic  Сбросить все иконки профиля',
-            '  /clear ac  Сбросить все достижения',
-            '╚══════════════════════════════════════╝',
-        ].join('\n');
-        console.log(helpText);
-        // Show in separate help modal
-        const helpContent = document.getElementById('helpContent');
-        if (helpContent) {
-            helpContent.textContent = helpText;
-            const helpModal = document.getElementById('helpModal');
-            if (helpModal) helpModal.style.display = 'flex';
-        }
-    }
-}
-
-if (commandCancel) commandCancel.addEventListener('click', () => {
-    commandInput.value = '';
-    if (commandModal) commandModal.style.display = 'none';
-});
-if (commandModal) {
-    commandModal.addEventListener('click', (e) => {
-        if (e.target === commandModal) {
-            commandInput.value = '';
-            commandModal.style.display = 'none';
-        }
-    });
-}
-if (commandInput) {
-    commandInput.addEventListener('keydown', (e) => {
-        if (e.code === 'Enter') {
-            processDevCommand(commandInput.value);
-            commandInput.value = '';
-            if (commandModal) commandModal.style.display = 'none';
-        } else if (e.code === 'Escape') {
-            commandInput.value = '';
-            if (commandModal) commandModal.style.display = 'none';
-        }
-    });
-}
-
-const helpClose = document.getElementById('helpClose');
-if (helpClose) helpClose.addEventListener('click', () => {
-    const helpModal = document.getElementById('helpModal');
-    if (helpModal) helpModal.style.display = 'none';
-});
-const helpModal = document.getElementById('helpModal');
-if (helpModal) {
-    helpModal.addEventListener('click', (e) => {
-        if (e.target === helpModal) {
-            helpModal.style.display = 'none';
-        }
-    });
-}
-
-
+// processDevCommand and all modal event handlers are in src/admin.js
 
 // Win/lose overlay moved to src/win-lose.js
 // See src/win-lose.js for the result UI, messages and helper
@@ -2859,6 +2460,10 @@ const selectPyroTank = document.getElementById('selectPyroTank');
 if (selectPyroTank) selectPyroTank.addEventListener('click', () => {
     showTankDetail('pyro');
 });
+const selectAirTank = document.getElementById('selectAirTank');
+if (selectAirTank) selectAirTank.addEventListener('click', () => {
+    showTankDetail('air');
+});
 const selectSpartanTank = document.getElementById('selectSpartanTank');
 if (selectSpartanTank) selectSpartanTank.addEventListener('click', () => {
     showTankDetail('spartan');
@@ -2909,12 +2514,13 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → chromatic
-const allTanksList = ['ice', 'machinegun', 'buckshot', 'pyro', 'fire', 'waterjet', 'buratino', 'musical', 'medical', 'mine', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman', 'spartan'];
+const allTanksList = ['machinegun', 'buckshot', 'pyro', 'air', 'fire', 'waterjet', 'mine', 'ice', 'buratino', 'musical', 'medical', 'toxic', 'mirror', 'robot', 'illuminat', 'plasma', 'electric', 'time', 'imitator', 'roman', 'spartan'];
 const tankRarityMap = {
-    'ice': 'rare',
+    'ice': 'epic',
     'machinegun': 'rare',
     'buckshot': 'rare',
     'pyro': 'rare',
+    'air': 'rare',
     'fire': 'super_rare',
     'waterjet': 'super_rare',
     'mine': 'super_rare',
@@ -3640,6 +3246,35 @@ function update() {
             if (tank.frozenEffect) tank.frozenEffect--;
         } else {
         
+        // handle ice slow state for player tank (50% slowdown)
+        if (tank.iceSlowed) {
+            tank.iceSlowedTime = (tank.iceSlowedTime || 0) - 1;
+            if (tank.iceSlowedTime <= 0) tank.iceSlowed = false;
+            if (tank.frozenEffect) tank.frozenEffect--;
+        }
+
+        // Wind knockback: smooth decaying push from air bullet
+        if (tank.windPushVx || tank.windPushVy) {
+            if (typeof canPlaceAt === 'function' && canPlaceAt(tank, tank.x + tank.windPushVx, tank.y)) {
+                tank.x += tank.windPushVx;
+            } else {
+                tank.windPushVx *= -0.5; // bounce slightly
+            }
+            if (typeof canPlaceAt === 'function' && canPlaceAt(tank, tank.x, tank.y + tank.windPushVy)) {
+                tank.y += tank.windPushVy;
+            } else {
+                tank.windPushVy *= -0.5; // bounce slightly
+            }
+            tank.windPushVx *= 0.78;
+            tank.windPushVy *= 0.78;
+            if (Math.abs(tank.windPushVx) < 0.3 && Math.abs(tank.windPushVy) < 0.3) {
+                tank.windPushVx = 0;
+                tank.windPushVy = 0;
+            } else if (Math.random() > 0.6) {
+                if (typeof spawnParticle === 'function') spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#a0ffe8', 0.5);
+            }
+        }
+        
         if (tank.invertedControls > 0) {
             tank.invertedControls--;
             // Visual confusion
@@ -3672,6 +3307,8 @@ function update() {
         if (isS) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
         if (isA) { dx -= tank.speed; tank.baseAngle = Math.PI; }
         if (isD) { dx += tank.speed; tank.baseAngle = 0; }
+        // Apply ice-slow 50% movement penalty
+        if (tank.iceSlowed) { dx *= 0.5; dy *= 0.5; }
         // Store velocity so flames inherit it (bug fix: flames don't drift back when moving)
         tank._vx = dx; tank._vy = dy;
         if (dx !== 0 || dy !== 0) {
@@ -4031,6 +3668,25 @@ function update() {
             }
         }
 
+        // Ice / Ice Wave Ability (E) — Ultimate: charge 0.5s, then ice wave that fully freezes nearby enemies
+        if (tankType === 'ice') {
+            if (keys['KeyE']) {
+                if (!tank.isUltimateActive && (!tank.ultimateCooldown || tank.ultimateCooldown <= 0)) {
+                    tank.isUltimateActive = true;
+                    tank.ultimateTimer = 30; // 0.5s charge
+                    tank.ultimateCooldown = 600; // 10s cooldown
+                    tank.iceUltimate = true; // mark this ultimate as ice
+                    // Visual frost charge
+                    for (let i = 0; i < 30; i++) {
+                        spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w*1.2,
+                                     tank.y + tank.h/2 + (Math.random()-0.5)*tank.h*1.2,
+                                     '#a8e6ff', 1);
+                    }
+                }
+                keys['KeyE'] = false;
+            }
+        }
+
         // Medical Tank: E key creates healing zone for 5 seconds
         if (tankType === 'medical') {
             if (keys['KeyE']) {
@@ -4240,12 +3896,21 @@ function update() {
                 tank.isUltimateActive = false;
                 const cx = tank.x + tank.w/2;
                 const cy = tank.y + tank.h/2;
-                // Reduced radius ~200px for electric electric ultimate
-                if (typeof createElectricNova === 'function') {
-                    createElectricNova(cx, cy, 200, Math.round(200 * getPlayerDmgMult()), tank.team);
+                if (tank.iceUltimate) {
+                    // Ice wave: completely freeze all enemies in radius
+                    tank.iceUltimate = false;
+                    if (typeof createIceNova === 'function') {
+                        createIceNova(cx, cy, 280, tank.team);
+                    }
+                    for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#a8e6ff', 0.9);
+                } else {
+                    // Reduced radius ~200px for electric electric ultimate
+                    if (typeof createElectricNova === 'function') {
+                        createElectricNova(cx, cy, 200, Math.round(200 * getPlayerDmgMult()), tank.team);
+                    }
+                    // Center burst particles
+                    for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
                 }
-                // Center burst particles
-                for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
             }
         }
         if (tank.ultimateCooldown > 0) tank.ultimateCooldown--;
@@ -4965,6 +4630,7 @@ function updateShopButtonStyles() {
         'electric': 'selectElectricTank',
         'roman': 'selectRomanTank',
         'pyro': 'selectPyroTank',
+        'air': 'selectAirTank',
         'spartan': 'selectSpartanTank',
         'mechDiy': 'selectMechDiy',
         'mechShield': 'selectMechShield',
@@ -4978,6 +4644,7 @@ function updateShopButtonStyles() {
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic',
         'roman': 'imitator',
         'pyro': 'rare',
+        'air': 'rare',
         'mechDiy': 'rare',
         'mechShield': 'super',
         'mechRocket': 'epic'
@@ -5378,7 +5045,7 @@ function updateTankDetailButton(type) {
     // Map tank type to rarity class
     const rarityMap = {
         'normal': 'common',
-        'ice': 'rare', 'machinegun': 'rare', 'buckshot': 'rare', 'pyro': 'rare',
+        'ice': 'epic', 'machinegun': 'rare', 'buckshot': 'rare', 'pyro': 'rare', 'air': 'rare',
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'robot': 'legendary',

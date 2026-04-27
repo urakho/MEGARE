@@ -5,116 +5,121 @@
 const tankDescriptions = {
     normal: {
         name: "Стандартный танк",
-        description: "Стандартный танк — надёжная боевая машина без сложных механик. Сбалансированная скорость, урон и броня делают его универсальным бойцом, подходящим для любой ситуации.",
+        description: "Надёжный базовый танк без лишних трюков. Он не удивляет, зато всегда остаётся понятным, честным и удобным для любого боя. Хорош для старта, для спокойной игры и для тех случаев, когда нужен просто стабильный результат.",
         rarity: "Обычный"
     },
     ice: {
         name: "Ледяной танк",
-        description: "Стреляет ледяными глыбами, замедляющими врагов. Замороженные противники становятся уязвимы и движутся медленнее. Идеален для контроля поля боя.",
-        rarity: "Редкий"
+        description: "Ледяной танк любит держать бой под контролем. Его снаряды ломают темп противника, а ультимейт выпускает ледяную волну, которая полностью замораживает всех вокруг.\n\nЭто выбор для терпеливой, умной игры на дистанции, где важны позиция, выдержка и правильный момент атаки.",
+        rarity: "Эпический"
     },
     fire: {
         name: "Огненный танк",
-        description: "Мощный огнемет, сжигающий врагов потоком пламени. Наносит периодический урон и поджигает цели. Опасен на близкой дистанции.",
+        description: "Агрессивный танк ближней и средней дистанции. Он прожигает позиции врага, не даёт стоять на месте и отлично чувствует себя в плотных схватках. Чем ближе бой, тем опаснее он становится, и тем труднее его игнорировать.",
         rarity: "Сверхредкий"
     },
     toxic: {
         name: "Токсичный танк",
-        description: "Запускает ядовитые газовые облака, создающие зоны поражения. Особая способность (E): выпускает огромное облако мегагаза, наносящее урон всем в нем. Зонный контроль.",
+        description: "Танк контроля, который превращает поле боя в опасную зону. Он заставляет врага ошибаться, отступать и постоянно искать более безопасный путь. Особенно силён там, где можно перекрыть проходы, замедлить темп и загнать цель в ловушку.",
         rarity: "Легендарный"
     },
     plasma: {
         name: "Плазменный танк",
-        description: "Стреляет мощными плазменными болтами, пробивающими врагов насквозь и наносящими огромный урон. Особая способность (E): концентрирует плазму в огромный взрывной выстрел. Высокий урон, долгая перезарядка.",
+        description: "Тяжёлый атакующий танк с пробивными выстрелами. Чем дольше он держит линию, тем опаснее становится для тех, кто попался в его прицел. Это танк для тех, кто любит чувствовать мощь каждого выстрела и уверенно давить соперника.",
         rarity: "Мифический"
     },
     buratino: {
         name: "Буратино (ТОС)",
-        description: "Тяжелая система залпового огня. Запускает мощный залп из ракет по площадям. Медленный и тяжелый, но наносит колоссальный урон в группировке.",
+        description: "Огневая поддержка с мощными залпами по площади. Он медленный и тяжёлый, но в куче противников быстро превращает строй врага в хаос. Лучше всего раскрывается тогда, когда врагу некуда разбежаться и он вынужден принимать удар на месте.",
         rarity: "Эпический"
     },
     musical: {
         name: "Музыкальный танк",
-        description: "Атакует звуковыми волнами, рикошетящими от стен и дезориентирующими врагов. Волна расширяется по мере распространения. Хитрый тактически.",
+        description: "Хитрый танк, который играет рикошетами и ломает привычный ритм боя. Особенно опасен там, где стены становятся частью атаки. Он хорош для тех, кто любит нестандартные углы, неожиданные выстрелы и игру с пространством.",
         rarity: "Эпический"
     },
     illuminat: {
         name: "Иллюминат",
-        description: "Мистическая сущность, атакующая непрерывным световым лучом. Особая способность (E): инверсия управления — враги движутся в обратную сторону 2 секунды. Необычный боец с нестандартной тактикой.",
+        description: "Танк с лучевой атакой и очень неудобной манерой боя. Он сбивает чужой ритм, давит психологически и заставляет ошибаться. Такой стиль особенно неприятен для тех, кто привык играть слишком прямолинейно и без адаптации.",
         rarity: "Мифический"
     },
     mirror: {
         name: "Зеркальный",
-        description: "Мастер адаптации. Копирует тип снарядов противника при получении урона и отражает их обратно. Особая способность (E): активирует зеркальный щит, отражающий все входящие атаки, кроме мин и ракет. Умный защитник.",
+        description: "Танк-адаптер, который подстраивается под чужой стиль и отвечает тем же. Чем разнообразнее враг, тем интереснее и опаснее становится бой. Он особенно ценится за умение превращать чужие сильные стороны в свою пользу и сбивать планы соперника.",
         rarity: "Легендарный"
     },
     time: {
         name: "Временной",
-        description: "Повелитель времени, защищающийся от опасности. Стреляет обычными пулями. Особая способность (E): временная петля — мгновенно возвращает танк в состояние 5 секунд назад (кулдаун 8 сек). Экстренная защита от поражения.",
+        description: "Танк для осторожной и умной игры. Он умеет пережить плохой момент, вернуть контроль над боем и снова навязать свой темп. Это хороший выбор для игроков, которые любят думать на несколько шагов вперёд и не сдаваться после ошибки.",
         rarity: "Хроматическая"
     },
     machinegun: {
         name: "Пулемётчик",
-        description: "Высокоскоростной боец, стреляющий очередями из 4 пуль. Частая огневая мощь компенсирует слабость одного выстрела. Идеален для постоянного давления.",
+        description: "Быстрый танк для постоянного давления. Его сила не в одном выстреле, а в темпе, который он навязывает противнику без пауз. Он отлично подходит для тех, кто любит не отпускать врага из-под огня и держать бой в движении.",
         rarity: "Редкий"
     },
     buckshot: {
         name: "Дробовой танк",
-        description: "Выстреливает 6 дробин вперёд веером, расходящихся под углом. На близкой дистанции наносит огромный урон. На дальней дистанции дробь расходится, и урон снижается. Медленная перезарядка для компенсации мощности.",
+        description: "Танк ближнего боя, который раскрывается почти в упор. Если подойти правильно, он быстро наказывает за жадность и ошибку в позиции. В руках смелого игрока он превращается в очень опасный инструмент для коротких разменов и резких врывов.",
         rarity: "Редкий"
     },
     waterjet: {
         name: "Водомётчик",
-        description: "Стреляет мощной струёй воды вперед. Наносит урон при прямом контакте, замедляет и отталкивает врагов. Не пробивает стены — рассеивается при ударе. Идеален для защиты узких проходов.",
+        description: "Танк контроля с мощной струёй, которая теснят врагов и ломает их позиции. Он особенно хорош там, где можно зажать соперника в неудобный угол. Хорош для защиты проходов, выталкивания цели и жёсткого навязывания дистанции.",
         rarity: "Сверхредкий"
     },
     imitator: {
         name: "Имитатор",
-        description: "Стреляет одиничным призматическим снарядом. Способность (E): на 6 сек копирует ближайшего противника (внешность, снаряды, способность, HP, скорость). Кулдаун 18 сек.",
+        description: "Необычный танк, который копирует чужой стиль и использует его против владельца. Сильнее всего раскрывается в руках игрока, который умеет читать бой на шаг вперёд. Чем внимательнее ты играешь, тем страшнее он становится для соперника и тем легче подстраивать бой под себя.",
         rarity: "Хроматическая"
     },
     electric: {
         name: "Электрический",
-        description: "Мифический электрический танк. Шаровые молнии преследуют врагов и обходят препятствия. Ульта (E): вспышка молний поражает всех рядом, проходя сквозь препятствия. Кулдаун: 8 сек. Танк идеален для контроля толпы и точечных зачисток.",
+        description: "Быстрый контрольный танк с молниями и взрывной ультой. Он любит плотные схватки, где можно разом наказывать сразу нескольких врагов. Хорош для давления на группу, резкого перелома боя и наказания за скученность.",
         rarity: "Мифический"
     },
     robot: {
         name: "Танк-робот",
-        description: "Тяжёлый боевой робот с рельсотроном. Его выстрел пробивает танки и наносит урон всем врагам на линии. Ульта выпускает 3 боевых дрона, которые самостоятельно ищут врагов и атакуют их.",
+        description: "Тяжёлый танк с пробивным оружием и боевыми дронами. Он создаёт постоянное давление, не даёт спокойно занять позицию и быстро добирает ослабленных врагов. Это надёжная машина для длинной и плотной игры, где важны контроль и напор.",
         rarity: "Легендарный"
     },
     medical: {
         name: "Медицинский танк",
-        description: "Боевой санитар, помогающий своей команде. Стреляет медицинскими импульсами — нанося урон врагам. Способность (E): создаёт лечебное поле на 5 секунд, восстанавливающее HP всех рядом находящихся товарищей. Кулдаун: 12 сек.",
+        description: "Командный танк поддержки, который лечит союзников и мешает врагам. Он особенно ценен там, где нужно долго держать линию и не терять темп команды. В удачной связке он делает команду заметно живучее и увереннее в бою.",
         rarity: "Эпический"
     },
     mine: {
         name: "Минный танк",
-        description: "Скрытный сапёр, расставляющий замаскированные мины. Нажмите пробел, чтобы разместить мину на земле. Свои мины видны только вам — вражеские скрыты. Мина взрывается при контакте с противником, нанося урон.",
+        description: "Скрытный танк-ловушка, который играет от терпения и мин. Он хорошо чувствует карту и умеет превращать привычные маршруты врага в опасные. Такой стиль особенно раздражает тех, кто привык идти напролом и не смотреть под колёса.",
         rarity: "Сверхредкий"
     },
     roman: {
         name: "Римский танк",
-        description: "Имперский танк, вдохновлённый величием древнего Рима. Бросает тяжёлый клинок, способный поражать врагов даже за укрытиями, а в критический момент возводит сияющий золотой щит, становясь неуязвимым для любой атаки. Символ силы, чести и несгибаемой воли легионера.",
+        description: "Танк с защитным стилем и сильным ответом на давление. Он выглядит спокойно, но в правильный момент умеет превратить оборону в уверенное наступление. Это выбор для игроков, которые любят собранность, контроль и надёжную опору в бою.",
         rarity: "Хроматическая"
     },
     pyro: {
         name: "Зажигательный",
-        description: "Стреляет зажигательными снарядами, поджигающими врагов при попадании. Горящая цель получает урон каждые 0.5 сек на протяжении 3 секунд. Медленный, но хорошо бронированный — компенсирует скорость стрельбы постепенным уроном от ожога.",
+        description: "Танк постепенного урона, который поджигает цели и выигрывает за счёт давления. Его сила раскрывается в длинных разменах, где враг не успевает перевести дыхание. Он хорош против тех, кто любит затягивать бой и надеется пережить огонь.",
         rarity: "Редкий"
+    },
+    air: {
+        name: "Воздушный",
+        description: "Танк контроля дистанции. Его снаряды отталкивают врага назад, не давая ему приблизиться. Он хорош разрывает позицию врага, загоняет его в неудобный угол и наказывает за жадность. Идеален для тех, кто любит диктовать дистанцию и не пускать врага ближе.",
+        rarity: "Редкая"
     },
     spartan: {
         name: "Спартанский танк",
-        description: "Боевой дух Спарты. Метает боевыми копьями, пробивающими врагов насквозь и наносящими 80 урона каждому. При снижении HP ниже 50% спартанец охвачывает адреналин и ускоряется. Чем ближе к гибели — тем опаснее.",
+        description: "Прямолинейный и опасный танк, который становится злее в тяжёлой ситуации. Он любит близкий бой, давление и смелые решения без лишней осторожности. Чем жёстче обмен ударами, тем лучше он раскрывается и тем сложнее его остановить.",
         rarity: "Сверхредкий"
     },
-    mechDiy: window.mechDiyMeta || { name: "Штурмовой мех", description: "Мощный боевой мех с двумя плазменными пушками.", rarity: "Редкий" },
-    mechShield: window.mechShieldMeta || { name: "Щитовой мех", description: "Тяжёлый мех с энергетическим щитом.", rarity: "Сверхредкий" },
-    mechRocket: window.mechRocketMeta || { name: "Ракетный мех", description: "Боевой мех с ракетным вооружением и залповым ультимейтом.", rarity: "Эпический" },
+    mechDiy: window.mechDiyMeta || { name: "Штурмовой мех", description: "Гибкий боевой мех с энергобюджетом и двумя плазменными пушками. Он хорош в темпе, но любит аккуратную игру и контроль ресурсов. Если вести его правильно, он становится очень неприятным соперником, который постоянно держит давление.", rarity: "Редкий" },
+    mechShield: window.mechShieldMeta || { name: "Щитовой мех", description: "Тяжёлый мех с защитным корпусом и мощным фронтом. Он медленнее других, зато отлично держит линию и ломает оборону в лоб. Хорош в боях, где нужно пережить натиск, не отдать позицию и дожать врага.", rarity: "Сверхредкий" },
+    mechRocket: window.mechRocketMeta || { name: "Ракетный мех", description: "Эпический ракетный мех для плотного урона по площади. Он особенно опасен там, где врагам некуда разойтись. Сильнее всего работает в тесных сражениях, против скоплений целей и под хорошим прикрытием команды.", rarity: "Эпический" },
     kamikaze: {
         name: "Камикадзе",
-        description: "Мощный танк с уникальной механикой. Он вроде обычный, но может протаранить стены и раскидать врагов с помощью своей ульты. При активации ульты танк ускоряется и становится неуязвимым, нанося урон при столкновении с врагами. Идеален для внезапных атак и разрушения обороны противника. Камикадзе — это символ Японской империи. За императора!",
-        rarity: "Лимитированный"
+        description: "Рискованный танк для агрессивной игры. Его сила в резком врыве, хаосе и умении сломать спокойный бой за один момент. Он подходит тем, кто любит заходить ва-банк, ломать чужую оборону и навязывать свой ритм силой.",
+        rarity: "Лимитированная"
     }
 };
 
@@ -123,7 +128,7 @@ const tankDescriptions = {
 // Эпический=purple, Легендарный=yellow, Мифический=red
 const tankBgGradients = {
     normal: ['#1b5e20', '#1b5e20'],   // Обычный - dark grass green (menu & modal)
-    ice: ['#2ecc71', '#27ae60'],      // Редкий - green
+    ice: ['#9b59b6', '#8e44ad'],      // Эпический - purple
     buckshot: ['#2ecc71', '#27ae60'], // Редкий - green
     fire: ['#3498db', '#5dade2'],     // Сверхредкий - blue
     waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
@@ -139,6 +144,7 @@ const tankBgGradients = {
     spartan: ['#3498db', '#5dade2'],       // Сверхредкий - blue
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     pyro: ['#2ecc71', '#27ae60'],        // Редкий - green
+    air: ['#2ecc71', '#27ae60'],          // Редкий - green
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
     electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
     robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
@@ -171,6 +177,7 @@ const tankBaseColors = {
     roman: '#8B6914',      // Dark gold for Roman tank
     spartan: '#b87333',    // Bronze for Spartan tank
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
+    air: '#00a896',          // Teal-cyan for Air tank
     mechDiy: window.mechDiyBaseColor || '#1a8a3e',    // Dark green for mech body
     mechShield: window.mechShieldBaseColor || '#1a3a6e', // Dark navy for shield mech
     mechRocket: window.mechRocketBaseColor || '#7d1f1f', // Dark red for rocket mech
@@ -971,6 +978,100 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#2a3510';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'air') {
+            // Enhanced Air Tank — highly stylized, beautiful glowing tornado vortex
+            const t = Date.now() * 0.003; // smooth rotation time
+            
+            // Base shadow/glow to ground the tornado
+            const shadowGrad = ctx.createRadialGradient(0, 0, bodyW * 0.2, 0, 0, bodyW * 0.8);
+            shadowGrad.addColorStop(0, 'rgba(0, 228, 204, 0.4)');
+            shadowGrad.addColorStop(0.5, 'rgba(0, 168, 150, 0.15)');
+            shadowGrad.addColorStop(1, 'rgba(0, 94, 87, 0)');
+            ctx.fillStyle = shadowGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, bodyW * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Interlocking asymmetric swirl arms (the "blades" of the tornado)
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            const arms = 5; // Number of major swirl arms
+            for (let i = 0; i < arms; i++) {
+                const angleOffset = (Math.PI * 2 / arms) * i + t * 1.5;
+                const armLength = bodyW * 0.65 + Math.sin(t * 2 + i) * (bodyW * 0.1);
+                
+                // Outer glow per arm
+                ctx.strokeStyle = `rgba(0, 228, 204, 0.6)`;
+                ctx.lineWidth = bodyW * 0.12;
+                ctx.beginPath();
+                for (let r = 0; r <= armLength; r += 2) {
+                    // Spiral function: angle increases as radius increases
+                    const theta = angleOffset + (r / armLength) * Math.PI * 1.8;
+                    const x = Math.cos(theta) * r;
+                    const y = Math.sin(theta) * r;
+                    if (r === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                // Inner bright core per arm
+                ctx.strokeStyle = `rgba(224, 255, 248, 0.9)`;
+                ctx.lineWidth = bodyW * 0.04;
+                ctx.beginPath();
+                for (let r = 0; r <= armLength * 0.8; r += 2) {
+                    const theta = angleOffset + (r / (armLength * 0.8)) * Math.PI * 1.5;
+                    const x = Math.cos(theta) * r;
+                    const y = Math.sin(theta) * r;
+                    if (r === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // High-speed winding stripes crossing over the vortex
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            for (let s = 0; s < 4; s++) {
+                const sAngle = (s / 4) * Math.PI * 2 - t * 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, bodyW * 0.45, sAngle, sAngle + Math.PI / 3);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // Dynamic floating dust / wind particles being sucked in
+            ctx.fillStyle = '#bdfdf2';
+            for (let p = 0; p < 8; p++) {
+                // Particles spiral inward and loop back outward
+                const progress = ((t * 2 + p * 0.125) % 1.0); // 0.0 to 1.0
+                const pR = bodyW * 0.7 * (1 - progress); // start far, go to 0
+                const pAng = (p * Math.PI / 4) + t * 4 + (progress * Math.PI * 2);
+                
+                const px = Math.cos(pAng) * pR;
+                const py = Math.sin(pAng) * pR;
+                
+                ctx.beginPath();
+                // Particles fade as they reach the center
+                ctx.globalAlpha = 1 - progress;
+                ctx.arc(px, py, bodyW * 0.04 + (progress * bodyW * 0.02), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Central Eye of the Storm (super bright core)
+            const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, bodyW * 0.25);
+            coreGrad.addColorStop(0, '#ffffff');
+            coreGrad.addColorStop(0.3, '#e0fff8');
+            coreGrad.addColorStop(0.7, '#00e4cc');
+            coreGrad.addColorStop(1, 'rgba(0, 95, 87, 0)');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, bodyW * 0.25, 0, Math.PI * 2);
+            ctx.fill();
         } else if (type === 'mechDiy') {
             // mechDiy uses a dedicated walker-mech renderer in mechs.js
             if (typeof drawMechOn !== 'function') {
@@ -1790,6 +1891,39 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0, 0, tSize * 0.22, 0, Math.PI * 2);
         ctx.fillStyle = '#cc0000';
         ctx.fill();
+    } else if (type === 'air') {
+        // Air turret — rounded teal dome with spinning wind ring
+        const airT = ctx.createRadialGradient(-tSize*0.15, -tSize*0.15, 0, 0, 0, tSize*0.6);
+        airT.addColorStop(0,   '#7fffee');
+        airT.addColorStop(0.5, '#00c9a7');
+        airT.addColorStop(1,   '#005f57');
+        ctx.fillStyle = airT;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        // Animated wind ring
+        const ringT = Date.now() * 0.003;
+        ctx.save();
+        ctx.rotate(ringT);
+        ctx.strokeStyle = 'rgba(200,255,245,0.65)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([tSize * 0.35, tSize * 0.3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.38, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+        // Bright center dot
+        ctx.fillStyle = '#e0fff8';
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        // Border
+        ctx.strokeStyle = '#005f57';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
+        ctx.stroke();
     } else if (type === 'mechDiy') {
         // Entire mech rendering delegated to mechs.js drawMechOn.
         ctx.restore();
@@ -2873,6 +3007,70 @@ function drawCharacterPreviews() {
     drawItem(buckshotTankCtx, buckshotTankPreview, 'buckshot', '#2ecc71', tankBgGradients.buckshot);
     if (typeof pyroTankCtx !== 'undefined' && pyroTankCtx && pyroTankPreview) {
         drawItem(pyroTankCtx, pyroTankPreview, 'pyro', '#8b2500', tankBgGradients.pyro);
+    }
+    // Animated Air Tank preview
+    if (typeof airTankCtx !== 'undefined' && airTankCtx && airTankPreview) {
+        if (window.airTankAnimId) cancelAnimationFrame(window.airTankAnimId);
+        const animateAirTank = () => {
+            const ctx = airTankCtx;
+            const canvas = airTankPreview;
+            if (!ctx || !canvas) return;
+            // Similar logic to static drawItem but inside loop
+            const isUnlocked = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes('air');
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            if (isUnlocked) {
+                grad.addColorStop(0, tankBgGradients.air[0]);
+                grad.addColorStop(1, tankBgGradients.air[1]);
+            } else {
+                grad.addColorStop(0, '#444');
+                grad.addColorStop(1, '#222');
+            }
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            let side = Math.min(canvas.width, canvas.height) / 2;
+            
+            ctx.save();
+            if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
+            drawTankOn(ctx, canvas.width/2, canvas.height/2, side, side, '#00a896', 0, 1, 'air');
+            ctx.restore();
+            
+            // Draw trophy counter for unlocked tanks
+            if (isUnlocked && typeof getTankTrophies === 'function') {
+                const tankTrophies = getTankTrophies('air');
+                if (tankTrophies > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+                    ctx.fillStyle = '#e67e22';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🏆 ' + tankTrophies, canvas.width/2, canvas.height - 12);
+                }
+            }
+            
+            if (typeof window.getCurrentTankType === 'function' && window.getCurrentTankType() === 'air') {
+                ctx.save();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+                ctx.restore();
+            } else if (!isUnlocked) {
+                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                 ctx.font = '40px Arial';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillStyle = '#fff';
+                 ctx.shadowColor = 'black';
+                 ctx.shadowBlur = 4;
+                 ctx.fillText('🔒', canvas.width/2, canvas.height/2);
+                 ctx.shadowBlur = 0;
+            }
+            window.airTankAnimId = requestAnimationFrame(animateAirTank);
+        };
+        animateAirTank();
     }
     // SUPER_RARE
     drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
@@ -4515,6 +4713,73 @@ function draw() {
             ctx.fillStyle = 'rgba(255,255,200,0.85)';
             ctx.beginPath();
             ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else if (b.type === 'airBullet') {
+            // Little flying tornado / whirlwind
+            const pr = (b.w || 10) / 2;
+            const t = Date.now() * 0.01; // fast rotation speed
+            const ang = Math.atan2(b.vy, b.vx);
+
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            // Rotate to point backward the movement direction so it looks like it's drifting, but keep the tornado upright relative to velocity
+            ctx.rotate(ang + Math.PI / 2);
+
+            // Draw a stack of spinning ellipses (tornado layers)
+            // They get wider at the top (-y) and narrower at the bottom (+y)
+            const layers = 5;
+            for (let i = 0; i < layers; i++) {
+                // Layer properties
+                const layerY = (i - layers/2) * (pr * 0.5); // from top to bottom
+                const layerWidth = pr * (1.8 - (i * 0.25)); // wider at i=0 (top)
+                const layerHeight = pr * 0.5;
+
+                // Alternate rotation offset for erratic wind look
+                const waveOffset = Math.sin(t + i) * (pr * 0.3);
+
+                ctx.save();
+                ctx.translate(waveOffset, layerY);
+
+                const grad = ctx.createLinearGradient(-layerWidth, 0, layerWidth, 0);
+                grad.addColorStop(0, 'rgba(0,200,160,0.2)');
+                grad.addColorStop(0.2, '#00e4cc');
+                grad.addColorStop(0.5, '#e0fff8');
+                grad.addColorStop(0.8, '#00c9a7');
+                grad.addColorStop(1, 'rgba(0,200,160,0.2)');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, layerWidth, layerHeight, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Wind streaks inside the layer
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-layerWidth * 0.5, 0);
+                ctx.quadraticCurveTo(0, layerHeight * 0.5, layerWidth * 0.5, 0);
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            // Draw some flying debris/dust around it
+            ctx.fillStyle = '#bdfdf2';
+            for (let d = 0; d < 3; d++) {
+                const dx = Math.cos(t * 1.5 + d * 2) * (pr * 1.2);
+                const dy = Math.sin(t * 1.5 + d * 2) * (pr * 1.2);
+                ctx.beginPath();
+                ctx.arc(dx, dy, pr * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            // Specular highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.80)';
+            ctx.beginPath();
+            ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.25, 0, Math.PI * 2);
             ctx.fill();
 
         } else if (b.type === 'mechDiy') {
@@ -6313,6 +6578,7 @@ function renderTankUpgradesUI(tt) {
     });
 }
 // ─────────────────────────────────────────────────────────────────────────────
+// getRankInfo and TANK_RANKS are defined in src/rank.js
 
 // Function to show tank detail modal
 function showTankDetail(tankType) {
@@ -6347,12 +6613,49 @@ function showTankDetail(tankType) {
     } else if (rarityValue === 'Хроматическая') {
         rarityColor = '#00ffcc';
         glowStyle = 'text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc, 0 0 30px #00ffcc;';
-    } else if (rarityValue === 'Лимитированный') {
+    } else if (rarityValue === 'Лимитированная' || rarityValue === 'Лимитированный') {
         rarityColor = '#ff4400';
         glowStyle = 'text-shadow: 0 0 12px #ff4400, 0 0 24px #ff6600, 0 0 36px #ff4400;';
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
     description.textContent = tankDescriptions[tankType].description;
+
+    // Rank badge based on per-tank trophies
+    const rankEl = document.getElementById('tankDetailRank');
+    if (rankEl) {
+        const tt = (typeof getTankTrophies === 'function') ? getTankTrophies(tankType) : 0;
+        const info = getRankInfo(tt);
+        const filled = '★'.repeat(info.stars);
+        const empty  = (info.perStar > 0) ? '☆'.repeat(3 - info.stars) : '';
+        // Progress to next star or next rank
+        let progressText = '';
+        if (info.perStar > 0 && info.stars < 3) {
+            const next = info.base + (info.stars + 1) * info.perStar;
+            progressText = `${tt}/${next} 🏆`;
+        } else if (info.perStar === 0) {
+            progressText = `${tt} 🏆 (макс.)`;
+        } else {
+            // 3 stars reached, show progress to next rank if exists
+            const idx = TANK_RANKS.findIndex(r => r.name === info.name);
+            const nextRank = TANK_RANKS[idx + 1];
+            if (nextRank) progressText = `${tt}/${nextRank.base} 🏆`;
+            else progressText = `${tt} 🏆`;
+        }
+        rankEl.style.borderColor = info.color;
+        rankEl.style.cursor = 'pointer';
+        rankEl.title = 'Нажми, чтобы увидеть подробности звания';
+        rankEl.innerHTML = `
+            <div style="font-size:13px; font-weight:bold; color:${info.color}; line-height:1; display:flex; align-items:center; gap:4px;">
+                <span>${info.icon}</span><span>${info.name}</span>
+            </div>
+            <div style="font-size:14px; color:#f1c40f; letter-spacing:2px; line-height:1;">${filled}<span style="color:#555;">${empty}</span></div>
+            <div style="font-size:10px; color:#bbb; line-height:1;">${progressText}</div>
+        `;
+        // Open rank detail modal on click
+        rankEl.onclick = () => {
+            if (typeof showRankModal === 'function') showRankModal(tankType);
+        };
+    }
 
     // Trio badge
     const trioEl = document.getElementById('tankDetailTrio');
@@ -6448,7 +6751,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, mechDiy: 40, mechShield: 120, mechRocket: 150, spartan: 80
+            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, mechDiy: 40, mechShield: 120, mechRocket: 150, spartan: 80, air: 80
         };
         const dmgRaw   = tankDamageByType[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
@@ -6625,6 +6928,30 @@ function showTankDetail(tankType) {
             // Draw tank with animated eye
             const side = Math.min(canvas.width, canvas.height) / 2;
             const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
+            drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+        return;
+    } else if (tankType === 'air') {
+        // Animated Air tank tornado in modal
+        if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
+        modal.style.display = 'flex';
+        const drawFrame = () => {
+            if (modal.style.display === 'none') {
+                window.tankDetailAnimId = null;
+                return;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, tankBgGradients.air[0]);
+            grad.addColorStop(1, tankBgGradients.air[1]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const side = Math.min(canvas.width, canvas.height) / 2;
+            const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#00a896';
             drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType);
             window.tankDetailAnimId = requestAnimationFrame(drawFrame);
         };

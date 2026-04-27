@@ -413,6 +413,37 @@ function updateEnemyAI() {
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
+        // Ice slow: 50% speed by skipping every other AI tick
+        if (enemy.iceSlowed) {
+            enemy.iceSlowedTime--;
+            if (enemy.iceSlowedTime <= 0) enemy.iceSlowed = false;
+            if (enemy.frozenEffect) enemy.frozenEffect--;
+            enemy._iceSkipFlip = !enemy._iceSkipFlip;
+            if (enemy._iceSkipFlip) continue;
+        }
+
+        // Wind knockback: smooth decaying push from air bullet
+        if (enemy.windPushVx || enemy.windPushVy) {
+            if (typeof canPlaceAt === 'function' && canPlaceAt(enemy, enemy.x + enemy.windPushVx, enemy.y)) {
+                enemy.x += enemy.windPushVx;
+            } else {
+                enemy.windPushVx *= -0.5;
+            }
+            if (typeof canPlaceAt === 'function' && canPlaceAt(enemy, enemy.x, enemy.y + enemy.windPushVy)) {
+                enemy.y += enemy.windPushVy;
+            } else {
+                enemy.windPushVy *= -0.5;
+            }
+            enemy.windPushVx *= 0.78;
+            enemy.windPushVy *= 0.78;
+            if (Math.abs(enemy.windPushVx) < 0.3 && Math.abs(enemy.windPushVy) < 0.3) {
+                enemy.windPushVx = 0;
+                enemy.windPushVy = 0;
+            } else if (Math.random() > 0.6) {
+                // Trailing wind particles during push
+                spawnParticle(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#a0ffe8', 0.5);
+            }
+        }
         
         // Try dodge incoming projectiles first (all enemy types should dodge)
         if (tryDodgeIncoming(enemy)) continue;
@@ -1182,7 +1213,7 @@ function updateEnemyAI() {
 
             let b = null;
             if (tt === 'plasma') {
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:200, owner:'enemy', team: enemy.team, type:'plasma', damage:350, piercing:true };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:219, owner:'enemy', team: enemy.team, type:'plasma', damage:350, piercing:true };
             } else if (tt === 'toxic') {
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:6, h:6, vx:Math.cos(enemy.turretAngle)*7, vy:Math.sin(enemy.turretAngle)*7, life:500, owner:'enemy', team: enemy.team, type:'toxic', explodeTimer:45, spawned:5 };
             } else if (tt === 'fire') {
@@ -1338,7 +1369,7 @@ function updateEnemyAI() {
             } else if (tt === 'musical') {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 180, team: enemy.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 167, team: enemy.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
             } else if (tt === 'time') {
                 // Time tank: regular high-damage shot
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'time', damage: 100 };
@@ -1370,7 +1401,7 @@ function updateEnemyAI() {
                     w: 6, h: 6,
                     vx: Math.cos(enemy.turretAngle) * 18,
                     vy: Math.sin(enemy.turretAngle) * 18,
-                    life: 110,
+                    life: 70,
                     owner: 'enemy',
                     team: enemy.team,
                     type: 'railgun',
@@ -1420,6 +1451,19 @@ function updateEnemyAI() {
                     owner: 'enemy', team: enemy.team,
                     type: 'pyroBullet',
                     damage: 70
+                };
+            } else if (tt === 'air') {
+                // Air tank: wind gust that knocks back target
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 22,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 22,
+                    w: 10, h: 10,
+                    vx: Math.cos(enemy.turretAngle) * 6,
+                    vy: Math.sin(enemy.turretAngle) * 6,
+                    life: 125,
+                    owner: 'enemy', team: enemy.team,
+                    type: 'airBullet',
+                    damage: 80
                 };
             } else if (tt === 'mechDiy') {
                 // mechDiy: trigger energy burst only if energy > 50 (conserve below that)
@@ -1486,7 +1530,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'pyro') ? 35 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
@@ -1506,6 +1550,14 @@ function updateAllyAI() {
       try {
         if (!ally || !ally.alive) continue;
         if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; if (ally.frozenEffect) ally.frozenEffect--; continue; }
+        // Ice slow: 50% speed by skipping every other AI tick
+        if (ally.iceSlowed) {
+            ally.iceSlowedTime--;
+            if (ally.iceSlowedTime <= 0) ally.iceSlowed = false;
+            if (ally.frozenEffect) ally.frozenEffect--;
+            ally._iceSkipFlip = !ally._iceSkipFlip;
+            if (ally._iceSkipFlip) continue;
+        }
         // Try dodge incoming projectiles first (all ally types should dodge)
         if (tryDodgeIncoming(ally)) continue;
         // If in artillery mode, countdown and skip normal AI movement/actions
@@ -1750,7 +1802,7 @@ function updateAllyAI() {
 
                 let b = null;
                 if (tt === 'plasma') {
-                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:200, owner:'ally', team: ally.team, type:'plasma', damage:350, piercing:true };
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:219, owner:'ally', team: ally.team, type:'plasma', damage:350, piercing:true };
                 } else if (tt === 'toxic') {
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*7, vy:Math.sin(ally.turretAngle)*7, life:500, owner:'ally', team: ally.team, type:'toxic', explodeTimer:45, spawned:5 };
                 } else if (tt === 'fire') {
@@ -1823,7 +1875,7 @@ function updateAllyAI() {
                 } else if (tt === 'musical') {
                         // Ally musical: sound wave projectile that ricochets
                         const speed = 6;
-                        b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 180, team: ally.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+                        b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 167, team: ally.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
                     } else if (tt === 'illuminat') {
                         // Ally illuminat: activate beam
                         if (!ally.beamActive && (!ally.beamCooldown || ally.beamCooldown <= 0)) {
@@ -1916,9 +1968,22 @@ function updateAllyAI() {
                             damage: 80,
                             hitEntities: []
                         };
+                    } else if (tt === 'air') {
+                        // Ally air: knockback wind gust
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 22,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 22,
+                            w: 10, h: 10,
+                            vx: Math.cos(ally.turretAngle) * 6,
+                            vy: Math.sin(ally.turretAngle) * 6,
+                            life: 125,
+                            owner: 'ally', team: ally.team,
+                            type: 'airBullet',
+                            damage: 80
+                        };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 45 : (tt === 'roman') ? 65 : (tt === 'spartan') ? 40 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

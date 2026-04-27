@@ -550,22 +550,28 @@ function syncResultOverlay(state = gameState) {
             }
         } else {
             // LOSE: show only trophy penalties
-            if (currentMode === 'trial') {
+            if (currentMode === 'training') {
+                rewardText = 'Тренировка окончена';
+            } else if (currentMode === 'trial') {
                 rewardText = 'Испытание провалено (без штрафа)';
             } else if (currentMode === 'custom' || window._customMapActive) {
                 rewardText = 'Своя карта — трофеи не снимаются';
-            } else if (currentMode === 'single') {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей';
-            } else if (currentMode === 'duel') {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей';
-            } else if (currentMode === 'team') {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-3 трофея';
-            } else if (currentMode === 'onevsall') {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-5 трофеев';
-            } else if (currentMode === 'bossfight') {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-15 трофеев';
             } else {
-                rewardText = getMinimumTrophyLevel() >= trophies ? 'Защищен от потери трофеев' : '-1 трофей';
+                let rLoss = 1;
+                if (currentMode === 'team') rLoss = 3;
+                else if (currentMode === 'onevsall') rLoss = 5;
+                else if (currentMode === 'bossfight') rLoss = 15;
+                
+                let curTankTrophies = 0;
+                if (typeof getTankTrophies === 'function' && typeof tankType !== 'undefined') {
+                    curTankTrophies = getTankTrophies(tankType);
+                }
+                
+                if (getMinimumTrophyLevel() >= trophies && curTankTrophies <= 0) {
+                    rewardText = 'Защищен от потери трофеев';
+                } else {
+                    rewardText = `-${rLoss} трофе${rLoss === 1 ? 'й' : (rLoss >= 5 ? 'ев' : 'я')}`;
+                }
             }
         }
 
