@@ -87,7 +87,7 @@
 // the normal main menu.  Set to 'off' to run the game as usual.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance screen
+const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance screen
 
 (function () {
     // If maintenance is OFF, clean up any leftover bypass flags
@@ -124,12 +124,6 @@ const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance scree
         if (mainMenu) {
             // Save original content before replacing
             originalMenuContent = mainMenu.innerHTML;
-            // Make the overlay scrollable externally (no clip at top/bottom)
-            mainMenu.style.overflowY = 'auto';
-            mainMenu.style.overflowX = 'hidden';
-            mainMenu.style.alignItems = 'stretch';
-            mainMenu.style.justifyContent = 'flex-start';
-            mainMenu.style.display = 'block';
             // Replace inner content with maintenance message
             mainMenu.innerHTML = `
 <div style="
@@ -138,13 +132,13 @@ const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance scree
     align-items:center;
     justify-content:center;
     gap:24px;
-    min-height:100%;
+    min-height:100vh;
     width:100%;
     padding:40px 20px;
     box-sizing:border-box;
     text-align:center;
 ">
-    <div id="maintenanceWrench" style="font-size:72px;line-height:1;cursor:default;user-select:none;">🔧</div>
+    <div style="font-size:72px;line-height:1;">🔧</div>
     <h1 style="
         font-size:clamp(28px,5vw,48px);
         font-weight:900;
@@ -179,14 +173,11 @@ const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance scree
         ⏳ Ориентировочное время восстановления:<br>
         <span style="color:#f1c40f;font-weight:bold;">неизвестно</span>
     </div>
-    <div id="maintenanceCodeWrap" style="display:none;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
-        <input id="maintenanceCodeInput" type="text" inputmode="text" maxlength="32"
-            autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false"
-            name="mtnc-code" data-lpignore="true" data-form-type="other" data-1p-ignore="true"
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
+        <input id="maintenanceCodeInput" type="text" maxlength="32" placeholder="Код доступа"
             style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);
                    border-radius:10px;padding:10px 14px;color:#fff;font-size:15px;outline:none;
-                   width:200px;font-family:monospace;letter-spacing:2px;
-                   -webkit-text-security:disc;text-security:disc;">
+                   width:200px;font-family:monospace;letter-spacing:2px;">
         <button id="maintenanceCodeBtn"
             style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;
                    border:none;border-radius:10px;padding:10px 18px;font-size:14px;
@@ -195,6 +186,7 @@ const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance scree
     <div id="maintenanceCodeMsg" style="font-size:13px;min-height:18px;color:#e74c3c;"></div>
     <p style="font-size:13px;color:#666;margin:0;">MEGARE &copy; 2026</p>
 </div>`;
+            mainMenu.style.display = 'flex';
         }
 
         // Prevent game from starting
@@ -224,25 +216,7 @@ const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance scree
         const input = document.getElementById('maintenanceCodeInput');
         const btn   = document.getElementById('maintenanceCodeBtn');
         const msg   = document.getElementById('maintenanceCodeMsg');
-        const wrap  = document.getElementById('maintenanceCodeWrap');
-        const wrench = document.getElementById('maintenanceWrench');
         if (!input || !btn) return;
-
-        // Hidden activation: 5 clicks on the wrench icon reveals the code field
-        if (wrench && wrap) {
-            let clickCount = 0;
-            let resetTimer = null;
-            wrench.addEventListener('click', () => {
-                clickCount++;
-                clearTimeout(resetTimer);
-                resetTimer = setTimeout(() => { clickCount = 0; }, 1500);
-                if (clickCount >= 5) {
-                    wrap.style.display = 'flex';
-                    input.focus();
-                    clickCount = 0;
-                }
-            });
-        }
 
         function tryCode() {
             // Secret code is base64-encoded
