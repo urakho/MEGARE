@@ -17,7 +17,22 @@ const TANK_RANKS = [
 window.TANK_RANKS = TANK_RANKS;
 
 // Compute rank and star count from trophy total.
-function getRankInfo(trophies) {
+// Optional tankType enables the atmospheric title tier (≥8000 trophies).
+function getRankInfo(trophies, tankType) {
+    // Atmospheric title tier (above Marshal, tank-specific, unlocked at 8000)
+    if (trophies >= 8000 && tankType && window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType]) {
+        const td = window.TANK_ATMOSPHERIC_TITLES[tankType];
+        return {
+            name: td.name,
+            icon: '🏅',
+            color: td.color,
+            stars: 0,
+            trophies,
+            perStar: 0,
+            base: 8000,
+            isAtmospheric: true,
+        };
+    }
     let rank = TANK_RANKS[0];
     for (let i = TANK_RANKS.length - 1; i >= 0; i--) {
         if (trophies >= TANK_RANKS[i].base) { rank = TANK_RANKS[i]; break; }
@@ -94,7 +109,7 @@ const RANK_PHRASES = [
     "Маневр важнее брони.",
     // Humor
     "Армия — место, где компас всегда прав, но ты нет.",
-    "Рядовой — звание навсегда в сердце.",
+    " е.",
     "Солдатская каша — топливо победы.",
     "Устав написан кровью — читай внимательно.",
     "Если сержант молчит — жди команды.",
@@ -627,7 +642,7 @@ window.getRandomRankPhrase = getRandomRankPhrase;
 // Build and show the rank detail modal for a given tank type
 function showRankModal(tankType) {
     const trophies = (typeof getTankTrophies === 'function') ? getTankTrophies(tankType) : 0;
-    const info = getRankInfo(trophies);
+    const info = getRankInfo(trophies, tankType);
     const phrase = getRandomRankPhrase();
 
     // Remove any stale instance
@@ -667,7 +682,7 @@ function showRankModal(tankType) {
             starHtml = `<span style="font-size:13px;color:#f1c40f;letter-spacing:1px;text-shadow:0 0 6px #f1c40f88;">${'★'.repeat(tierStars)}</span>`
                      + `<span style="font-size:13px;color:rgba(255,255,255,0.12);letter-spacing:1px;">${'★'.repeat(3 - tierStars)}</span>`;
         } else if (tier.name === 'Маршал' && isUnlocked) {
-            starHtml = `<span style="font-size:11px;font-weight:bold;color:#ff4081;letter-spacing:1px;text-shadow:0 0 8px #ff408188;">МАХ</span>`;
+            starHtml = '';
         }
 
         // Card background states
@@ -722,12 +737,72 @@ function showRankModal(tankType) {
         </div>`;
     }).join('');
 
+    // ── Dynamic atmospheric title row (8000 trophies, tank-specific)
+    let atmosphericRowHtml = '';
+    if (window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType]) {
+        const td = window.TANK_ATMOSPHERIC_TITLES[tankType];
+        const isAtmosphericCurrent = info.isAtmospheric;
+        const isAtmosphericUnlocked = trophies >= 8000;
+        const isAtmosphericLocked = !isAtmosphericUnlocked;
+
+        let atCardBg, atBorder, atOpacity, atShadow, atNameStyle;
+        if (isAtmosphericCurrent) {
+            atCardBg = `linear-gradient(90deg,${td.color}28 0%,${td.color}0a 70%,transparent 100%)`;
+            atBorder = `1px solid ${td.color}99`;
+            atOpacity = '1';
+            atShadow = `inset 0 0 20px ${td.color}18, 0 2px 8px rgba(0,0,0,0.5)`;
+            atNameStyle = `font-weight:bold;color:${td.color};font-size:13px;text-shadow:0 0 8px ${td.color}66;`;
+        } else if (isAtmosphericUnlocked) {
+            atCardBg = 'linear-gradient(90deg,rgba(255,255,255,0.04),transparent)';
+            atBorder = '1px solid rgba(255,255,255,0.08)';
+            atOpacity = '1';
+            atShadow = '0 1px 3px rgba(0,0,0,0.3)';
+            atNameStyle = `font-weight:normal;color:${td.color};font-size:13px;`;
+        } else {
+            atCardBg = 'rgba(0,0,0,0.2)';
+            atBorder = '1px solid rgba(255,255,255,0.04)';
+            atOpacity = '0.38';
+            atShadow = 'none';
+            atNameStyle = 'font-weight:normal;color:#555;font-size:13px;';
+        }
+
+        const atRightBadge = isAtmosphericCurrent
+            ? `<span style="font-size:10px;font-weight:bold;padding:2px 6px;background:${td.color};color:#000;border-radius:10px;letter-spacing:.5px;">ТЕКУЩЕЕ</span>`
+            : isAtmosphericLocked
+                ? `<span style="font-size:14px;opacity:0.4;">🔒</span>`
+                : `<span style="font-size:14px;opacity:0.7;">✅</span>`;
+
+        atmosphericRowHtml = `<div style="
+            display:flex;align-items:center;gap:10px;
+            margin-bottom:4px;padding:7px 10px;
+            background:${atCardBg};
+            border:${atBorder};
+            border-radius:8px;
+            box-shadow:${atShadow};
+            opacity:${atOpacity};
+            transition:opacity .2s;
+        ">
+            <div style="font-size:22px;line-height:1;flex-shrink:0;filter:${isAtmosphericLocked?'grayscale(1)':'none'};">👑</div>
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="${atNameStyle}">«${td.name}»</span>
+                    <span style="font-size:11px;color:rgba(255,255,255,0.3);">· 8000 🏆</span>
+                </div>
+            </div>
+            <div style="flex-shrink:0;">${atRightBadge}</div>
+        </div>`;
+    }
+
     // ── Progress bar to next star or next rank
     let progressBarHtml = '';
     {
         const cur = info.trophies;
         const rankIdx = TANK_RANKS.findIndex(r => r.name === info.name);
-        if (info.perStar > 0 && info.stars < 3) {
+        if (info.isAtmospheric) {
+            // Already at the atmospheric title tier — show MAX
+            progressBarHtml = `
+            <div style="margin:12px 0 4px;font-size:12px;font-weight:bold;color:${info.color};text-align:center;letter-spacing:1px;text-shadow:0 0 10px ${info.color}88;">👑 «${info.name}» — достигнуто! 👑</div>`;
+        } else if (info.perStar > 0 && info.stars < 3) {
             const lo = info.base + info.stars * info.perStar;
             const hi = info.base + (info.stars + 1) * info.perStar;
             const pct = Math.round(((cur - lo) / (hi - lo)) * 100);
@@ -753,7 +828,21 @@ function showRankModal(tankType) {
                 </div>`;
             }
         } else if (info.name === 'Маршал') {
-            progressBarHtml = `<div style="margin:12px 0 4px;font-size:12px;font-weight:bold;color:#ff4081;text-align:center;letter-spacing:1px;text-shadow:0 0 10px #ff408188;">👑 МАКСИМАЛЬНОЕ ЗВАНИЕ ДОСТИГНУТО 👑</div>`;
+            // Show progress bar from 5000 to 8000 (unique title threshold)
+            const titleThreshold = 8000;
+            const marshalBase = 5000;
+            const td = window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType];
+            const titleName = td ? td.name : 'Уникальное звание';
+            const titleColor = td ? td.color : '#f1c40f';
+            const pct = Math.min(100, Math.round(((trophies - marshalBase) / (titleThreshold - marshalBase)) * 100));
+            progressBarHtml = `
+            <div style="margin:12px 0 4px;font-size:12px;font-weight:bold;color:#ff4081;text-align:center;letter-spacing:1px;text-shadow:0 0 10px #ff408188;">👑 МАРШАЛ — максимальное звание</div>
+            <div style="display:flex;justify-content:space-between;margin:8px 0 5px;font-size:11px;color:#888;">
+                <span>👑 До звания «${titleName}»</span><span style="color:${titleColor};">${trophies} / ${titleThreshold} 🏆</span>
+            </div>
+            <div style="height:8px;background:rgba(0,0,0,0.5);border-radius:4px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+                <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,${titleColor},${titleColor}cc);border-radius:4px;box-shadow:0 0 8px ${titleColor}88;transition:width 0.4s;"></div>
+            </div>`;
         } else if (info.name === 'Без звания') {
             const hi2 = TANK_RANKS[1].base;
             const pct2 = Math.min(100, Math.round((cur / hi2) * 100));
@@ -773,10 +862,12 @@ function showRankModal(tankType) {
         : tankType;
 
     // ── Star display (large)
-    const starsLargeHtml = (info.perStar > 0)
-        ? `<span style="font-size:32px;color:#f1c40f;letter-spacing:6px;text-shadow:0 0 16px #f1c40f,0 0 32px #f1c40f88;">${'★'.repeat(info.stars)}</span>`
-        + `<span style="font-size:32px;color:rgba(255,255,255,0.08);letter-spacing:6px;">${'★'.repeat(3 - info.stars)}</span>`
-        : (info.name === 'Маршал' ? `<span style="font-size:32px;letter-spacing:6px;text-shadow:0 0 16px #ff4081,0 0 32px #ff408188;">👑👑👑</span>` : '');
+    const starsLargeHtml = info.isAtmospheric
+        ? `<span style="font-size:32px;letter-spacing:6px;color:${info.color};text-shadow:0 0 16px ${info.color},0 0 32px ${info.color}88;">👑👑👑</span>`
+        : (info.perStar > 0)
+            ? `<span style="font-size:32px;color:#f1c40f;letter-spacing:6px;text-shadow:0 0 16px #f1c40f,0 0 32px #f1c40f88;">${'★'.repeat(info.stars)}</span>`
+            + `<span style="font-size:32px;color:rgba(255,255,255,0.08);letter-spacing:6px;">${'★'.repeat(3 - info.stars)}</span>`
+            : (info.name === 'Маршал' ? `<span style="font-size:32px;letter-spacing:6px;text-shadow:0 0 16px #ff4081,0 0 32px #ff408188;">👑👑👑</span>` : '');
 
     // ── Assemble modal
     const modal = document.createElement('div');
@@ -833,7 +924,7 @@ function showRankModal(tankType) {
             Таблица&nbsp;званий
             <div style="flex:1;height:1px;background:linear-gradient(90deg,#2a3a4a,transparent);"></div>
         </div>
-        <div>${rowsHtml}</div>
+        <div>${rowsHtml}${atmosphericRowHtml}</div>
 
         <!-- Divider -->
         <div style="height:1px;background:linear-gradient(90deg,transparent,${info.color}44,transparent);margin:16px 0 12px;"></div>

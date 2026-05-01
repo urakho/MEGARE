@@ -252,17 +252,29 @@ if (ADMIN_ENABLED !== 'on') {
         if (commandExecute) commandExecute.addEventListener('click', () => {
             if (commandInput) processDevCommand(commandInput.value);
             if (commandInput) commandInput.value = '';
+            if (commandInput) commandInput.blur();
             if (commandModal) commandModal.style.display = 'none';
         });
         if (commandCancel) commandCancel.addEventListener('click', () => {
             if (commandInput) commandInput.value = '';
+            if (commandInput) commandInput.blur();
             if (commandModal) commandModal.style.display = 'none';
         });
         if (commandModal) commandModal.addEventListener('click', (e) => {
-            if (e.target === commandModal) { if (commandInput) commandInput.value = ''; commandModal.style.display = 'none'; }
+            if (e.target === commandModal) {
+                if (commandInput) commandInput.value = '';
+                if (commandInput) commandInput.blur();
+                commandModal.style.display = 'none';
+            }
         });
         if (commandInput) commandInput.addEventListener('keydown', (e) => {
-            if (e.code === 'Enter') { processDevCommand(commandInput.value); commandInput.value = ''; if (commandModal) commandModal.style.display = 'none'; e.stopImmediatePropagation(); }
+            if (e.code === 'Enter') {
+                processDevCommand(commandInput.value);
+                commandInput.value = '';
+                commandInput.blur();
+                if (commandModal) commandModal.style.display = 'none';
+                e.stopImmediatePropagation();
+            }
             else if (e.code === 'Escape') { commandInput.value = ''; if (commandModal) commandModal.style.display = 'none'; commandInput.blur(); }
         });
         if (helpClose) helpClose.addEventListener('click', () => { if (helpModal) helpModal.style.display = 'none'; });

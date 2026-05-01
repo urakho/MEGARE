@@ -1080,3 +1080,48 @@ function showMechRocketModal(ctx, canvas, modal) {
 window.drawMechRocketOn      = drawMechRocketOn;
 window.drawMechRocketPreview = drawMechRocketPreview;
 window.showMechRocketModal   = showMechRocketModal;
+
+// ── Consolidated mech data structures ────────────────────────────────────────
+// Single canonical source of truth for all mech unit data.
+// Other files must use window.isMech() and window.mech* objects
+// instead of hardcoding mech types inside tank data structures.
+
+const MECH_TYPES = ['mechDiy', 'mechShield', 'mechRocket'];
+window.MECH_TYPES = MECH_TYPES;
+window.isMech = (type) => MECH_TYPES.includes(type);
+
+window.mechDescriptions = {
+    mechDiy:    window.mechDiyMeta,
+    mechShield: window.mechShieldMeta,
+    mechRocket: window.mechRocketMeta,
+};
+window.mechBgGradients = {
+    mechDiy:    window.mechDiyBgGradient,
+    mechShield: window.mechShieldBgGradient,
+    mechRocket: window.mechRocketBgGradient,
+};
+window.mechBaseColors = {
+    mechDiy:    window.mechDiyBaseColor,
+    mechShield: window.mechShieldBaseColor,
+    mechRocket: window.mechRocketBaseColor,
+};
+window.mechGemPrices = {
+    mechDiy:    150,
+    mechShield: 300,
+    mechRocket: 600,
+};
+window.mechMaxHpByType = {
+    mechDiy:    420,
+    mechShield: 600,
+    mechRocket: 450,
+};
+window.mechMaxSpeedByType = {
+    mechDiy:    2.4,
+    mechShield: 2.3,
+    mechRocket: 2.1,
+};
+window.mechDamageByType = {
+    mechDiy:    40,
+    mechShield: 120,
+    mechRocket: 150,
+};
