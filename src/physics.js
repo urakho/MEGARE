@@ -19,9 +19,203 @@ function applyIncomingPlayerDamage(damage) {
     return damage;
 }
 
+function getEntityTankType(entity) {
+    if (!entity) return '';
+    if (typeof tank !== 'undefined' && entity === tank) {
+        return typeof tankType !== 'undefined' ? tankType : (entity.tankType || 'normal');
+    }
+    return entity.tankType || 'normal';
+}
+
+function isEgyptianTank(entity) {
+    return getEntityTankType(entity) === 'egyptian';
+}
+
+function applyTargetDamageModifiers(entity, damage) {
+    if (entity && (entity.sandCurseTimer || 0) > 0) {
+        return damage * 1.25;
+    }
+    return damage;
+}
+
+function dealDamageToEntity(entity, damage) {
+    const finalDamage = applyTargetDamageModifiers(entity, damage);
+    entity.hp = (entity.hp || 0) - finalDamage;
+    return finalDamage;
+}
+
+function refreshSandstormDebuff(entity, duration = 30) {
+    if (!entity || entity.alive === false || isEgyptianTank(entity)) return;
+    entity.sandCurseTimer = Math.max(entity.sandCurseTimer || 0, duration);
+    entity.sandBlindTimer = Math.max(entity.sandBlindTimer || 0, duration);
+    entity.sandNoShootTimer = Math.max(entity.sandNoShootTimer || 0, duration);
+    if (typeof tank !== 'undefined' && entity !== tank) {
+        entity.confused = Math.max(entity.confused || 0, 4);
+    }
+}
+
+function tickSandstormDebuff(entity) {
+    if (!entity) return;
+    if ((entity.sandCurseTimer || 0) > 0) {
+        entity.sandCurseTimer--;
+        entity._sandCurseFxTick = ((entity._sandCurseFxTick || 0) + 1) % 6;
+        if (entity._sandCurseFxTick === 0 && typeof spawnParticle === 'function' && window.effectsEnabled !== false && particles.length < 220) {
+            const cx = entity.x + (entity.w || 0) / 2;
+            const cy = entity.y + (entity.h || 0) / 2;
+            const ang = Math.random() * Math.PI * 2;
+            const dist = Math.max(entity.w || 0, entity.h || 0) * (0.18 + Math.random() * 0.46);
+            spawnParticle(cx + Math.cos(ang) * dist, cy + Math.sin(ang) * dist, 'rgba(8, 8, 14, 0.94)', 0.85);
+        }
+    } else {
+        entity._sandCurseFxTick = 0;
+    }
+    if ((entity.sandBlindTimer || 0) > 0) entity.sandBlindTimer--;
+    if ((entity.sandNoShootTimer || 0) > 0) entity.sandNoShootTimer--;
+}
+
 function checkRectCollision(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+function circleIntersectsRect(cx, cy, radius, rect) {
+    const nearestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+    const nearestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+    const dx = cx - nearestX;
+    const dy = cy - nearestY;
+    return (dx * dx + dy * dy) <= radius * radius;
+}
+
+function applyPharaohCurse(entity, duration = 300) {
+    if (!entity || entity.alive === false || isEgyptianTank(entity)) return false;
+    entity.sandCurseTimer = Math.max(entity.sandCurseTimer || 0, duration);
+    return true;
+}
+
+function createPharaohSwarm(source, duration = 300) {
+    if (!source || !Array.isArray(objects)) return null;
+    const swarm = {
+        type: 'pharaohSwarm',
+        x: source.x + (source.w || 0) / 2,
+        y: source.y + (source.h || 0) / 2,
+        radius: 78,
+        life: duration,
+        maxLife: duration,
+        team: source.team,
+        speed: 1.35,
+        damagePerTick: 1,
+        damageInterval: 30,
+        curseDuration: duration,
+        wobbleSeed: Math.random() * Math.PI * 2
+    };
+    objects.push(swarm);
+    return swarm;
+}
+
+function getNearestPharaohSwarmTarget(swarm) {
+    if (!swarm) return null;
+    let bestTarget = null;
+    let bestDistance = Infinity;
+    const consider = (entity) => {
+        if (!entity || entity.alive === false || entity.team === swarm.team) return;
+        const ex = entity.x + (entity.w || 0) / 2;
+        const ey = entity.y + (entity.h || 0) / 2;
+        const distance = Math.hypot(ex - swarm.x, ey - swarm.y);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestTarget = entity;
+        }
+    };
+    if (typeof tank !== 'undefined') consider(tank);
+    if (typeof allies !== 'undefined') for (const ally of allies) consider(ally);
+    if (typeof enemies !== 'undefined') for (const enemy of enemies) consider(enemy);
+    return bestTarget;
+}
+
+function applyPharaohSwarmDamage(entity, damage) {
+    if (!entity || entity.alive === false) return;
+    entity.hp = (entity.hp || 0) - damage;
+    if (entity.hp > 0) return;
+
+    const centerX = entity.x + (entity.w || 0) / 2;
+    const centerY = entity.y + (entity.h || 0) / 2;
+    spawnExplosion(centerX, centerY, entity === tank ? 70 : 65);
+
+    if (typeof tank !== 'undefined' && entity === tank) {
+        if (currentMode === 'war') {
+            if ((tank.respawnCount || 0) >= 2) {
+                gameState = 'lose';
+                loseTrophies(1);
+                syncResultOverlay('lose');
+            } else {
+                tank.alive = false;
+                tank.respawnTimer = 600;
+            }
+        } else {
+            gameState = 'lose';
+            loseModeTrophies();
+            syncResultOverlay('lose');
+        }
+        return;
+    }
+
+    const removeFromGroup = (group) => {
+        const idx = group.indexOf(entity);
+        if (idx === -1) return;
+        if (currentMode === 'war') {
+            entity.alive = false;
+            entity.respawnTimer = 600;
+        } else {
+            group.splice(idx, 1);
+        }
+    };
+
+    if (typeof allies !== 'undefined' && allies.indexOf(entity) !== -1) {
+        removeFromGroup(allies);
+        return;
+    }
+    if (typeof enemies !== 'undefined' && enemies.indexOf(entity) !== -1) {
+        removeFromGroup(enemies);
+    }
+}
+
+function updatePharaohSwarm(swarm) {
+    if (!swarm) return;
+
+    const target = getNearestPharaohSwarmTarget(swarm);
+    if (target) {
+        const tx = target.x + (target.w || 0) / 2;
+        const ty = target.y + (target.h || 0) / 2;
+        const dx = tx - swarm.x;
+        const dy = ty - swarm.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const speed = Math.min(swarm.speed || 1.35, distance);
+        const wobble = Math.sin((swarm.life || 0) * 0.08 + (swarm.wobbleSeed || 0)) * 0.2;
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+        swarm.x += dirX * speed - dirY * wobble;
+        swarm.y += dirY * speed + dirX * wobble;
+    }
+
+    swarm._tickCounter = (swarm._tickCounter || 0) + 1;
+    const damageNow = swarm._tickCounter % Math.max(1, swarm.damageInterval || 30) === 0;
+    const affectEntity = (entity) => {
+        if (!entity || entity.alive === false || entity.team === swarm.team) return;
+        const rect = { x: entity.x, y: entity.y, w: entity.w || 0, h: entity.h || 0 };
+        if (!circleIntersectsRect(swarm.x, swarm.y, swarm.radius || 0, rect)) return;
+        applyPharaohCurse(entity, swarm.curseDuration || 300);
+        if (damageNow) applyPharaohSwarmDamage(entity, swarm.damagePerTick || 1);
+    };
+
+    affectEntity(typeof tank !== 'undefined' ? tank : null);
+    if (typeof allies !== 'undefined') for (const ally of allies) affectEntity(ally);
+    if (typeof enemies !== 'undefined') for (const enemy of enemies) affectEntity(enemy);
+
+    if (window.effectsEnabled !== false && typeof spawnParticle === 'function' && particles.length < 220 && (swarm.life % 4 === 0)) {
+        const ang = Math.random() * Math.PI * 2;
+        const dist = (swarm.radius || 0) * (0.2 + Math.random() * 0.65);
+        spawnParticle(swarm.x + Math.cos(ang) * dist, swarm.y + Math.sin(ang) * dist, 'rgba(8, 8, 12, 0.92)', 0.75);
+    }
 }
 
 // Create electric chain lightning - shoots instantly in a direction and chains between enemies
@@ -92,7 +286,7 @@ function createElectricChain(startX, startY, angle, baseDamage = 2, ownerTeam = 
         const damage = baseDamage * Math.pow(0.75, chainLevel);
         
         // Damage the target
-        targetE.hp -= damage;
+        dealDamageToEntity(targetE, damage);
         
         // Add to chained list
         const newChained = [...chainedEnemies, firstHit];
@@ -182,7 +376,7 @@ function updateNovaZones() {
                 const ey = e.y + e.h / 2;
                 const d = Math.hypot(ex - zone.centerX, ey - zone.centerY);
                 if (d <= zone.radius) {
-                    e.hp -= zone.damage;
+                    dealDamageToEntity(e, zone.damage);
                     
                     // Particle effect for repeated hits
                     spawnParticle(ex + (Math.random()-0.5)*15, ey + (Math.random()-0.5)*15, '#00d4ff', 0.7);
@@ -210,52 +404,132 @@ function updateNovaZones() {
 }
 
 // Create an instant electric nova that hits ALL enemies in radius and ignores walls
-// Ice Wave Ultimate: completely freezes (paralyzes) all enemies/allies on opposing teams within radius
-function createIceNova(centerX, centerY, radius = 280, ownerTeam = 0) {
-    // Freeze enemies (skip other ice tanks — they're immune)
-    if (typeof enemies !== 'undefined') {
-        for (let i = 0; i < enemies.length; i++) {
-            const e = enemies[i];
-            if (!e || !e.alive || e.team === ownerTeam) continue;
-            if (e.tankType === 'ice') continue;
-            const ex = e.x + e.w / 2;
-            const ey = e.y + e.h / 2;
-            const d = Math.hypot(ex - centerX, ey - centerY);
-            if (d <= radius) {
-                e.paralyzed = true;
-                e.paralyzedTime = 240; // 4 seconds full freeze
-                e.frozenEffect = 240;
-                for (let k = 0; k < 8; k++) spawnParticle(ex + (Math.random()-0.5)*e.w, ey + (Math.random()-0.5)*e.h, '#a8e6ff', 1.0);
-            }
+let nextIceFieldId = 1;
+
+function isIceFieldTarget(entity, fieldTeam) {
+    if (!entity || entity.alive === false) return false;
+    if (fieldTeam !== undefined && entity.team === fieldTeam) return false;
+    return getEntityTankType(entity) !== 'ice';
+}
+
+function isIceFieldCellActive(field, cell) {
+    if (!field || !cell) return false;
+    const maxLife = field.maxLife || 240;
+    const freezeInTicks = field.freezeInTicks || 42;
+    const thawOutTicks = field.thawOutTicks || 56;
+    const elapsed = maxLife - (field.life || 0);
+    const cellElapsed = elapsed - (cell.delay || 0);
+    if (cellElapsed < Math.max(10, freezeInTicks * 0.35)) return false;
+    return ((field.life || 0) - (cell.delay || 0) * 0.45) > Math.max(6, thawOutTicks * 0.16);
+}
+
+function isEntityTouchingIceField(entity, field) {
+    if (!entity || !field || !Array.isArray(field.cells) || field.cells.length === 0) return false;
+    const centerX = entity.x + (entity.w || 0) / 2;
+    const centerY = entity.y + (entity.h || 0) / 2;
+    const maxReach = (field.radius || 0) + Math.max(entity.w || 0, entity.h || 0);
+    if (Math.hypot(centerX - field.x, centerY - field.y) > maxReach) return false;
+
+    const insetX = (entity.w || 0) * 0.18;
+    const insetY = (entity.h || 0) * 0.18;
+    const entityRect = {
+        x: entity.x + insetX,
+        y: entity.y + insetY,
+        w: Math.max(8, (entity.w || 0) - insetX * 2),
+        h: Math.max(8, (entity.h || 0) - insetY * 2)
+    };
+
+    for (const cell of field.cells) {
+        if (!isIceFieldCellActive(field, cell)) continue;
+        const cellRect = { x: cell.x, y: cell.y, w: cell.size || 25, h: cell.size || 25 };
+        if (checkRectCollision(entityRect, cellRect)) return true;
+    }
+    return false;
+}
+
+function applyIceFieldFreeze(entity, field) {
+    if (!isIceFieldTarget(entity, field ? field.team : undefined)) return;
+    const fieldId = field.fieldId;
+    if (!fieldId) return;
+
+    const touchState = entity._iceFieldTouchState || (entity._iceFieldTouchState = {});
+    const touchingField = isEntityTouchingIceField(entity, field);
+
+    if (!touchingField) {
+        delete touchState[fieldId];
+        return;
+    }
+    if (touchState[fieldId]) return;
+
+    touchState[fieldId] = true;
+    const freezeTime = field.contactFreezeTime || 240;
+    entity.paralyzed = true;
+    entity.paralyzedTime = Math.max(entity.paralyzedTime || 0, freezeTime);
+    entity.frozenEffect = Math.max(entity.frozenEffect || 0, freezeTime);
+
+    if (window.effectsEnabled !== false && typeof spawnParticle === 'function' && particles.length < 230) {
+        const centerX = entity.x + (entity.w || 0) / 2;
+        const centerY = entity.y + (entity.h || 0) / 2;
+        for (let i = 0; i < 8; i++) {
+            const ang = (i / 8) * Math.PI * 2 + Math.random() * 0.28;
+            const dist = Math.max(entity.w || 0, entity.h || 0) * (0.18 + Math.random() * 0.28);
+            spawnParticle(centerX + Math.cos(ang) * dist, centerY + Math.sin(ang) * dist, '#a8e6ff', 1.0);
         }
     }
-    // Freeze allied bots only if from opposing team (rarely happens, but for completeness)
-    if (typeof allies !== 'undefined') {
-        for (let i = 0; i < allies.length; i++) {
-            const a = allies[i];
-            if (!a || !a.alive || a.team === ownerTeam) continue;
-            if (a.tankType === 'ice') continue;
-            const ax = a.x + a.w / 2;
-            const ay = a.y + a.h / 2;
-            const d = Math.hypot(ax - centerX, ay - centerY);
-            if (d <= radius) {
-                a.paralyzed = true;
-                a.paralyzedTime = 240;
-                a.frozenEffect = 240;
-                for (let k = 0; k < 8; k++) spawnParticle(ax + (Math.random()-0.5)*a.w, ay + (Math.random()-0.5)*a.h, '#a8e6ff', 1.0);
+}
+
+function clearIceFieldTouchState(fieldId) {
+    if (!fieldId) return;
+    const clearFor = (entity) => {
+        if (entity && entity._iceFieldTouchState) delete entity._iceFieldTouchState[fieldId];
+    };
+    if (typeof tank !== 'undefined') clearFor(tank);
+    if (typeof allies !== 'undefined') for (const ally of allies) clearFor(ally);
+    if (typeof enemies !== 'undefined') for (const enemy of enemies) clearFor(enemy);
+}
+
+// Ice Wave Ultimate: creates frozen ground that freezes targets on contact
+function createIceNova(centerX, centerY, radius = 220, ownerTeam = 0) {
+    const fieldId = nextIceFieldId++;
+    if (typeof objects !== 'undefined') {
+        const cellSize = (typeof navCell !== 'undefined' && navCell > 0) ? navCell : 25;
+        const cells = [];
+        const minX = Math.floor((centerX - radius) / cellSize) * cellSize;
+        const maxX = Math.ceil((centerX + radius) / cellSize) * cellSize;
+        const minY = Math.floor((centerY - radius) / cellSize) * cellSize;
+        const maxY = Math.ceil((centerY + radius) / cellSize) * cellSize;
+        for (let cellY = minY; cellY <= maxY; cellY += cellSize) {
+            for (let cellX = minX; cellX <= maxX; cellX += cellSize) {
+                if (cellX + cellSize < 0 || cellY + cellSize < 0 || cellX > worldWidth || cellY > worldHeight) continue;
+                const cellCenterX = cellX + cellSize / 2;
+                const cellCenterY = cellY + cellSize / 2;
+                const distance = Math.hypot(cellCenterX - centerX, cellCenterY - centerY);
+                if (distance > radius - cellSize * 0.18) continue;
+                const delay = Math.floor((distance / radius) * 34);
+                cells.push({
+                    x: cellX,
+                    y: cellY,
+                    size: cellSize,
+                    delay: delay,
+                    phase: ((cellX * 13 + cellY * 7) % 17) / 17,
+                    icicles: ((cellX + cellY) / cellSize) % 3 === 0
+                });
             }
         }
-    }
-    // Player tank: skip if ice tank, otherwise freeze if on opposing team
-    if (typeof tank !== 'undefined' && tank.alive && tank.team !== ownerTeam && (typeof tankType === 'undefined' || tankType !== 'ice')) {
-        const tx = tank.x + tank.w / 2;
-        const ty = tank.y + tank.h / 2;
-        const d = Math.hypot(tx - centerX, ty - centerY);
-        if (d <= radius) {
-            tank.paralyzed = true;
-            tank.paralyzedTime = 240;
-            tank.frozenEffect = 240;
-        }
+        objects.push({
+            type: 'iceField',
+            fieldId: fieldId,
+            x: centerX,
+            y: centerY,
+            radius: radius,
+            team: ownerTeam,
+            life: 240,
+            maxLife: 240,
+            freezeInTicks: 42,
+            thawOutTicks: 56,
+            contactFreezeTime: 240,
+            cells: cells
+        });
     }
     // Expanding ring particles
     for (let p = 0; p < 60; p++) {
@@ -385,7 +659,7 @@ function explodeBarrel(obj) {
         const dist = Math.hypot(tx - (obj.x + obj.w/2), ty - (obj.y + obj.h/2));
         if (dist <= R) {
             const damage = Math.max(50, Math.round((1 - dist / R) * 300));
-            t.hp = (t.hp || 0) - damage;
+            dealDamageToEntity(t, damage);
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
                 gameState = 'lose'; 
@@ -433,7 +707,7 @@ function explodeRocket(bullet) {
             // Roman shield: full immunity to rocket splash
             if (t === tank && t.romanShieldActive) return;
             const damage = Math.max(50, Math.round((1 - dist / R) * 300));
-            t.hp = (t.hp || 0) - damage;
+            dealDamageToEntity(t, damage);
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
                 gameState = 'lose'; 
@@ -478,7 +752,7 @@ function explodeMechRocket(bullet, directHit = null) {
             const damage = (t === directHit && dist > R)
                 ? dmgMax
                 : Math.max(Math.round(dmgMax * 0.4), Math.round((1 - dist / R) * dmgMax));
-            t.hp = (t.hp || 0) - damage;
+            dealDamageToEntity(t, damage);
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x + t.w/2, t.y + t.h/2, 60);
                 gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
@@ -534,7 +808,7 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
         const dist = Math.hypot(tx - x, ty - y);
         if (dist <= R) {
             const damage = Math.max(1, Math.round((1 - dist / R) * coef));
-            t.hp = (t.hp || 0) - damage;
+            dealDamageToEntity(t, damage);
             t.hitFlashTime = Date.now();
             if (t === tank && t.hp <= 0) {
                 spawnExplosion(t.x+t.w/2, t.y+t.h/2, 70);
@@ -866,6 +1140,8 @@ function shoot() {
             props.type = 'mechRocketBullet'; props.damage = 150; props.w = 12; props.h = 12;
             props.explodeRadius = 50;
             props.vx = Math.cos(tank.turretAngle) * 9; props.vy = Math.sin(tank.turretAngle) * 9;
+        } else if (pType === 'egyptArrow') {
+            props.type = 'egyptArrow'; props.damage = 100; props.w = 10; props.h = 4; props.life = 110; props.vx = Math.cos(tank.turretAngle) * 7.2; props.vy = Math.sin(tank.turretAngle) * 7.2;
         } else if (pType === 'buckshot') {
             props.type = 'buckshot'; props.damage = 125; props.w = 6; props.h = 6;
         } else if (pType === 'railgun') {
@@ -1076,6 +1352,22 @@ function shoot() {
             spinAngle: 0
         });
         tank.fireCooldown = 60; // 1 shot per second
+    } else if (tankType === 'egyptian') {
+        // Egyptian arrow: fast, clean projectile with no extra on-hit effects
+        const ang = tank.turretAngle;
+        bullets.push({
+            x: tank.x + tank.w/2 + Math.cos(ang) * 24,
+            y: tank.y + tank.h/2 + Math.sin(ang) * 24,
+            w: 10, h: 4,
+            vx: Math.cos(ang) * 7.2,
+            vy: Math.sin(ang) * 7.2,
+            life: 110,
+            owner: 'player',
+            team: 0,
+            type: 'egyptArrow',
+            damage: 100
+        });
+        tank.fireCooldown = 45;
     } else if (tankType === 'pyro') {
         // Incendiary shell: deals 70 impact damage and applies burn DoT on hit
         const ang = tank.turretAngle;
@@ -1159,7 +1451,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'egyptian' && tankType !== 'pyro' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : (tankType === 'normal' ? 30 : FIRE_COOLDOWN)); // 1.5sec for mirror, normal 2 shots/s
     }
 }
@@ -1290,7 +1582,7 @@ function updatePhysics() {
                     if (dist < b.explosionRadius) {
                         let dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
                         if (b.owner === 'player') dmg = applyPlayerDamage(dmg);
-                        e.hp -= dmg;
+                        dealDamageToEntity(e, dmg);
                     }
                 }
             }
@@ -1381,7 +1673,7 @@ function updatePhysics() {
                                 if (dist < b.explosionRadius) {
                                     let dmgExp = b.explosionDamage || 100;
                                     if (b.owner === 'player') dmgExp = applyPlayerDamage(dmgExp);
-                                    enemy.hp -= dmgExp;
+                                    dealDamageToEntity(enemy, dmgExp);
                                 }
                             }
                         }
@@ -1515,7 +1807,7 @@ function updatePhysics() {
                 if (b.type === 'medicalPulse') {
                     if (b.team !== tank.team) {
                         // Damage enemy only
-                        if (!tank.mirrorShieldActive) tank.hp -= b.damage || 75;
+                        if (!tank.mirrorShieldActive) dealDamageToEntity(tank, b.damage || 75);
                     } else {
                         // Same team - bullet passes through without healing
                         continue;
@@ -1536,7 +1828,7 @@ function updatePhysics() {
                     const pid = -1;
                     if (!b.hitChain.includes(pid)) {
                         if (!tank.mirrorShieldActive) {
-                            tank.hp -= b.damage || 150;
+                            dealDamageToEntity(tank, b.damage || 150);
                             b.hitChain.push(pid);
                             for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
                         }
@@ -1610,7 +1902,7 @@ function updatePhysics() {
                     // Toxic bombs only damage once per target, don't stop or explode on contact
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
-                        tank.hp -= Math.round((b.damage || 50) * _shieldMult);
+                        dealDamageToEntity(tank, Math.round((b.damage || 50) * _shieldMult));
                         b.hitEntities.push('player');
                     }
                     // continue flying, don't remove bullet
@@ -1619,9 +1911,9 @@ function updatePhysics() {
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
                         if (tankType === 'mirror') {
-                             tank.hp -= Math.round(Math.round(b.damage || 350) * 0.5 * _shieldMult);
+                            dealDamageToEntity(tank, Math.round(Math.round(b.damage || 350) * 0.5 * _shieldMult));
                         } else {
-                             tank.hp -= Math.round((b.damage || 350) * _shieldMult);
+                            dealDamageToEntity(tank, Math.round((b.damage || 350) * _shieldMult));
                         }
                         b.hitEntities.push('player');
                     }
@@ -1630,26 +1922,26 @@ function updatePhysics() {
                     b.hitEntities = b.hitEntities || [];
                     if (!b.hitEntities.includes('player')) {
                         if (tankType === 'mirror') {
-                            tank.hp -= Math.round(175 * _shieldMult);
+                            dealDamageToEntity(tank, Math.round(175 * _shieldMult));
                         } else {
-                            tank.hp -= Math.round((b.damage || 350) * _shieldMult);
+                            dealDamageToEntity(tank, Math.round((b.damage || 350) * _shieldMult));
                         }
                         b.hitEntities.push('player');
                     }
                 } else if (b.type === 'illuminat') {
                     // Illuminat beam: damage and disorient
-                    tank.hp -= Math.round((b.damage || 0.5) * _shieldMult);
+                    dealDamageToEntity(tank, Math.round((b.damage || 0.5) * _shieldMult));
                     tank.disoriented = b.disorientTime || 36; // 0.6 seconds
                     bullets.splice(i, 1);
                 } else if (b.type === 'machinegun') {
                     // Machinegun: rapid fire with consistent damage
-                    tank.hp -= Math.round(b.damage * _shieldMult);
+                    dealDamageToEntity(tank, Math.round(b.damage * _shieldMult));
                     bullets.splice(i, 1);
                 } else if (b.type === 'railgun') {
                     // Railgun pierces player too — hit once then continue flying
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
-                        tank.hp -= Math.round((b.damage || 75) * _shieldMult);
+                        dealDamageToEntity(tank, Math.round((b.damage || 75) * _shieldMult));
                         b.hitEntities.push('player');
                         for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
                     }
@@ -1658,7 +1950,7 @@ function updatePhysics() {
                     // Spartan spear pierces player too — hit once then continue flying
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
-                        tank.hp -= Math.round((b.damage || 80) * _shieldMult);
+                        dealDamageToEntity(tank, Math.round((b.damage || 80) * _shieldMult));
                         b.hitEntities.push('player');
                         for (let k = 0; k < 4; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#b87333', 0.7);
                     }
@@ -1666,7 +1958,7 @@ function updatePhysics() {
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      dmg = Math.round(dmg * _shieldMult);
-                     tank.hp -= dmg;
+                     dealDamageToEntity(tank, dmg);
                      if (b.type === 'ice' && tankType !== 'ice') { tank.iceSlowed = true; tank.iceSlowedTime = 240; tank.frozenEffect = 240; }
                      if (b.type === 'pyroBullet') { tank.burning = true; tank.burnTimer = 300; tank.burnDps = 10; }
                      // Air bullet: apply smooth wind knockback to player
@@ -1820,7 +2112,7 @@ function updatePhysics() {
                     if (b.type === 'medicalPulse') {
                         if (b.team !== e.team) {
                             // Damage enemy only
-                            e.hp -= b.damage || 75;
+                            dealDamageToEntity(e, b.damage || 75);
                         } else {
                             // Same team - bullet passes through without healing
                             continue;
@@ -1873,7 +2165,7 @@ function updatePhysics() {
                         if (!b.hitEntities.includes(j)) {
                             let dmgToxic = b.damage || 50;
                             if (b.owner === 'player') dmgToxic = applyPlayerDamage(dmgToxic);
-                            e.hp -= dmgToxic;
+                            dealDamageToEntity(e, dmgToxic);
                             b.hitEntities.push(j);
                         }
                         // continue flying, don't remove bullet
@@ -1884,7 +2176,7 @@ function updatePhysics() {
                             let dmgPlasma = b.damage || 350;
                             if (b.owner === 'player') dmgPlasma = applyPlayerDamage(dmgPlasma);
                             if (e.isBoss) dmgPlasma = Math.round(dmgPlasma * 0.25); // 75% less vs boss
-                            e.hp -= dmgPlasma;
+                            dealDamageToEntity(e, dmgPlasma);
                             b.hitEntities.push(j);
                         }
                         // continue flying, don't remove bullet
@@ -1895,7 +2187,7 @@ function updatePhysics() {
                             let dmgPBlast = b.damage || 600;
                             if (b.owner === 'player') dmgPBlast = applyPlayerDamage(dmgPBlast);
                             if (e.isBoss) dmgPBlast = Math.round(dmgPBlast * 0.5); // 50% less vs boss
-                            e.hp -= dmgPBlast;
+                            dealDamageToEntity(e, dmgPBlast);
                             b.hitEntities.push('pb_' + j);
                         }
                         // continue flying, don't remove bullet
@@ -1905,7 +2197,7 @@ function updatePhysics() {
                         if (!b.hitChain.includes(j)) {
                             let dmgElec = b.damage || 150;
                             if (b.owner === 'player') dmgElec = applyPlayerDamage(dmgElec);
-                            e.hp -= dmgElec;
+                            dealDamageToEntity(e, dmgElec);
                             b.hitChain.push(j);
                             // Sparkle effects on hit
                             for (let k = 0; k < 6; k++) {
@@ -1918,7 +2210,7 @@ function updatePhysics() {
                         // Machinegun: rapid fire with consistent damage
                         let dmgMG = b.damage;
                         if (b.owner === 'player') dmgMG = applyPlayerDamage(dmgMG);
-                        e.hp -= dmgMG;
+                        dealDamageToEntity(e, dmgMG);
                         bullets.splice(i, 1);
                     } else if (b.type === 'railgun') {
                         // Railgun: pierce through all enemies, hit each only once
@@ -1926,7 +2218,7 @@ function updatePhysics() {
                         if (!b.hitEntities.includes(j)) {
                             let dmgRailgun = b.damage || 75;
                             if (b.owner === 'player') dmgRailgun = applyPlayerDamage(dmgRailgun);
-                            e.hp -= dmgRailgun;
+                            dealDamageToEntity(e, dmgRailgun);
                             b.hitEntities.push(j);
                             for (let k = 0; k < 5; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#00e5ff', 0.6);
                         }
@@ -1937,14 +2229,14 @@ function updatePhysics() {
                         if (!b.hitEntities.includes(j)) {
                             let dmgSpear = b.damage || 80;
                             if (b.owner === 'player') dmgSpear = applyPlayerDamage(dmgSpear);
-                            e.hp -= dmgSpear;
+                            dealDamageToEntity(e, dmgSpear);
                             b.hitEntities.push(j);
                             for (let k = 0; k < 4; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#b87333', 0.7);
                         }
                         // Don't remove — keeps flying through
                     } else if (b.type === 'droneBullet') {
                         // Drone bullet: damage and remove
-                        e.hp -= b.damage || 25;
+                        dealDamageToEntity(e, b.damage || 25);
                         bullets.splice(i, 1);
                     } else if (b.hasExplosion) {
                         // Buratino enhanced shot: large explosion on impact
@@ -1959,14 +2251,14 @@ function updatePhysics() {
                             if (dist < b.explosionRadius) {
                                 let dmg = (b.damage || 100) * (1 - dist / b.explosionRadius);
                                 if (b.owner === 'player') dmg = applyPlayerDamage(dmg);
-                                ex.hp -= dmg;
+                                dealDamageToEntity(ex, dmg);
                             }
                         }
                         bullets.splice(i, 1);
                     } else {
                         let dmgDefault = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.owner === 'player') dmgDefault = applyPlayerDamage(dmgDefault);
-                        e.hp -= dmgDefault;
+                        dealDamageToEntity(e, dmgDefault);
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.iceSlowed = true; e.iceSlowedTime = 240; e.frozenEffect = 240; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         // Pyro bullet: apply burn DoT (10 HP/sec for 5 sec)
@@ -2173,7 +2465,7 @@ function updatePhysics() {
             }
             
             if (!shielded) {
-                tank.hp -= sw.damage;
+                dealDamageToEntity(tank, sw.damage);
                 tank.confused = 30;
                 if (tank.hp <= 0) {
                      spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
@@ -2195,7 +2487,7 @@ function updatePhysics() {
                     e.lastHitType = 'musical';
                     e.lastHitTime = Date.now();
                 }
-                e.hp -= sw.damage;
+                dealDamageToEntity(e, sw.damage);
                 e.confused = 30; // 0.5 seconds confusion
                 if (e.hp <= 0) {
                     enemies.splice(j, 1);
@@ -2211,7 +2503,7 @@ function updatePhysics() {
                     a.lastHitType = 'musical';
                     a.lastHitTime = Date.now();
                 }
-                a.hp -= sw.damage;
+                dealDamageToEntity(a, sw.damage);
                 a.confused = 30;
                 if (a.hp <= 0) {
                     allies.splice(j, 1);
@@ -2265,7 +2557,7 @@ function updatePhysics() {
             for (let j = enemies.length - 1; j >= 0; j--) {
                 const e = enemies[j];
                 if (e.team !== tank.team && lineIntersectsRect(beamX, beamY, endX, endY, e.x, e.y, e.w, e.h)) {
-                    e.hp -= 0.5; // continuous damage
+                    dealDamageToEntity(e, 0.5); // continuous damage
                     e.disoriented = 36; // 0.6 seconds
                     if (e.hp <= 0) {
                         enemies.splice(j, 1);
@@ -2346,7 +2638,7 @@ function updatePhysics() {
                     tank.lastHitTime = Date.now();
                 }
 
-                tank.hp -= f.damage;
+                dealDamageToEntity(tank, f.damage);
                 flames.splice(i, 1);
                 if (tank.hp <= 0) {
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
@@ -2372,7 +2664,7 @@ function updatePhysics() {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
                 if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, a) && f.team !== a.team) {
-                    a.hp -= f.damage;
+                    dealDamageToEntity(a, f.damage);
                     flames.splice(i, 1);
                     if (a.hp <= 0) {
                         if (currentMode === 'war') {
@@ -2391,7 +2683,7 @@ function updatePhysics() {
                 if (!e || !e.alive) continue;
                 if (checkRectCollision({x: f.x-2, y: f.y-2, w:4, h:4}, e) && f.team !== e.team) {
                     const flameDmg = e.isBoss ? f.damage * 0.25 : f.damage; // 75% less vs boss
-                    e.hp -= flameDmg;
+                    dealDamageToEntity(e, flameDmg);
                     flames.splice(i, 1);
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
@@ -2453,10 +2745,51 @@ function updatePhysics() {
         } else if (obj.type === 'implosion') {
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'pharaohSwarm') {
+            updatePharaohSwarm(obj);
+            obj.life--;
+            if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'iceField') {
+            applyIceFieldFreeze(tank, obj);
+            for (const ally of allies) applyIceFieldFreeze(ally, obj);
+            for (const enemy of enemies) applyIceFieldFreeze(enemy, obj);
+            obj.life--;
+            if (obj.life <= 0) {
+                clearIceFieldTouchState(obj.fieldId);
+                objects.splice(i, 1);
+            }
         } else if (obj.type === 'gas') {
             // gas cloud visual fades over time
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'sandstorm') {
+            obj.life--;
+            if (obj.ownerRef && obj.ownerRef.alive !== false) {
+                obj.x = obj.ownerRef.x + (obj.ownerRef.w || 0) / 2;
+                obj.y = obj.ownerRef.y + (obj.ownerRef.h || 0) / 2;
+            }
+            const radiusSq = obj.radius * obj.radius;
+            const applyStormTo = (ent) => {
+                if (!ent || ent.alive === false) return;
+                if (obj.team !== undefined && ent.team === obj.team) return;
+                if (isEgyptianTank(ent)) return;
+                const ex = ent.x + (ent.w || 0) / 2;
+                const ey = ent.y + (ent.h || 0) / 2;
+                const dx = ex - obj.x;
+                const dy = ey - obj.y;
+                if ((dx * dx + dy * dy) <= radiusSq) {
+                    refreshSandstormDebuff(ent, 30);
+                }
+            };
+            applyStormTo(tank);
+            for (const ally of allies) applyStormTo(ally);
+            for (const enemy of enemies) applyStormTo(enemy);
+            if (window.effectsEnabled !== false && particles.length < 180 && (obj.life % 3 === 0)) {
+                const ang = Math.random() * Math.PI * 2;
+                const dist = obj.radius * (0.18 + Math.random() * 0.7);
+                spawnParticle(obj.x + Math.cos(ang) * dist, obj.y + Math.sin(ang) * dist, '#d2b46f', 0.45);
+            }
+            if (obj.life <= 0 || (obj.ownerRef && obj.ownerRef.alive === false)) objects.splice(i, 1);
         } else if (obj.type === 'visualRocket') {
             // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
             if (obj.delay && obj.delay > 0) {
@@ -2505,6 +2838,10 @@ function updatePhysics() {
             }
         }
     }
+
+    tickSandstormDebuff(tank);
+    for (const ally of allies) tickSandstormDebuff(ally);
+    for (const enemy of enemies) tickSandstormDebuff(enemy);
     
     // Check artillery mode
     if (tank.artilleryTimer > 0) {
@@ -2609,7 +2946,7 @@ function updatePhysics() {
                   ent.lastHitTime = Date.now();
               }
 
-            ent.hp = (ent.hp || 0) - dmgPerTick;
+            dealDamageToEntity(ent, dmgPerTick);
             ent.poisonTimer--;
             // Emit green toxic particles from poisoned entity
             if (typeof spawnParticle === 'function' && Math.random() > 0.5) {
@@ -2791,9 +3128,9 @@ function updatePhysics() {
             trophies += 10; // one vs all trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10);
         } else if (currentMode === 'bossfight') {
-            coins += 500;
-            trophies += 30; // boss fight win reward
-            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 30);
+            coins += 300;
+            trophies += 25; // boss fight win reward
+            if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 25);
         }
         if (!window._customMapActive) saveProgress();
         syncResultOverlay('win');

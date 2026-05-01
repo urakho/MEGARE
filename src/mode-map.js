@@ -77,9 +77,9 @@ function generateMap() {
     for (let i = 0; i < 3; i++) {
         const cp = cornerPositions[i];
         const p = findFreeSpot(cp.x - 19, cp.y - 19, 38, 38);
-        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield','mechRocket'];
+        const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','air','air','mechDiy','mechShield','mechRocket'];
         const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
+        const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', egyptian: '#c89b3c', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
         enemies.push({
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
@@ -205,7 +205,7 @@ function spawnTeamMode() {
     tank.x = playerCorner.x; tank.y = playerCorner.y; tank.team = 0;
     clearArea(playerCorner.x - 48, playerCorner.y - 48, 96, 96);
     
-    const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine','roman'];
+    const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'egyptian', 'time', 'machinegun', 'waterjet','electric','robot','medical','mine','roman'];
     const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
     allies.push({ x: playerCorner.x + 44, y: playerCorner.y + 10, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
 
@@ -214,9 +214,9 @@ function spawnTeamMode() {
         const base = corners[ci];
         clearArea(base.x - 48, base.y - 48, 96, 96);
         for (let k = 0; k < 2; k++) {
-            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro','spartan'];
+            const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','roman','pyro','spartan'];
             const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500', spartan: '#b87333' };
+            const typeColor = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', egyptian: '#c89b3c', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', pyro: '#8b2500', spartan: '#b87333' };
             let sx = base.x + (k === 0 ? 0 : (ci===1 ? -44 : (ci===2 ? 44 : -44)));
             let sy = base.y + (k === 0 ? 0 : (ci===1 ? 28 : (ci===2 ? -28 : -28))); 
             
@@ -251,9 +251,9 @@ function spawnDuelMode() {
     const ex = worldWidth - 100;
     const ey = worldHeight - 100;
     const enemyPos = findFreeSpot(ex - 19, ey - 19, 38, 38, 600, 24);
-    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan','mechDiy','mechShield','mechRocket'];
+    const tankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan','air','mechDiy','mechShield','mechRocket'];
     const tt = tankTypes[Math.floor(Math.random() * tankTypes.length)];
-    const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
+    const typeColors = { normal: '#8B0000', ice: '#00BFFF', fire: '#FF4500', buratino: '#6E38B0', toxic: '#27ae60', plasma: '#8e44ad', musical: '#00ffff', illuminat: '#f39c12', mirror: '#bdc3c7', egyptian: '#c89b3c', machinegun: '#A0522D', waterjet: '#2e86c1', buckshot: '#455A64', electric: '#6c3483', imitator: '#6c3483', robot: '#263238', mine: '#3d4c18', pyro: '#8b2500', spartan: '#b87333', air: '#2ecc71', mechDiy: '#1a8a3e', mechShield: '#1a3a6e', mechRocket: '#7d1f1f' };
     enemies.push({
         x: enemyPos.x, y: enemyPos.y, w: 38, h: 38,
         color: typeColors[tt] || '#B22222',
@@ -296,8 +296,8 @@ function spawnTrialMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
+    const trialTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','roman','pyro','spartan','air'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', egyptian:'#c89b3c', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];
@@ -338,8 +338,8 @@ function spawnOneVsAllMode() {
     tank.x = ps.x; tank.y = ps.y; tank.team = 0;
     
     const botStartX = worldWidth * 0.85;
-    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','mechDiy','mechShield','mechRocket'];
-    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e', mechRocket:'#7d1f1f' };
+    const botTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','air','mechDiy','mechShield','mechRocket'];
+    const typeColors = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', egyptian:'#c89b3c', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', mechDiy:'#1a8a3e', mechShield:'#1a3a6e', mechRocket:'#7d1f1f' };
     
     for (let i = 0; i < 7; i++) {
         const angle = (i / 7) * Math.PI * 1.5 - Math.PI * 0.75;
@@ -491,8 +491,8 @@ function spawnLeaderHuntMode() {
         { x: 120, y: cy },
         { x: worldWidth - 120, y: cy }
     ];
-    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
+    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','imitator','robot','medical','mine','pyro','spartan','air'];
+    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', egyptian:'#c89b3c', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500' };
 
     for (let i = 0; i < 7; i++) {
         const sp = spreadPositions[i];

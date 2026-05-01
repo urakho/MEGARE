@@ -16,6 +16,20 @@ function smoothTurretRotation(entity, targetAngle, rotateSpeed = 0.12) {
     }
 }
 
+const SANDSTORM_BLIND_VISION_RANGE = 90;
+const SANDSTORM_LAST_SEEN_TICKS = 150;
+
+function filterTargetsByVision(unit, targets) {
+    if (!unit || (unit.sandBlindTimer || 0) <= 0) return targets;
+    const ux = unit.x + (unit.w || 0) / 2;
+    const uy = unit.y + (unit.h || 0) / 2;
+    return targets.filter(target => {
+        const tx = target.x + ((target.w || 0) / 2);
+        const ty = target.y + ((target.h || 0) / 2);
+        return Math.hypot(tx - ux, ty - uy) <= SANDSTORM_BLIND_VISION_RANGE;
+    });
+}
+
 function pathClearFor(entity, angle, dist, samples = 4) {
     // use entity center for sampling so narrow passages are tested correctly
     const cx = entity.x + (entity.w || 0) / 2;
@@ -474,10 +488,14 @@ function updateEnemyAI() {
                 enemy.isUltimateActive = false;
                 const cx = enemy.x + enemy.w/2;
                 const cy = enemy.y + enemy.h/2;
-                if (typeof createElectricNova === 'function') {
+                if (enemy.iceUltimate && typeof createIceNova === 'function') {
+                    createIceNova(cx, cy, 220, enemy.team);
+                    for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#d6f4ff', 0.9);
+                } else if (typeof createElectricNova === 'function') {
                     createElectricNova(cx, cy, 200, 200, enemy.team);
+                    for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
                 }
-                for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
+                enemy.iceUltimate = false;
             }
             if (enemy.ultimateCooldown > 0) enemy.ultimateCooldown--;
             // remain stationary and skip other actions while charging
@@ -531,8 +549,32 @@ function updateEnemyAI() {
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
         const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...(typeof playerDrones !== 'undefined' ? playerDrones.filter(d => d && d.alive) : [])];
-        const targets = potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team));
-        if (targets.length === 0) continue;
+        if ((enemy.lastSeenPlayerTimer || 0) > 0) enemy.lastSeenPlayerTimer--;
+        const visibleTargets = filterTargetsByVision(enemy, potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team)));
+        const playerVisibleToEnemy = visibleTargets.includes(tank);
+        if (playerVisibleToEnemy && tank && tank.alive !== false) {
+            enemy.lastSeenPlayerX = tank.x + tank.w / 2;
+            enemy.lastSeenPlayerY = tank.y + tank.h / 2;
+            enemy.lastSeenPlayerTimer = SANDSTORM_LAST_SEEN_TICKS;
+        }
+        let targets = visibleTargets;
+        if ((enemy.sandBlindTimer || 0) > 0 && !playerVisibleToEnemy && (enemy.lastSeenPlayerTimer || 0) > 0) {
+            targets = [{
+                x: enemy.lastSeenPlayerX,
+                y: enemy.lastSeenPlayerY,
+                w: 0,
+                h: 0,
+                team: -999,
+                isLastSeenPlayer: true
+            }];
+        }
+        if (targets.length === 0) {
+            if ((enemy.sandBlindTimer || 0) > 0) {
+                enemy.turretAngle += (Math.random() - 0.5) * 0.16;
+                enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, 10);
+            }
+            continue;
+        }
         
         let nearest;
         {
@@ -632,6 +674,32 @@ function updateEnemyAI() {
                 enemy.ultimateCooldown = 480; // 8s cooldown
                 // Visual charge particles
                 for (let k = 0; k < 30; k++) spawnParticle(enemy.x + enemy.w/2 + (Math.random()-0.5)*enemy.w*1.2, enemy.y + enemy.h/2 + (Math.random()-0.5)*enemy.h*1.2, '#00d4ff', 1);
+                enemy.fireCooldown = 60;
+            }
+
+            if (enemy.tankType === 'ice' && (!enemy.isUltimateActive) && (!enemy.ultimateCooldown || enemy.ultimateCooldown <= 0) && distToNearest < 220 && Math.random() < 0.03) {
+                enemy.isUltimateActive = true;
+                enemy.ultimateTimer = 30;
+                enemy.ultimateCooldown = 600;
+                enemy.iceUltimate = true;
+                for (let k = 0; k < 28; k++) spawnParticle(enemy.x + enemy.w/2 + (Math.random()-0.5)*enemy.w*1.1, enemy.y + enemy.h/2 + (Math.random()-0.5)*enemy.h*1.1, '#a8e6ff', 1);
+                enemy.fireCooldown = 45;
+            }
+
+            if (enemy.egyptianSwarmActive === undefined) enemy.egyptianSwarmActive = false;
+            if (enemy.egyptianSwarmTimer === undefined) enemy.egyptianSwarmTimer = 0;
+            if (enemy.egyptianSwarmCooldown === undefined) enemy.egyptianSwarmCooldown = 0;
+            if (enemy.egyptianSwarmActive) {
+                enemy.egyptianSwarmTimer--;
+                if (enemy.egyptianSwarmTimer <= 0) enemy.egyptianSwarmActive = false;
+            }
+            if (enemy.egyptianSwarmCooldown > 0) enemy.egyptianSwarmCooldown--;
+            if (enemy.tankType === 'egyptian' && !enemy.egyptianSwarmActive && enemy.egyptianSwarmCooldown <= 0 && distToNearest < 420 && Math.random() < 0.025) {
+                enemy.egyptianSwarmActive = true;
+                enemy.egyptianSwarmTimer = 300;
+                enemy.egyptianSwarmCooldown = 900;
+                if (typeof createPharaohSwarm === 'function') createPharaohSwarm(enemy, 300);
+                for (let k = 0; k < 18; k++) spawnParticle(enemy.x + enemy.w/2 + (Math.random()-0.5)*64, enemy.y + enemy.h/2 + (Math.random()-0.5)*64, '#111114', 0.75);
                 enemy.fireCooldown = 60;
             }
 
@@ -825,13 +893,13 @@ function updateEnemyAI() {
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
                 // Don't copy imitator, dummy, or boss_dummy — but mirror is allowed
-                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time','mechDiy','mechShield','mechRocket'];
+                const validTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','robot','mine','roman','pyro','time','mechDiy','mechShield','mechRocket'];
                 let copiedType = (nearestType && validTypes.includes(nearestType)) ? nearestType : 'normal';
                 enemy.originalTankType = 'imitator';
                 enemy.imitatorActive = true;
                 enemy.imitatorTimer = 360;
                 enemy.tankType = copiedType;
-                const newMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[copiedType]) || 300;
+                const newMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[copiedType]) || window.mechMaxHpByType?.[copiedType] || 300;
                 enemy.hp = Math.min(enemy.hp, newMaxHp);
                 // Initialize mech energy when copying mechs
                 if (copiedType === 'mechDiy') {
@@ -1182,6 +1250,7 @@ function updateEnemyAI() {
 
         // Стрелять по ближайшей цели; если цель враждебна (другая команда), стрелять чаще
         const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
+        const enemyDisarmed = (enemy.sandNoShootTimer || 0) > 0;
         
         // --- AI MACHINEGUN HEAT LOGIC (exact same as player) ---
         const tt = enemy.tankType || 'normal';
@@ -1194,6 +1263,8 @@ function updateEnemyAI() {
                 enemy.heat -= COOL_RATE;
                 if (enemy.heat <= 0) { enemy.heat = 0; enemy.overheated = false; }
                 if (Math.random() > 0.5) spawnParticle(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#555', 0.5);
+            } else if (enemyDisarmed) {
+                enemy.heat = Math.max(0, enemy.heat - COOL_RATE);
             } else {
                 // heat++ every frame — identical to player holding Space
                 enemy.heat++;
@@ -1208,7 +1279,7 @@ function updateEnemyAI() {
 
         const mgShootProb = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
         if (enemy.fireCooldown > 0) enemy.fireCooldown--;
-        if (enemy.fireCooldown <= 0 && Math.random() < mgShootProb && !enemy.overheated) {
+        if (enemy.fireCooldown <= 0 && Math.random() < mgShootProb && !enemy.overheated && !enemyDisarmed) {
             // No extra heat here — heat is managed per-frame above based on fireCooldown state
 
             let b = null;
@@ -1352,6 +1423,9 @@ function updateEnemyAI() {
                     props.damage = 100; props.w = 8; props.h = 8;
                 } else if (pType === 'ice') {
                     props.type = 'ice'; props.w = 8; props.h = 8; props.speed = 5;
+                } else if (pType === 'egyptArrow') {
+                    props.type = 'egyptArrow'; props.damage = 100; props.w = 10; props.h = 4; props.life = 110;
+                    props.vx = Math.cos(enemy.turretAngle) * 7.2; props.vy = Math.sin(enemy.turretAngle) * 7.2;
                 } else if (pType === 'mechRocketBullet') {
                     props.type = 'mechRocketBullet'; props.damage = 150; props.w = 12; props.h = 12;
                     props.explodeRadius = 50;
@@ -1438,6 +1512,18 @@ function updateEnemyAI() {
                     type: 'romanBlade',
                     damage: 125,
                     bounces: 0, maxBounces: 1, spinAngle: 0
+                };
+            } else if (tt === 'egyptian') {
+                b = {
+                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 24,
+                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 24,
+                    w: 10, h: 4,
+                    vx: Math.cos(enemy.turretAngle) * 7.2,
+                    vy: Math.sin(enemy.turretAngle) * 7.2,
+                    life: 110,
+                    owner: 'enemy', team: enemy.team,
+                    type: 'egyptArrow',
+                    damage: 100
                 };
             } else if (tt === 'pyro') {
                 // Pyro: incendiary shell that sets targets on fire
@@ -1530,7 +1616,7 @@ function updateEnemyAI() {
             }
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'egyptian') ? 45 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
@@ -1566,8 +1652,30 @@ function updateAllyAI() {
             if (ally.artilleryTimer <= 0) ally.artilleryMode = false;
             continue;
         }
-        const targets = [...enemies.filter(e => e && e.alive), ...illusions.filter(i => i.life > 0)];
-        if (targets.length === 0) continue;
+        if (ally.isUltimateActive) {
+            ally.ultimateTimer = (ally.ultimateTimer || 0) - 1;
+            if (ally.ultimateTimer <= 0) {
+                ally.isUltimateActive = false;
+                const cx = ally.x + ally.w/2;
+                const cy = ally.y + ally.h/2;
+                if (ally.iceUltimate && typeof createIceNova === 'function') {
+                    createIceNova(cx, cy, 220, ally.team);
+                    for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#d6f4ff', 0.9);
+                }
+                ally.iceUltimate = false;
+            }
+            if (ally.ultimateCooldown > 0) ally.ultimateCooldown--;
+            continue;
+        }
+        if (ally.ultimateCooldown > 0) ally.ultimateCooldown--;
+        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...illusions.filter(i => i.life > 0)]);
+        if (targets.length === 0) {
+            if ((ally.sandBlindTimer || 0) > 0) {
+                ally.turretAngle += (Math.random() - 0.5) * 0.16;
+                ally.fireCooldown = Math.max(ally.fireCooldown || 0, 10);
+            }
+            continue;
+        }
         let nearest = targets[0];
         let nd = Math.hypot((nearest.x + (nearest.w||0)/2) - (ally.x + ally.w/2), (nearest.y + (nearest.h||0)/2) - (ally.y + ally.h/2));
         for (const t of targets) {
@@ -1656,6 +1764,32 @@ function updateAllyAI() {
                 ally.romanShieldTimer = 240; // 4 seconds
                 ally.romanShieldCooldown = 600; // 10 seconds
             }
+        }
+
+        if (ally.tankType === 'ice' && !ally.isUltimateActive && (!ally.ultimateCooldown || ally.ultimateCooldown <= 0) && nd < 220 && Math.random() < 0.03) {
+            ally.isUltimateActive = true;
+            ally.ultimateTimer = 30;
+            ally.ultimateCooldown = 600;
+            ally.iceUltimate = true;
+            for (let k = 0; k < 28; k++) spawnParticle(ally.x + ally.w/2 + (Math.random()-0.5)*ally.w*1.1, ally.y + ally.h/2 + (Math.random()-0.5)*ally.h*1.1, '#a8e6ff', 1);
+            ally.fireCooldown = 45;
+        }
+
+        if (ally.egyptianSwarmActive === undefined) ally.egyptianSwarmActive = false;
+        if (ally.egyptianSwarmTimer === undefined) ally.egyptianSwarmTimer = 0;
+        if (ally.egyptianSwarmCooldown === undefined) ally.egyptianSwarmCooldown = 0;
+        if (ally.egyptianSwarmActive) {
+            ally.egyptianSwarmTimer--;
+            if (ally.egyptianSwarmTimer <= 0) ally.egyptianSwarmActive = false;
+        }
+        if (ally.egyptianSwarmCooldown > 0) ally.egyptianSwarmCooldown--;
+        if (ally.tankType === 'egyptian' && !ally.egyptianSwarmActive && ally.egyptianSwarmCooldown <= 0 && nd < 420 && Math.random() < 0.025) {
+            ally.egyptianSwarmActive = true;
+            ally.egyptianSwarmTimer = 300;
+            ally.egyptianSwarmCooldown = 900;
+            if (typeof createPharaohSwarm === 'function') createPharaohSwarm(ally, 300);
+            for (let k = 0; k < 18; k++) spawnParticle(ally.x + ally.w/2 + (Math.random()-0.5)*64, ally.y + ally.h/2 + (Math.random()-0.5)*64, '#111114', 0.75);
+            ally.fireCooldown = 60;
         }
 
         // Movement towards nearest enemy (reuse enemy logic: pathfinding then small-step fallback)
@@ -1775,6 +1909,7 @@ function updateAllyAI() {
             
             // --- ALLY MACHINEGUN HEAT LOGIC (exact same as player) ---
             const tt = ally.tankType || 'normal';
+            const allyDisarmed = (ally.sandNoShootTimer || 0) > 0;
             if (tt === 'machinegun') {
                 ally.heat = ally.heat || 0;
                 const HEAT_MAX = 240; // 4 seconds at 60fps
@@ -1783,6 +1918,8 @@ function updateAllyAI() {
                     ally.heat -= COOL_RATE;
                     if (ally.heat <= 0) { ally.heat = 0; ally.overheated = false; }
                     if (Math.random() > 0.5) spawnParticle(ally.x + ally.w/2, ally.y + ally.h/2, '#555', 0.5);
+                } else if (allyDisarmed) {
+                    ally.heat = Math.max(0, ally.heat - COOL_RATE);
                 } else {
                     // heat++ every frame — identical to player holding Space
                     ally.heat++;
@@ -1797,7 +1934,7 @@ function updateAllyAI() {
 
         const mgShootProbA = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
             if (ally.fireCooldown > 0) ally.fireCooldown--;
-            if (ally.fireCooldown <= 0 && Math.random() < mgShootProbA && !ally.overheated) {
+            if (ally.fireCooldown <= 0 && Math.random() < mgShootProbA && !ally.overheated && !allyDisarmed) {
                 // Heat managed per-frame above
 
                 let b = null;
@@ -1954,6 +2091,18 @@ function updateAllyAI() {
                             damage: 125,
                             bounces: 0, maxBounces: 1, spinAngle: 0
                         };
+                    } else if (tt === 'egyptian') {
+                        b = {
+                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 24,
+                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 24,
+                            w: 10, h: 4,
+                            vx: Math.cos(ally.turretAngle) * 7.2,
+                            vy: Math.sin(ally.turretAngle) * 7.2,
+                            life: 110,
+                            owner: 'ally', team: ally.team,
+                            type: 'egyptArrow',
+                            damage: 100
+                        };
                     } else if (tt === 'spartan') {
                         // Ally spartan: piercing spear
                         b = {
@@ -1983,7 +2132,7 @@ function updateAllyAI() {
                         };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

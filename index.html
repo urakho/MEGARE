@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -31,7 +31,7 @@
                 <li><strong>Дуэль</strong> — один на один противостояние</li>
                 <li><strong>Команда</strong> — 2v2v2v2 (ты + союзник против 3 вражеских команд)</li>
                 <li><strong>Испытание</strong> — один против 7 врагов одновременно</li>
-                <li><strong>Один против всех</strong> — 1v7 (с облегченным ИИ)</li>
+                <li><strong>Один против всех</strong> — 1v7</li>
                 <li><strong>Босс-файт</strong> — сражайся с боссом (7500 HP, стреляет метеорами, 2 фазы)</li>
                 <li><strong>Тренировка</strong> — практика против неподвижных целей</li>
             </ul>
@@ -46,8 +46,6 @@
                 <li><strong>Детали (🔧)</strong> — использются для улучшений</li>
                 <li><strong>Трофеи (🏆)</strong> — за экстраординарные победы</li>
             </ul>
-            
-            <p><strong>📈 Улучшение танков:</strong> Каждый танк можно прокачать до 20 уровня, увеличивая HP, урон и скорость. Максимальное HP танка в обычной игре — 600, у босса — 7500.</p>
             
             <p><strong>🤖 ИИ противников:</strong> Боты используют A* патфайндинг и адаптивную тактику. Они избегают препятствий, координируют атаки и применяют специальные способности.</p>
             
@@ -202,13 +200,32 @@
             <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
         </div>
         
-        <!-- Shop items container with scroll -->
-        <div style="display:flex; flex-direction:column; gap:15px; align-items:center; flex: 1; min-height: 0; overflow-y: auto; padding-right: 5px; width: 100%;">
-            <!-- КОНТЕЙНЕРЫ section header -->
-            <div style="width:80%; text-align:center; margin-top:10px; margin-bottom:5px;">
-                <p style="margin:0; font-size:20px; font-weight:bold; color:#3498db; text-shadow:0 0 5px rgba(52,152,219,0.5);">📦 КОНТЕЙНЕРЫ</p>
-            </div>
-            
+        <!-- Shop tab buttons -->
+        <div class="shop-tabs">
+            <button class="shop-tab-btn shop-tab-active" data-shop-tab="shopTabContainers">📦 Контейнеры</button>
+            <button class="shop-tab-btn" data-shop-tab="shopTabLimited" style="display:inline-flex;align-items:center;gap:6px;">
+                <svg width="18" height="18" viewBox="0 0 28 28" style="flex-shrink:0;overflow:visible;">
+                    <circle cx="14" cy="14" r="12" fill="rgba(233,30,99,0.15)" stroke="#e91e63" stroke-width="1.5"/>
+                    <line x1="14" y1="3" x2="14" y2="5" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="14" y1="23" x2="14" y2="25" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="3" y1="14" x2="5" y2="14" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="23" y1="14" x2="25" y2="14" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <circle cx="14" cy="14" r="1.2" fill="#e91e63"/>
+                    <g style="transform-origin:14px 14px;animation:rotateClock 12s linear infinite;">
+                        <line x1="14" y1="14" x2="14" y2="9" stroke="#e91e63" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+                    </g>
+                    <g style="transform-origin:14px 14px;animation:rotateClock 4s linear infinite;">
+                        <line x1="14" y1="14" x2="14" y2="5.5" stroke="#e91e63" stroke-width="1.2" stroke-linecap="round"/>
+                    </g>
+                </svg>
+                Лимитированное
+            </button>
+            <button class="shop-tab-btn" data-shop-tab="shopTabResources">💱 Ресурсы</button>
+            <button class="shop-tab-btn" data-shop-tab="shopTabOther">🎟️ Другое</button>
+        </div>
+
+        <!-- CONTAINERS TAB -->
+        <div id="shopTabContainers" class="shop-tab-pane">
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
@@ -239,37 +256,87 @@
                 <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
+        </div>
 
-            <!-- ЛИМИТИРОВАННОЕ section header -->
-            <div style="width:80%; text-align:center; margin-top:15px; margin-bottom:5px;">
-                <div style="display:inline-flex; align-items:center; gap:8px;">
-                    <svg width="28" height="28" viewBox="0 0 28 28" style="vertical-align:middle;">
-                        <style>
-                            @keyframes rotateClock { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                            .clock-hand { transform-origin: 50% 50%; animation: rotateClock 4s linear infinite; }
-                        </style>
-                        <!-- Clock circle -->
-                        <circle cx="14" cy="14" r="12" fill="none" stroke="#e91e63" stroke-width="1.5"/>
-                        <!-- Center dot -->
-                        <circle cx="14" cy="14" r="1.5" fill="#e91e63"/>
-                        <!-- Hour markers -->
-                        <line x1="14" y1="3" x2="14" y2="5" stroke="#e91e63" stroke-width="1"/>
-                        <line x1="14" y1="23" x2="14" y2="25" stroke="#e91e63" stroke-width="1"/>
-                        <line x1="3" y1="14" x2="5" y2="14" stroke="#e91e63" stroke-width="1"/>
-                        <line x1="23" y1="14" x2="25" y2="14" stroke="#e91e63" stroke-width="1"/>
-                        <!-- Rotating hand -->
-                        <g class="clock-hand">
-                            <line x1="14" y1="14" x2="14" y2="7" stroke="#e91e63" stroke-width="1.5" stroke-linecap="round"/>
-                        </g>
-                    </svg>
-                    <p style="margin:0; font-size:20px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px rgba(233,30,99,0.5);">ЛИМИТИРОВАННОЕ</p>
+        <!-- LIMITED TAB -->
+        <div id="shopTabLimited" class="shop-tab-pane" style="display:none;">
+            <style>
+                @keyframes rotateClock { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                .clock-hand { transform-origin: 50% 50%; animation: rotateClock 4s linear infinite; }
+                .clock-hand-sec { transform-origin: 50% 50%; animation: rotateClock 1s linear infinite; }
+            </style>
+            <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:10px; padding:8px 16px;">
+                <!-- SVG animated clock on tab button -->
+                <svg width="32" height="32" viewBox="0 0 28 28" style="vertical-align:middle;">
+                    <!-- Outer glow circle -->
+                    <circle cx="14" cy="14" r="12.5" fill="none" stroke="#e91e63" stroke-width="0.8" opacity="0.3"/>
+                    <!-- Main circle -->
+                    <circle cx="14" cy="14" r="12" fill="rgba(233,30,99,0.1)" stroke="#e91e63" stroke-width="1.5"/>
+                    <!-- Hour markers -->
+                    <line x1="14" y1="2.5" x2="14" y2="3.8" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="14" y1="24.2" x2="14" y2="25.5" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="2.5" y1="14" x2="3.8" y2="14" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <line x1="24.2" y1="14" x2="25.5" y2="14" stroke="#e91e63" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                    <!-- Center dot -->
+                    <circle cx="14" cy="14" r="1.2" fill="#e91e63"/>
+                    <!-- Hour hand (shorter, slower) -->
+                    <g class="clock-hand" style="animation-duration: 12s;">
+                        <line x1="14" y1="14" x2="14" y2="9" stroke="#e91e63" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+                    </g>
+                    <!-- Minute hand (longer, faster) -->
+                    <g class="clock-hand">
+                        <line x1="14" y1="14" x2="14" y2="5.5" stroke="#e91e63" stroke-width="1.2" stroke-linecap="round"/>
+                    </g>
+                </svg>
+                
+                <!-- Text -->
+                <div>
+                    <p style="margin:0; font-size:16px; font-weight:bold; color:#e91e63; letter-spacing:1px;">ЛИМИТИРОВАННОЕ</p>
+                    <p style="margin:2px 0 0; font-size:11px; color:rgba(233,30,99,0.6); letter-spacing:0.5px;">Предложения с ограничением по времени</p>
                 </div>
             </div>
-            <div id="limitedItemsContainer" style="width:80%;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;"></div>
+            <div id="limitedItemsContainer" style="width:100%;display:flex;flex-wrap:wrap;justify-content:center;gap:12px;"></div>
+        </div>
 
-            <!-- Promo codes section (no header) -->
-            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:14px 16px;width:80%;flex-shrink:0;box-sizing:border-box;margin-top:10px;">
-                <p style="margin:0 0 10px;font-size:15px;font-weight:bold;color:#f1c40f;">🎟️ Промокод</p>
+        <!-- RESOURCES TAB -->
+        <div id="shopTabResources" class="shop-tab-pane" style="display:none;">
+            <p style="margin:0 0 4px; font-size:13px; color:rgba(255,255,255,0.55); text-align:center;">Курс: 30 💰 = 1 💎  |  1 💎 = 10 💰</p>
+
+            <!-- Buy gems with coins -->
+            <div style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3);border-radius:12px;padding:14px 18px;width:80%;box-sizing:border-box;">
+                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#2ecc71;">💰 → 💎 Обменять монеты на гемы</p>
+                <p style="margin:0 0 10px; font-size:12px; color:rgba(255,255,255,0.6);">Курс: 30 монет = 1 гем</p>
+                <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
+                    <input id="coinsExchangeInput" type="number" min="30" step="30" value="30" placeholder="Кол-во монет"
+                        style="max-width:120px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;">
+                    <span style="font-size:13px;">💰</span>
+                    <span style="color:rgba(255,255,255,0.5);">→</span>
+                    <span id="coinsExchangeResult" style="font-size:13px;color:#2ecc71;font-weight:bold;min-width:60px;text-align:center;">1 💎</span>
+                    <button id="exchangeCoinsBtn" class="btn" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;padding:8px 16px;font-size:13px;border-radius:7px;">Обменять</button>
+                </div>
+            </div>
+
+            <!-- Sell gems for coins -->
+            <div style="background:rgba(241,196,15,0.1);border:1px solid rgba(241,196,15,0.3);border-radius:12px;padding:14px 18px;width:80%;box-sizing:border-box;">
+                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#f1c40f;">💎 → 💰 Обменять гемы на монеты</p>
+                <p style="margin:0 0 10px; font-size:12px; color:rgba(255,255,255,0.6);">Курс: 1 гем = 10 монет</p>
+                <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
+                    <input id="gemsExchangeInput" type="number" min="1" value="1" placeholder="Кол-во гемов"
+                        style="max-width:120px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;">
+                    <span style="font-size:13px;">💎</span>
+                    <span style="color:rgba(255,255,255,0.5);">→</span>
+                    <span id="gemsExchangeResult" style="font-size:13px;color:#f1c40f;font-weight:bold;min-width:60px;text-align:center;">10 💰</span>
+                    <button id="exchangeGemsBtn" class="btn" style="background:linear-gradient(135deg,#b7950b,#f1c40f);color:#fff;padding:8px 16px;font-size:13px;border-radius:7px;">Обменять</button>
+                </div>
+            </div>
+            <div id="shopExchangeResult" style="font-size:13px;min-height:18px;text-align:center;margin-top:10px;"></div>
+        </div>
+
+        <!-- OTHER TAB -->
+        <div id="shopTabOther" class="shop-tab-pane" style="display:none;">
+            <div style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:18px 20px;width:80%;flex-shrink:0;box-sizing:border-box;">
+                <p style="margin:0 0 12px;font-size:16px;font-weight:bold;color:#f1c40f;">🎟️ Промокод</p>
+                <p style="margin:0 0 12px;font-size:13px;color:rgba(255,255,255,0.6);">Введите промокод, чтобы получить бесплатные награды.</p>
                 <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
                     <input id="promoCodeInput" type="text" maxlength="16" placeholder="Введите промокод"
                         style="flex:1;min-width:0;max-width:220px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:14px;outline:none;font-family:monospace;">
@@ -324,20 +391,20 @@
             </div>
             <!-- SUPER RARE -->
             <div>
-                <canvas id="fireTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
-                <button id="selectFireTank" class="btn btn-shop">Огнемётчик</button>
+                <canvas id="fireTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
+                <button id="selectFireTank" class="btn btn-rare">Огнемётчик</button>
             </div>
             <div>
-                <canvas id="spartanTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
-                <button id="selectSpartanTank" class="btn btn-shop">Спартанский</button>
+                <canvas id="spartanTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
+                <button id="selectSpartanTank" class="btn btn-rare">Спартанский</button>
             </div>
             <div>
-                <canvas id="waterjetTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
-                <button id="selectWaterjetTank" class="btn btn-shop">Водомётчик</button>
+                <canvas id="waterjetTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
+                <button id="selectWaterjetTank" class="btn btn-rare">Водомётчик</button>
             </div>
             <div>
-                <canvas id="mineTankPreview" width="150" height="150" style="border:2px solid #3498db; border-radius:8px;"></canvas>
-                <button id="selectMineTank" class="btn btn-shop">Минный</button>
+                <canvas id="mineTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
+                <button id="selectMineTank" class="btn btn-rare">Минный</button>
             </div>
             <!-- EPIC -->
             <div>
@@ -358,29 +425,33 @@
             </div>
             <!-- LEGENDARY -->
             <div>
-                <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
-                <button id="selectToxicTank" class="btn btn-gold">Отравляющий</button>
+                <canvas id="toxicTankPreview" width="150" height="150" style="border:2px solid #1abc9c; border-radius:8px;"></canvas>
+                <button id="selectToxicTank" class="btn btn-legendary">Отравляющий</button>
             </div>
             <div>
-                <canvas id="mirrorTankPreview" width="150" height="150" style="border:2px solid #f1c40f; border-radius:8px;"></canvas>
-                <button id="selectMirrorTank" class="btn btn-gold">Зеркальный</button>
+                <canvas id="mirrorTankPreview" width="150" height="150" style="border:2px solid #1abc9c; border-radius:8px;"></canvas>
+                <button id="selectMirrorTank" class="btn btn-legendary">Зеркальный</button>
             </div>
             <div>
-                <canvas id="robotTankPreview" width="150" height="150" style="border:3px solid #fff176; border-radius:8px; background:#0d0d1e;"></canvas>
-                <button id="selectRobotTank" class="btn btn-gold">Танк-робот</button>
+                <canvas id="egyptianTankPreview" width="150" height="150" style="border:2px solid #1abc9c; border-radius:8px;"></canvas>
+                <button id="selectEgyptianTank" class="btn btn-legendary">Танк-фараон</button>
+            </div>
+            <div>
+                <canvas id="robotTankPreview" width="150" height="150" style="border:3px solid #1abc9c; border-radius:8px; background:#0d0d1e;"></canvas>
+                <button id="selectRobotTank" class="btn btn-legendary">Танк-робот</button>
             </div>
             <!-- MYTHIC -->
             <div>
                 <canvas id="illuminatTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
-                <button id="selectIlluminatTank" class="btn btn-blood">👁 Иллюминат</button>
+                <button id="selectIlluminatTank" class="btn btn-mythic">👁 Иллюминат</button>
             </div>
             <div>
                 <canvas id="plasmaTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
-                <button id="selectPlasmaTank" class="btn btn-blood">Плазменный</button>
+                <button id="selectPlasmaTank" class="btn btn-mythic">Плазменный</button>
             </div>
             <div>
                 <canvas id="electricTankPreview" width="150" height="150" style="border:2px solid #8b0000; border-radius:8px;"></canvas>
-                <button id="selectElectricTank" class="btn btn-blood">Электрический</button>
+                <button id="selectElectricTank" class="btn btn-mythic">Электрический</button>
             </div>
             <!-- CHROMATIC -->
             <div>
@@ -710,6 +781,16 @@
             <div id="attackArrow"></div>
         </div>
         <span id="attackLabel" class="attack-label">АТАКА</span>
+    </div>
+    <div id="ultZone">
+        <div id="ultBase">
+            <div id="ultKnob"></div>
+        </div>
+        <span id="ultLabel" class="attack-label ult-label">УЛЬТА</span>
+        <div id="ultChargeBar">
+            <div id="ultChargeBarFill"></div>
+        </div>
+        <span id="ultChargeText">READY</span>
     </div>
 </div>
 

@@ -16,7 +16,7 @@ const tankDescriptions = {
     fire: {
         name: "Огненный танк",
         description: "Агрессивный танк ближней и средней дистанции. Он прожигает позиции врага, не даёт стоять на месте и отлично чувствует себя в плотных схватках. Чем ближе бой, тем опаснее он становится, и тем труднее его игнорировать.",
-        rarity: "Сверхредкий"
+        rarity: "Редкая"
     },
     toxic: {
         name: "Токсичный танк",
@@ -48,6 +48,11 @@ const tankDescriptions = {
         description: "Танк-адаптер, который подстраивается под чужой стиль и отвечает тем же. Чем разнообразнее враг, тем интереснее и опаснее становится бой. Он особенно ценится за умение превращать чужие сильные стороны в свою пользу и сбивать планы соперника.",
         rarity: "Легендарный"
     },
+    egyptian: {
+        name: "Танк-фараон",
+        description: "Легендарный танк-фараон держит врага под давлением проклятий и постоянной угрозы. Его ульта выпускает облако чёрных насекомых, которое медленно преследует ближайшую цель, проклинает всех, кто к нему прикоснётся, и постепенно разъедает тех, кто остаётся внутри. Это сильный выбор для тех, кто любит навязывать неудобный бой, ослаблять врага перед разменом и добирать цель через контроль пространства.",
+        rarity: "Легендарный"
+    },
     time: {
         name: "Временной",
         description: "Танк для осторожной и умной игры. Он умеет пережить плохой момент, вернуть контроль над боем и снова навязать свой темп. Это хороший выбор для игроков, которые любят думать на несколько шагов вперёд и не сдаваться после ошибки.",
@@ -56,17 +61,17 @@ const tankDescriptions = {
     machinegun: {
         name: "Пулемётчик",
         description: "Быстрый танк для постоянного давления. Его сила не в одном выстреле, а в темпе, который он навязывает противнику без пауз. Он отлично подходит для тех, кто любит не отпускать врага из-под огня и держать бой в движении.",
-        rarity: "Редкий"
+        rarity: "Необычная"
     },
     buckshot: {
         name: "Дробовой танк",
         description: "Танк ближнего боя, который раскрывается почти в упор. Если подойти правильно, он быстро наказывает за жадность и ошибку в позиции. В руках смелого игрока он превращается в очень опасный инструмент для коротких разменов и резких врывов.",
-        rarity: "Редкий"
+        rarity: "Необычная"
     },
     waterjet: {
         name: "Водомётчик",
         description: "Танк контроля с мощной струёй, которая теснят врагов и ломает их позиции. Он особенно хорош там, где можно зажать соперника в неудобный угол. Хорош для защиты проходов, выталкивания цели и жёсткого навязывания дистанции.",
-        rarity: "Сверхредкий"
+        rarity: "Редкая"
     },
     imitator: {
         name: "Имитатор",
@@ -91,7 +96,7 @@ const tankDescriptions = {
     mine: {
         name: "Минный танк",
         description: "Скрытный танк-ловушка, который играет от терпения и мин. Он хорошо чувствует карту и умеет превращать привычные маршруты врага в опасные. Такой стиль особенно раздражает тех, кто привык идти напролом и не смотреть под колёса.",
-        rarity: "Сверхредкий"
+        rarity: "Редкая"
     },
     roman: {
         name: "Римский танк",
@@ -101,7 +106,7 @@ const tankDescriptions = {
     pyro: {
         name: "Зажигательный",
         description: "Танк постепенного урона, который поджигает цели и выигрывает за счёт давления. Его сила раскрывается в длинных разменах, где враг не успевает перевести дыхание. Он хорош против тех, кто любит затягивать бой и надеется пережить огонь.",
-        rarity: "Редкий"
+        rarity: "Необычная"
     },
     air: {
         name: "Воздушный",
@@ -111,11 +116,8 @@ const tankDescriptions = {
     spartan: {
         name: "Спартанский танк",
         description: "Прямолинейный и опасный танк, который становится злее в тяжёлой ситуации. Он любит близкий бой, давление и смелые решения без лишней осторожности. Чем жёстче обмен ударами, тем лучше он раскрывается и тем сложнее его остановить.",
-        rarity: "Сверхредкий"
+        rarity: "Редкая"
     },
-    mechDiy: window.mechDiyMeta || { name: "Штурмовой мех", description: "Гибкий боевой мех с энергобюджетом и двумя плазменными пушками. Он хорош в темпе, но любит аккуратную игру и контроль ресурсов. Если вести его правильно, он становится очень неприятным соперником, который постоянно держит давление.", rarity: "Редкий" },
-    mechShield: window.mechShieldMeta || { name: "Щитовой мех", description: "Тяжёлый мех с защитным корпусом и мощным фронтом. Он медленнее других, зато отлично держит линию и ломает оборону в лоб. Хорош в боях, где нужно пережить натиск, не отдать позицию и дожать врага.", rarity: "Сверхредкий" },
-    mechRocket: window.mechRocketMeta || { name: "Ракетный мех", description: "Эпический ракетный мех для плотного урона по площади. Он особенно опасен там, где врагам некуда разойтись. Сильнее всего работает в тесных сражениях, против скоплений целей и под хорошим прикрытием команды.", rarity: "Эпический" },
     kamikaze: {
         name: "Камикадзе",
         description: "Рискованный танк для агрессивной игры. Его сила в резком врыве, хаосе и умении сломать спокойный бой за один момент. Он подходит тем, кто любит заходить ва-банк, ломать чужую оборону и навязывать свой ритм силой.",
@@ -130,28 +132,26 @@ const tankBgGradients = {
     normal: ['#1b5e20', '#1b5e20'],   // Обычный - dark grass green (menu & modal)
     ice: ['#9b59b6', '#8e44ad'],      // Эпический - purple
     buckshot: ['#2ecc71', '#27ae60'], // Редкий - green
-    fire: ['#3498db', '#5dade2'],     // Сверхредкий - blue
-    waterjet: ['#3498db', '#5dade2'],  // Сверхредкий - blue (like fire slot)
-    mine: ['#3498db', '#5dade2'],     // Сверхредкий - blue
+    fire: ['#f9e04b', '#f1c40f'],     // Редкая - yellow
+    waterjet: ['#f9e04b', '#f1c40f'],  // Редкая - yellow
+    mine: ['#f9e04b', '#f1c40f'],     // Редкая - yellow
     buratino: ['#9b59b6', '#8e44ad'], // Эпический - purple
-    toxic: ['#fff9c4', '#fff176'],    // Легендарный - pale yellow
-    plasma: ['#ff6b6b', '#e74c3c'],   // Мифический - red
+    toxic: ['#40f6d1', '#11a89c', '#06615b'],    // Легендарный - turquoise
+    plasma: ['#ff2400', '#ba0020', '#660012'],   // Мифический - ало-бордовый
     musical: ['#9b59b6', '#8e44ad'],  // Эпический - purple
-    illuminat: ['#ff6b6b', '#e74c3c'],// Мифический - red
-    mirror: ['#fff9c4', '#fff176'],   // Легендарный - pale yellow
+    illuminat: ['#ff2400', '#ba0020', '#660012'],// Мифический - ало-бордовый
+    mirror: ['#40f6d1', '#11a89c', '#06615b'],   // Легендарный - turquoise
+    egyptian: ['#40f6d1', '#11a89c', '#06615b'], // Легендарный - standard legendary
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     roman: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - animated like time
-    spartan: ['#3498db', '#5dade2'],       // Сверхредкий - blue
+    spartan: ['#f9e04b', '#f1c40f'],       // Редкая - yellow
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     pyro: ['#2ecc71', '#27ae60'],        // Редкий - green
     air: ['#2ecc71', '#27ae60'],          // Редкий - green
     imitator: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Имитатор - animated via code
-    electric: ['#ff6b6b', '#e74c3c'],  // Электрический - red (robot theme)
-    robot:  ['#fff9c4', '#fff176'],    // Танк-робот - legendary yellow
+    electric: ['#ff2400', '#ba0020', '#660012'],  // Мифический - ало-бордовый
+    robot:  ['#40f6d1', '#11a89c', '#06615b'],    // Легендарный - turquoise
     medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
-    mechDiy: window.mechDiyBgGradient || ['#2ecc71', '#27ae60'],   // Редкий - green (mech)
-    mechShield: window.mechShieldBgGradient || ['#3498db', '#5dade2'], // Сверхредкий - blue (mech)
-    mechRocket: window.mechRocketBgGradient || ['#9b59b6', '#8e44ad'], // Эпический - purple
     kamikaze: ['#ff4400', '#cc2200'], // Лимитированный - red-orange
     // sport removed
 };
@@ -168,6 +168,7 @@ const tankBaseColors = {
     musical: '#0000FF',
     illuminat: '#0000FF',
     mirror: '#0000FF',
+    egyptian: '#8c6a25',
     time: '#FF00FF',
     machinegun: '#0000FF',
     electric: '#1a1a2e',  // Dark blue-purple for robot
@@ -178,9 +179,6 @@ const tankBaseColors = {
     spartan: '#b87333',    // Bronze for Spartan tank
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
     air: '#00a896',          // Teal-cyan for Air tank
-    mechDiy: window.mechDiyBaseColor || '#1a8a3e',    // Dark green for mech body
-    mechShield: window.mechShieldBaseColor || '#1a3a6e', // Dark navy for shield mech
-    mechRocket: window.mechRocketBaseColor || '#7d1f1f', // Dark red for rocket mech
     kamikaze: '#FFFFFF', // White — Japanese imperial theme
     // sport removed
 };
@@ -223,6 +221,7 @@ const tankTrios = {
     normal: _trioBase, ice: _trioBase, waterjet: _trioBase,
     mine: _trioControl, buratino: _trioControl, toxic: _trioControl,
     musical: _trioSupport, medical: _trioSupport, mirror: _trioSupport,
+    egyptian: null,
     illuminat: null,
     pyro: null,
 };
@@ -855,6 +854,73 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Gold outline
             ctx.strokeStyle = '#8B6914';
             ctx.lineWidth = 1.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'egyptian') {
+            const sandGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            sandGrad.addColorStop(0, '#f3d995');
+            sandGrad.addColorStop(0.45, '#c89b3c');
+            sandGrad.addColorStop(1, '#8f6720');
+            ctx.fillStyle = sandGrad;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+
+            const panelW = bodyW * 0.2;
+            const stripeW = panelW / 5;
+            for (const side of [-1, 1]) {
+                const panelX = side < 0 ? -bodyW / 2 : bodyW / 2 - panelW;
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillStyle = i % 2 === 0 ? '#113c74' : '#d7b55e';
+                    ctx.fillRect(panelX + i * stripeW, -bodyH / 2, stripeW, bodyH);
+                }
+            }
+
+            const faceGrad = ctx.createRadialGradient(-bodyW * 0.04, -bodyH * 0.1, 0, 0, 0, bodyH * 0.34);
+            faceGrad.addColorStop(0, '#f6dfa0');
+            faceGrad.addColorStop(0.58, '#d8b561');
+            faceGrad.addColorStop(1, '#8f6720');
+            ctx.fillStyle = faceGrad;
+            ctx.beginPath();
+            ctx.ellipse(0, -bodyH * 0.02, bodyW * 0.18, bodyH * 0.27, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#4d3310';
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW * 0.09, -bodyH * 0.06);
+            ctx.quadraticCurveTo(-bodyW * 0.03, -bodyH * 0.11, bodyW * 0.01, -bodyH * 0.06);
+            ctx.moveTo(bodyW * 0.09, -bodyH * 0.06);
+            ctx.quadraticCurveTo(bodyW * 0.03, -bodyH * 0.11, -bodyW * 0.01, -bodyH * 0.06);
+            ctx.stroke();
+
+            ctx.fillStyle = '#0e2f60';
+            ctx.beginPath();
+            ctx.arc(-bodyW * 0.05, -bodyH * 0.04, bodyW * 0.018, 0, Math.PI * 2);
+            ctx.arc(bodyW * 0.05, -bodyH * 0.04, bodyW * 0.018, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#6b4a18';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(0, bodyH * 0.03);
+            ctx.lineTo(0, bodyH * 0.13);
+            ctx.stroke();
+
+            ctx.fillStyle = '#113c74';
+            ctx.beginPath();
+            ctx.moveTo(0, bodyH * 0.12);
+            ctx.lineTo(bodyW * 0.04, bodyH * 0.32);
+            ctx.lineTo(-bodyW * 0.04, bodyH * 0.32);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255,241,191,0.55)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(-bodyW * 0.11, bodyH * 0.17);
+            ctx.lineTo(bodyW * 0.11, bodyH * 0.17);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#704a12';
+            ctx.lineWidth = 1.6;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'pyro') {
             // Body: dark-red gradient with two side vents and a subtle diagonal highlight
@@ -1814,6 +1880,57 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.beginPath();
         ctx.arc(0, 0, tSize * 0.07, 0, Math.PI * 2);
         ctx.fill();
+    } else if (type === 'egyptian') {
+        const crownR = tSize * 0.54;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, crownR, 0, Math.PI * 2);
+        ctx.clip();
+        for (let i = -5; i <= 5; i++) {
+            ctx.fillStyle = i % 2 === 0 ? '#113c74' : '#d8b561';
+            ctx.fillRect(i * tSize * 0.1 - tSize * 0.05, -crownR, tSize * 0.1, crownR * 2);
+        }
+        ctx.restore();
+
+        const egGrad = ctx.createRadialGradient(-tSize * 0.1, -tSize * 0.15, 0, 0, 0, crownR);
+        egGrad.addColorStop(0, 'rgba(255,236,180,0.95)');
+        egGrad.addColorStop(0.5, 'rgba(214,181,97,0.55)');
+        egGrad.addColorStop(1, 'rgba(143,103,32,0.2)');
+        ctx.fillStyle = egGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, crownR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#6b4a18';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, crownR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#d7b55e';
+        ctx.beginPath();
+        ctx.ellipse(0, -tSize * 0.02, tSize * 0.17, tSize * 0.22, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#4d3310';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-tSize * 0.09, -tSize * 0.05);
+        ctx.quadraticCurveTo(-tSize * 0.04, -tSize * 0.1, tSize * 0.005, -tSize * 0.05);
+        ctx.moveTo(tSize * 0.09, -tSize * 0.05);
+        ctx.quadraticCurveTo(tSize * 0.04, -tSize * 0.1, -tSize * 0.005, -tSize * 0.05);
+        ctx.stroke();
+
+        ctx.fillStyle = '#113c74';
+        ctx.beginPath();
+        ctx.moveTo(0, -crownR * 0.82);
+        ctx.quadraticCurveTo(tSize * 0.07, -crownR * 0.6, 0, -crownR * 0.42);
+        ctx.quadraticCurveTo(-tSize * 0.07, -crownR * 0.6, 0, -crownR * 0.82);
+        ctx.fill();
+        ctx.fillStyle = '#d7b55e';
+        ctx.beginPath();
+        ctx.arc(0, -crownR * 0.48, tSize * 0.045, 0, Math.PI * 2);
+        ctx.fill();
     } else if (type === 'mine') {
         // Flat camo dome turret with mine deployer hatch
         ctx.fillStyle = '#3d4c18';
@@ -2458,6 +2575,37 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = '#8B6914';
             ctx.lineWidth = 0.8;
             ctx.stroke();
+        } else if (type === 'egyptian') {
+            const egBarrelLen = Math.min(W, H) * 0.7 * turretScale;
+            const egBarrelH = Math.min(W, H) * 0.07 * turretScale;
+            const shaftLen = egBarrelLen * 0.68;
+            const shaftGrad = ctx.createLinearGradient(tSize / 2, -egBarrelH / 2, tSize / 2 + shaftLen, egBarrelH / 2);
+            shaftGrad.addColorStop(0, '#7a5220');
+            shaftGrad.addColorStop(0.55, '#9f6c2a');
+            shaftGrad.addColorStop(1, '#5b3b12');
+            ctx.fillStyle = shaftGrad;
+            ctx.fillRect(tSize / 2, -egBarrelH / 2, shaftLen, egBarrelH);
+
+            ctx.fillStyle = '#d9b25b';
+            ctx.fillRect(tSize / 2 + shaftLen * 0.2, -egBarrelH / 2, 3, egBarrelH);
+            ctx.fillRect(tSize / 2 + shaftLen * 0.5, -egBarrelH / 2, 3, egBarrelH);
+
+            const tipLen = egBarrelLen * 0.32;
+            const tipX = tSize / 2 + shaftLen;
+            const tipGrad = ctx.createLinearGradient(tipX, 0, tipX + tipLen, 0);
+            tipGrad.addColorStop(0, '#fff1bf');
+            tipGrad.addColorStop(0.45, '#d9b25b');
+            tipGrad.addColorStop(1, '#8f6720');
+            ctx.fillStyle = tipGrad;
+            ctx.beginPath();
+            ctx.moveTo(tipX, -egBarrelH * 1.2);
+            ctx.lineTo(tipX + tipLen, 0);
+            ctx.lineTo(tipX, egBarrelH * 1.2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#6b4a18';
+            ctx.lineWidth = 0.9;
+            ctx.stroke();
         } else if (type === 'mine') {
             // Short mine deployer arm with a mine at the end
             const mBarrelLen = Math.min(W, H) * 0.34 * turretScale;
@@ -2931,6 +3079,330 @@ function drawFrozenOverlay(ctx, x, y, w, h, life) {
     ctx.restore();
 }
 
+function drawSandCurseOverlay(ctx, radius, timer) {
+    if (!timer || timer <= 0) return;
+    const time = Date.now() * 0.004;
+    const pulse = 0.68 + 0.18 * Math.sin(time * 2.3);
+    ctx.save();
+    const grad = ctx.createRadialGradient(0, 0, radius * 0.2, 0, 0, radius);
+    grad.addColorStop(0, `rgba(14,12,20,${0.08 * pulse})`);
+    grad.addColorStop(0.55, `rgba(26,22,38,${0.28 * pulse})`);
+    grad.addColorStop(1, `rgba(6,5,12,${0.56 * pulse})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.96, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(8, 7, 14, ${0.22 * pulse})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(108, 92, 140, ${0.6 * pulse})`;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(22, 18, 34, ${0.72 * pulse})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.58, 0, Math.PI * 2);
+    ctx.stroke();
+
+    for (let i = 0; i < 5; i++) {
+        const ang = time * 1.6 + i * 1.26;
+        const drift = ((time * 0.35) + i * 0.17) % 1;
+        const dist = radius * (0.18 + drift * 0.72);
+        const px = Math.cos(ang) * dist * 0.88;
+        const py = Math.sin(ang * 0.92) * dist * 0.62 - drift * radius * 0.18;
+        const size = 1.8 + (i % 2) * 1.1;
+        ctx.fillStyle = `rgba(38, 32, 52, ${0.48 + drift * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(px, py, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawPharaohSwarm(ctx, obj) {
+    if (!obj) return;
+    const maxLife = obj.maxLife || 300;
+    const lifeRatio = Math.max(0, Math.min(1, (obj.life || 0) / maxLife));
+    const alpha = 0.18 + (1 - lifeRatio) * 0.08 + lifeRatio * 0.24;
+    const swirl = Date.now() * 0.0018;
+
+    ctx.save();
+    ctx.translate(obj.x, obj.y);
+
+    const haze = ctx.createRadialGradient(0, 0, obj.radius * 0.12, 0, 0, obj.radius);
+    haze.addColorStop(0, `rgba(34,34,42,${alpha * 0.36})`);
+    haze.addColorStop(0.48, `rgba(18,18,24,${alpha * 0.65})`);
+    haze.addColorStop(0.82, `rgba(8,8,12,${alpha * 0.78})`);
+    haze.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = haze;
+    ctx.beginPath();
+    ctx.arc(0, 0, obj.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(96,96,112,${alpha * 0.34})`;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+        const ringRadius = obj.radius * (0.42 + i * 0.16);
+        ctx.beginPath();
+        for (let s = 0; s <= 26; s++) {
+            const angle = (s / 26) * Math.PI * 2;
+            const wobble = Math.sin(swirl * (2 + i * 0.4) + angle * (3.2 + i)) * obj.radius * 0.05;
+            const px = Math.cos(angle) * (ringRadius + wobble);
+            const py = Math.sin(angle) * (ringRadius - wobble * 0.6);
+            if (s === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = `rgba(6,6,8,${alpha * 0.95})`;
+    for (let i = 0; i < 18; i++) {
+        const angle = swirl * (1.8 + (i % 4) * 0.18) + i * 0.61;
+        const dist = obj.radius * (0.18 + ((i * 11) % 9) / 10 * 0.66);
+        const px = Math.cos(angle) * dist;
+        const py = Math.sin(angle * 1.07) * dist * 0.78;
+        const size = 1.2 + (i % 3) * 0.4;
+        ctx.beginPath();
+        ctx.ellipse(px, py, size * 1.8, size, angle, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.fillStyle = `rgba(186,186,204,${alpha * 0.14})`;
+    for (let i = 0; i < 8; i++) {
+        const angle = -swirl * 2.6 + i * 0.8;
+        const dist = obj.radius * (0.2 + (i % 4) * 0.15);
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * dist, Math.sin(angle * 0.9) * dist * 0.6, 1.5 + (i % 2) * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawIceFieldGround(ctx, obj) {
+    if (!obj) return;
+    const maxLife = obj.maxLife || 240;
+    const elapsed = maxLife - (obj.life || 0);
+    const freezeInTicks = obj.freezeInTicks || 42;
+    const thawOutTicks = obj.thawOutTicks || 56;
+    const cells = Array.isArray(obj.cells) ? obj.cells : [];
+    const shimmer = Date.now() * 0.0018;
+    const radius = obj.radius || 0;
+
+    if (cells.length === 0) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, worldWidth, worldHeight);
+    ctx.clip();
+
+    const fieldFreeze = Math.max(0, Math.min(1, elapsed / Math.max(16, freezeInTicks)));
+    const fieldThaw = Math.max(0, Math.min(1, (obj.life || 0) / Math.max(18, thawOutTicks)));
+    const fieldStrength = fieldFreeze * fieldThaw;
+    if (fieldStrength > 0) {
+        const body = ctx.createRadialGradient(obj.x, obj.y, radius * 0.14, obj.x, obj.y, radius * 1.04);
+        body.addColorStop(0, `rgba(232,247,255,${0.06 + fieldStrength * 0.12})`);
+        body.addColorStop(0.45, `rgba(176,218,244,${0.05 + fieldStrength * 0.11})`);
+        body.addColorStop(0.8, `rgba(132,184,232,${0.03 + fieldStrength * 0.08})`);
+        body.addColorStop(1, 'rgba(120,176,226,0)');
+        ctx.fillStyle = body;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, radius * 1.02, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(242,252,255,${0.07 + fieldStrength * 0.16})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (let i = 0; i <= 48; i++) {
+            const angle = (i / 48) * Math.PI * 2;
+            const wave = Math.sin(shimmer * 2.2 + angle * 3.1) * radius * 0.025;
+            const ripple = Math.cos(shimmer * 1.5 - angle * 4.2) * radius * 0.018;
+            const px = obj.x + Math.cos(angle) * (radius * (0.86 + fieldStrength * 0.05) + wave + ripple);
+            const py = obj.y + Math.sin(angle) * (radius * (0.82 + fieldStrength * 0.05) + wave - ripple);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    for (const cell of cells) {
+        const cellElapsed = elapsed - (cell.delay || 0);
+        if (cellElapsed <= 0) continue;
+        const cellSize = cell.size || 25;
+        const freezeProgress = Math.max(0, Math.min(1, cellElapsed / Math.max(16, freezeInTicks)));
+        const thawProgress = Math.max(0, Math.min(1, ((obj.life || 0) - (cell.delay || 0) * 0.45) / Math.max(18, thawOutTicks)));
+        const strength = freezeProgress * thawProgress;
+        if (strength <= 0.02) continue;
+
+        const centerX = cell.x + cellSize / 2;
+        const centerY = cell.y + cellSize / 2;
+        const haloRadius = cellSize * (0.74 + strength * 0.34);
+        const coreRadius = haloRadius * (0.2 + strength * 0.28);
+        const frost = ctx.createRadialGradient(centerX, centerY, coreRadius * 0.18, centerX, centerY, haloRadius);
+        frost.addColorStop(0, `rgba(244,252,255,${0.12 + strength * 0.22})`);
+        frost.addColorStop(0.35, `rgba(193,229,250,${0.12 + strength * 0.2})`);
+        frost.addColorStop(0.72, `rgba(146,199,236,${0.08 + strength * 0.16})`);
+        frost.addColorStop(1, 'rgba(115,176,226,0)');
+        ctx.fillStyle = frost;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, haloRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        const veinLen = cellSize * (0.82 + strength * 0.42);
+        const veinAngle = shimmer + cell.phase * Math.PI * 2;
+        ctx.strokeStyle = `rgba(240,248,255,${0.05 + strength * 0.16})`;
+        ctx.lineWidth = 0.8 + strength * 0.9;
+        ctx.beginPath();
+        ctx.moveTo(
+            centerX - Math.cos(veinAngle) * veinLen * 0.34,
+            centerY - Math.sin(veinAngle) * veinLen * 0.28
+        );
+        ctx.quadraticCurveTo(
+            centerX + Math.cos(veinAngle + 0.9) * veinLen * 0.14,
+            centerY + Math.sin(veinAngle + 0.9) * veinLen * 0.18,
+            centerX + Math.cos(veinAngle) * veinLen * 0.38,
+            centerY + Math.sin(veinAngle) * veinLen * 0.3
+        );
+        ctx.stroke();
+
+        if (cell.icicles && strength > 0.34) {
+            const sparkleAngle = shimmer * 1.4 + cell.phase * Math.PI * 4;
+            const sparkleDist = cellSize * (0.16 + strength * 0.18);
+            const sparkleX = centerX + Math.cos(sparkleAngle) * sparkleDist;
+            const sparkleY = centerY + Math.sin(sparkleAngle) * sparkleDist;
+            const sparkleSize = 2.5 + strength * 2.2;
+            ctx.strokeStyle = `rgba(250,254,255,${0.08 + strength * 0.2})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(sparkleX - sparkleSize, sparkleY);
+            ctx.lineTo(sparkleX + sparkleSize, sparkleY);
+            ctx.moveTo(sparkleX, sparkleY - sparkleSize * 0.85);
+            ctx.lineTo(sparkleX, sparkleY + sparkleSize * 0.85);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+function drawSandBlindScreenOverlay(ctx, width, height, timer) {
+    if (!timer || timer <= 0) return;
+    const fullBlind = (typeof tankType !== 'undefined' && tankType !== 'egyptian');
+    if (fullBlind) {
+        const alpha = Math.min(0.96, 0.82 + (timer / 90) * 0.16);
+        const drift = Date.now() * 0.0009;
+        const playerCx = (typeof tank !== 'undefined' ? tank.x + (tank.w || 0) / 2 : width / 2);
+        const playerCy = (typeof tank !== 'undefined' ? tank.y + (tank.h || 0) / 2 : height / 2);
+        const revealRange = 90;
+
+        ctx.save();
+        ctx.fillStyle = `rgba(168, 134, 74, ${alpha})`;
+        ctx.fillRect(0, 0, width, height);
+
+        const stormGrad = ctx.createRadialGradient(playerCx, playerCy, 0, playerCx, playerCy, Math.max(width, height) * 0.95);
+        stormGrad.addColorStop(0, `rgba(186, 151, 84, ${Math.min(0.92, alpha)})`);
+        stormGrad.addColorStop(0.5, `rgba(154, 120, 62, ${Math.min(0.95, alpha + 0.04)})`);
+        stormGrad.addColorStop(1, `rgba(113, 83, 34, ${Math.min(0.98, alpha + 0.06)})`);
+        ctx.fillStyle = stormGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = `rgba(235, 213, 164, ${0.2 + Math.min(0.18, timer / 450)})`;
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 7; i++) {
+            const y = height * (0.1 + i * 0.13);
+            ctx.beginPath();
+            ctx.moveTo(-40, y + Math.sin(drift * 3.5 + i) * 24);
+            ctx.quadraticCurveTo(width * 0.33, y - 18, width + 40, y + Math.cos(drift * 2.7 + i * 0.8) * 20);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = `rgba(224, 196, 138, ${0.22})`;
+        for (let i = 0; i < 22; i++) {
+            const px = (i * 71 + drift * 1200) % (width + 80) - 40;
+            const py = ((i * 53) % (height + 60)) - 30 + Math.sin(drift * 4 + i) * 14;
+            const size = 2 + (i % 3);
+            ctx.beginPath();
+            ctx.arc(px, py, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        const revealTargets = [];
+        const collectReveal = (unit) => {
+            if (!unit || unit.alive === false || (unit.tankType || '') !== 'egyptian') return;
+            const ux = unit.x + (unit.w || 0) / 2;
+            const uy = unit.y + (unit.h || 0) / 2;
+            const dist = Math.hypot(ux - playerCx, uy - playerCy);
+            if (dist > revealRange) return;
+            revealTargets.push({
+                x: ux,
+                y: uy,
+                radius: Math.max(22, Math.max(unit.w || 0, unit.h || 0) * 0.92 + (revealRange - dist) * 0.26)
+            });
+        };
+        if (typeof enemies !== 'undefined') enemies.forEach(collectReveal);
+        if (typeof allies !== 'undefined') allies.forEach(collectReveal);
+
+        if (revealTargets.length > 0) {
+            ctx.globalCompositeOperation = 'destination-out';
+            for (const reveal of revealTargets) {
+                const hole = ctx.createRadialGradient(reveal.x, reveal.y, reveal.radius * 0.18, reveal.x, reveal.y, reveal.radius);
+                hole.addColorStop(0, 'rgba(0,0,0,0.96)');
+                hole.addColorStop(0.7, 'rgba(0,0,0,0.42)');
+                hole.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = hole;
+                ctx.beginPath();
+                ctx.arc(reveal.x, reveal.y, reveal.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+
+            ctx.strokeStyle = 'rgba(245, 226, 180, 0.24)';
+            ctx.lineWidth = 1.2;
+            for (const reveal of revealTargets) {
+                ctx.beginPath();
+                ctx.arc(reveal.x, reveal.y, reveal.radius * 0.92, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+        return;
+    }
+
+    const alpha = Math.min(0.34, 0.12 + (timer / 90) * 0.18);
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.max(width, height) * 0.72;
+    const drift = Date.now() * 0.0008;
+
+    ctx.save();
+    const vignette = ctx.createRadialGradient(cx, cy, Math.min(width, height) * 0.12, cx, cy, radius);
+    vignette.addColorStop(0, 'rgba(245,230,180,0)');
+    vignette.addColorStop(0.58, `rgba(212,185,120,${alpha * 0.18})`);
+    vignette.addColorStop(1, `rgba(110,82,35,${alpha})`);
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = `rgba(245,225,170,${alpha * 0.38})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+        const y = height * (0.18 + i * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(-30, y + Math.sin(drift * 4 + i) * 18);
+        ctx.quadraticCurveTo(width * 0.35, y - 14, width + 30, y + Math.cos(drift * 3 + i) * 16);
+        ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+}
+
 function drawCharacterPreviews() {
     const drawItem = (ctx, canvas, type, baseColor, bgGrad) => {
         if (!ctx) return;
@@ -2941,8 +3413,9 @@ function drawCharacterPreviews() {
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
         
         if (isUnlocked) {
-            grad.addColorStop(0, bgGrad[0]);
-            grad.addColorStop(1, bgGrad[1]);
+            bgGrad.forEach((c, idx) => {
+                grad.addColorStop(idx / Math.max(1, bgGrad.length - 1), c);
+            });
         } else {
             // Темный фон для заблокированных
             grad.addColorStop(0, '#444');
@@ -3116,6 +3589,7 @@ function drawCharacterPreviews() {
     // LEGENDARY
     drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', tankBgGradients.toxic);
     drawItem(mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF', tankBgGradients.mirror);
+    drawItem(egyptianTankCtx, egyptianTankPreview, 'egyptian', '#8c6a25', tankBgGradients.egyptian);
     // MYTHIC
     // Illuminat Tank Animation (eye animation only, no pixelated background)
     if (typeof illuminatTankCtx !== 'undefined' && illuminatTankCtx && illuminatTankPreview) {
@@ -3466,6 +3940,13 @@ function draw() {
     }
     ctx.stroke();
 
+    objects.forEach(obj => {
+        const rad = obj.radius || 0;
+        if (obj.type !== 'iceField') return;
+        if (!isVisible(obj.x - rad, obj.y - rad, obj.w || (rad * 2), obj.h || (rad * 2))) return;
+        drawIceFieldGround(ctx, obj);
+    });
+
     // 2. Частицы пыли
     particles.forEach(p => {
         if (!isVisible(p.x, p.y, p.size || 4, p.size || 4)) return;
@@ -3484,6 +3965,7 @@ function draw() {
     objects.forEach(obj => {
         const rad = obj.radius || 0; // for circles
         if (!isVisible(obj.x - rad, obj.y - rad, obj.w || (rad*2), obj.h || (rad*2))) return;
+        if (obj.type === 'iceField') return;
 
         ctx.save();
         ctx.fillStyle = obj.color;
@@ -3788,6 +4270,76 @@ function draw() {
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = `rgba(120,240,120,${alpha * 0.25})`;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.6, 0, Math.PI * 2); ctx.fill();
+        } else if (obj.type === 'pharaohSwarm') {
+            drawPharaohSwarm(ctx, obj);
+        } else if (obj.type === 'iceField') {
+            drawIceFieldGround(ctx, obj);
+        } else if (obj.type === 'sandstorm') {
+            const maxLife = obj.maxLife || 300;
+            const lifeRatio = Math.max(0, (obj.life || 0) / maxLife);
+            const alpha = 0.16 + lifeRatio * 0.28;
+            ctx.save();
+            ctx.translate(obj.x, obj.y);
+            const swirl = Date.now() * 0.00095;
+
+            const haze = ctx.createRadialGradient(0, 0, obj.radius * 0.12, 0, 0, obj.radius * 1.02);
+            haze.addColorStop(0, `rgba(242,224,180,${alpha * 0.14})`);
+            haze.addColorStop(0.48, `rgba(201,163,92,${alpha * 0.36})`);
+            haze.addColorStop(0.82, `rgba(138,101,44,${alpha * 0.24})`);
+            haze.addColorStop(1, 'rgba(92,67,28,0)');
+            ctx.fillStyle = haze;
+            ctx.beginPath();
+            ctx.arc(0, 0, obj.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            for (let i = 0; i < 2; i++) {
+                ctx.save();
+                ctx.rotate(swirl * (i % 2 === 0 ? 1 : -0.8) + i * 0.9);
+                ctx.scale(1, 0.72 + i * 0.08);
+                const layerRadius = obj.radius * (0.96 - i * 0.18);
+                const layerGrad = ctx.createRadialGradient(0, 0, layerRadius * 0.14, 0, 0, layerRadius);
+                layerGrad.addColorStop(0, `rgba(255,238,196,${alpha * (0.05 + i * 0.03)})`);
+                layerGrad.addColorStop(0.5, `rgba(205,170,105,${alpha * (0.18 + i * 0.05)})`);
+                layerGrad.addColorStop(1, 'rgba(150,104,45,0)');
+                ctx.fillStyle = layerGrad;
+                ctx.beginPath();
+                ctx.arc(0, 0, layerRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            ctx.strokeStyle = `rgba(110,74,28,${alpha * 0.7})`;
+            ctx.lineWidth = 3;
+            ctx.setLineDash([16, 10]);
+            ctx.beginPath();
+            ctx.arc(0, 0, obj.radius * 0.98, swirl * 32, swirl * 32 + Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.strokeStyle = `rgba(247,229,178,${alpha * 0.42})`;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(0, 0, obj.radius * 0.82, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = `rgba(245,224,170,${alpha * 0.42})`;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 2; i++) {
+                ctx.beginPath();
+                ctx.arc(0, 0, obj.radius * (0.32 + i * 0.18), swirl * 1.4 + i * 0.7, swirl * 1.4 + i * 0.7 + Math.PI * 1.25);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = `rgba(235,216,160,${alpha * 0.52})`;
+            for (let i = 0; i < 8; i++) {
+                const ang = swirl * 2.2 + i * 0.52;
+                const dist = obj.radius * (0.16 + ((i * 13) % 8) / 10 * 0.72);
+                const size = 1.5 + (i % 3) * 0.9;
+                ctx.beginPath();
+                ctx.arc(Math.cos(ang) * dist, Math.sin(ang) * dist, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
         } else {
             const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
             ctx.fillStyle = '#cd853f'; // Peru
@@ -4160,6 +4712,59 @@ function draw() {
             ctx.strokeStyle = '#8B6914';
             ctx.lineWidth = 0.6;
             ctx.stroke();
+
+            ctx.restore();
+
+        } else if (b.type === 'egyptArrow') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(Math.atan2(b.vy, b.vx));
+
+            const shaftLen = Math.max(9, (b.w || 10) * 1.55);
+            const shaftH = Math.max(1.6, (b.h || 4) * 0.4);
+            const shaftX = -shaftLen * 0.35;
+
+            const shaftGrad = ctx.createLinearGradient(shaftX, 0, shaftX + shaftLen, 0);
+            shaftGrad.addColorStop(0, '#7a5220');
+            shaftGrad.addColorStop(0.5, '#a3702d');
+            shaftGrad.addColorStop(1, '#5b3b12');
+            ctx.fillStyle = shaftGrad;
+            ctx.fillRect(shaftX, -shaftH / 2, shaftLen, shaftH);
+
+            ctx.fillStyle = '#d9b25b';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen, -shaftH * 1.6);
+            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.28, 0);
+            ctx.lineTo(shaftX + shaftLen, shaftH * 1.6);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#f8e7b2';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen, -shaftH);
+            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.18, 0);
+            ctx.lineTo(shaftX + shaftLen, shaftH);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = '#6b4a18';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(shaftX, -shaftH / 2, shaftLen, shaftH);
+
+            ctx.strokeStyle = 'rgba(255,241,191,0.7)';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen * 0.15, 0);
+            ctx.lineTo(shaftX + shaftLen * 0.92, 0);
+            ctx.stroke();
+
+            ctx.fillStyle = '#8f6720';
+            ctx.beginPath();
+            ctx.moveTo(shaftX - shaftLen * 0.16, 0);
+            ctx.lineTo(shaftX, -shaftH * 1.45);
+            ctx.lineTo(shaftX + shaftLen * 0.08, 0);
+            ctx.lineTo(shaftX, shaftH * 1.45);
+            ctx.closePath();
+            ctx.fill();
 
             ctx.restore();
 
@@ -5472,6 +6077,7 @@ function draw() {
             ctx.restore();
         }
         drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated }, 0);
+        drawSandCurseOverlay(ctx, Math.max(a.w, a.h) * 0.85, a.sandCurseTimer || 0);
         // Hit flash - radial impact burst
         const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
         if (_aFlashAge < 120) {
@@ -5803,6 +6409,7 @@ function draw() {
                 _moveAnim = Math.min(1, Math.abs(enemy.speed) * 0.25);
             }
             drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated }, _moveAnim);
+            drawSandCurseOverlay(ctx, Math.max(enemy.w, enemy.h) * 0.85, enemy.sandCurseTimer || 0);
         }
         // Hit flash - radial impact burst
         const _eFlashAge = Date.now() - (enemy.hitFlashTime || 0);
@@ -5901,6 +6508,7 @@ function draw() {
             moveAnim = Math.min(1, Math.abs(tank.speed) * 0.3);
         }
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated }, moveAnim);
+        drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
 
         // Hit flash overlay - radial impact burst, red-tinted for player
         const _tFlashAge = Date.now() - (tank.hitFlashTime || 0);
@@ -6046,6 +6654,10 @@ function draw() {
         if ((tankType === 'mechDiy' || tankType === 'mechShield' || tankType === 'mechRocket') && typeof drawMechEnergyBar === 'function') {
             drawMechEnergyBar(ctx, tank);
         }
+    }
+
+    if ((tank.sandBlindTimer || 0) > 0) {
+        drawSandBlindScreenOverlay(ctx, canvas.width, canvas.height, tank.sandBlindTimer || 0);
     }
     
     // Illuminat beam handled by drawUnitBeam above for all units including player
@@ -6592,21 +7204,27 @@ function showTankDetail(tankType) {
     // Reference to the modal primary action button (style updated elsewhere)
     const tankDetailSelectBtn = document.getElementById('tankDetailSelect');
 
+    // Resolve unit description — mechs use their own data, tanks use tankDescriptions
+    const unitDesc = (window.isMech && window.isMech(tankType))
+        ? (window.mechDescriptions && window.mechDescriptions[tankType])
+        : tankDescriptions[tankType];
+
     // Set title, rarity and description
-    title.textContent = tankDescriptions[tankType].name;
-    const rarityText = "Редкость: " + tankDescriptions[tankType].rarity;
+    title.textContent = unitDesc.name;
+    const rarityText = "Редкость: " + unitDesc.rarity;
     let rarityColor = '#f1c40f'; // default yellow
     let glowStyle = '';
-    const rarityValue = tankDescriptions[tankType].rarity;
-    if (rarityValue === 'Редкий') {
+    const rarityValue = unitDesc.rarity;
+    if (rarityValue === 'Необычная') {
         rarityColor = '#27ae60'; // green
     } else if (rarityValue === 'Эпический') {
         rarityColor = '#9b59b6'; // purple
-    } else if (rarityValue === 'Сверхредкий') {
-        rarityColor = '#3498db'; // blue
+    } else if (rarityValue === 'Редкая') {
+        rarityColor = '#f1c40f'; // yellow
     } else if (rarityValue === 'Легендарный') {
-        rarityColor = '#ffd700'; // gold
-        glowStyle = 'text-shadow: 0 0 15px #ffd700, 0 0 30px #ffd700, 0 0 45px #ffd700;';
+        // Легендарный: teal for all
+        rarityColor = '#1abc9c'; // teal
+        glowStyle = 'text-shadow: 0 0 15px #1abc9c, 0 0 30px #1abc9c, 0 0 45px #1abc9c;';
     } else if (rarityValue === 'Мифический') {
         rarityColor = '#e91e63'; // pink
         glowStyle = 'text-shadow: 0 0 15px #e91e63, 0 0 30px #e91e63, 0 0 45px #e91e63;';
@@ -6618,7 +7236,7 @@ function showTankDetail(tankType) {
         glowStyle = 'text-shadow: 0 0 12px #ff4400, 0 0 24px #ff6600, 0 0 36px #ff4400;';
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
-    description.textContent = tankDescriptions[tankType].description;
+    description.textContent = unitDesc.description;
 
     // Rank badge based on per-tank trophies
     const rankEl = document.getElementById('tankDetailRank');
@@ -6665,7 +7283,7 @@ function showTankDetail(tankType) {
             const c = trio.color;
             // Build member chips: emoji + short name, highlight current tank, gray out locked tanks
             const chips = trio.members.map(([mType, mIcon]) => {
-                const mName = tankDescriptions[mType] ? tankDescriptions[mType].name : mType;
+                const mName = (tankDescriptions[mType] || window.mechDescriptions?.[mType])?.name || mType;
                 const isActive = mType === tankType;
                 const isUnlocked = unlockedTanks && unlockedTanks.includes(mType);
                 let bgColor, borderColor, textColor, fontWeight, opacity;
@@ -6724,14 +7342,14 @@ function showTankDetail(tankType) {
     // Fill stats block (with inline upgrade buttons)
     const statsEl = document.getElementById('tankDetailStats');
     if (statsEl) {
-        const hpBase = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
-        const spdBase = (typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType[tankType]) || 3.2;
+        const hpBase = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || window.mechMaxHpByType?.[tankType] || 300;
+        const spdBase = (typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType[tankType]) || window.mechMaxSpeedByType?.[tankType] || 3.2;
         const hpLvl   = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'hp')  : 0;
         const spdLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'spd') : 0;
         const dmgLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'dmg') : 0;
         const hp  = hpBase  + hpLvl  * 50;
         // per-type maximum (base + full upgrades)
-        const hpMaxPossible = (tankMaxHpByType[tankType] || 300) + (UPGRADE_MAX * 50);
+        const hpMaxPossible = (tankMaxHpByType[tankType] || window.mechMaxHpByType?.[tankType] || 300) + (UPGRADE_MAX * 50);
         const hpStars  = Math.min(10, Math.round((hp / hpMaxPossible) * 10));
         // speed current and per-type max
         let spdBonus = 0;
@@ -6742,7 +7360,7 @@ function showTankDetail(tankType) {
             for (let _i = 0; _i < spdLvl; _i++) spdBonus += (_incs[_i] || 0);
         }
         const spd = parseFloat((spdBase + spdBonus).toFixed(1));
-        const spdMaxPossible = (tankMaxSpeedByType[tankType] || 3.2) + (typeof SPEED_INCREMENTS !== 'undefined' ? SPEED_INCREMENTS.reduce((a,b)=>a+b,0) : 0.7);
+        const spdMaxPossible = (tankMaxSpeedByType[tankType] || window.mechMaxSpeedByType?.[tankType] || 3.2) + (typeof SPEED_INCREMENTS !== 'undefined' ? SPEED_INCREMENTS.reduce((a,b)=>a+b,0) : 0.7);
         const spdStars = Math.min(10, Math.round((spd / spdMaxPossible) * 10));
         const bar = (val, max = 10) => {
             const filled = Math.min(val, max);
@@ -6751,9 +7369,9 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, mechDiy: 40, mechShield: 120, mechRocket: 150, spartan: 80, air: 80
+            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80
         };
-        const dmgRaw   = tankDamageByType[tankType] || 100;
+        const dmgRaw = tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
         const dmgMultAtLvl = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[dmgLvl] : (1 + dmgLvl*0.1);
         const dmgMultMax = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6;

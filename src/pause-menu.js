@@ -87,14 +87,20 @@
 // the normal main menu.  Set to 'off' to run the game as usual.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance screen
+const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance screen
 
 (function () {
-    // If maintenance is OFF, clean up any leftover bypass flags
+    // If maintenance is OFF, clean up any leftover bypass flags and exit
     if (MAINTENANCE_MODE !== 'on') {
         localStorage.removeItem('maintenanceBypassTime');
         return;
     }
+
+    // Dev helper: call clearMaintenanceBypass() in console to force-show maintenance screen
+    window.clearMaintenanceBypass = function () {
+        localStorage.removeItem('maintenanceBypassTime');
+        window.location.reload();
+    };
 
     // Check if maintenance bypass is active and not expired
     const bypassTime = localStorage.getItem('maintenanceBypassTime');
@@ -116,6 +122,8 @@ const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance scre
     }
 
     let originalMenuContent = null; // Store original menu to restore later
+    let wrenchClickCount = 0;
+    let lastWrenchClickAt = 0;
 
     // Hide everything and show maintenance overlay
     function showMaintenance() {
@@ -127,64 +135,80 @@ const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance scre
             // Replace inner content with maintenance message
             mainMenu.innerHTML = `
 <div style="
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:24px;
+    display:block;
     min-height:100vh;
     width:100%;
-    padding:40px 20px;
+    padding:24px 16px;
     box-sizing:border-box;
-    text-align:center;
+    overflow-y:auto;
 ">
-    <div style="font-size:72px;line-height:1;">🔧</div>
-    <h1 style="
-        font-size:clamp(28px,5vw,48px);
-        font-weight:900;
-        color:#f1c40f;
-        text-shadow:0 0 20px rgba(241,196,15,0.6),2px 2px 0 #000;
-        margin:0;
-        letter-spacing:2px;
-        text-transform:uppercase;
-    ">Технический перерыв</h1>
-    <p style="
-        font-size:clamp(15px,2.5vw,20px);
-        color:#ecf0f1;
-        max-width:520px;
-        line-height:1.7;
-        margin:0;
-        text-shadow:1px 1px 0 #000;
-    ">
-        Игра временно недоступна.<br>
-        Мы проводим плановые технические работы.<br>
-        Возвращайтесь позже — скоро всё будет готово! 🚀
-    </p>
     <div style="
-        background:rgba(255,255,255,0.06);
-        border:1px solid rgba(255,255,255,0.15);
-        border-radius:14px;
-        padding:16px 28px;
-        font-size:14px;
-        color:#aaa;
-        max-width:420px;
-        line-height:1.6;
+        min-height:calc(100vh - 48px);
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:24px;
+        width:100%;
+        max-width:640px;
+        margin:0 auto;
+        text-align:center;
     ">
-        ⏳ Ориентировочное время восстановления:<br>
-        <span style="color:#f1c40f;font-weight:bold;">неизвестно</span>
+        <button id="maintenanceWrenchBtn" type="button" aria-label="Admin access"
+            style="background:none;border:none;padding:0;cursor:pointer;font-size:72px;line-height:1;color:inherit;">
+            🔧
+        </button>
+        <h1 style="
+            font-size:clamp(28px,5vw,48px);
+            font-weight:900;
+            color:#f1c40f;
+            text-shadow:0 0 20px rgba(241,196,15,0.6),2px 2px 0 #000;
+            margin:0;
+            letter-spacing:2px;
+            text-transform:uppercase;
+        ">Технический перерыв</h1>
+        <p style="
+            font-size:clamp(15px,2.5vw,20px);
+            color:#ecf0f1;
+            max-width:520px;
+            line-height:1.7;
+            margin:0;
+            text-shadow:1px 1px 0 #000;
+        ">
+            Игра временно недоступна.<br>
+            Мы проводим плановые технические работы.<br>
+            Возвращайтесь позже — скоро всё будет готово! 🚀
+        </p>
+        <div style="
+            background:rgba(255,255,255,0.06);
+            border:1px solid rgba(255,255,255,0.15);
+            border-radius:14px;
+            padding:16px 28px;
+            font-size:14px;
+            color:#aaa;
+            max-width:420px;
+            line-height:1.6;
+        ">
+            ⏳ Ориентировочное время восстановления:</br>
+            <span style="color:#f1c40f;font-weight:bold;">неизвестно</span>
+        </div>
+        <div id="maintenanceAdminPanel" style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;margin-top:4px;">
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;width:100%;">
+                <input id="maintenanceCodeInput" type="text" inputmode="text" maxlength="32"
+                    autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false"
+                    data-lpignore="true" data-form-type="other" name="maintenance-access-code"
+                    style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);
+                           border-radius:10px;padding:10px 14px;color:#fff;font-size:15px;outline:none;
+                           width:200px;font-family:monospace;letter-spacing:2px;-webkit-text-security:disc;">
+                <button id="maintenanceCodeBtn" type="button"
+                    style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;
+                           border:none;border-radius:10px;padding:10px 18px;font-size:14px;
+                           cursor:pointer;font-weight:bold;">✔</button>
+            </div>
+            <div id="maintenanceCodeMsg" style="font-size:13px;min-height:18px;color:#e74c3c;"></div>
+        </div>
+        <p style="font-size:13px;color:#666;margin:0;">MEGARE &copy; 2026</p>
     </div>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
-        <input id="maintenanceCodeInput" type="text" maxlength="32" placeholder="Код доступа"
-            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);
-                   border-radius:10px;padding:10px 14px;color:#fff;font-size:15px;outline:none;
-                   width:200px;font-family:monospace;letter-spacing:2px;">
-        <button id="maintenanceCodeBtn"
-            style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;
-                   border:none;border-radius:10px;padding:10px 18px;font-size:14px;
-                   cursor:pointer;font-weight:bold;">✔</button>
-    </div>
-    <div id="maintenanceCodeMsg" style="font-size:13px;min-height:18px;color:#e74c3c;"></div>
-    <p style="font-size:13px;color:#666;margin:0;">MEGARE &copy; 2026</p>
 </div>`;
             mainMenu.style.display = 'flex';
         }
@@ -214,9 +238,30 @@ const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance scre
     function bindCodeInput() {
         // Elements are injected by showMaintenance(), so query after it runs
         const input = document.getElementById('maintenanceCodeInput');
-        const btn   = document.getElementById('maintenanceCodeBtn');
-        const msg   = document.getElementById('maintenanceCodeMsg');
-        if (!input || !btn) return;
+        const btn = document.getElementById('maintenanceCodeBtn');
+        const msg = document.getElementById('maintenanceCodeMsg');
+        const wrenchBtn = document.getElementById('maintenanceWrenchBtn');
+        const adminPanel = document.getElementById('maintenanceAdminPanel');
+        if (!input || !btn || !wrenchBtn || !adminPanel) return;
+
+        function revealAdminPanel() {
+            adminPanel.style.display = 'flex';
+            input.focus();
+        }
+
+        wrenchBtn.addEventListener('click', () => {
+            const now = Date.now();
+            if (now - lastWrenchClickAt > 1200) {
+                wrenchClickCount = 0;
+            }
+            lastWrenchClickAt = now;
+            wrenchClickCount += 1;
+
+            if (wrenchClickCount >= 5) {
+                wrenchClickCount = 0;
+                revealAdminPanel();
+            }
+        });
 
         function tryCode() {
             // Secret code is base64-encoded
@@ -234,6 +279,7 @@ const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance scre
                     setTimeout(() => { msg.textContent = ''; }, 2000);
                 }
                 input.value = '';
+                input.focus();
             }
         }
 

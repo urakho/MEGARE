@@ -542,7 +542,7 @@ function syncResultOverlay(state = gameState) {
             } else if (currentMode === 'trial') {
                 rewardText = 'Испытание пройдено! (без наград)';
             } else if (currentMode === 'bossfight') {
-                rewardText = '+500 монет, +30 трофеев';
+                rewardText = '+300 монет, +25 трофеев';
             } else if (currentMode === 'custom' || window._customMapActive) {
                 rewardText = 'Своя карта — без наград';
             } else {
@@ -682,7 +682,7 @@ function syncResultOverlay(state = gameState) {
                 } else if (currentMode === 'onevsall') {
                     bonusAmount = 5; // 10 + 5 = 15 total
                 } else if (currentMode === 'bossfight') {
-                    bonusAmount = 10; // 30 + 10 = 40 total
+                    bonusAmount = 10; // 25 + 10 = 35 total
                 }
                 if (bonusAmount > 0) {
                     trophies += bonusAmount;
@@ -700,7 +700,7 @@ function syncResultOverlay(state = gameState) {
                     } else if (currentMode === 'onevsall') {
                         rewardText = '+80 монет, +15 трофеев';
                     } else if (currentMode === 'bossfight') {
-                        rewardText = '+500 монет, +40 трофеев';
+                        rewardText = '+400 монет, +35 трофеев';
                     }
                     // Update display to show bonus amounts
                     if (resultReward) {
