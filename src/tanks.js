@@ -4642,10 +4642,10 @@ function draw() {
             const _lt = Date.now() * 0.0012;
             const _lx = obj.x, _ly = obj.y, _lw = obj.w, _lh = obj.h;
             const _lGrad = ctx.createLinearGradient(_lx, _ly, _lx + _lw, _ly + _lh);
-            _lGrad.addColorStop(0,   '#ff2200');
-            _lGrad.addColorStop(0.4, '#ff6600');
-            _lGrad.addColorStop(0.7, '#ff3300');
-            _lGrad.addColorStop(1,   '#cc1100');
+            _lGrad.addColorStop(0,   '#ff8800');
+            _lGrad.addColorStop(0.4, '#ffaa00');
+            _lGrad.addColorStop(0.7, '#ff6600');
+            _lGrad.addColorStop(1,   '#dd4400');
             ctx.fillStyle = _lGrad;
             ctx.fillRect(_lx, _ly, _lw, _lh);
             // Animated lava bubbles / wave overlay
@@ -4654,14 +4654,14 @@ function draw() {
                 const _bpy = _ly + _lh * 0.5 + Math.cos(_lt * 0.9 + _bi * 1.2) * _lh * 0.3;
                 const _br  = Math.min(_lw, _lh) * (0.12 + 0.06 * Math.sin(_lt + _bi));
                 const _bGrad = ctx.createRadialGradient(_bpx, _bpy, 0, _bpx, _bpy, _br);
-                _bGrad.addColorStop(0, `rgba(255,220,50,${0.6 + 0.4 * Math.sin(_lt + _bi)})`);
-                _bGrad.addColorStop(1, 'rgba(255,50,0,0)');
+                _bGrad.addColorStop(0, `rgba(255,240,100,${0.6 + 0.4 * Math.sin(_lt + _bi)})`);
+                _bGrad.addColorStop(1, 'rgba(255,120,0,0)');
                 ctx.fillStyle = _bGrad;
                 ctx.beginPath(); ctx.arc(_bpx, _bpy, _br, 0, Math.PI * 2); ctx.fill();
             }
             // Glowing edge
-            ctx.shadowColor = '#ff5500'; ctx.shadowBlur = 10;
-            ctx.strokeStyle = `rgba(255,120,0,${0.7 + 0.3 * Math.sin(_lt * 2)})`;
+            ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 10;
+            ctx.strokeStyle = `rgba(255,180,0,${0.7 + 0.3 * Math.sin(_lt * 2)})`;
             ctx.lineWidth = 2;
             ctx.strokeRect(_lx, _ly, _lw, _lh);
             ctx.shadowBlur = 0;
@@ -7542,6 +7542,46 @@ function draw() {
                 canvas.width / 2, by + bh - 3
             );
         }
+    }
+
+    let battleCounterText = '';
+    if (gameState === 'playing') {
+        if (currentMode === 'single') {
+            const remainingTanks = (typeof enemies !== 'undefined' ? enemies : []).filter(e => e && e.alive !== false && (e.hp == null || e.hp > 0)).length;
+            battleCounterText = 'Врагов: ' + remainingTanks;
+        } else if (currentMode === 'onevsall') {
+            const remainingEnemies = (typeof enemies !== 'undefined' ? enemies : []).filter(e => e && e.alive !== false && (e.hp == null || e.hp > 0)).length;
+            battleCounterText = 'Врагов: ' + remainingEnemies;
+        } else if (currentMode === 'team') {
+            const aliveTeams = new Set();
+            if (typeof tank !== 'undefined' && tank && tank.alive !== false && (tank.hp == null || tank.hp > 0)) {
+                aliveTeams.add(tank.team ?? 0);
+            }
+            if (typeof allies !== 'undefined') {
+                for (const ally of allies) {
+                    if (ally && ally.alive !== false && (ally.hp == null || ally.hp > 0)) aliveTeams.add(ally.team ?? 0);
+                }
+            }
+            if (typeof enemies !== 'undefined') {
+                for (const enemy of enemies) {
+                    if (enemy && enemy.alive !== false && (enemy.hp == null || enemy.hp > 0)) aliveTeams.add(enemy.team);
+                }
+            }
+            battleCounterText = 'Команд: ' + aliveTeams.size;
+        }
+    }
+
+    if (battleCounterText) {
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = (window.deviceModeMobile ? 'bold 18px Arial' : 'bold 20px Arial');
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillStyle = '#f5f7fa';
+        ctx.strokeText(battleCounterText, 14, 14);
+        ctx.fillText(battleCounterText, 14, 14);
+        ctx.restore();
     }
 
     // DEBUG: Ultimate status (if electric tank)

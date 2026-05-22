@@ -1818,7 +1818,7 @@ function startGame(mode) {
 
     if (mode === 'single') {
         // normal world
-        worldWidth = 900; worldHeight = 700;
+        worldWidth = 1350; worldHeight = 1050;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         tank.x = 50; tank.y = 50;
         generateMap();
@@ -2148,6 +2148,7 @@ const buyMiniContainer = document.getElementById('buyMiniContainer');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
+const buyAlphaContainer = document.getElementById('buyAlphaContainer');
 const buyMechPartsContainer = document.getElementById('buyMechPartsContainer');
 const shopCancel = document.getElementById('shopCancel');
 const characterCancel = document.getElementById('characterCancel');
@@ -2259,8 +2260,8 @@ const exchangeCoinsBtn = document.getElementById('exchangeCoinsBtn');
 
 if (coinsInput && coinsResult) {
     const updateCoinsResult = () => {
-        const coinsAmount = parseInt(coinsInput.value) || 30;
-        const gemsAmount = Math.floor(coinsAmount / 30);
+        const coinsAmount = parseInt(coinsInput.value) || 100;
+        const gemsAmount = Math.floor(coinsAmount / 100);
         coinsResult.textContent = `${gemsAmount} 💎`;
     };
     coinsInput.addEventListener('input', updateCoinsResult);
@@ -2269,16 +2270,16 @@ if (coinsInput && coinsResult) {
 
 if (exchangeCoinsBtn) {
     exchangeCoinsBtn.addEventListener('click', () => {
-        const coinsAmount = parseInt(coinsInput.value) || 30;
-        if (coinsAmount < 30) {
-            _showExchangeResult('Минимум 30 монет!', false);
+        const coinsAmount = parseInt(coinsInput.value) || 100;
+        if (coinsAmount < 100) {
+            _showExchangeResult('Минимум 100 монет!', false);
             return;
         }
-        if (coinsAmount % 30 !== 0) {
-            _showExchangeResult('Количество должно быть кратно 30!', false);
+        if (coinsAmount % 100 !== 0) {
+            _showExchangeResult('Количество должно быть кратно 100!', false);
             return;
         }
-        const gemsAmount = coinsAmount / 30;
+        const gemsAmount = coinsAmount / 100;
         if (coins < coinsAmount) {
             _showExchangeResult('Недостаточно монет!', false);
             return;
@@ -2288,7 +2289,7 @@ if (exchangeCoinsBtn) {
         updateCoinDisplay();
         saveProgress();
         _showExchangeResult(`Обмен выполнен! +${gemsAmount} 💎`, true);
-        coinsInput.value = '30';
+        coinsInput.value = '100';
         coinsResult.textContent = '1 💎';
     });
 }
@@ -2364,6 +2365,7 @@ if (buyMiniContainer) buyMiniContainer.addEventListener('click', () => showConta
 if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
+if (buyAlphaContainer) buyAlphaContainer.addEventListener('click', () => showContainerFlow('alpha'));
 if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () => showContainerFlow('mechParts'));
 
 // ── Promo codes ─────────────────────────────────────────────────────────────
@@ -2482,6 +2484,7 @@ function updateContainerFlowStage(stage) {
     const isOmega = containerFlowType === 'omega';
     const isMini = containerFlowType === 'mini';
     const isMechParts = containerFlowType === 'mechParts';
+    const isAlpha = containerFlowType === 'alpha';
     
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
@@ -2494,7 +2497,10 @@ function updateContainerFlowStage(stage) {
     containerFlowPreview.style.filter = '';
 
     if (stage === 'intro') {
-        if (isOmega) {
+        if (isAlpha) {
+            containerFlowPreview.src = 'png/cont-png/alpha-cont.png';
+            containerFlowText.textContent = 'Нажми на АЛЬФА контейнер!';
+        } else if (isOmega) {
             containerFlowPreview.src = 'png/cont-png/omega-cont.png';
             containerFlowText.textContent = 'Нажми на ОМЕГА контейнер!';
         } else if (isMini) {
@@ -2510,7 +2516,10 @@ function updateContainerFlowStage(stage) {
                 : 'Нажми на контейнер, чтобы открыть';
         }
     } else {
-        if (isOmega) {
+        if (isAlpha) {
+            containerFlowPreview.src = 'png/cont-png/alpha-cont2.png';
+            containerFlowText.textContent = 'АЛЬФА контейнер взрывается наградами!';
+        } else if (isOmega) {
             containerFlowPreview.src = 'png/cont-png/omega-cont2.png';
             containerFlowText.textContent = 'ОМЕГА контейнер взрывается наградами!';
         } else if (isMini) {
@@ -2582,7 +2591,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
-    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : 1000)));
+    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : (type === 'alpha' ? 12000 : 1000))));
     if (coins < price) {
         showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
         return;
@@ -2617,22 +2626,33 @@ function showFreeContainerFlow(type) {
 function handleFreeContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'omega' ? 7 : (currentType === 'mini' ? 2 : 5));
     const rewards = [];
-    // Generate rewards without payment
-    for (let i = 0; i < dropCount; i++) {
-        let reward;
-        if (currentType === 'omega') {
-            reward = openOmegaContainer({ suppressRewardModal: true });
-        } else if (currentType === 'bronze') {
-            reward = openContainer({ suppressRewardModal: true });
-        } else if (currentType === 'mini') {
-            reward = openMiniContainer({ suppressRewardModal: true });
-        } else {
-            reward = openSuperContainer({ suppressRewardModal: true });
+    const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0 };
+
+    if (currentType === 'alpha') {
+        // Alpha: 1 guaranteed tank slot + (totalSlots-1) regular slots
+        const totalSlots = getRandomInt(5, 7);
+        rewards.push(openAlphaGuaranteedSlot({ suppressRewardModal: true, ctx }));
+        for (let i = 1; i < totalSlots; i++) {
+            rewards.push(openAlphaContainer({ suppressRewardModal: true, ctx }));
         }
-        rewards.push(reward);
+    } else {
+        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'omega' ? getRandomInt(4,7) : (currentType === 'mini' ? getRandomInt(1,2) : getRandomInt(3,5)));
+        for (let i = 0; i < dropCount; i++) {
+            let reward;
+            if (currentType === 'omega') {
+                reward = openOmegaContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'bronze') {
+                reward = openContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'mini') {
+                reward = openMiniContainer({ suppressRewardModal: true, ctx });
+            } else {
+                reward = openSuperContainer({ suppressRewardModal: true, ctx });
+            }
+            rewards.push(reward);
+        }
     }
+
     updateContainerFlowStage('open');
     animateContainerDrops(rewards, () => {
         closeContainerFlow();
@@ -2706,7 +2726,7 @@ function showContainerRewards(rewards, index = 0) {
 function handleContainerConfirm() {
     if (!containerFlowType || containerDropActive) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : 1000)));
+    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : (currentType === 'alpha' ? 12000 : 1000))));
     if (coins < price) {
         showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
         closeContainerFlow();
@@ -2714,27 +2734,37 @@ function handleContainerConfirm() {
     }
     coins -= price;
     updateCoinDisplay();
-    const dropCount = currentType === 'bronze' ? 3 : (currentType === 'mini' ? 2 : (currentType === 'mechParts' ? 4 : (currentType === 'omega' ? 7 : 5)));
     const rewards = [];
-    // Ensure we create unique objects for each reward
-    for (let i = 0; i < dropCount; i++) {
-        let reward;
-        if (currentType === 'omega') {
-            reward = openOmegaContainer({ suppressRewardModal: true });
-        } else if (currentType === 'bronze') {
-            reward = openContainer({ suppressRewardModal: true });
-        } else if (currentType === 'mini') {
-            reward = openMiniContainer({ suppressRewardModal: true });
-        } else if (currentType === 'mechParts') {
-            reward = openMechPartsContainer({ suppressRewardModal: true });
-        } else {
-            reward = openSuperContainer({ suppressRewardModal: true });
+
+    if (currentType === 'alpha') {
+        // Alpha: 1 guaranteed tank slot + (totalSlots-1) regular slots
+        const totalSlots = getRandomInt(5, 7);
+        const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0, alphaContainer: true };
+        rewards.push(openAlphaGuaranteedSlot({ suppressRewardModal: true, ctx }));
+        for (let i = 1; i < totalSlots; i++) {
+            rewards.push(openAlphaContainer({ suppressRewardModal: true, ctx }));
         }
-        
-        // Add unique ID just in case
-        console.log('Generated reward:', reward);
-        rewards.push(reward);
+    } else {
+        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'mini' ? getRandomInt(1,2) : (currentType === 'mechParts' ? getRandomInt(3,4) : (currentType === 'omega' ? getRandomInt(4,7) : getRandomInt(3,5))));
+        const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0 };
+        for (let i = 0; i < dropCount; i++) {
+            let reward;
+            if (currentType === 'omega') {
+                reward = openOmegaContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'bronze') {
+                reward = openContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'mini') {
+                reward = openMiniContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'mechParts') {
+                reward = openMechPartsContainer({ suppressRewardModal: true, ctx });
+            } else {
+                reward = openSuperContainer({ suppressRewardModal: true, ctx });
+            }
+            console.log('Generated reward:', reward);
+            rewards.push(reward);
+        }
     }
+
     updateContainerFlowStage('open');
     animateContainerDrops(rewards, () => {
         closeContainerFlow();
@@ -3159,32 +3189,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
 }
 
 function unlockRandomTank(fromSuper = false, options = {}) {
-    const { suppressRewardModal = false } = options;
-    
-    // 1. Pick rarity
-    const rarity = getRarity();
-    const tanksInRarity = allTanksList.filter(t => tankRarityMap[t] === rarity);
-    const t = tanksInRarity.length > 0
-        ? tanksInRarity[Math.floor(Math.random() * tanksInRarity.length)]
-        : allTanksList[Math.floor(Math.random() * allTanksList.length)]; // fallback
-
-    const tDesc = tankDescriptions[t] ? tankDescriptions[t].name : t.toUpperCase();
-    const rarityLabel = rarity.replace('_', ' ').toUpperCase();
-
-    if (!unlockedTanks.includes(t)) {
-        unlockedTanks.push(t);
-        saveProgress();
-        if (!suppressRewardModal) showReward('tank', 1, 'Unlocked permanently!', t);
-        updateTankDetailButton(t);
-        return { type: 'tank', tankType: t, desc: 'Unlocked permanently!', icon: '�' };
-    } else {
-        const price = tankGemPrices[t] || window.mechGemPrices?.[t] || 0;
-        const comp = price > 0 ? Math.floor(price * 0.03) : (fromSuper ? 3 : 1);
-        gems += comp;
-        saveProgress();
-        if (!suppressRewardModal) showReward('gems', comp, `Дубликат танка ${t.toUpperCase()} конвертирован в Гемы!`);
-        return { type: 'gems', amount: comp, desc: `Дубликат танка ${t.toUpperCase()} конвертирован в Гемы!`, icon: '💎' };
-    }
+    return unlockRandomTankNew(fromSuper, options);
 }
 
 
@@ -3192,97 +3197,96 @@ function unlockRandomTank(fromSuper = false, options = {}) {
 function openMiniContainer(options = {}) {
     const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
-    if (r < 60) { // 60% — coins (10–20)
+    if (r < 80) { // 80% — coins (10–20)
         const val = getRandomInt(10, 20);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (10–20)');
         return { type: 'coins', amount: val, desc: 'Монеты (10–20)', icon: '💰' };
-    } else if (r < 80) { // next 20% — gems (1–2)
-        const val = getRandomInt(1, 2);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–2)');
-        return { type: 'gems', amount: val, desc: 'Гемы (1–2)', icon: '💎' };
-    } else if (r < 90) { // next 10% — coins (20–40)
+    } else if (r < 95) { // next 15% — coins (20–40)
         const val = getRandomInt(20, 40);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (20–40)');
         return { type: 'coins', amount: val, desc: 'Монеты (20–40)', icon: '💰' };
-    } else if (r < 95) { // next 5% — gems (2–3)
-        const val = getRandomInt(2, 3);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (2–3)');
-        return { type: 'gems', amount: val, desc: 'Гемы (2–3)', icon: '💎' };
     } else if (r < 98) { // next 3% — coins (40–60)
         const val = getRandomInt(40, 60);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (40–60)');
         return { type: 'coins', amount: val, desc: 'Монеты (40–60)', icon: '💰' };
     }
-    // remaining 2% — gems (3–5)
-    const val = getRandomInt(3, 5);
-    gems += val;
-    if (!suppressRewardModal) showReward('gems', val, 'Гемы (3–5)');
-    return { type: 'gems', amount: val, desc: 'Гемы (3–5)', icon: '💎' };
+    // remaining 2% — coins (60–80)
+    const val = getRandomInt(60, 80);
+    coins += val;
+    if (!suppressRewardModal) showReward('coins', val, 'Монеты (60–80)');
+    return { type: 'coins', amount: val, desc: 'Монеты (60–80)', icon: '💰' };
 }
 
 // Open normal container
 function openContainer(options = {}) {
-    const { suppressRewardModal = false } = options;
+    const { suppressRewardModal = false, ctx = null } = options;
     const r = Math.random() * 100;
-    if (r < 45) { // 45% — coins (20–60)
+    if (r < 60) { // 60% — coins (20–60)
         const val = getRandomInt(20, 60);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (20–60)');
         return { type: 'coins', amount: val, desc: 'Монеты (20–60)', icon: '💰' };
-    } else if (r < 75) { // next 30% — coins (60–120)
-        const val = getRandomInt(60, 120);
+    } else if (r < 90) { // next 30% — coins (80–120)
+        const val = getRandomInt(80, 120);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (60–120)');
-        return { type: 'coins', amount: val, desc: 'Монеты (60–120)', icon: '💰' };
-    } else if (r < 90) { // next 15% — gems (1–3)
-        const val = getRandomInt(1, 3);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–3)');
-        return { type: 'gems', amount: val, desc: 'Гемы (1–3)', icon: '💎' };
-    } else if (r < 95) { // next 5% — gems (3–6)
-        const val = getRandomInt(3, 6);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (3–6)');
-        return { type: 'gems', amount: val, desc: 'Гемы (3–6)', icon: '💎' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (80–120)');
+        return { type: 'coins', amount: val, desc: 'Монеты (80–120)', icon: '💰' };
+    } else if (r < 95) { // next 5% — coins (120–150)
+        const val = getRandomInt(120, 150);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (120–150)');
+        return { type: 'coins', amount: val, desc: 'Монеты (120–150)', icon: '💰' };
     }
-    return unlockRandomTankNew(false, { suppressRewardModal, rarityOverride: {
-        'rare': 70,
-        'super_rare': 20,
-        'epic': 10
-    } });
+    // remaining 5% — gems (1–2); limited to once per opening
+    if (ctx && ctx.chanceGemsDropped) {
+        const val = getRandomInt(80, 120);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (80–120)');
+        return { type: 'coins', amount: val, desc: 'Монеты (80–120)', icon: '💰' };
+    }
+    if (ctx) {
+        ctx.chanceGemsDropped = true;
+    }
+    const val = getRandomInt(1, 2);
+    gems += val;
+    if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–2)');
+    return { type: 'gems', amount: val, desc: 'Гемы (1–2)', icon: '💎' };
 }
 
 // Open super container
 function openSuperContainer(options = {}) {
-    const { suppressRewardModal = false } = options;
+    const { suppressRewardModal = false, ctx = null } = options;
     const r = Math.random() * 100;
-    if (r < 35) { // 35% — coins (120–250)
+    if (r < 50) { // 50% — coins (120–250)
         const val = getRandomInt(120, 250);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (120–250)');
         return { type: 'coins', amount: val, desc: 'Монеты (120–250)', icon: '💰' };
-    } else if (r < 60) { // next 25% — coins (250–450)
+    } else if (r < 85) { // next 35% — coins (250–450)
         const val = getRandomInt(250, 450);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–450)');
         return { type: 'coins', amount: val, desc: 'Монеты (250–450)', icon: '💰' };
-    } else if (r < 75) { // next 15% — gems (5–10)
-        const val = getRandomInt(5, 10);
+    } else if (r < 95) { // next 10% — gems (2–4); limited to once per opening
+        if (ctx && ctx.chanceGemsDropped) {
+            const val = getRandomInt(250, 450);
+            coins += val;
+            if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–450)');
+            return { type: 'coins', amount: val, desc: 'Монеты (250–450)', icon: '💰' };
+        }
+        if (ctx) {
+            ctx.chanceGemsDropped = true;
+        }
+        const val = getRandomInt(2, 4);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (5–10)');
-        return { type: 'gems', amount: val, desc: 'Гемы (5–10)', icon: '💎' };
-    } else if (r < 90) { // next 15% — gems (10–15)
-        const val = getRandomInt(10, 15);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (10–15)');
-        return { type: 'gems', amount: val, desc: 'Гемы (10–15)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (2–4)');
+        return { type: 'gems', amount: val, desc: 'Гемы (2–4)', icon: '💎' };
     }
-    return unlockRandomTankNew(true, { suppressRewardModal, rarityOverride: {
+    // remaining 5% — tank
+        return unlockRandomTankNew(true, { suppressRewardModal, ctx, rarityOverride: {
         'rare': 50,
         'super_rare': 30,
         'epic': 15,
@@ -3331,41 +3335,131 @@ function openMechPartsContainer(options = {}) {
 }
 
 // Open Omega container
-// 35% - Coins (250–400)
-// 20% - Coins (400–600)
-// 20% - Gems (7–15)
-// 10% - Gems (15–20)
-// 15% - Tank
+// 40% - Coins (200–400)
+// 35% - Coins (400–500)
+// 10% - Gems (4–7)
+// 7.5% - Gems (7–10)
+// 7.5% - Tank
 function openOmegaContainer(options = {}) {
-    const { suppressRewardModal = false } = options;
+    const { suppressRewardModal = false, ctx = null } = options;
     const r = Math.random() * 100;
     
-    if (r < 35) { // 35% coins small
-        const val = getRandomInt(250, 400);
+    if (r < 40) { // 40% coins small
+        const val = getRandomInt(200, 400);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–400)');
-        return { type: 'coins', amount: val, desc: 'Монеты (250–400)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (200–400)');
+        return { type: 'coins', amount: val, desc: 'Монеты (200–400)', icon: '💰' };
     
-    } else if (r < 55) { // 20% coins big (35 + 20 = 55)
-        const val = getRandomInt(400, 600);
+    } else if (r < 75) { // 35% coins big (40 + 35 = 75)
+        const val = getRandomInt(400, 500);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–600)');
-        return { type: 'coins', amount: val, desc: 'Монеты (400–600)', icon: '💰' };
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
+        return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
     
-    } else if (r < 75) { // 20% gems small (55 + 20 = 75)
-        const val = getRandomInt(7, 15);
+    } else if (r < 85) { // 10% gems small (75 + 10 = 85); limited to once per opening
+        if (ctx && ctx.chanceGemsDropped) {
+            const val = getRandomInt(400, 500);
+            coins += val;
+            if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
+            return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
+        }
+        if (ctx) {
+            ctx.chanceGemsDropped = true;
+        }
+        const val = getRandomInt(4, 7);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (7–15)');
-        return { type: 'gems', amount: val, desc: 'Гемы (7–15)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (4–7)');
+        return { type: 'gems', amount: val, desc: 'Гемы (4–7)', icon: '💎' };
     
-    } else if (r < 85) { // 10% gems big (75 + 10 = 85)
-        const val = getRandomInt(15, 20);
+    } else if (r < 92.5) { // 7.5% gems big (85 + 7.5 = 92.5); limited to once per opening
+        if (ctx && ctx.chanceGemsDropped) {
+            const val = getRandomInt(400, 500);
+            coins += val;
+            if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
+            return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
+        }
+        if (ctx) {
+            ctx.chanceGemsDropped = true;
+        }
+        const val = getRandomInt(7, 10);
         gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (15–20)');
-        return { type: 'gems', amount: val, desc: 'Гемы (15–20)', icon: '💎' };
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (7–10)');
+        return { type: 'gems', amount: val, desc: 'Гемы (7–10)', icon: '💎' };
     
-    } else { // Remaining 15% (85 -> 100) is Tank
-        return unlockRandomTankNew(true, { suppressRewardModal });
+    } else { // Remaining 7.5% (92.5 -> 100) is Tank
+        return unlockRandomTankNew(true, { suppressRewardModal, ctx });
+    }
+}
+
+// ── Alpha Container ──────────────────────────────────────────────────────────
+// Guaranteed tank slot: super_rare 45%, epic 28%, legendary 12%, chromatic 7.5%, mythic 7.5%
+function openAlphaGuaranteedSlot(options = {}) {
+    const { suppressRewardModal = false, ctx = null } = options;
+    return unlockRandomTankNew(true, {
+        suppressRewardModal,
+        ctx,
+        rarityOverride: {
+            'super_rare': 45,
+            'epic': 28,
+            'legendary': 12,
+            'chromatic': 7.5,
+            'mythic': 7.5
+        }
+    });
+}
+
+// Regular slot for Alpha Container
+// 40% coins 300-500, 30% coins 500-700, 20% gems 6-8, 5% gems 8-12, 5% tank
+function openAlphaContainer(options = {}) {
+    const { suppressRewardModal = false, ctx = null } = options;
+    const r = Math.random() * 100;
+    if (r < 40) { // 40% coins 300-500
+        const val = getRandomInt(300, 500);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
+        return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
+    } else if (r < 70) { // 30% coins 500-700
+        const val = getRandomInt(500, 700);
+        coins += val;
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (500–700)');
+        return { type: 'coins', amount: val, desc: 'Монеты (500–700)', icon: '💰' };
+    } else if (r < 90) { // 20% gems 6-8; limited to once per opening
+        if (ctx && ctx.chanceGemsDropped) {
+            const val = getRandomInt(300, 500);
+            coins += val;
+            if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
+            return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
+        }
+        if (ctx) ctx.chanceGemsDropped = true;
+        const val = getRandomInt(6, 8);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (6–8)');
+        return { type: 'gems', amount: val, desc: 'Гемы (6–8)', icon: '💎' };
+    } else if (r < 95) { // 5% gems 8-12; limited to once per opening
+        if (ctx && ctx.chanceGemsDropped) {
+            const val = getRandomInt(300, 500);
+            coins += val;
+            if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
+            return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
+        }
+        if (ctx) ctx.chanceGemsDropped = true;
+        const val = getRandomInt(8, 12);
+        gems += val;
+        if (!suppressRewardModal) showReward('gems', val, 'Гемы (8–12)');
+        return { type: 'gems', amount: val, desc: 'Гемы (8–12)', icon: '💎' };
+    } else { // 5% tank (any rarity)
+        return unlockRandomTankNew(true, {
+            suppressRewardModal,
+            ctx,
+            rarityOverride: {
+                'rare': 40,
+                'super_rare': 20,
+                'epic': 15,
+                'legendary': 10,
+                'chromatic': 7.5,
+                'mythic': 7.5
+            }
+        });
     }
 }
 
@@ -5756,7 +5850,7 @@ window.addEventListener('load', () => {
     }
 });
 function unlockRandomTankNew(fromSuper = false, options = {}) {
-    const { suppressRewardModal = false, rarityOverride = null } = options;
+    const { suppressRewardModal = false, rarityOverride = null, ctx = null } = options;
     
     // 1. Pick rarity (use per-container override if provided)
     const rarity = getRarity(rarityOverride);
@@ -5770,25 +5864,49 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
     const tDesc = tankDescriptions[t] ? tankDescriptions[t].name : t.toUpperCase();
     const rarityLabel = rarity.replace('_', ' ').toUpperCase();
 
-    if (!unlockedTanks.includes(t)) {
-        unlockedTanks.push(t);
+    const unlockTankReward = (tankType) => {
+        const tankDesc = tankDescriptions[tankType] ? tankDescriptions[tankType].name : tankType.toUpperCase();
+        unlockedTanks.push(tankType);
         saveProgress();
-        if (!suppressRewardModal) showReward('tank', 1, `Разблокирован ${tDesc}!`, t);
-        updateTankDetailButton(t);
-        return { type: 'tank', tankType: t, desc: `${tDesc} разблокирован!`, icon: '🚜', rarity: rarity };
+        if (!suppressRewardModal) showReward('tank', 1, `Разблокирован ${tankDesc}!`, tankType);
+        updateTankDetailButton(tankType);
+        return { type: 'tank', tankType: tankType, desc: `${tankDesc} разблокирован!`, icon: '🚜', rarity: rarity };
+    };
+
+    if (!unlockedTanks.includes(t)) {
+        return unlockTankReward(t);
     } else {
-        // Duplicate tank — reward gems based on rarity
+        // Duplicate tank compensation
+        const reducedComp = !!(ctx && (ctx.duplicatesInOpening || 0) >= 1);
+        const isAlpha = !!(ctx && ctx.alphaContainer);
         let comp;
-        if (rarity === 'rare' || rarity === 'super_rare') {
-            comp = getRandomInt(3, 8);
-        } else if (rarity === 'epic' || rarity === 'legendary') {
-            comp = getRandomInt(8, 12);
-        } else if (rarity === 'mythic' || rarity === 'chromatic') {
-            comp = getRandomInt(12, 18);
+        if (isAlpha) {
+            // Alpha container: lower duplicate gem values
+            if (rarity === 'rare' || rarity === 'super_rare') {
+                comp = reducedComp ? 3 : getRandomInt(3, 5);
+            } else if (rarity === 'epic' || rarity === 'legendary') {
+                comp = reducedComp ? getRandomInt(3, 5) : getRandomInt(5, 8);
+            } else if (rarity === 'mythic' || rarity === 'chromatic') {
+                comp = reducedComp ? getRandomInt(5, 8) : getRandomInt(8, 12);
+            } else {
+                comp = 3;
+            }
         } else {
-            comp = 5; // fallback
+            // Standard duplicate gem values
+            if (rarity === 'rare' || rarity === 'super_rare') {
+                comp = reducedComp ? getRandomInt(3, 6) : getRandomInt(3, 8);
+            } else if (rarity === 'epic' || rarity === 'legendary') {
+                comp = reducedComp ? getRandomInt(6, 10) : getRandomInt(8, 12);
+            } else if (rarity === 'mythic' || rarity === 'chromatic') {
+                comp = reducedComp ? getRandomInt(10, 15) : getRandomInt(12, 18);
+            } else {
+                comp = 5;
+            }
         }
 
+        if (ctx) {
+            ctx.duplicatesInOpening = (ctx.duplicatesInOpening || 0) + 1;
+        }
         gems += comp;
         saveProgress();
         if (!suppressRewardModal) showReward('gems', comp, `Дубликат ${tDesc} конвертирован в Гемы!`);

@@ -449,6 +449,9 @@ function updateEnemyAI() {
         if (!enemy || !enemy.alive) continue;
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
+        if (enemy.tankType === 'burovoy' && typeof syncBurovoyState === 'function') {
+            syncBurovoyState(enemy);
+        }
         if (enemy.paralyzed) { enemy.paralyzedTime--; if (enemy.paralyzedTime <= 0) enemy.paralyzed = false; if (enemy.frozenEffect) enemy.frozenEffect--; continue; }
         // Ice slow: 50% speed by skipping every other AI tick
         if (enemy.iceSlowed) {
@@ -1334,9 +1337,6 @@ function updateEnemyAI() {
         
         // --- AI MACHINEGUN HEAT LOGIC (exact same as player) ---
         const tt = enemy.tankType || 'normal';
-        if (tt === 'burovoy' && typeof syncBurovoyState === 'function') {
-            syncBurovoyState(enemy);
-        }
         if (tt === 'machinegun') {
             enemy.heat = enemy.heat || 0;
             const HEAT_MAX = 240; // 4 seconds at 60fps
@@ -1727,6 +1727,9 @@ function updateAllyAI() {
     for (let ally of allies) {
       try {
         if (!ally || !ally.alive) continue;
+                if (ally.tankType === 'burovoy' && typeof syncBurovoyState === 'function') {
+                        syncBurovoyState(ally);
+                }
         if (ally.paralyzed) { ally.paralyzedTime--; if (ally.paralyzedTime <= 0) ally.paralyzed = false; if (ally.frozenEffect) ally.frozenEffect--; continue; }
         // Ice slow: 50% speed by skipping every other AI tick
         if (ally.iceSlowed) {
@@ -2035,9 +2038,6 @@ function updateAllyAI() {
             // --- ALLY MACHINEGUN HEAT LOGIC (exact same as player) ---
             const tt = ally.tankType || 'normal';
             const allyDisarmed = (ally.sandNoShootTimer || 0) > 0;
-            if (tt === 'burovoy' && typeof syncBurovoyState === 'function') {
-                syncBurovoyState(ally);
-            }
             if (tt === 'machinegun') {
                 ally.heat = ally.heat || 0;
                 const HEAT_MAX = 240; // 4 seconds at 60fps

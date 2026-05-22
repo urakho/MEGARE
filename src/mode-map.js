@@ -114,16 +114,7 @@ function generateBossFightMap() {
         [1510, 610, 170, 80]
     ].forEach(([x, y, w, h]) => lava(x, y, w, h));
 
-    [
-        [390, 220, 180, 52],
-        [1230, 220, 180, 52],
-        [390, 1128, 180, 52],
-        [1230, 1128, 180, 52],
-        [760, 430, 280, 58],
-        [760, 912, 280, 58],
-        [630, 665, 170, 48],
-        [1000, 665, 170, 48]
-    ].forEach(([x, y, w, h]) => rift(x, y, w, h));
+    // hellRift objects removed
 
     for (let x = 0; x < W; x += B) { wall(x, 0, B, B); wall(x, H - B, B, B); }
     for (let y = B; y < H - B; y += B) { wall(0, y, B, B); wall(W - B, y, B, B); }
