@@ -92,7 +92,7 @@
 // the normal main menu.  Set to 'off' to run the game as usual.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance screen
+const MAINTENANCE_MODE = 'on'; // <-- change to 'on' to enable maintenance screen
 
 (function () {
     // If maintenance is OFF, clean up any leftover bypass flags and exit
@@ -195,7 +195,7 @@ const MAINTENANCE_MODE = 'off'; // <-- change to 'on' to enable maintenance scre
             line-height:1.6;
         ">
             ⏳ Ориентировочное время восстановления:</br>
-            <span style="color:#f1c40f;font-weight:bold;">неизвестно</span>
+            <span style="color:#f1c40f;font-weight:bold;">10 часов</span>
         </div>
         <div id="maintenanceAdminPanel" style="display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;margin-top:4px;">
             <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;width:100%;">

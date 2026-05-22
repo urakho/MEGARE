@@ -1,4 +1,4 @@
-
+﻿
 // --- VISUALS & ABILITIES --- //
 
 // Tank descriptions for detail modal
@@ -127,6 +127,11 @@ const tankDescriptions = {
         name: "Камикадзе",
         description: "Рискованный танк для агрессивной игры. Его сила в резком врыве, хаосе и умении сломать спокойный бой за один момент. Он подходит тем, кто любит заходить ва-банк, ломать чужую оборону и навязывать свой ритм силой.",
         rarity: "Лимитированная"
+    },
+    kvant: {
+        name: "Квант",
+        description: "Хроматический танк с нестабильным квантовым оружием. Выпускает три энергетических снаряда — центральный летит прямо, боковые разделяются в полёте на два осколка. Ульта \"Перегруз сети\" (E): волна замедляет врагов на 20% и снижает их урон на 20% на 5 секунд, после чего поражённые враги взрываются и получают 80 урона.",
+        rarity: "Хроматическая"
     }
 };
 
@@ -150,6 +155,7 @@ const tankBgGradients = {
     egyptian: ['#40f6d1', '#11a89c', '#06615b'], // Легендарный - standard legendary
     time: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - transparent for CSS anim
     roman: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'], // Хроматическая - animated like time
+    kvant: ['rgba(0,0,0,0)', 'rgba(0,0,0,0)'],  // Хроматическая - animated like time
     spartan: ['#f9e04b', '#f1c40f'],       // Редкая - yellow
     machinegun: ['#2ecc71', '#27ae60'], // Редкий - green (like ice)
     pyro: ['#2ecc71', '#27ae60'],        // Редкий - green
@@ -183,6 +189,7 @@ const tankBaseColors = {
     medical: '#0033ff',    // Bright blue for medical tank
     mine: '#3d4c18',       // Dark olive for mine tank
     roman: '#8B6914',      // Dark gold for Roman tank
+    ai: '#0d1b2a',          // Dark navy for Квант
     spartan: '#b87333',    // Bronze for Spartan tank
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
     air: '#00a896',          // Teal-cyan for Air tank
@@ -1337,6 +1344,83 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
                 ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
             }
             // Actual drawing happens in the mechShield turret block below
+        } else if (type === 'kvant') {
+            // Квант body: Cybernetic obsidian frame with glowing neon circuitry
+            const _aiT = Date.now() * 0.001;
+            const _aiP = 0.55 + 0.45 * Math.sin(_aiT * 3.0);
+            
+            // 1. Dark obsidian base plate with rounded chamfer and metallic gradient
+            const _baseGrad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
+            _baseGrad.addColorStop(0, '#040b12');
+            _baseGrad.addColorStop(0.5, '#0d1e2e');
+            _baseGrad.addColorStop(1, '#020609');
+            ctx.fillStyle = _baseGrad;
+            // Draw slightly clipped octagonal base
+            ctx.beginPath();
+            const cutX = bodyW * 0.18;
+            const cutY = bodyH * 0.18;
+            ctx.moveTo(-bodyW/2 + cutX, -bodyH/2);
+            ctx.lineTo(bodyW/2 - cutX, -bodyH/2);
+            ctx.lineTo(bodyW/2, -bodyH/2 + cutY);
+            ctx.lineTo(bodyW/2, bodyH/2 - cutY);
+            ctx.lineTo(bodyW/2 - cutX, bodyH/2);
+            ctx.lineTo(-bodyW/2 + cutX, bodyH/2);
+            ctx.lineTo(-bodyW/2, bodyH/2 - cutY);
+            ctx.lineTo(-bodyW/2, -bodyH/2 + cutY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Outer thick plating border (metallic)
+            ctx.strokeStyle = '#112b40';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // 2. Cyber-circuitry glowing lines inside
+            ctx.save();
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 5 + 3 * _aiP;
+            ctx.strokeStyle = `rgba(0, 229, 255, ${0.4 + 0.6 * _aiP})`;
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            // Left circuit
+            ctx.moveTo(-bodyW*0.35, -bodyH*0.28);
+            ctx.lineTo(-bodyW*0.2, -bodyH*0.12);
+            ctx.lineTo(-bodyW*0.2,  bodyH*0.12);
+            ctx.lineTo(-bodyW*0.35,  bodyH*0.28);
+            ctx.stroke();
+
+            ctx.beginPath();
+            // Right circuit
+            ctx.moveTo(bodyW*0.35, -bodyH*0.28);
+            ctx.lineTo(bodyW*0.2, -bodyH*0.12);
+            ctx.lineTo(bodyW*0.2,  bodyH*0.12);
+            ctx.lineTo(bodyW*0.35,  bodyH*0.28);
+            ctx.stroke();
+            
+            // Bright data nodes at the ends of circuits
+            ctx.fillStyle = '#e0ffff';
+            ctx.beginPath(); ctx.arc(-bodyW*0.35, -bodyH*0.28, 2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-bodyW*0.35,  bodyH*0.28, 2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc( bodyW*0.35, -bodyH*0.28, 2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc( bodyW*0.35,  bodyH*0.28, 2, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+
+            // 3. Core energy channel pulsating
+            ctx.fillStyle = `rgba(0, 229, 255, ${0.08 + 0.12 * _aiP})`;
+            ctx.beginPath(); ctx.arc(0, 0, Math.min(bodyW, bodyH) * 0.35, 0, Math.PI*2); ctx.fill();
+            
+            // 4. Rotating containment ring
+            ctx.save();
+            ctx.rotate(-_aiT * 0.8);
+            ctx.strokeStyle = `rgba(0, 229, 255, ${0.4 + 0.2*_aiP})`;
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([6, 4]); // dashed high-tech ring
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.min(bodyW, bodyH) * 0.28, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.restore();
         } else {
             // Default
             ctx.fillStyle = color;
@@ -2296,6 +2380,37 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0, 0, tSize * 0.22, 0, Math.PI * 2);
         ctx.fillStyle = '#cc0000';
         ctx.fill();
+    } else if (type === 'kvant') {
+        // Квант turret: hex dome with pulsing eye
+        const _aiTT = Date.now() * 0.001;
+        const _aiPT = 0.6 + 0.4 * Math.sin(_aiTT * 2.8);
+        const _hexR = tSize * 0.52;
+        // Hex base
+        const hexGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, _hexR);
+        hexGrad.addColorStop(0, '#0a2233');
+        hexGrad.addColorStop(1, '#071520');
+        ctx.fillStyle = hexGrad;
+        ctx.beginPath();
+        for (let _hi = 0; _hi < 6; _hi++) {
+            const _ha = (_hi / 6) * Math.PI * 2 - Math.PI / 6;
+            _hi === 0 ? ctx.moveTo(Math.cos(_ha)*_hexR, Math.sin(_ha)*_hexR) : ctx.lineTo(Math.cos(_ha)*_hexR, Math.sin(_ha)*_hexR);
+        }
+        ctx.closePath(); ctx.fill();
+        // Glowing hex border
+        ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 8 * _aiPT;
+        ctx.strokeStyle = `rgba(0,229,255,${_aiPT * 0.9})`; ctx.lineWidth = 1.5;
+        ctx.stroke(); ctx.shadowBlur = 0;
+        // Spinning scan arm
+        ctx.save(); ctx.rotate(_aiTT * 1.8);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, _hexR*0.65, -0.2, 0.2); ctx.closePath();
+        ctx.fillStyle = `rgba(0,229,255,${_aiPT * 0.2})`; ctx.fill();
+        ctx.strokeStyle = `rgba(0,229,255,${_aiPT * 0.7})`; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(_hexR*0.65, 0); ctx.stroke();
+        ctx.restore();
+        // Pulsing center eye
+        const eyeGrad = ctx.createRadialGradient(0,0,0,0,0,tSize*0.18);
+        eyeGrad.addColorStop(0, `rgba(255,255,255,${_aiPT})`); eyeGrad.addColorStop(0.5, `rgba(0,229,255,${_aiPT*0.9})`); eyeGrad.addColorStop(1, 'rgba(0,100,160,0)');
+        ctx.fillStyle = eyeGrad; ctx.beginPath(); ctx.arc(0,0,tSize*0.18,0,Math.PI*2); ctx.fill();
     } else if (type === 'air') {
         // Air turret — rounded teal dome with spinning wind ring
         const airT = ctx.createRadialGradient(-tSize*0.15, -tSize*0.15, 0, 0, 0, tSize*0.6);
@@ -2985,6 +3100,23 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.stroke();
         } else if (type === 'mechShield') {
             // mechShield: barrels drawn by drawMechShieldOn (already returned above)
+        } else if (type === 'kvant') {
+            // Квант barrel: twin energy launchers
+            const bLen = Math.min(W,H) * 0.58 * turretScale;
+            const bH   = Math.min(W,H) * 0.10 * turretScale;
+            const gap  = Math.min(W,H) * 0.10 * turretScale;
+            for (let _bi = 0; _bi < 2; _bi++) {
+                const yOff = (_bi === 0 ? -1 : 1) * gap;
+                const bGrad = ctx.createLinearGradient(tSize/2, 0, tSize/2 + bLen, 0);
+                bGrad.addColorStop(0, '#071520'); bGrad.addColorStop(0.6, '#0a3355'); bGrad.addColorStop(0.85, '#0077aa'); bGrad.addColorStop(1, '#00e5ff');
+                ctx.fillStyle = bGrad;
+                ctx.fillRect(tSize/2, yOff - bH/2, bLen, bH);
+                // Glow tip
+                ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 7;
+                ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1;
+                ctx.strokeRect(tSize/2 + bLen - 4, yOff - bH/2 - 1, 4, bH + 2);
+                ctx.shadowBlur = 0;
+            }
         } else if (type === 'mechDiy') {
             // Dual barrels — two parallel thin cannons side-by-side
             const dBarL = Math.min(W, H) * 0.65 * turretScale;
@@ -3936,6 +4068,9 @@ function drawCharacterPreviews() {
         drawChromaticItem(timeTankCtx, timeTankPreview, 'time', '#FF00FF', '#333');
         drawChromaticItem(imitatorTankCtx, imitatorTankPreview, 'imitator', '#1a1a3e', '#111');
         drawChromaticItem(romanTankCtx, romanTankPreview, 'roman', '#1a1a2e', '#111');
+        if (typeof kvantTankCtx !== 'undefined' && kvantTankCtx && kvantTankPreview) {
+            drawChromaticItem(kvantTankCtx, kvantTankPreview, 'kvant', '#0d1b2a', '#06111e');
+        }
     };
 
     drawItem(normalTankCtx, normalTankPreview, 'normal', '#0000FF', tankBgGradients.normal);
@@ -4350,13 +4485,39 @@ function draw() {
             const t = Math.max(0, obj.life / maxLife);
             const alpha = t * 0.75;
             ctx.save();
-            ctx.strokeStyle = `rgba(255,220,110,${alpha})`;
-            ctx.lineWidth = Math.max(0.5, 3.5 * t);
-            ctx.shadowColor = `rgba(255,190,0,${alpha * 0.8})`;
-            ctx.shadowBlur = 12;
-            ctx.beginPath();
-            ctx.arc(obj.x, obj.y, Math.max(1, obj.radius), 0, Math.PI * 2);
-            ctx.stroke();
+            // Квант shockwave: cyan energy ring with segments
+            if (obj.color === '#00e5ff') {
+                const r = Math.max(1, obj.radius);
+                // Outer ring
+                ctx.strokeStyle = `rgba(0,229,255,${alpha * 0.9})`;
+                ctx.lineWidth = Math.max(0.5, 4 * t);
+                ctx.shadowColor = '#00e5ff';
+                ctx.shadowBlur = 18 * t;
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2); ctx.stroke();
+                // Inner ring (thinner, slightly smaller)
+                ctx.strokeStyle = `rgba(150,255,255,${alpha * 0.5})`;
+                ctx.lineWidth = Math.max(0.5, 1.5 * t);
+                ctx.shadowBlur = 8 * t;
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, Math.max(1, r * 0.72), 0, Math.PI * 2); ctx.stroke();
+                // Energy arc segments rotating with time
+                ctx.lineWidth = Math.max(0.5, 2.5 * t);
+                ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.7})`;
+                ctx.shadowBlur = 10 * t;
+                const _segCount = 6;
+                const _segOff = (Date.now() * 0.003) % (Math.PI * 2);
+                for (let _si = 0; _si < _segCount; _si++) {
+                    const _sa = _segOff + (_si / _segCount) * Math.PI * 2;
+                    ctx.beginPath(); ctx.arc(obj.x, obj.y, r, _sa, _sa + 0.32); ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+            } else {
+                // Default shockwave (orange/yellow)
+                ctx.strokeStyle = `rgba(255,220,110,${alpha})`;
+                ctx.lineWidth = Math.max(0.5, 3.5 * t);
+                ctx.shadowColor = `rgba(255,190,0,${alpha * 0.8})`;
+                ctx.shadowBlur = 12;
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, Math.max(1, obj.radius), 0, Math.PI * 2); ctx.stroke();
+            }
             ctx.restore();
         } else if (obj.type === 'implosion') {
             const maxLife = obj.maxLife || 30;
@@ -4476,6 +4637,71 @@ function draw() {
                 ctx.fill();
             }
             ctx.restore();
+        } else if (obj.type === 'hellLava') {
+            // Boss fight lava pool — animated orange/red
+            const _lt = Date.now() * 0.0012;
+            const _lx = obj.x, _ly = obj.y, _lw = obj.w, _lh = obj.h;
+            const _lGrad = ctx.createLinearGradient(_lx, _ly, _lx + _lw, _ly + _lh);
+            _lGrad.addColorStop(0,   '#ff2200');
+            _lGrad.addColorStop(0.4, '#ff6600');
+            _lGrad.addColorStop(0.7, '#ff3300');
+            _lGrad.addColorStop(1,   '#cc1100');
+            ctx.fillStyle = _lGrad;
+            ctx.fillRect(_lx, _ly, _lw, _lh);
+            // Animated lava bubbles / wave overlay
+            for (let _bi = 0; _bi < 4; _bi++) {
+                const _bpx = _lx + (_bi / 4) * _lw + Math.sin(_lt + _bi * 1.8) * _lw * 0.08;
+                const _bpy = _ly + _lh * 0.5 + Math.cos(_lt * 0.9 + _bi * 1.2) * _lh * 0.3;
+                const _br  = Math.min(_lw, _lh) * (0.12 + 0.06 * Math.sin(_lt + _bi));
+                const _bGrad = ctx.createRadialGradient(_bpx, _bpy, 0, _bpx, _bpy, _br);
+                _bGrad.addColorStop(0, `rgba(255,220,50,${0.6 + 0.4 * Math.sin(_lt + _bi)})`);
+                _bGrad.addColorStop(1, 'rgba(255,50,0,0)');
+                ctx.fillStyle = _bGrad;
+                ctx.beginPath(); ctx.arc(_bpx, _bpy, _br, 0, Math.PI * 2); ctx.fill();
+            }
+            // Glowing edge
+            ctx.shadowColor = '#ff5500'; ctx.shadowBlur = 10;
+            ctx.strokeStyle = `rgba(255,120,0,${0.7 + 0.3 * Math.sin(_lt * 2)})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(_lx, _ly, _lw, _lh);
+            ctx.shadowBlur = 0;
+        } else if (obj.type === 'hellRift') {
+            // Boss fight dimensional rift — dark purple/crimson crack
+            const _rt = Date.now() * 0.0015;
+            const _rx = obj.x, _ry = obj.y, _rw = obj.w, _rh = obj.h;
+            const _rGrad = ctx.createLinearGradient(_rx, _ry, _rx + _rw, _ry + _rh);
+            _rGrad.addColorStop(0,   '#1a0022');
+            _rGrad.addColorStop(0.5, '#5a0044');
+            _rGrad.addColorStop(1,   '#1a0022');
+            ctx.fillStyle = _rGrad;
+            ctx.fillRect(_rx, _ry, _rw, _rh);
+            // Pulsing inner glow
+            const _rInner = ctx.createRadialGradient(
+                _rx + _rw * 0.5, _ry + _rh * 0.5, 0,
+                _rx + _rw * 0.5, _ry + _rh * 0.5, Math.max(_rw, _rh) * 0.55);
+            const _rAlpha = 0.5 + 0.4 * Math.sin(_rt * 2);
+            _rInner.addColorStop(0, `rgba(200,0,255,${_rAlpha})`);
+            _rInner.addColorStop(0.5, `rgba(100,0,80,${_rAlpha * 0.4})`);
+            _rInner.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = _rInner;
+            ctx.fillRect(_rx, _ry, _rw, _rh);
+            // Crack lines across the rift
+            ctx.shadowColor = '#dd00ff'; ctx.shadowBlur = 8;
+            ctx.strokeStyle = `rgba(220,100,255,${0.6 + 0.4 * Math.sin(_rt * 3)})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(_rx + _rw * 0.1, _ry + _rh * 0.5);
+            ctx.lineTo(_rx + _rw * 0.35, _ry + _rh * 0.3);
+            ctx.lineTo(_rx + _rw * 0.5, _ry + _rh * 0.5);
+            ctx.lineTo(_rx + _rw * 0.65, _ry + _rh * 0.7);
+            ctx.lineTo(_rx + _rw * 0.9, _ry + _rh * 0.5);
+            ctx.stroke();
+            // Outer rim
+            ctx.shadowBlur = 14;
+            ctx.strokeStyle = `rgba(180,0,255,${0.5 + 0.3 * Math.sin(_rt)})`;
+            ctx.lineWidth = 2.5;
+            ctx.strokeRect(_rx, _ry, _rw, _rh);
+            ctx.shadowBlur = 0;
         } else {
             const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
             ctx.fillStyle = '#cd853f'; // Peru
@@ -5119,6 +5345,56 @@ function draw() {
             ctx.beginPath();
             ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.3, 0, Math.PI * 2);
             ctx.fill();
+
+        } else if (b.type === 'kvantMain' || b.type === 'kvantSide' || b.type === 'kvantSmall') {
+            // Квант bullets — kvantMain is the primary morphing orb, kvantSmall are fragments
+            const isMain = b.type === 'kvantMain';
+            const pr = b.type === 'kvantSmall' ? Math.max(2.5, b.w/2) : Math.max(isMain ? 6 : 4.5, b.w/2);
+            const ang = Math.atan2(b.vy, b.vx);
+            const pulse = 0.7 + 0.3 * Math.sin(Date.now() * 0.012 + b.x * 0.02);
+            // For kvantMain: flash/pulse faster as morph approaches
+            const morphFraction = isMain && b.morphTimer != null ? Math.max(0, b.morphTimer / 90) : 1;
+            const morphPulse = isMain ? (morphFraction > 0.2 ? pulse : 0.5 + 0.5 * Math.sin(Date.now() * 0.06)) : 1;
+            const alpha = (b.type === 'kvantSide' && (b.splitTimer || 90) < 22)
+                ? (0.5 + 0.5 * Math.sin(Date.now() * 0.04)) : 1;
+            // Trail
+            const trailLen = pr * (isMain ? 4.5 : 3.2);
+            const tx = b.x - Math.cos(ang) * trailLen, ty = b.y - Math.sin(ang) * trailLen;
+            const aiTrail = ctx.createLinearGradient(tx, ty, b.x, b.y);
+            aiTrail.addColorStop(0, 'rgba(0,229,255,0)');
+            aiTrail.addColorStop(1, `rgba(0,229,255,${0.5 * morphPulse * alpha})`);
+            ctx.strokeStyle = aiTrail; ctx.lineWidth = pr * (isMain ? 2.2 : 1.6); ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(b.x, b.y); ctx.stroke();
+            // Outer glow (bigger for main)
+            const glowR = pr * (isMain ? 3.5 : 2.4);
+            const aiGlow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, glowR);
+            aiGlow.addColorStop(0, `rgba(0,229,255,${0.38 * morphPulse * alpha})`);
+            aiGlow.addColorStop(1, 'rgba(0,100,180,0)');
+            ctx.fillStyle = aiGlow; ctx.beginPath(); ctx.arc(b.x, b.y, glowR, 0, Math.PI*2); ctx.fill();
+            // Morphing ring indicator on kvantMain (shows time-to-morph)
+            if (isMain && b.morphTimer != null) {
+                const _ringAlpha = (1 - morphFraction) * 0.8;
+                if (_ringAlpha > 0.05) {
+                    ctx.strokeStyle = `rgba(255,255,100,${_ringAlpha})`;
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 6;
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, pr * 2, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * (1 - morphFraction));
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+            // Core
+            ctx.globalAlpha = alpha;
+            const coreColor0 = isMain ? '#ffffff' : '#ffffff';
+            const coreColor1 = isMain ? '#44ffff' : '#00e5ff';
+            const aiCore = ctx.createRadialGradient(b.x - pr*0.25, b.y - pr*0.25, 0, b.x, b.y, pr);
+            aiCore.addColorStop(0, coreColor0); aiCore.addColorStop(0.35, coreColor1);
+            aiCore.addColorStop(0.75, '#0066aa'); aiCore.addColorStop(1, '#003366');
+            ctx.fillStyle = aiCore; ctx.beginPath(); ctx.arc(b.x, b.y, pr, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = `rgba(0,229,255,${0.6 * pulse})`; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(b.x, b.y, pr * 1.55, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 1;
 
         } else if (b.type === 'buckshot') {
             // Shotgun pellet — brass sphere with motion trail
@@ -6580,6 +6856,36 @@ function draw() {
         ctx.restore();
         if (_enemyBurovoyDrill && _enemyBurovoyDrill.burovoyBurrowActive) drawBurovoyBurrowCracks(ctx, enemy);
         if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
+        // Draw Квант overload debuff indicator
+        if (enemy._kvantOverload && enemy._kvantOverloadTimer > 0) {
+            const _ovProg = enemy._kvantOverloadTimer / 300; // 1 = just applied, 0 = about to explode
+            const _ovPulse = 0.55 + 0.45 * Math.sin(Date.now() * 0.012);
+            const _ovCx = enemy.x + enemy.w / 2;
+            const _ovCy = enemy.y + enemy.h / 2;
+            const _ovR = Math.max(enemy.w, enemy.h) * 0.72;
+            ctx.save();
+            // Pulsing dashed cyan ring
+            ctx.strokeStyle = `rgba(0,229,255,${(_ovPulse * 0.85).toFixed(2)})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.arc(_ovCx, _ovCy, _ovR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Countdown arc (solid, fills up as timer runs out)
+            ctx.strokeStyle = 'rgba(0,229,255,0.95)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(_ovCx, _ovCy, _ovR + 5, -Math.PI / 2, -Math.PI / 2 + _ovProg * Math.PI * 2);
+            ctx.stroke();
+            // Cyan overload icon above tank
+            ctx.fillStyle = `rgba(0,229,255,${_ovPulse.toFixed(2)})`;
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('⚡', _ovCx, enemy.y - 13);
+            ctx.restore();
+        }
         if ((enemy.tankType === 'mechShield') && typeof drawShieldActiveOverlay === 'function') {
             const _eFadeR = enemy.mechShieldActive ? 1 : Math.max(0, (enemy.mechShieldFadeTimer || 0) / 30);
             const _eDmgP = enemy.mechShieldDamagePercent || 0;
@@ -6661,6 +6967,32 @@ function draw() {
         const _playerBurovoyDrill = getBurovoyDrillRenderState(tank);
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit }, moveAnim);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
+
+        // Draw Квант overload indicator on player tank (when debuffed by enemy bot)
+        if (tank._kvantOverload && tank._kvantOverloadTimer > 0) {
+            const _ovProg = tank._kvantOverloadTimer / 300;
+            const _ovPulse = 0.55 + 0.45 * Math.sin(Date.now() * 0.012);
+            const _ovR = Math.max(tank.w, tank.h) * 0.72;
+            ctx.save();
+            ctx.strokeStyle = `rgba(0,229,255,${(_ovPulse * 0.85).toFixed(2)})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.arc(0, 0, _ovR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(0,229,255,0.95)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, _ovR + 5, -Math.PI / 2, -Math.PI / 2 + _ovProg * Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(0,229,255,${_ovPulse.toFixed(2)})`;
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('⚡', 0, -tank.h / 2 - 13);
+            ctx.restore();
+        }
 
         // Hit flash overlay - radial impact burst, red-tinted for player
         const _tFlashAge = Date.now() - (tank.hitFlashTime || 0);
@@ -7534,7 +7866,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80
+            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, ai: 80
         };
         const dmgRaw = tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100;
         // Use multiplier table if present, compute raw (float) boosted damage
@@ -7547,6 +7879,12 @@ function showTankDetail(tankType) {
         let displayDmgBoosted = tankType === 'fire' ? dmgBoostedRaw.toFixed(1) : Math.round(dmgBoostedRaw);
         let displayDmgMaxPossible = dmgMaxPossible;
         let displayDmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3', fire: '/ч', burovoy: '/сек' }[tankType] || '';
+        // Квант: show main bullet + all 3 morph variants
+        let displayDmgExtra = '';
+        if (tankType === 'kvant') {
+            const _kvantMainDmg = Math.round(100 * dmgMultAtLvl);
+            displayDmgBoosted = `${_kvantMainDmg}`;
+        }
 
         if (tankType === 'waterjet' || tankType === 'illuminat') {
             // convert tick-based damage to per-second for display (60 ticks = 1s)
@@ -7595,6 +7933,7 @@ function showTankDetail(tankType) {
                     <div style="width:80px; font-weight:bold; flex-shrink:0;">Урон</div>
                     ${cssBar(dmgPct, '#A0522D')}
                     <div style="margin-left:4px; flex-shrink:0; font-variant-numeric:tabular-nums;">${displayDmgBoosted}${displayDmgNote}</div>
+                    ${displayDmgExtra || ''}
                     ${makeNear('dmg')}
                     <div style="flex:1;"></div>
                     <div style="flex-shrink:0;">${makeFar('dmg')}</div>
@@ -7654,7 +7993,7 @@ function showTankDetail(tankType) {
         const grass = (tankBgGradients && tankBgGradients.normal && tankBgGradients.normal[1]) ? tankBgGradients.normal[1] : '#228B22';
         ctx.fillStyle = grass;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
+    } else if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman' || tankType === 'kvant') {
         // Animated: pixelated rainbow flowing from top-left; redraw every frame
         if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
         modal.style.display = 'flex'; // ensure visible before first frame

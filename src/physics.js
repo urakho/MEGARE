@@ -1,4 +1,4 @@
-// physics.js  collision detection, explosions, particles, shooting, movement
+﻿// physics.js  collision detection, explosions, particles, shooting, movement
 
 // Apply damage with god mode multiplier if enabled
 function applyPlayerDamage(damage) {
@@ -1766,8 +1766,19 @@ function shoot() {
             damage: 80
         });
         tank.fireCooldown = 40; // 1.5 shots per second
+    } else if (tankType === 'kvant') {
+        // Квант: 1 main bullet that morphs into one of 3 effects after 1.5s
+        const ang = tank.turretAngle;
+        const spd = 5.5;
+        const sx = tank.x + tank.w/2 + Math.cos(ang) * 24;
+        const sy = tank.y + tank.h/2 + Math.sin(ang) * 24;
+        const _kvantBaseDmg = Math.round(100 * (typeof getPlayerDmgMult === 'function' ? getPlayerDmgMult() : 1));
+        bullets.push({ x: sx, y: sy, w: 10, h: 10,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            life: 220, owner: 'player', team: 0, type: 'kvantMain',
+            damage: _kvantBaseDmg, morphTimer: 90 });
+        tank.fireCooldown = 60;
     } else if (tankType === 'mechShield') {
-        // Shield mech: 120 damage projectile that can break walls with 6 hits
         const speed = 5;
         const life = 100;
         bullets.push({
@@ -1815,7 +1826,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'egyptian' && tankType !== 'pyro' && tankType !== 'burovoy' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'egyptian' && tankType !== 'pyro' && tankType !== 'burovoy' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical' && tankType !== 'kvant') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : (tankType === 'normal' ? 30 : FIRE_COOLDOWN)); // 1.5sec for mirror, normal 2 shots/s
     }
 }
@@ -1865,7 +1876,72 @@ function updatePhysics() {
         b.x += b.vx;
         b.y += b.vy;
         b.life--;
-        
+
+        // КВАНТ kvantMain MORPH: after 1.5s, one of 3 random effects triggers
+        if (b.type === 'kvantMain' && typeof b.morphTimer !== 'undefined') {
+            b.morphTimer--;
+            if (b.morphTimer <= 0) {
+                const _bAng = Math.atan2(b.vy, b.vx);
+                const _bSpd = Math.hypot(b.vx, b.vy);
+                const _roll = Math.floor(Math.random() * 3);
+                if (_roll === 0) {
+                    // Split into 8 fragments, each 1/8 of base damage
+                    const _fragDmg = Math.max(1, Math.round(b.damage / 8));
+                    for (let _fi = 0; _fi < 8; _fi++) {
+                        const _fa = _bAng + (_fi / 8) * Math.PI * 2;
+                        bullets.push({ x: b.x, y: b.y, w: 6, h: 6,
+                            vx: Math.cos(_fa) * _bSpd * 0.85,
+                            vy: Math.sin(_fa) * _bSpd * 0.85,
+                            life: 80, owner: b.owner, team: b.team,
+                            type: 'kvantSmall', damage: _fragDmg });
+                    }
+                    for (let _pk = 0; _pk < 14; _pk++) spawnParticle(b.x, b.y, '#00e5ff', 0.9);
+                    bullets.splice(i, 1);
+                    continue;
+                } else if (_roll === 1) {
+                    // Accelerate by 50%, no further morph
+                    b.vx *= 1.5;
+                    b.vy *= 1.5;
+                    delete b.morphTimer;
+                    for (let _pk = 0; _pk < 6; _pk++) spawnParticle(b.x, b.y, '#00e5ff', 0.7);
+                } else {
+                    // Duplicate into 2 bullets at 2/3 damage each, no further morph
+                    const _dupDmg = Math.max(1, Math.round(b.damage * 2 / 3));
+                    const _off = 0.18;
+                    bullets.push({ x: b.x, y: b.y, w: 9, h: 9,
+                        vx: Math.cos(_bAng - _off) * _bSpd,
+                        vy: Math.sin(_bAng - _off) * _bSpd,
+                        life: b.life, owner: b.owner, team: b.team,
+                        type: 'kvantMain', damage: _dupDmg });
+                    bullets.push({ x: b.x, y: b.y, w: 9, h: 9,
+                        vx: Math.cos(_bAng + _off) * _bSpd,
+                        vy: Math.sin(_bAng + _off) * _bSpd,
+                        life: b.life, owner: b.owner, team: b.team,
+                        type: 'kvantMain', damage: _dupDmg });
+                    for (let _pk = 0; _pk < 10; _pk++) spawnParticle(b.x, b.y, '#00e5ff', 0.8);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+            }
+        }
+
+        // КВАНТ kvantSide SPLIT: each side bullet splits into 2 smalls at ±0.3 rad
+        if (b.type === 'kvantSide' && b.splitSide && typeof b.splitTimer !== 'undefined') {
+            b.splitTimer--;
+            if (b.splitTimer <= 0) {
+                const bAng = Math.atan2(b.vy, b.vx);
+                const bSpd = Math.hypot(b.vx, b.vy);
+                bullets.push({ x: b.x, y: b.y, w: 6, h: 6,
+                    vx: Math.cos(bAng - 0.3) * bSpd, vy: Math.sin(bAng - 0.3) * bSpd,
+                    life: 75, owner: b.owner, team: b.team, type: 'kvantSmall', damage: 40 });
+                bullets.push({ x: b.x, y: b.y, w: 6, h: 6,
+                    vx: Math.cos(bAng + 0.3) * bSpd, vy: Math.sin(bAng + 0.3) * bSpd,
+                    life: 75, owner: b.owner, team: b.team, type: 'kvantSmall', damage: 40 });
+                bullets.splice(i, 1);
+                continue;
+            }
+        }
+
         // ELECTRIC BALL HOMING: Track and pursue nearest hostile target (player, allies, enemies)
         if (b.type === 'electricBall') {
             let nearestTarget = null;
@@ -1951,6 +2027,7 @@ function updatePhysics() {
         let hit = false;
         if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical' && b.type !== 'meteorMini' && b.type !== 'romanBlade') {
             for (const obj of objects) {
+                if (!isBlockingTerrainObject(obj)) continue; // only solid objects stop bullets
                 if (checkRectCollision(bRect, obj)) {
                     // Toxic/mega bombs pass through walls but explode on other objects
                     if ((b.type === 'toxic' || b.type === 'megabomb') && obj.type === 'wall') {
@@ -3440,8 +3517,11 @@ function updatePhysics() {
     if (currentMode === 'training') {
         if (gameState !== 'playing') gameState = 'playing'; // undo premature lose/win
         if (!tank.alive || tank.hp <= 0) {
-            const tankMaxHp = { 'normal': 300, 'ice': 300, 'fire': 600, 'buratino': 350, 'toxic': 250, 'plasma': 300, 'musical': 400, 'illuminat': 300, 'mirror': 400, 'time': 200, 'machinegun': 300, 'buckshot': 350, 'waterjet': 300, 'imitator': 250, 'electric': 400 };
-            tank.hp = tankMaxHp[tankType] || 300;
+            if (typeof setTankHP === 'function') {
+                setTankHP(tankType);
+            } else {
+                tank.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
+            }
             tank.alive = true;
             tank.x = 150; tank.y = worldHeight / 2 - 19;
         }

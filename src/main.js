@@ -1,4 +1,4 @@
-/**
+﻿/**
  * КЛАССИЧЕСКИЕ ТАНКИ С ПРОЦЕДУРНЫМИ СТЕНАМИ
  * Логика: Генерация длинных препятствий с проверкой путей
  */
@@ -146,6 +146,7 @@ const TANK_ATMOSPHERIC_TITLES = {
     mechDiy:     { name: 'Механический Страж',                 color: '#607d8b' },
     mechShield:  { name: 'Энергетическая Стена',               color: '#3f51b5' },
     mechRocket:  { name: 'Гранатомётчик',                      color: '#ff5722' },
+    kvant:       { name: 'Квантовое Разрушение',                color: '#00e5ff' },
 };
 window.TANK_ATMOSPHERIC_TITLES = TANK_ATMOSPHERIC_TITLES;
 
@@ -520,6 +521,7 @@ const tankGemPrices = {
     'electric': 800,  // Электрический (Шаровая молния с цепочкой хит)
     'robot': 650,     // Легендарный (Рельсотрон + дроны)
     'roman': 800,     // Хроматический
+    'kvant': 800,        // Хроматический
     'kamikaze': 400   // Лимитированный
 };
 
@@ -587,6 +589,19 @@ function getTankTrophies(tankType) {
         return 0;
     }
 }
+
+// Migrate legacy title keys (e.g. 'ai' → 'kvant') in localStorage
+(function _migrateTitleKeys() {
+    const MAP = { 'ai': 'kvant' };
+    try {
+        let changed = false;
+        const unlocks = JSON.parse(localStorage.getItem('playerTitleUnlocks') || '[]');
+        const migrated = unlocks.map(k => { if (MAP[k]) { changed = true; return MAP[k]; } return k; });
+        if (changed) localStorage.setItem('playerTitleUnlocks', JSON.stringify(migrated));
+        const active = localStorage.getItem('playerTitle');
+        if (active && MAP[active]) localStorage.setItem('playerTitle', MAP[active]);
+    } catch(e) {}
+})();
 
 // Get list of unlocked tank title IDs (e.g. ['fire','egyptian'])
 function _getUnlockedTitles() {
@@ -732,6 +747,7 @@ const tankMaxHpByType = {
     'mine': 350,
     'burovoy': 700,
     'roman': 350,
+    'kvant': 350,
     'pyro': 420,
     'spartan': 320,
     'kamikaze': 300,
@@ -770,6 +786,7 @@ const tankMaxSpeedByType = {
     'mine': 3.1,
     'burovoy': 2.3,
     'roman': 3.0,
+    'kvant': 3.0,
     'pyro': 2.75,
     'spartan': 3.0,
     'kamikaze': 3.0,
@@ -1300,7 +1317,7 @@ function updateMusic() {
     joystickZone.addEventListener('touchend',    endJoystick, { passive: false });
     joystickZone.addEventListener('touchcancel', () => { joystickTouchId = null; resetKnob(joystickKnob); clearMoveKeys(); });
 
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'egyptian', 'burovoy', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket', 'ice'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'egyptian', 'burovoy', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket', 'ice', 'kvant'];
 
     function currentTankHasUlt() {
         const tt = typeof tankType !== 'undefined' ? tankType : '';
@@ -1617,6 +1634,8 @@ const mineTankPreview = document.getElementById('mineTankPreview');
 const mineTankCtx = mineTankPreview && mineTankPreview.getContext ? mineTankPreview.getContext('2d') : null;
 const romanTankPreview = document.getElementById('romanTankPreview');
 const romanTankCtx = romanTankPreview && romanTankPreview.getContext ? romanTankPreview.getContext('2d') : null;
+const kvantTankPreview = document.getElementById('kvantTankPreview');
+const kvantTankCtx = kvantTankPreview && kvantTankPreview.getContext ? kvantTankPreview.getContext('2d') : null;
 const pyroTankPreview = document.getElementById('pyroTankPreview');
 const pyroTankCtx = pyroTankPreview && pyroTankPreview.getContext ? pyroTankPreview.getContext('2d') : null;
 const airTankPreview = document.getElementById('airTankPreview');
@@ -2832,6 +2851,10 @@ const selectRomanTank = document.getElementById('selectRomanTank');
 if (selectRomanTank) selectRomanTank.addEventListener('click', () => {
     showTankDetail('roman');
 });
+const selectKvantTank = document.getElementById('selectKvantTank');
+if (selectKvantTank) selectKvantTank.addEventListener('click', () => {
+    showTankDetail('kvant');
+});
 const selectPyroTank = document.getElementById('selectPyroTank');
 if (selectPyroTank) selectPyroTank.addEventListener('click', () => {
     showTankDetail('pyro');
@@ -2890,7 +2913,7 @@ function getRandomInt(min, max) {
 }
 
 // Tanks sorted by rarity: rare → super_rare → epic → legendary → mythic → chromatic
-const allTanksList = ['machinegun', 'buckshot', 'pyro', 'air', 'fire', 'waterjet', 'mine', 'ice', 'buratino', 'musical', 'medical', 'toxic', 'mirror', 'egyptian', 'robot', 'illuminat', 'plasma', 'electric', 'burovoy', 'time', 'imitator', 'roman', 'spartan'];
+const allTanksList = ['machinegun', 'buckshot', 'pyro', 'air', 'fire', 'waterjet', 'mine', 'ice', 'buratino', 'musical', 'medical', 'toxic', 'mirror', 'egyptian', 'robot', 'illuminat', 'plasma', 'electric', 'burovoy', 'time', 'imitator', 'roman', 'spartan', 'kvant'];
 const tankRarityMap = {
     'ice': 'epic',
     'machinegun': 'rare',
@@ -2914,6 +2937,7 @@ const tankRarityMap = {
     'time': 'chromatic',
     'imitator': 'chromatic',
     'roman': 'chromatic',
+    'kvant': 'chromatic',
     'spartan': 'super_rare',
     'kamikaze': 'limited'
 };
@@ -3039,7 +3063,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
             rewardBox.style.boxShadow = ''; // restore default shadow from CSS
             
             // Only modify the CARD (square) background
-            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
+            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman' || tankType === 'kvant') {
                // For imitator/Time, we need a CANVAS animation to match the menu exactly
                // The menu uses JS to draw pixelated rainbow. We can't easily reuse that code 
                // without refactoring, but we can copy the logic into a new helper or inline.
@@ -3094,7 +3118,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         
         const ctx = canvas.getContext('2d');
         if (typeof drawTankOn === 'function') {
-            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman') {
+            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman' || tankType === 'kvant') {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
@@ -3270,8 +3294,8 @@ function openSuperContainer(options = {}) {
 // 40% - Coins 50-100
 // 30% - Coins 200-300
 // 15% - Parts 80-100
-// 10% - Parts 150-200
-// 5% - Parts 250-350
+// 10% - Parts 100-200
+// 5% - Parts 200-300
 function openMechPartsContainer(options = {}) {
     const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
@@ -3291,18 +3315,18 @@ function openMechPartsContainer(options = {}) {
         localStorage.setItem('tankParts', parts);
         if (!suppressRewardModal) showReward('parts', val, 'Детали (80–100)');
         return { type: 'parts', amount: val, desc: 'Детали (80–100)', icon: '🔧' };
-    } else if (r < 95) { // next 10% — parts (150–200)
-        const val = getRandomInt(150, 200);
+    } else if (r < 95) { // next 10% — parts (100–200)
+        const val = getRandomInt(100, 200);
         parts += val;
         localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Детали (150–200)');
-        return { type: 'parts', amount: val, desc: 'Детали (150–200)', icon: '🔧' };
-    } else { // last 5% — parts (250–350)
-        const val = getRandomInt(250, 350);
+        if (!suppressRewardModal) showReward('parts', val, 'Детали (100–200)');
+        return { type: 'parts', amount: val, desc: 'Детали (100–200)', icon: '🔧' };
+    } else { // last 5% — parts (200–300)
+        const val = getRandomInt(200, 300);
         parts += val;
         localStorage.setItem('tankParts', parts);
-        if (!suppressRewardModal) showReward('parts', val, 'Детали (250–350)');
-        return { type: 'parts', amount: val, desc: 'Детали (250–350)', icon: '🔧' };
+        if (!suppressRewardModal) showReward('parts', val, 'Детали (200–300)');
+        return { type: 'parts', amount: val, desc: 'Детали (200–300)', icon: '🔧' };
     }
 }
 
@@ -4294,10 +4318,114 @@ function update() {
             if (tank.romanShieldTimer <= 0) tank.romanShieldActive = false;
         }
         if (tank.romanShieldCooldown > 0) tank.romanShieldCooldown--;
+        // Квант: E — «Перегруз сети» (волна замедляет/снижает урон врагов, через 5с взрыв 80 урона)
+        if (tankType === 'kvant') {
+            if (keys['KeyE'] && (!tank.kvantUltCooldown || tank.kvantUltCooldown <= 0) && !tank.kvantUltActive) {
+                tank.kvantUltActive = true;
+                tank.kvantUltTimer = 300; // 5 seconds at 60fps
+                tank.kvantUltCooldown = 900; // 15 seconds cooldown
+                const _cx = tank.x + tank.w/2, _cy = tank.y + tank.h/2;
+                // Expanding wave ring effect
+                objects.push({ type: 'shockwave', x: _cx, y: _cy, radius: 10, speed: 18, life: 14, maxLife: 14, color: '#00e5ff' });
+                // Apply overload debuff to all nearby enemies within 250px
+                for (let _ei = 0; _ei < enemies.length; _ei++) {
+                    const _e = enemies[_ei];
+                    if (!_e || !_e.alive) continue;
+                    if (Math.hypot((_e.x + _e.w/2) - _cx, (_e.y + _e.h/2) - _cy) <= 250) {
+                        _e._kvantOverload = true;
+                        _e._kvantOverloadTimer = 300; // 5 seconds
+                        if (!_e._kvantBaseSpeed) _e._kvantBaseSpeed = _e.speed;
+                    }
+                }
+                for (let _p = 0; _p < 40; _p++) {
+                    const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 130;
+                    spawnParticle(_cx + Math.cos(_pa)*_pd, _cy + Math.sin(_pa)*_pd, '#00e5ff', 0.85);
+                }
+                keys['KeyE'] = false;
+            }
+        }
+        if (tank.kvantUltActive) {
+            tank.kvantUltTimer--;
+            if (tank.kvantUltTimer <= 0) tank.kvantUltActive = false;
+        }
+        if ((tank.kvantUltCooldown || 0) > 0) tank.kvantUltCooldown--;
+        // Tick overload debuff on enemies each frame; explode on expiry
+        for (let _oi = enemies.length - 1; _oi >= 0; _oi--) {
+            const _oe = enemies[_oi];
+            if (!_oe || !_oe.alive || !_oe._kvantOverload) continue;
+            _oe._kvantOverloadTimer--;
+            // 20% speed penalty each frame
+            _oe.speed = (_oe._kvantBaseSpeed || _oe.speed) * 0.8;
+            if (_oe._kvantOverloadTimer <= 0) {
+                // Debuff expired — Квант explosion: cyan shockwave burst
+                _oe._kvantOverload = false;
+                _oe.speed = _oe._kvantBaseSpeed || _oe.speed;
+                _oe._kvantBaseSpeed = null;
+                const _ex = _oe.x + _oe.w/2, _ey = _oe.y + _oe.h/2;
+                // Cyan shockwave ring (handled in tanks.js via color flag)
+                if (typeof objects !== 'undefined') {
+                    objects.push({ type: 'shockwave', x: _ex, y: _ey, radius: 5, speed: 14, life: 18, maxLife: 18, color: '#00e5ff' });
+                    objects.push({ type: 'shockwave', x: _ex, y: _ey, radius: 5, speed: 8,  life: 14, maxLife: 14, color: '#00e5ff' });
+                }
+                // Cyan particles burst
+                if (typeof spawnParticle === 'function') {
+                    for (let _pp = 0; _pp < 18; _pp++) {
+                        const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 45;
+                        spawnParticle(_ex + Math.cos(_pa)*_pd, _ey + Math.sin(_pa)*_pd, '#00e5ff', 0.85);
+                    }
+                }
+                _oe.hp -= 80;
+                if (_oe.hp <= 0) {
+                    if (typeof objects !== 'undefined') objects.push({ type: 'shockwave', x: _ex, y: _ey, radius: 5, speed: 18, life: 20, maxLife: 20, color: '#00e5ff' });
+                    if (typeof spawnExplosion === 'function') spawnExplosion(_ex, _ey, 50);
+                    enemies.splice(_oi, 1);
+                    if (typeof gainTrophies === 'function') gainTrophies(1);
+                    // Trigger win immediately if this was the last enemy alive
+                    // (updatePhysics win-check may not fire correctly for kills originating outside physics.js)
+                    if (enemies.length === 0 && gameState === 'playing' && currentMode !== 'training' && currentMode !== 'war') {
+                        gameState = 'win';
+                        if (!window._customMapActive) {
+                            if (currentMode === 'single')   { coins += 30; trophies += 3;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);  }
+                            else if (currentMode === 'team')       { coins += 40; trophies += 5;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 5);  }
+                            else if (currentMode === 'duel')       { coins += 20; trophies += 2;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 2);  }
+                            else if (currentMode === 'onevsall')   { coins += 80; trophies += 10; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10); }
+                            else if (currentMode === 'bossfight')  { coins += 300; trophies += 25; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 25); }
+                            if (typeof saveProgress === 'function') saveProgress();
+                        }
+                        if (typeof syncResultOverlay === 'function') syncResultOverlay('win');
+                    }
+                }
+            }
+        }
         if (tank.isAutopilotActive) {
             tank.autoPilotTimer--;
             if (tank.autoPilotTimer <= 0) {
                 tank.isAutopilotActive = false;
+            }
+        }
+        // Tick player overload debuff (applied by enemy Квант bot ult)
+        if (tank._kvantOverload) {
+            tank._kvantOverloadTimer--;
+            tank.speed = (tank._kvantBaseSpeed || tank.speed) * 0.8;
+            if (tank._kvantOverloadTimer <= 0) {
+                tank._kvantOverload = false;
+                tank.speed = tank._kvantBaseSpeed || tank.speed;
+                tank._kvantBaseSpeed = null;
+                const _ptx = tank.x + tank.w/2, _pty = tank.y + tank.h/2;
+                if (typeof objects !== 'undefined') {
+                    objects.push({ type: 'shockwave', x: _ptx, y: _pty, radius: 5, speed: 14, life: 18, maxLife: 18, color: '#00e5ff' });
+                    objects.push({ type: 'shockwave', x: _ptx, y: _pty, radius: 5, speed: 8,  life: 14, maxLife: 14, color: '#00e5ff' });
+                }
+                for (let _pp = 0; _pp < 18; _pp++) {
+                    const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 45;
+                    if (typeof spawnParticle === 'function') spawnParticle(_ptx + Math.cos(_pa)*_pd, _pty + Math.sin(_pa)*_pd, '#00e5ff', 0.85);
+                }
+                tank.hp -= 80;
+                if (tank.hp <= 0 && gameState === 'playing') {
+                    tank.alive = false;
+                    gameState = 'lose';
+                    if (typeof syncResultOverlay === 'function') syncResultOverlay('lose');
+                }
             }
         }
         if (tank.autoPilotCooldown > 0) tank.autoPilotCooldown--;
@@ -5053,6 +5181,7 @@ function updateShopButtonStyles() {
         'electric': 'selectElectricTank',
         'burovoy': 'selectBurovoyTank',
         'roman': 'selectRomanTank',
+        'kvant': 'selectKvantTank',
         'pyro': 'selectPyroTank',
         'air': 'selectAirTank',
         'spartan': 'selectSpartanTank',
@@ -5066,7 +5195,8 @@ function updateShopButtonStyles() {
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'egyptian': 'legendary', 'robot': 'legendary',
         'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'burovoy': 'mythic',
-        'roman': 'imitator',
+        'roman': 'chromatic',
+        'kvant': 'chromatic',
         'pyro': 'rare',
         'air': 'rare',
         'mechDiy': 'rare',
@@ -5483,7 +5613,7 @@ function updateTankDetailButton(type) {
         'fire': 'super', 'waterjet': 'super', 'mine': 'super',
         'buratino': 'epic', 'musical': 'epic', 'medical': 'epic',
         'toxic': 'legendary', 'mirror': 'legendary', 'egyptian': 'legendary', 'robot': 'legendary',
-        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'burovoy': 'mythic', 'time': 'imitator', 'imitator': 'imitator', 'roman': 'imitator',
+        'illuminat': 'mythic', 'plasma': 'mythic', 'electric': 'mythic', 'burovoy': 'mythic', 'time': 'chromatic', 'imitator': 'chromatic', 'roman': 'chromatic', 'kvant': 'chromatic',
         'spartan': 'super', 'mechDiy': 'rare', 'mechShield': 'super', 'mechRocket': 'epic',
         'kamikaze': 'limited'
     };

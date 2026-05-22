@@ -6,7 +6,7 @@
 //   'off' → console is fully hidden; button/shortcut do nothing
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ADMIN_ENABLED = 'off'; // ← set to 'off' to completely hide the console
+const ADMIN_ENABLED = 'on'; // ← set to 'off' to completely hide the console
 
 // If admin is disabled, expose a no-op and hide all entry points
 if (ADMIN_ENABLED !== 'on') {
@@ -209,6 +209,16 @@ if (ADMIN_ENABLED !== 'on') {
         } else if (command.startsWith('/unpart')) {
             const a = parseInt(command.substring(7).trim());
             if (!isNaN(a)&&a>0) { parts=-a; localStorage.setItem('tankParts',parts); updateCoinDisplay(); saveProgress(); console.log(`Parts: ${parts}`); } else console.log('Usage: /unpart N');
+        } else if (command.toUpperCase() === '/EX') {
+            // Secret experiment container — always drops a tank of any rarity
+            if (typeof unlockRandomTankNew === 'function') {
+                const result = unlockRandomTankNew(true, {
+                    rarityOverride: { 'rare': 25, 'super_rare': 20, 'epic': 18, 'legendary': 15, 'mythic': 12, 'chromatic': 10 }
+                });
+                console.log('[EX] Experiment container opened:', result);
+            } else {
+                console.log('[EX] unlockRandomTankNew not available');
+            }
         } else if (command === '/aid' || command === '/commands') {
             const helpText = [
                 '╔══════════════════════════════════════╗',
@@ -228,6 +238,7 @@ if (ADMIN_ENABLED !== 'on') {
                 '  /clear ic  Сбросить иконки',
                 '  /clear ac  Сбросить достижения',
                 '  /meg on    Полный сброс профиля',
+                '  /EX        🧪 Секретный эксперимент',
                 '  /aid       Этот список',
                 '╚══════════════════════════════════════╝',
             ].join('\n');

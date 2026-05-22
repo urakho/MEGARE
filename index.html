@@ -205,7 +205,7 @@
         
         <!-- Shop tab buttons -->
         <div class="shop-tabs">
-            <button class="shop-tab-btn shop-tab-active" data-shop-tab="shopTabContainers">📦 Контейнеры</button>
+            <button class="shop-tab-btn shop-tab-active" data-shop-tab="shopTabContainers">📦 Боксы</button>
             <button class="shop-tab-btn" data-shop-tab="shopTabLimited" style="display:inline-flex;align-items:center;gap:6px;">
                 <svg width="18" height="18" viewBox="0 0 28 28" style="flex-shrink:0;overflow:visible;">
                     <circle cx="14" cy="14" r="12" fill="rgba(233,30,99,0.15)" stroke="#e91e63" stroke-width="1.5"/>
@@ -227,8 +227,10 @@
             <button class="shop-tab-btn" data-shop-tab="shopTabOther">🎟️ Другое</button>
         </div>
 
-        <!-- CONTAINERS TAB -->
+        <!-- BOXES TAB -->
         <div id="shopTabContainers" class="shop-tab-pane">
+            <!-- Section: Контейнеры -->
+            <p style="width:80%;text-align:left;margin:4px 0 8px 0;font-size:13px;font-weight:700;color:#aaa;letter-spacing:0.08em;text-transform:uppercase;">📦 Контейнеры</p>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
@@ -242,12 +244,6 @@
                 <button id="buyContainer" class="btn btn-buy">Купить (100 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
-                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
-                <p style="margin:5px 0; font-size:14px;">Контейнер с техническими деталями для улучшений. Содержит детали и монеты.</p>
-                <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
-            </div>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px #ff00de;">Легендарный Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Высокий шанс получить Gems, редких персонажей!</p>
@@ -258,6 +254,14 @@
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#9b59b6; text-shadow:0 0 5px #8e44ad;">Омега Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
+            </div>
+            <!-- Section: Ящики -->
+            <p style="width:80%;text-align:left;margin:14px 0 8px 0;font-size:13px;font-weight:700;color:#aaa;letter-spacing:0.08em;text-transform:uppercase;">🗃️ Ящики</p>
+            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
+                <img src="png/cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
+                <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
+                <p style="margin:5px 0; font-size:14px;">Контейнер с техническими деталями для улучшений. Содержит детали и монеты.</p>
+                <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
             </div>
         </div>
 
@@ -472,6 +476,10 @@
             <div>
                 <canvas id="romanTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
                 <button id="selectRomanTank" class="btn btn-rainbow">Римский</button>
+            </div>
+            <div>
+                <canvas id="kvantTankPreview" width="150" height="150" class="tank-preview-rainbow" style="border-radius:8px;"></canvas>
+                <button id="selectKvantTank" class="btn btn-rainbow">Квант</button>
             </div>
             <!-- LIMITED -->
             <div id="kamikazeTankEntry" style="display:none;">

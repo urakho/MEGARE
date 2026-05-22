@@ -1,4 +1,4 @@
-// bot.js  pathfinding, navigation grid, enemy AI, ally AI
+﻿// bot.js  pathfinding, navigation grid, enemy AI, ally AI
 
 // Smooth turret rotation: interpolate current angle toward target
 function smoothTurretRotation(entity, targetAngle, rotateSpeed = 0.12) {
@@ -744,6 +744,28 @@ function updateEnemyAI() {
                 if (typeof castBurovoyUltimate === 'function') castBurovoyUltimate(enemy);
                 enemy.burovoyUltCooldown = 720;
                 enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, 45);
+            }
+
+            // Квант enemy ult: periodic overload wave — slows & damages player if nearby
+            if (enemy.kvantUltCooldown === undefined) enemy.kvantUltCooldown = 240;
+            if (enemy.kvantUltCooldown > 0) enemy.kvantUltCooldown--;
+            if (enemy.tankType === 'kvant' && enemy.kvantUltCooldown <= 0 && distToNearest < 300 && Math.random() < 0.02) {
+                const _kEx = enemy.x + enemy.w/2, _kEy = enemy.y + enemy.h/2;
+                objects.push({ type: 'shockwave', x: _kEx, y: _kEy, radius: 10, speed: 18, life: 14, maxLife: 14, color: '#00e5ff' });
+                if (typeof tank !== 'undefined' && tank.alive) {
+                    const _kTx = tank.x + tank.w/2, _kTy = tank.y + tank.h/2;
+                    if (Math.hypot(_kTx - _kEx, _kTy - _kEy) <= 250) {
+                        tank._kvantOverload = true;
+                        tank._kvantOverloadTimer = 300;
+                        if (!tank._kvantBaseSpeed) tank._kvantBaseSpeed = tank.speed;
+                    }
+                }
+                for (let _kp = 0; _kp < 30; _kp++) {
+                    const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 130;
+                    if (typeof spawnParticle === 'function') spawnParticle(_kEx + Math.cos(_pa)*_pd, _kEy + Math.sin(_pa)*_pd, '#00e5ff', 0.8);
+                }
+                enemy.kvantUltCooldown = 480;
+                enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, 30);
             }
 
             // Roman: activate shield defensive ability when close to targets
@@ -1584,18 +1606,15 @@ function updateEnemyAI() {
                     damage: 125,
                     bounces: 0, maxBounces: 1, spinAngle: 0
                 };
-            } else if (tt === 'egyptian') {
-                b = {
-                    x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 24,
-                    y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 24,
-                    w: 10, h: 4,
-                    vx: Math.cos(enemy.turretAngle) * 7.2,
-                    vy: Math.sin(enemy.turretAngle) * 7.2,
-                    life: 110,
-                    owner: 'enemy', team: enemy.team,
-                    type: 'egyptArrow',
-                    damage: 100
-                };
+            } else if (tt === 'kvant') {
+                // Квант enemy: morphing orb (kvantMain) like the player
+                const _kAng = enemy.turretAngle, _kSpd = 5.5;
+                const _kSX = enemy.x + enemy.w/2 + Math.cos(_kAng)*24;
+                const _kSY = enemy.y + enemy.h/2 + Math.sin(_kAng)*24;
+                const _kFcd = enemy._kvantOverload ? 130 : 65;
+                bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'enemy', team:enemy.team, type:'kvantMain', damage:100, morphTimer:90 });
+                enemy.fireCooldown = _kFcd;
+                b = null;
             } else if (tt === 'pyro') {
                 // Pyro: incendiary shell that sets targets on fire
                 b = {
@@ -1685,9 +1704,11 @@ function updateEnemyAI() {
                 const w = (tt === 'ice') ? 8 : 9;
                 b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: w, h: w, vx:Math.cos(enemy.turretAngle)*6, vy:Math.sin(enemy.turretAngle)*6, life:100, owner:'enemy', team: enemy.team, type: (tt === 'ice') ? 'ice' : 'normal' };
             }
+            // Apply Квант overload: -20% damage to bullets fired by debuffed enemies
+            if (b && enemy._kvantOverload && b.damage) b.damage = Math.round(b.damage * 0.8);
             if (b) bullets.push(b);
             // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'egyptian') ? 45 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
@@ -1872,6 +1893,28 @@ function updateAllyAI() {
             if (typeof castBurovoyUltimate === 'function') castBurovoyUltimate(ally);
             ally.burovoyUltCooldown = 720;
             ally.fireCooldown = Math.max(ally.fireCooldown || 0, 45);
+        }
+
+        // Квант ally ult: periodic overload wave — slows & debuffs nearby enemies
+        if (ally.kvantUltCooldown === undefined) ally.kvantUltCooldown = 240;
+        if (ally.kvantUltCooldown > 0) ally.kvantUltCooldown--;
+        if (ally.tankType === 'kvant' && ally.kvantUltCooldown <= 0 && nd < 300 && Math.random() < 0.02) {
+            const _kAx = ally.x + ally.w/2, _kAy = ally.y + ally.h/2;
+            objects.push({ type: 'shockwave', x: _kAx, y: _kAy, radius: 10, speed: 18, life: 14, maxLife: 14, color: '#00e5ff' });
+            for (let _kei = 0; _kei < enemies.length; _kei++) {
+                const _ke = enemies[_kei];
+                if (!_ke || !_ke.alive) continue;
+                if (Math.hypot((_ke.x + _ke.w/2) - _kAx, (_ke.y + _ke.h/2) - _kAy) <= 250) {
+                    _ke._kvantOverload = true;
+                    _ke._kvantOverloadTimer = 300;
+                    if (!_ke._kvantBaseSpeed) _ke._kvantBaseSpeed = _ke.speed;
+                }
+            }
+            for (let _kp = 0; _kp < 30; _kp++) {
+                const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 130;
+                if (typeof spawnParticle === 'function') spawnParticle(_kAx + Math.cos(_pa)*_pd, _kAy + Math.sin(_pa)*_pd, '#00e5ff', 0.8);
+            }
+            ally.kvantUltCooldown = 480;
         }
 
         // Movement towards nearest enemy (reuse enemy logic: pathfinding then small-step fallback)
@@ -2186,18 +2229,14 @@ function updateAllyAI() {
                             damage: 125,
                             bounces: 0, maxBounces: 1, spinAngle: 0
                         };
-                    } else if (tt === 'egyptian') {
-                        b = {
-                            x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 24,
-                            y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 24,
-                            w: 10, h: 4,
-                            vx: Math.cos(ally.turretAngle) * 7.2,
-                            vy: Math.sin(ally.turretAngle) * 7.2,
-                            life: 110,
-                            owner: 'ally', team: ally.team,
-                            type: 'egyptArrow',
-                            damage: 100
-                        };
+                    } else if (tt === 'kvant') {
+                        // Квант ally: morphing orb (kvantMain) like the player
+                        const _kAng = ally.turretAngle, _kSpd = 5.5;
+                        const _kSX = ally.x + ally.w/2 + Math.cos(_kAng)*24;
+                        const _kSY = ally.y + ally.h/2 + Math.sin(_kAng)*24;
+                        bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'ally', team:ally.team, type:'kvantMain', damage:120, morphTimer:90 });
+                        ally.fireCooldown = 65;
+                        b = null;
                     } else if (tt === 'spartan') {
                         // Ally spartan: piercing spear
                         b = {
@@ -2227,7 +2266,7 @@ function updateAllyAI() {
                         };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }
