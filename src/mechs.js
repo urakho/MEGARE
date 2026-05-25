@@ -339,7 +339,7 @@ function drawMechDiyPreview(canvasEl, isUnlocked) {
 window.mechDiyMeta = {
     name: "Штурмовой мех",
     description: "Гибкий боевой мех с двумя плазменными пушками. Он любит аккуратную игру, даёт хороший темп атаки и заметно слабеет, если не следить за энергией. Это мех для тех, кто умеет держать ритм, считать момент и не тратить ресурсы впустую.",
-    rarity: "Редкий"
+    rarity: "Необычная"
 };
 window.mechDiyBgGradient = ['#2ecc71', '#27ae60'];
 window.mechDiyBaseColor  = '#1a8a3e';
@@ -347,9 +347,9 @@ window.mechDiyBaseColor  = '#1a8a3e';
 window.mechShieldMeta = {
     name: "Щитовой мех",
     description: "Тяжёлый мех с защитным корпусом и мощным фронтом. Он движется медленнее остальных, зато уверенно держит удар и хорошо давит в лоб. Его стиль — выдержать натиск, пережить опасный момент и сломать строй противника силой брони.",
-    rarity: "Сверхредкий"
+    rarity: "Редкая"
 };
-window.mechShieldBgGradient = ['#3498db', '#5dade2'];
+window.mechShieldBgGradient = ['#f9e04b', '#f1c40f'];
 window.mechShieldBaseColor  = '#1a3a6e';
 
 // ── Paralysis overlay (yellow-electric stun visual for mechDiy) ───────────────
@@ -690,8 +690,9 @@ function drawMechShieldPreview(canvasEl, isUnlocked) {
 
         if (isUnlocked) {
             const bg = ctx.createLinearGradient(0, 0, 0, H);
-            bg.addColorStop(0, '#3498db');
-            bg.addColorStop(1, '#5dade2');
+            const [bgStart, bgEnd] = window.mechShieldBgGradient || ['#f9e04b', '#f1c40f'];
+            bg.addColorStop(0, bgStart);
+            bg.addColorStop(1, bgEnd);
             ctx.fillStyle = bg;
         } else {
             ctx.fillStyle = '#333';
@@ -803,10 +804,11 @@ function showMechShieldModal(ctx, canvas, modal) {
             return;
         }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Blue rarity background
+        // Rare rarity background
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        grad.addColorStop(0, '#3498db');
-        grad.addColorStop(1, '#5dade2');
+        const [bgStart, bgEnd] = window.mechShieldBgGradient || ['#f9e04b', '#f1c40f'];
+        grad.addColorStop(0, bgStart);
+        grad.addColorStop(1, bgEnd);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         const side = Math.min(canvas.width, canvas.height) / 2;

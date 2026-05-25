@@ -234,31 +234,31 @@
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
-                <p style="margin:5px 0; font-size:14px;">Маленький контейнер с хорошим шансом на награды!</p>
+                <p style="margin:5px 0; font-size:14px;">Небольшой контейнер только с монетами.</p>
                 <button id="buyMiniContainer" class="btn btn-buy">Купить (25 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/cont1.png" alt="Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#f1c40f;">Бронзовый Контейнер</p>
-                <p style="margin:5px 0; font-size:14px;">Содержит случайное количество монет (10-100) и шанс на обычного персонажа.</p>
+                <p style="margin:5px 0; font-size:14px;">Контейнер с монетами и иногда гемами. Танки не выпадают.</p>
                 <button id="buyContainer" class="btn btn-buy">Купить (100 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px #ff00de;">Легендарный Контейнер</p>
-                <p style="margin:5px 0; font-size:14px;">Высокий шанс получить Gems, редких персонажей!</p>
+                <p style="margin:5px 0; font-size:14px;">Ценный контейнер с монетами, гемами и шансом на танк.</p>
                 <button id="buySuperContainer" class="btn btn-buy">Купить (1000 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/omega-cont.png" alt="Омега Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#9b59b6; text-shadow:0 0 5px #8e44ad;">Омега Контейнер</p>
-                <p style="margin:5px 0; font-size:14px;">Максимальные награды! Редкие танки и горы ресурсов.</p>
+                <p style="margin:5px 0; font-size:14px;">Щедрый контейнер с монетами, гемами и шансом на редкий танк.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/alpha-cont.png" alt="Альфа Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e74c3c; text-shadow:0 0 8px #ff4444;">Альфа Контейнер</p>
-                <p style="margin:5px 0; font-size:14px;">Гарантированный танк! 5–7 слотов с монетами, гемами и танками.</p>
+                <p style="margin:5px 0; font-size:14px;">Премиальный контейнер с гарантированным танком и дополнительными ценными наградами.</p>
                 <button id="buyAlphaContainer" class="btn btn-buy">Купить (12000 монет)</button>
             </div>
             <!-- Section: Ящики -->
@@ -266,7 +266,7 @@
             <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
                 <img src="png/cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
-                <p style="margin:5px 0; font-size:14px;">Контейнер с техническими деталями для улучшений. Содержит детали и монеты.</p>
+                <p style="margin:5px 0; font-size:14px;">Ящик с монетами и деталями для улучшений.</p>
                 <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
             </div>
         </div>
@@ -492,6 +492,10 @@
                 <canvas id="kamikazeTankPreview" width="150" height="150" style="border:2px solid #ff4400; border-radius:8px; box-shadow:0 0 10px #ff4400;"></canvas>
                 <button id="selectKamikazeTank" class="btn btn-shop" style="background:linear-gradient(90deg,#ff4400,#cc2200);border-color:#ff4400;box-shadow:0 0.375rem 0 rgba(120,20,0,0.85);">☠️ Камикадзе</button>
             </div>
+            <div id="myasnoyTankEntry" style="display:none;">
+                <canvas id="myasnoyTankPreview" width="150" height="150" style="border:2px solid #ff4400; border-radius:8px; box-shadow:0 0 10px #ff4400;"></canvas>
+                <button id="selectMyasnoyTank" class="btn btn-shop" style="background:linear-gradient(90deg,#ff4400,#cc2200);border-color:#ff4400;box-shadow:0 0.375rem 0 rgba(120,20,0,0.85);"><span style="font-family:'Segoe UI Emoji','Noto Color Emoji','Apple Color Emoji',sans-serif;">&#129656;</span> Мясной</button>
+            </div>
         </div>
         <!-- Mechs panel -->
         <div id="charGridMechs" class="char-grid" style="display:none; align-items:center; justify-items:center;">
@@ -527,6 +531,7 @@
         <h2 id="tankDetailTitle" class="modal-title">Танк</h2>
         <p id="tankDetailRarity" style="margin:0 0 4px 0; font-size:20px; color:#f1c40f;">Редкость</p>
         <div id="tankDetailTrio" style="margin:0 0 10px 0; display:none;"></div>
+        <div id="tankDetailTabs" style="display:none; margin:0 0 12px 0; gap:8px; flex-wrap:wrap;"></div>
         <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:16px;">
             <canvas id="tankDetailCanvas" width="200" height="200" style="flex-shrink:0; border:2px solid #444; border-radius:8px;"></canvas>
             <div style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">

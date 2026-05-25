@@ -594,6 +594,34 @@ function updateEnemyAI() {
                 isLastSeenPlayer: true
             }];
         }
+        if ((enemy.myasnoyHypnoTimer || 0) > 0) {
+            enemy.myasnoyHypnoTimer--;
+            enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, 12);
+            enemy.path = [];
+            enemy.pathIndex = 0;
+            enemy.pathRecalc = 0;
+            if (typeof tank !== 'undefined' && tank && tank.alive !== false) {
+                const _hypDx = (tank.x + tank.w / 2) - (enemy.x + enemy.w / 2);
+                const _hypDy = (tank.y + tank.h / 2) - (enemy.y + enemy.h / 2);
+                const _hypAng = Math.atan2(_hypDy, _hypDx);
+                const _hypDist = Math.hypot(_hypDx, _hypDy);
+                const _hypMoveDist = Math.max(0.6, (enemy.speed || 0) / 1.5);
+                smoothTurretRotation(enemy, _hypAng, 0.08);
+                enemy.baseAngle = _hypAng;
+                if (_hypDist > Math.max(enemy.w || 38, enemy.h || 38) * 1.05) {
+                    if (!moveSmallSteps(enemy, _hypAng, Math.min(_hypMoveDist, _hypDist))) {
+                        const _hypSideAngles = [_hypAng + Math.PI/6, _hypAng - Math.PI/6, _hypAng + Math.PI/3, _hypAng - Math.PI/3];
+                        for (const _altAng of _hypSideAngles) {
+                            if (moveSmallSteps(enemy, _altAng, _hypMoveDist * 0.9)) {
+                                enemy.baseAngle = _altAng;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            continue;
+        }
         if (targets.length === 0) {
             if (enemy.tankType === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
                 updateBurovoyDrillAttack(enemy, false, { damagePerSecond: 30 });
@@ -2060,7 +2088,7 @@ function updateAllyAI() {
             } else { ally.heat = 0; ally.overheated = false; }
             // --------------------------------
 
-        const mgShootProbA = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
+        const mgShootProbA = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : (tt === 'myasnoy') ? 0.55 : shootProb;
         const burovoyTargetCloseA = tt === 'burovoy' && !ally.burovoyBurrowActive && nearest && Math.hypot(
             (nearest.x + (nearest.w || 0) / 2) - (ally.x + ally.w / 2),
             (nearest.y + (nearest.h || 0) / 2) - (ally.y + ally.h / 2)
@@ -2251,6 +2279,28 @@ function updateAllyAI() {
                             damage: 80,
                             hitEntities: []
                         };
+                    } else if (tt === 'myasnoy') {
+                        // Body bot: bio-spray particles, don't use flames (no wood burning)
+                        const _myasnoyBodyDmg = 1.5 * ((ally.isMyasnoyBody && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1);
+                        const _mbSpread = 0.70;
+                        const _mbCount = 14;
+                        for (let _mbi = 0; _mbi < _mbCount; _mbi++) {
+                            const t = _mbCount <= 1 ? 0.5 : _mbi / (_mbCount - 1);
+                            const ang = ally.turretAngle + (t - 0.5) * _mbSpread + (Math.random() - 0.5) * 0.08;
+                            const spd = 4.5 + Math.random() * 1.5;
+                            bullets.push({
+                                x: ally.x + ally.w/2 + Math.cos(ang)*18,
+                                y: ally.y + ally.h/2 + Math.sin(ang)*18,
+                                w: 5, h: 5,
+                                vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+                                life: 42, owner: 'ally', team: ally.team,
+                                type: 'myasnoyBio', damage: _myasnoyBodyDmg,
+                                veinSeed: Math.random() * Math.PI * 2,
+                                veinTwist: 0.8 + Math.random() * 0.9
+                            });
+                        }
+                        ally.fireCooldown = 12;
+                        b = null;
                     } else if (tt === 'air') {
                         // Ally air: knockback wind gust
                         b = {
@@ -2266,7 +2316,7 @@ function updateAllyAI() {
                         };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'myasnoy') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }

@@ -1811,6 +1811,31 @@ function shoot() {
             explodeRadius: 50
         });
         tank.fireCooldown = 50;
+    } else if (tankType === 'myasnoy') {
+        // Bio-spray: 14 organic globs in a wide cone — own bullet type, doesn't burn wood
+        // Base damage is scaled later in main.js so it is not applied twice.
+        const _myDmg = 1.5;
+        const _mySpread = 0.70;
+        const _myCount = 14;
+        for (let _mi = 0; _mi < _myCount; _mi++) {
+            const t = _myCount <= 1 ? 0.5 : _mi / (_myCount - 1);
+            const ang = tank.turretAngle + (t - 0.5) * _mySpread + (Math.random() - 0.5) * 0.08;
+            const spd = 4.5 + Math.random() * 1.5;
+            bullets.push({
+                x: tank.x + tank.w/2 + Math.cos(ang) * 18,
+                y: tank.y + tank.h/2 + Math.sin(ang) * 18,
+                w: 5, h: 5,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                life: 42,
+                owner: 'player', team: 0,
+                type: 'myasnoyBio',
+                damage: _myDmg,
+                veinSeed: Math.random() * Math.PI * 2,
+                veinTwist: 0.8 + Math.random() * 0.9
+            });
+        }
+        tank.fireCooldown = 8;
     } else {
         const speed = 5;
         const life = 100;
@@ -1826,7 +1851,7 @@ function shoot() {
             type: tankType
         });
     }
-    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'egyptian' && tankType !== 'pyro' && tankType !== 'burovoy' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical' && tankType !== 'kvant') {
+    if (tankType !== 'fire' && tankType !== 'buratino' && tankType !== 'toxic' && tankType !== 'machinegun' && tankType !== 'electric' && tankType !== 'time' && tankType !== 'imitator' && tankType !== 'robot' && tankType !== 'mine' && tankType !== 'roman' && tankType !== 'egyptian' && tankType !== 'pyro' && tankType !== 'burovoy' && tankType !== 'spartan' && tankType !== 'kamikaze' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'myasnoy' && tankType !== 'ice' && tankType !== 'plasma' && tankType !== 'musical' && tankType !== 'medical' && tankType !== 'kvant') {
         tank.fireCooldown = (tankType === 'mirror' ? 90 : (tankType === 'normal' ? 30 : FIRE_COOLDOWN)); // 1.5sec for mirror, normal 2 shots/s
     }
 }
@@ -2689,6 +2714,7 @@ function updatePhysics() {
                     } else {
                         let dmgDefault = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                         if (b.owner === 'player') dmgDefault = applyPlayerDamage(dmgDefault);
+                        if (b.type === 'myasnoyBio' && b.owner === 'player' && e.isBoss) dmgDefault /= 3;
                         dealDamageToEntity(e, dmgDefault);
                         if (b.type === 'ice' && e.tankType !== 'ice') { e.iceSlowed = true; e.iceSlowedTime = 240; e.frozenEffect = 240; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion

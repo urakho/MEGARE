@@ -147,6 +147,7 @@ const TANK_ATMOSPHERIC_TITLES = {
     mechShield:  { name: 'Энергетическая Стена',               color: '#3f51b5' },
     mechRocket:  { name: 'Гранатомётчик',                      color: '#ff5722' },
     kvant:       { name: 'Квантовое Разрушение',                color: '#00e5ff' },
+    myasnoy:     { name: 'Что это такое?',                     color: '#cc2020' },
 };
 window.TANK_ATMOSPHERIC_TITLES = TANK_ATMOSPHERIC_TITLES;
 
@@ -522,7 +523,8 @@ const tankGemPrices = {
     'robot': 650,     // Легендарный (Рельсотрон + дроны)
     'roman': 800,     // Хроматический
     'kvant': 800,        // Хроматический
-    'kamikaze': 400   // Лимитированный
+    'kamikaze': 400,   // Лимитированный
+    'myasnoy':  500    // Лимитированный
 };
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
@@ -752,6 +754,7 @@ const tankMaxHpByType = {
     'spartan': 320,
     'kamikaze': 300,
     'air': 200,
+    'myasnoy': 280,
     'boss_hell': 7500
 };
 
@@ -790,7 +793,8 @@ const tankMaxSpeedByType = {
     'pyro': 2.75,
     'spartan': 3.0,
     'kamikaze': 3.0,
-    'air': 3.4
+    'air': 3.4,
+    'myasnoy': 3.0
 };
 
 function setTankSpeed(type) {
@@ -924,11 +928,88 @@ const tank = {
     mechShieldDamagePercent: 0,  // 0-100, for red color when damaged
     // mechRocket state
     mechRocketUltCooldown: 0,
+    // Myasnoy separation ultimate
+    myasnoyUltActive: false,
+    myasnoyUltTimer: 0,
+    myasnoyUltCooldown: 0,
+    myasnoyBodyBot: null,
+    myasnoyEyeUltCooldown: 0,
+    myasnoyAttackTimer: 0,
+    myasnoyHypnoBeamTimer: 0,
 };
 
 const EGYPTIAN_SWARM_DURATION = 300;
 const EGYPTIAN_SWARM_COOLDOWN = 900;
 const BUROVOY_ULT_COOLDOWN = 720;
+
+function roundMyasnoyFormHp(value, minValue = 10) {
+    const rounded = Math.round((value || 0) / 10) * 10;
+    return Math.max(minValue, rounded);
+}
+
+function resetTankMatchUltState(unit) {
+    if (!unit) return;
+
+    unit.robotDroneCooldown = 0;
+
+    unit.megaGasUsed = false;
+    unit.plasmaBlastUsed = 0;
+    unit.inversionUsed = 0;
+    unit.teleportCooldown = 0;
+    unit.medicalZoneCooldown = 0;
+    unit.barrageCooldown = 0;
+    unit.soundRicochetCooldown = 0;
+
+    unit.mirrorShieldActive = false;
+    unit.mirrorShieldTimer = 0;
+    unit.mirrorShieldCooldown = 0;
+
+    unit.kamikazeUltActive = false;
+    unit.kamikazeUltCooldown = 0;
+    unit.kamikazeInvincible = false;
+    unit.kamikazeInvincibleTimer = 0;
+    unit.kamikazeDashTimer = 0;
+
+    unit.egyptianSwarmActive = false;
+    unit.egyptianSwarmTimer = 0;
+    unit.egyptianSwarmCooldown = 0;
+
+    unit.burovoyUltCooldown = 0;
+    unit.burovoyBurrowActive = false;
+    unit.burovoyBurrowTimer = 0;
+    unit.burovoyBurrowDuration = 180;
+
+    unit.imitatorActive = false;
+    unit.imitatorTimer = 0;
+    unit.imitatorCooldown = 0;
+    unit.originalTankType = null;
+    unit.originalMaxHp = 250;
+
+    unit.isUltimateActive = false;
+    unit.ultimateTimer = 0;
+    unit.ultimateCooldown = 0;
+    unit.iceUltimate = false;
+
+    unit.mechRocketUltCooldown = 0;
+
+    unit.romanShieldActive = false;
+    unit.romanShieldTimer = 0;
+    unit.romanShieldCooldown = 0;
+
+    unit.myasnoyUltActive = false;
+    unit.myasnoyUltTimer = 0;
+    unit.myasnoyUltCooldown = 0;
+    unit.myasnoyBodyBot = null;
+    unit.myasnoyEyeUltCooldown = 0;
+    unit.myasnoyAttackTimer = 0;
+    unit.myasnoyHypnoBeamTimer = 0;
+    unit.myasnoySeparationAnim = 0;
+    unit.myasnoySeparationAnimMax = 0;
+    unit.myasnoySeparationStartX = 0;
+    unit.myasnoySeparationStartY = 0;
+    unit.myasnoySeparationTargetX = 0;
+    unit.myasnoySeparationTargetY = 0;
+}
 
 // Apply saved tank type properties
 setTankHP(tankType);
@@ -1317,7 +1398,7 @@ function updateMusic() {
     joystickZone.addEventListener('touchend',    endJoystick, { passive: false });
     joystickZone.addEventListener('touchcancel', () => { joystickTouchId = null; resetKnob(joystickKnob); clearMoveKeys(); });
 
-    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'egyptian', 'burovoy', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket', 'ice', 'kvant'];
+    const TANKS_WITH_ULT = ['toxic', 'plasma', 'illuminat', 'mirror', 'egyptian', 'burovoy', 'time', 'imitator', 'electric', 'robot', 'medical', 'buratino', 'musical', 'roman', 'kamikaze', 'mechRocket', 'ice', 'kvant', 'myasnoy'];
 
     function currentTankHasUlt() {
         const tt = typeof tankType !== 'undefined' ? tankType : '';
@@ -1406,6 +1487,16 @@ function updateMusic() {
                     ready: energyRatio >= 1,
                     active: false
                 };
+            }
+            case 'myasnoy': {
+                if (tank.myasnoyUltActive) {
+                    // Eye form: show eye AOE ult cooldown
+                    if ((tank.myasnoyEyeUltCooldown || 0) > 0) {
+                        return { ...getCooldownStatus(tank.myasnoyEyeUltCooldown || 0, 480), visible: true, active: true, text: getCooldownStatus(tank.myasnoyEyeUltCooldown || 0, 480).text };
+                    }
+                    return { visible: true, ratio: 1, text: '👁 ВСПЛЕСК', ready: true, active: true };
+                }
+                return { ...getCooldownStatus(tank.myasnoyUltCooldown || 0, 720), visible: true, active: false, text: tank.myasnoyUltCooldown > 0 ? getCooldownStatus(tank.myasnoyUltCooldown || 0, 720).text : 'ОТДЕЛЕНИЕ' };
             }
             default:
                 return { visible: true, ratio: 1, text: 'READY', ready: true, active: false };
@@ -1644,6 +1735,8 @@ const spartanTankPreview = document.getElementById('spartanTankPreview');
 const spartanTankCtx = spartanTankPreview && spartanTankPreview.getContext ? spartanTankPreview.getContext('2d') : null;
 const kamikazeTankPreview = document.getElementById('kamikazeTankPreview');
 const kamikazeTankCtx = kamikazeTankPreview && kamikazeTankPreview.getContext ? kamikazeTankPreview.getContext('2d') : null;
+const myasnoyTankPreview = document.getElementById('myasnoyTankPreview');
+const myasnoyTankCtx = myasnoyTankPreview && myasnoyTankPreview.getContext ? myasnoyTankPreview.getContext('2d') : null;
 const mechDiyTankPreview = document.getElementById('mechDiyPreview');
 const mechDiyTankCtx = mechDiyTankPreview && mechDiyTankPreview.getContext ? mechDiyTankPreview.getContext('2d') : null;
 const mechShieldTankPreview = document.getElementById('mechShieldPreview');
@@ -1765,6 +1858,7 @@ function startGame(mode) {
     tank.burnDps = 0;
     tank.windPushVx = 0;
     tank.windPushVy = 0;
+    resetTankMatchUltState(tank);
     
     // Reset mechDiy energy and burst state
     const _eUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechDiy', 'energy') : 0;
@@ -1793,6 +1887,20 @@ function startGame(mode) {
     }
     // Reset mechRocket ult cooldown
     tank.mechRocketUltCooldown = 0;
+    // Reset myasnoy separation ult
+    tank.myasnoyUltActive = false;
+    tank.myasnoyUltTimer = 0;
+    tank.myasnoyUltCooldown = 0;
+    tank.myasnoyBodyBot = null;
+    tank.myasnoyEyeUltCooldown = 0;
+    tank.myasnoyAttackTimer = 0;
+    tank.myasnoyHypnoBeamTimer = 0;
+    tank.myasnoySeparationAnim = 0;
+    tank.myasnoySeparationAnimMax = 0;
+    tank.myasnoySeparationStartX = 0;
+    tank.myasnoySeparationStartY = 0;
+    tank.myasnoySeparationTargetX = 0;
+    tank.myasnoySeparationTargetY = 0;
     
     // Reset imitator transformation ability
     tank.imitatorActive = false;
@@ -1977,8 +2085,14 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.originalTankType = null; tank.originalMaxHp = 250;
     tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
     tank.windPushVx = 0; tank.windPushVy = 0;
+    resetTankMatchUltState(tank);
     tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0; tank.iceUltimate = false;
     tank.romanShieldActive = false; tank.romanShieldTimer = 0; tank.romanShieldCooldown = 0;
+    tank.myasnoyUltActive = false; tank.myasnoyUltTimer = 0; tank.myasnoyUltCooldown = 0;
+    tank.myasnoyBodyBot = null; tank.myasnoyEyeUltCooldown = 0; tank.myasnoyAttackTimer = 0; tank.myasnoyHypnoBeamTimer = 0;
+    tank.myasnoySeparationAnim = 0; tank.myasnoySeparationAnimMax = 0;
+    tank.myasnoySeparationStartX = 0; tank.myasnoySeparationStartY = 0;
+    tank.myasnoySeparationTargetX = 0; tank.myasnoySeparationTargetY = 0;
 
     // Recalculate canvas size for current orientation
     DISPLAY_W = window.innerWidth;
@@ -1991,32 +2105,20 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     worldHeight = worldH || 700;
     canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
 
-    // Determine player team spawn center
-    let playerTeamCenterX, playerTeamCenterY;
-    if (playerSpawn) {
-        playerTeamCenterX = playerSpawn.x + playerSpawn.w / 2;
-        playerTeamCenterY = playerSpawn.y + playerSpawn.h / 2;
-    } else {
-        playerTeamCenterX = 50 + 19; // tank center
-        playerTeamCenterY = DISPLAY_H - 80 + 19;
-    }
+    const _spawnMarkerToTankPos = (spawn, w = 38, h = 38, fallbackX = 0, fallbackY = 0) => {
+        if (!spawn) return { x: fallbackX, y: fallbackY };
+        const spawnW = typeof spawn.w === 'number' ? spawn.w : 50;
+        const spawnH = typeof spawn.h === 'number' ? spawn.h : 50;
+        return {
+            x: spawn.x + (spawnW - w) / 2,
+            y: spawn.y + (spawnH - h) / 2
+        };
+    };
 
-    // Calculate spawn positions for player and allies in a circle
-    const totalTeamMembers = 1 + (allySpawns ? allySpawns.length : 0); // player + allies
-    const teamSpawnPositions = [];
-    for (let i = 0; i < totalTeamMembers; i++) {
-        const angle = (Math.PI * 2 * i) / totalTeamMembers;
-        const offsetX = Math.cos(angle) * 150;
-        const offsetY = Math.sin(angle) * 150;
-        teamSpawnPositions.push({
-            x: playerTeamCenterX + offsetX - 19, // adjust for tank center
-            y: playerTeamCenterY + offsetY - 19
-        });
-    }
-
-    // Player spawns at first position
-    tank.x = teamSpawnPositions[0].x;
-    tank.y = teamSpawnPositions[0].y;
+    // Player uses the editor marker directly instead of being redistributed around it
+    const _playerSpawnPos = _spawnMarkerToTankPos(playerSpawn, tank.w, tank.h, 50, DISPLAY_H - 80);
+    tank.x = _playerSpawnPos.x;
+    tank.y = _playerSpawnPos.y;
     cameraFollow = true;
 
     // Inject custom objects (with correct colors)
@@ -2042,7 +2144,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         time:'#16a085',     imitator:'#7f8c8d', roman:'#c0392b'
     };
     const spawnPositions = (enemySpawns && enemySpawns.length > 0)
-        ? enemySpawns.map(o => ({ x: o.x + 6, y: o.y + 6 }))
+        ? enemySpawns.map(o => _spawnMarkerToTankPos(o, 38, 38, o.x + 6, o.y + 6))
         : [
             { x: worldWidth - 80,  y: 80 },
             { x: 80,               y: worldHeight - 80 },
@@ -2054,15 +2156,8 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         // In 'solo' mode each enemy gets its own team (2, 3, 4...) so they fight each other
         const teamId = (enemyMode === 'solo') ? (i + 2) : 1;
-        // Scatter spawn position around center of map to keep enemies spread out
-        const centerX = worldWidth / 2;
-        const centerY = worldHeight / 2;
-        const scatter = 150;
-        const angle = (Math.PI * 2 * i) / Math.max(spawnPositions.length, 1);
-        const offsetX = Math.cos(angle) * scatter;
-        const offsetY = Math.sin(angle) * scatter;
         return {
-            x: centerX + offsetX, y: centerY + offsetY, w: 38, h: 38,
+            x: pos.x, y: pos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#e74c3c',
             tankType: tt,
             hp: (tankMaxHpByType[tt] || 300),
@@ -2077,13 +2172,11 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         };
     });
 
-    // Spawn allies (friendly tanks on player team)
-    // Allies spawn in remaining positions of the player team circle
+    // Spawn allies (friendly tanks on player team) on their exact editor markers
     const alliedTanks = (allySpawns && allySpawns.length > 0) ? allySpawns.map((spawn, i) => {
         // Random type for allied tanks
         const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
-        // Use the calculated team spawn positions (skip index 0 which is player)
-        const spawnPos = teamSpawnPositions[i + 1];
+        const spawnPos = _spawnMarkerToTankPos(spawn, 38, 38, tank.x + 50 + i * 44, tank.y);
         return {
             x: spawnPos.x, y: spawnPos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#2ecc71',
@@ -2198,6 +2291,9 @@ if (characterBtn) characterBtn.addEventListener('click', () => {
         // Show kamikaze entry only if owned
         const _kEntry = document.getElementById('kamikazeTankEntry');
         if (_kEntry) _kEntry.style.display = unlockedTanks.includes('kamikaze') ? '' : 'none';
+        // Show myasnoy entry only if owned
+        const _myEntry = document.getElementById('myasnoyTankEntry');
+        if (_myEntry) _myEntry.style.display = unlockedTanks.includes('myasnoy') ? '' : 'none';
     } 
 });
 if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
@@ -2426,17 +2522,67 @@ function _renderLimitedShopItems() {
     if (!container) return;
     container.innerHTML = '';
 
-    // No active limited offers at the moment
-    container.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.45);padding:40px 20px;font-size:14px;">
-        <div style="font-size:36px;margin-bottom:12px;">⏳</div>
-        <div style="font-weight:bold;margin-bottom:6px;color:rgba(233,30,99,0.7);">Нет активных предложений</div>
-        <div>Загляните позже — скоро появятся новые лимитированные товары!</div>
+    const tankId = 'myasnoy';
+    const price = (typeof tankGemPrices !== 'undefined' && tankGemPrices[tankId]) ? tankGemPrices[tankId] : 500;
+    const owned = typeof unlockedTanks !== 'undefined' && unlockedTanks.includes(tankId);
+    const canAfford = typeof gems !== 'undefined' && gems >= price;
+
+    let btnHtml;
+    if (owned) {
+        btnHtml = `<button onclick="showTankDetail('myasnoy')" style="margin-top:12px;padding:8px 24px;background:#2d6a2d;border:2px solid #27ae60;border-radius:8px;color:#d9ffd9;font-weight:bold;font-size:14px;cursor:pointer;box-shadow:0 3px 0 rgba(18,70,18,0.85);">✓ В коллекции</button>`;
+    } else if (canAfford) {
+        btnHtml = `<button onclick="window._buyLimitedTank('myasnoy')" style="margin-top:12px;padding:8px 24px;background:linear-gradient(90deg,#b02020,#7a0000);border:2px solid #cc2020;border-radius:8px;color:#fff;font-weight:bold;font-size:14px;cursor:pointer;box-shadow:0 3px 0 rgba(80,0,0,0.8);">Купить за ${price} 💎</button>`;
+    } else {
+        btnHtml = `<button disabled style="margin-top:12px;padding:8px 24px;background:#2a0a0a;border:2px solid #5a1a1a;border-radius:8px;color:#5a1a1a;font-weight:bold;font-size:14px;cursor:not-allowed;">Купить за ${price} 💎</button>`;
+    }
+
+    container.innerHTML = `
+    <div style="background:linear-gradient(180deg,#2d0000 0%,#180000 100%);border:2px solid #ff4400;border-radius:14px;padding:14px;width:220px;text-align:center;box-shadow:0 0 20px rgba(255,68,0,0.24);">
+        <div style="margin-bottom:10px;font-size:11px;font-weight:900;letter-spacing:2px;color:#ffb08a;">ЛИМИТИРОВАННЫЙ</div>
+        <canvas id="myasnoyShopCanvas" width="150" height="150" style="display:block;margin:0 auto 10px;border:2px solid #ff4400;border-radius:8px;box-shadow:0 0 10px #ff4400;"></canvas>
+        <div style="margin:0 0 12px;font-size:22px;font-weight:900;color:#ff5a38;text-shadow:0 0 10px rgba(255,68,0,0.45);"><span style="font-family:'Segoe UI Emoji','Noto Color Emoji','Apple Color Emoji',sans-serif;">&#129656;</span> Мясной</div>
+        ${btnHtml}
     </div>`;
+
+    // Draw tank preview on the shop canvas
+    requestAnimationFrame(() => {
+        const shopCv = document.getElementById('myasnoyShopCanvas');
+        if (!shopCv || typeof drawTankOn !== 'function') return;
+        const shopCtx = shopCv.getContext('2d');
+        const w = shopCv.width, h = shopCv.height;
+        // Dark flesh background
+        const bg = shopCtx.createRadialGradient(w*0.35, h*0.3, 0, w/2, h/2, w*0.75);
+        bg.addColorStop(0, '#3a0808'); bg.addColorStop(0.6, '#220404'); bg.addColorStop(1, '#0e0000');
+        shopCtx.fillStyle = bg; shopCtx.fillRect(0, 0, w, h);
+        // Subtle red vignette border
+        const vgn = shopCtx.createRadialGradient(w/2, h/2, w*0.28, w/2, h/2, w*0.72);
+        vgn.addColorStop(0, 'rgba(0,0,0,0)'); vgn.addColorStop(1, 'rgba(60,0,0,0.55)');
+        shopCtx.fillStyle = vgn; shopCtx.fillRect(0, 0, w, h);
+        // Draw tank centered without clipping the flesh spikes
+        const side = Math.min(w, h) * 0.34;
+        drawTankOn(shopCtx, w/2, h/2, side, side, '#c03030', 0, 1, 'myasnoy', null, 0);
+    });
 }
 
-function _buyEasterEggPack(packId) {
-    // Limited shop packs are disabled
-    showNotification('🔒 Лимитированный магазин закрыт', '#f39c12');
+function _buyLimitedTank(tankId) {
+    const price = (typeof tankGemPrices !== 'undefined' && tankGemPrices[tankId]) ? tankGemPrices[tankId] : 400;
+    if (typeof unlockedTanks !== 'undefined' && unlockedTanks.includes(tankId)) {
+        if (typeof showNotification === 'function') showNotification('✓ Уже в коллекции', '#27ae60');
+        return;
+    }
+    if (typeof gems === 'undefined' || gems < price) {
+        if (typeof showNotification === 'function') showNotification('❌ Недостаточно гемов! Нужно ' + price + ' 💎', '#e74c3c');
+        return;
+    }
+    gems -= price;
+    if (typeof unlockedTanks !== 'undefined') unlockedTanks.push(tankId);
+    // Show entry in character modal if it exists
+    const kEntry = document.getElementById(tankId + 'TankEntry');
+    if (kEntry) kEntry.style.display = '';
+    if (typeof saveProgress === 'function') saveProgress();
+    if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
+    if (typeof showNotification === 'function') showNotification('🎉 Танк «Мясной» разблокирован!', '#ff4400');
+    _renderLimitedShopItems();
 }
 
 const containerFlowModal = document.getElementById('containerFlowModal');
@@ -2903,6 +3049,11 @@ if (selectKamikazeTank) selectKamikazeTank.addEventListener('click', () => {
     showTankDetail('kamikaze');
 });
 
+const selectMyasnoyTank = document.getElementById('selectMyasnoyTank');
+if (selectMyasnoyTank) selectMyasnoyTank.addEventListener('click', () => {
+    showTankDetail('myasnoy');
+});
+
 const selectMechDiy = document.getElementById('selectMechDiy');
 if (selectMechDiy) selectMechDiy.addEventListener('click', () => {
     showTankDetail('mechDiy');
@@ -2969,7 +3120,8 @@ const tankRarityMap = {
     'roman': 'chromatic',
     'kvant': 'chromatic',
     'spartan': 'super_rare',
-    'kamikaze': 'limited'
+    'kamikaze': 'limited',
+    'myasnoy':  'limited'
 };
 
 const rarityChances = {
@@ -3029,6 +3181,9 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
 
     const customTitle = options.title;
     const customIcon = options.icon;
+    const isChromaticRewardTank = type === 'tank'
+        && !!tankType
+        && !!(window.tankDescriptions && window.tankDescriptions[tankType] && window.tankDescriptions[tankType].rarity === 'Хроматическая');
     
     // Determine title color
     let titleColor = '#e74c3c'; // default red
@@ -3039,6 +3194,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         // Use the second color of the gradient for text as it's usually solid
         titleColor = window.tankBgGradients[tankType][1]; 
     }
+    if (isChromaticRewardTank) titleColor = '#00ffcc';
 
     const defaultTitle = type === 'coins' ? 'МОНЕТЫ!' : type === 'gems' ? 'ГЕМЫ!' : type === 'parts' ? 'ДЕТАЛИ!' : 'НОВЫЙ ТАНК!';
     const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : type === 'parts' ? '🔧' : '🏆';
@@ -3093,13 +3249,17 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
             rewardBox.style.boxShadow = ''; // restore default shadow from CSS
             
             // Only modify the CARD (square) background
-            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman' || tankType === 'kvant') {
-               // For imitator/Time, we need a CANVAS animation to match the menu exactly
-               // The menu uses JS to draw pixelated rainbow. We can't easily reuse that code 
-               // without refactoring, but we can copy the logic into a new helper or inline.
-               // Let's create a dedicated canvas for the background inside the card
-               card.style.background = 'transparent'; // Canvas will provide bg
-               card.style.border = '2px solid #fff';
+                if (isChromaticRewardTank) {
+                    // Keep the outer reward card standard and tint only the square behind the tank.
+                    rewardBox.style.background = 'radial-gradient(circle, #2c3e50 0%, #000000 100%)';
+                    rewardBox.className = 'reward-box';
+                    rewardBox.style.border = '';
+                    rewardBox.style.boxShadow = '';
+
+                    card.className = 'new-tank-card';
+                    card.style.background = 'transparent';
+                    card.style.border = 'none';
+                    card.style.boxShadow = 'none';
                
                // Rainbow text for Tank Name
                amountText.style.background = 'linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff)';
@@ -3109,9 +3269,10 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                amountText.style.animation = 'rainbowText 2s linear infinite';
                amountText.style.textShadow = 'none';
                
-               // Keep Title standard
-               title.style.color = '#f1c40f'; // Default gold for title
-               title.style.textShadow = '2px 2px 0 #000';
+            // Keep title and description consistent with other reward cards.
+                title.style.color = '#f1c40f';
+                title.style.textShadow = '2px 2px 0 #000';
+                descText.style.color = '#bdc3c7';
                
             } else if (window.tankBgGradients && window.tankBgGradients[tankType]) {
                 const [c1, c2] = window.tankBgGradients[tankType];
@@ -3136,9 +3297,14 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         glow.style.boxShadow = `0 0 30px 10px ${titleColor}`;
         
         const canvas = document.createElement('canvas');
-        canvas.width = 150;
-        canvas.height = 150;
+        canvas.width = isChromaticRewardTank ? 200 : 150;
+        canvas.height = isChromaticRewardTank ? 200 : 150;
         canvas.className = 'tank-display';
+        if (isChromaticRewardTank) {
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.display = 'block';
+        }
         // Make the canvas background transparent so it shows the card gradient
         canvas.style.background = 'transparent';
         
@@ -3148,7 +3314,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
         
         const ctx = canvas.getContext('2d');
         if (typeof drawTankOn === 'function') {
-            if (tankType === 'time' || tankType === 'imitator' || tankType === 'roman' || tankType === 'kvant') {
+                        if (isChromaticRewardTank) {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
@@ -3171,14 +3337,15 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                      }
                  }
                  
-                 // Draw the tank on top
-                 // Need to save/restore context or drawTankOn might be affected by fillStyle
-                 drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+                                 // Draw the tank on top
+                                 const _side = Math.min(canvas.width, canvas.height) * 0.4;
+                                 drawTankOn(ctx, canvas.width / 2, canvas.height / 2, _side, _side, '#fff', -Math.PI/2, 1, tankType);
                  requestAnimationFrame(drawFrame);
                };
                drawFrame();
             } else {
-               drawTankOn(ctx, 75, 75, 60, 60, '#fff', -Math.PI/2, 1, tankType);
+                             const _side = Math.min(canvas.width, canvas.height) * 0.4;
+                             drawTankOn(ctx, canvas.width / 2, canvas.height / 2, _side, _side, '#fff', -Math.PI/2, 1, tankType);
             }
         }
     } else {
@@ -4491,6 +4658,174 @@ function update() {
                 }
             }
         }
+        // Myasnoy "Отделение" ult — separate eye from body
+        if (tankType === 'myasnoy') {
+            if (keys['KeyE'] && !tank.myasnoyUltActive && (tank.myasnoyUltCooldown || 0) <= 0) {
+                const _originX = tank.x;
+                const _originY = tank.y;
+                const _mySpeedBonus = typeof getTankSpeedBonus === 'function' ? getTankSpeedBonus('myasnoy') : 0;
+                const _myBodyMaxHp = roundMyasnoyFormHp(tank.maxHp * 0.7, 10);
+                const _myBodyHp = Math.min(_myBodyMaxHp, roundMyasnoyFormHp(tank.hp * 0.7, 1));
+                const _myBodySpot = findFreeSpot(_originX, _originY, tank.w, tank.h, 140, 10, tank, 20) || { x: _originX, y: _originY };
+                // Activate separation: spawn body as ally bot, player becomes eye
+                const _myBodyBot = {
+                    x: _myBodySpot.x, y: _myBodySpot.y, w: tank.w, h: tank.h,
+                    color: tank.color,
+                    tankType: 'myasnoy',
+                    hp: _myBodyHp,
+                    maxHp: _myBodyMaxHp,
+                    turretAngle: tank.turretAngle, baseAngle: 0,
+                    speed: parseFloat((3.2 + _mySpeedBonus).toFixed(1)), trackOffset: 0, alive: true, team: 0,
+                    stuckCount: 0, fireCooldown: 0,
+                    dodgeAccuracy: 0.85,
+                    heat: 0, overheated: false,
+                    _vx: 0, _vy: 0,
+                    paralyzed: false, paralyzedTime: 0,
+                    robotDroneCooldown: 0,
+                    isMyasnoyBody: true
+                };
+                allies.push(_myBodyBot);
+                tank.myasnoyBodyBot = _myBodyBot;
+                tank.myasnoyUltActive = true;
+                tank.myasnoyUltTimer = 600; // 10 seconds
+                const _myEyeMaxHp = roundMyasnoyFormHp(tank.maxHp * 0.55, 10);
+                tank.hp = _myEyeMaxHp;
+                tank.maxHp = _myEyeMaxHp;
+                tank.speed = parseFloat((3.6 + _mySpeedBonus).toFixed(1));
+                // Animate the eye separating from the body instead of teleporting instantly
+                const _sepAng = tank.turretAngle;
+                const _eyeStartDist = tank.w * 1.0;
+                const _eyeTargetDist = tank.w * 1.95;
+                const _eyeStartCandidateX = _myBodySpot.x + Math.cos(_sepAng) * _eyeStartDist;
+                const _eyeStartCandidateY = _myBodySpot.y + Math.sin(_sepAng) * _eyeStartDist;
+                const _eyeStartSpot = findFreeSpot(_eyeStartCandidateX, _eyeStartCandidateY, tank.w, tank.h, 140, 10, tank, 20) || {
+                    x: Math.max(0, Math.min(worldWidth - tank.w, _eyeStartCandidateX)),
+                    y: Math.max(0, Math.min(worldHeight - tank.h, _eyeStartCandidateY))
+                };
+                const _eyeTargetCandidateX = _myBodySpot.x + Math.cos(_sepAng) * _eyeTargetDist;
+                const _eyeTargetCandidateY = _myBodySpot.y + Math.sin(_sepAng) * _eyeTargetDist;
+                const _eyeTargetSpot = findFreeSpot(_eyeTargetCandidateX, _eyeTargetCandidateY, tank.w, tank.h, 220, 10, tank, 20) || _eyeStartSpot;
+                tank.myasnoySeparationStartX = _eyeStartSpot.x;
+                tank.myasnoySeparationStartY = _eyeStartSpot.y;
+                tank.myasnoySeparationTargetX = _eyeTargetSpot.x;
+                tank.myasnoySeparationTargetY = _eyeTargetSpot.y;
+                tank.myasnoySeparationAnim = 18;
+                tank.myasnoySeparationAnimMax = 18;
+                tank.x = _eyeStartSpot.x;
+                tank.y = _eyeStartSpot.y;
+                const _mySx = _myBodySpot.x + tank.w/2, _mySy = _myBodySpot.y + tank.h/2;
+                for (let _sp = 0; _sp < 14; _sp++) {
+                    const _spa = Math.random() * Math.PI * 2;
+                    spawnParticle(_mySx + Math.cos(_spa) * 20, _mySy + Math.sin(_spa) * 20, '#cc0000', 0.95);
+                }
+                if (typeof objects !== 'undefined') {
+                    objects.push({ type: 'shockwave', x: _mySx, y: _mySy, radius: 3, speed: 8, life: 16, maxLife: 16, color: '#8a0000' });
+                }
+                keys['KeyE'] = false;
+            } else if (keys['KeyE'] && tank.myasnoyUltActive && (tank.myasnoyEyeUltCooldown || 0) <= 0) {
+                // Eye ult: hypnosis beam in a tighter cone than the normal slash
+                const _myEx = tank.x + tank.w/2, _myEy = tank.y + tank.h/2;
+                const _myRadius = tank.w * 1.65;
+                const _myHalfArc = Math.PI * 0.48;
+                let _myHypCount = 0;
+                for (let _ei = enemies.length - 1; _ei >= 0; _ei--) {
+                    const _e = enemies[_ei];
+                    if (!_e || !_e.alive) continue;
+                    const _eDx = (_e.x + _e.w/2) - _myEx, _eDy = (_e.y + _e.h/2) - _myEy;
+                    if (Math.hypot(_eDx, _eDy) <= _myRadius) {
+                        let _eAngD = Math.atan2(_eDy, _eDx) - tank.turretAngle;
+                        while (_eAngD > Math.PI) _eAngD -= Math.PI * 2;
+                        while (_eAngD < -Math.PI) _eAngD += Math.PI * 2;
+                        if (Math.abs(_eAngD) > _myHalfArc) continue;
+                        _e.myasnoyHypnoTimer = 300;
+                        _e.hitFlashTime = Date.now();
+                        _e.path = [];
+                        _e.pathIndex = 0;
+                        _e.pathRecalc = 0;
+                        _myHypCount++;
+                    }
+                }
+                tank.myasnoyHypnoBeamTimer = 24;
+                objects.push({ type: 'shockwave', x: _myEx, y: _myEy, radius: 6, speed: 9, life: 18, maxLife: 18, color: 'rgba(173,106,255,0.9)' });
+                objects.push({ type: 'shockwave', x: _myEx, y: _myEy, radius: 3, speed: 6,  life: 14, maxLife: 14, color: 'rgba(228,193,255,0.9)' });
+                for (let _pp = 0; _pp < 18 + _myHypCount * 2; _pp++) {
+                    const _pa = tank.turretAngle + (Math.random() - 0.5) * (_myHalfArc * 2.2);
+                    const _pd = _myRadius * (0.35 + Math.random() * 0.65);
+                    spawnParticle(_myEx + Math.cos(_pa) * _pd, _myEy + Math.sin(_pa) * _pd, _pp % 2 === 0 ? '#b86cff' : '#f1d7ff', 0.92);
+                }
+                tank.myasnoyEyeUltCooldown = 480;
+                keys['KeyE'] = false;
+            } else {
+                keys['KeyE'] = false;
+            }
+            // Tick eye ult cooldown
+            if ((tank.myasnoyEyeUltCooldown || 0) > 0) tank.myasnoyEyeUltCooldown--;
+            // Tick separation; check body bot alive — only revert when body is destroyed
+            if (tank.myasnoyUltActive) {
+                if ((tank.myasnoySeparationAnim || 0) > 0) {
+                    const _sepMax = Math.max(1, tank.myasnoySeparationAnimMax || 18);
+                    const _sepProg = 1 - (tank.myasnoySeparationAnim / _sepMax);
+                    const _sepEase = 1 - Math.pow(1 - Math.max(0, Math.min(1, _sepProg)), 3);
+                    tank.x = tank.myasnoySeparationStartX + (tank.myasnoySeparationTargetX - tank.myasnoySeparationStartX) * _sepEase;
+                    tank.y = tank.myasnoySeparationStartY + (tank.myasnoySeparationTargetY - tank.myasnoySeparationStartY) * _sepEase;
+                    if (typeof spawnParticle === 'function') {
+                        const _sepCx = tank.x + tank.w / 2;
+                        const _sepCy = tank.y + tank.h / 2;
+                        spawnParticle(_sepCx + (Math.random() - 0.5) * 12, _sepCy + (Math.random() - 0.5) * 12, '#d31616', 0.75);
+                        spawnParticle(
+                            _sepCx - Math.cos(tank.turretAngle) * (12 + Math.random() * 12),
+                            _sepCy - Math.sin(tank.turretAngle) * (12 + Math.random() * 12),
+                            '#6a0000',
+                            0.55
+                        );
+                    }
+                    tank.myasnoySeparationAnim--;
+                }
+                const _bodyAlive = tank.myasnoyBodyBot && tank.myasnoyBodyBot.alive !== false;
+                if (_bodyAlive && checkRectCollision(tank, tank.myasnoyBodyBot)) {
+                    const _unstick = findFreeSpot(
+                        tank.myasnoyBodyBot.x + Math.cos(tank.turretAngle) * tank.w * 1.2,
+                        tank.myasnoyBodyBot.y + Math.sin(tank.turretAngle) * tank.h * 1.2,
+                        tank.w,
+                        tank.h,
+                        180,
+                        10,
+                        tank,
+                        20
+                    );
+                    if (_unstick) {
+                        tank.x = _unstick.x;
+                        tank.y = _unstick.y;
+                        if ((tank.myasnoySeparationAnim || 0) > 0) {
+                            tank.myasnoySeparationStartX = _unstick.x;
+                            tank.myasnoySeparationStartY = _unstick.y;
+                        }
+                    }
+                }
+                if (!_bodyAlive) {
+                    // Return to normal form
+                    tank.myasnoyUltActive = false;
+                    const _restoredMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType['myasnoy']) || 280;
+                    const _restoredSpeed = ((typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType['myasnoy']) || 3.0) + (typeof getTankSpeedBonus === 'function' ? getTankSpeedBonus('myasnoy') : 0);
+                    const _hpRatio = tank.hp / tank.maxHp;
+                    tank.maxHp = _restoredMaxHp;
+                    tank.hp = Math.max(1, Math.round(_restoredMaxHp * _hpRatio));
+                    tank.speed = parseFloat(_restoredSpeed.toFixed(1));
+                    tank.myasnoyUltCooldown = 720;
+                    tank.myasnoyBodyBot = null;
+                    tank.myasnoyHypnoBeamTimer = 0;
+                    tank.myasnoySeparationAnim = 0;
+                    tank.myasnoySeparationAnimMax = 0;
+                    // Return visual
+                    for (let _rp = 0; _rp < 16; _rp++) {
+                        spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*30, tank.y + tank.h/2 + (Math.random()-0.5)*30, '#aa0000', 0.9);
+                    }
+                }
+            }
+            if ((tank.myasnoyUltCooldown || 0) > 0) tank.myasnoyUltCooldown--;
+            if ((tank.myasnoyAttackTimer || 0) > 0) tank.myasnoyAttackTimer--;
+            if ((tank.myasnoyHypnoBeamTimer || 0) > 0) tank.myasnoyHypnoBeamTimer--;
+        }
         if (tank.isAutopilotActive) {
             tank.autoPilotTimer--;
             if (tank.autoPilotTimer <= 0) {
@@ -4978,6 +5313,64 @@ function update() {
         tank.overheated = false;
     }
 
+        // Myasnoy eye form: melee limb strike (Space)
+        if (tankType === 'myasnoy' && tank.myasnoyUltActive && keys['Space'] && tank.fireCooldown <= 0 && !tank.paralyzed) {
+            const _meCx = tank.x + tank.w/2, _meCy = tank.y + tank.h/2;
+            const _meRange = tank.w * 2.2;
+            const _meHalfArc = Math.PI * 0.65; // ~130° arc
+            const _dMult = getPlayerDmgMult();
+            for (let _mei = enemies.length - 1; _mei >= 0; _mei--) {
+                const _me = enemies[_mei];
+                if (!_me || !_me.alive) continue;
+                const _meDx = (_me.x + _me.w/2) - _meCx, _meDy = (_me.y + _me.h/2) - _meCy;
+                if (Math.hypot(_meDx, _meDy) > _meRange) continue;
+                let _mAngD = Math.atan2(_meDy, _meDx) - tank.turretAngle;
+                while (_mAngD > Math.PI) _mAngD -= Math.PI * 2;
+                while (_mAngD < -Math.PI) _mAngD += Math.PI * 2;
+                if (Math.abs(_mAngD) <= _meHalfArc) {
+                    const _mDmg = Math.round(80 * _dMult);
+                    _me.hp -= _mDmg;
+                    _me.hitFlashTime = Date.now();
+                    for (let _mp = 0; _mp < 6; _mp++) spawnParticle(_me.x + _me.w/2, _me.y + _me.h/2, '#cc0000', 0.9);
+                    if (_me.hp <= 0) {
+                        if (typeof spawnExplosion === 'function') spawnExplosion(_me.x + _me.w/2, _me.y + _me.h/2, 40);
+                        enemies.splice(_mei, 1);
+                        if (typeof gainTrophies === 'function') gainTrophies(1);
+                    }
+                }
+            }
+            // Also destroy destructible objects (boxes, barrels, wooden walls) in range
+            for (let _oi = objects.length - 1; _oi >= 0; _oi--) {
+                const _obj = objects[_oi];
+                if (!_obj) continue;
+                const _oDx = (_obj.x + (_obj.w||0)/2) - _meCx;
+                const _oDy = (_obj.y + (_obj.h||0)/2) - _meCy;
+                if (Math.hypot(_oDx, _oDy) > _meRange) continue;
+                let _oAngD = Math.atan2(_oDy, _oDx) - tank.turretAngle;
+                while (_oAngD > Math.PI) _oAngD -= Math.PI * 2;
+                while (_oAngD < -Math.PI) _oAngD += Math.PI * 2;
+                if (Math.abs(_oAngD) > _meHalfArc) continue;
+                if (_obj.type === 'woodenWall') {
+                    if (typeof damageWoodenWall === 'function') damageWoodenWall(_obj, Math.round(80 * _dMult), { hitColor: '#cc2200', hitParticles: 4 });
+                } else if (_obj.type === 'box') {
+                    for (let _mp = 0; _mp < 5; _mp++) spawnParticle(_obj.x + _obj.w/2, _obj.y + _obj.h/2, '#cc8800', 0.9);
+                    objects.splice(_oi, 1);
+                    if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
+                } else if (_obj.type === 'barrel') {
+                    if (typeof explodeBarrel === 'function') explodeBarrel(_obj);
+                }
+            }
+            // Visual: red slash particles in attack cone
+            for (let _mp = 0; _mp < 12; _mp++) {
+                const _mpa = tank.turretAngle + (Math.random() - 0.5) * 1.4;
+                const _mpd = _meRange * (0.4 + Math.random() * 0.6);
+                spawnParticle(_meCx + Math.cos(_mpa)*_mpd, _meCy + Math.sin(_mpa)*_mpd, '#dd1010', 0.9);
+            }
+            tank.fireCooldown = 22;
+            tank.myasnoyAttackTimer = 18;
+            keys['Space'] = false;
+        }
+
         // mechRocket: fire single rocket on Space (costs 20 energy)
         if (tankType === 'mechRocket' && keys['Space'] && tank.fireCooldown <= 0 && (tank.mechEnergy || 0) >= 20 && !tank.paralyzed) {
             tank.mechEnergy -= 20;
@@ -5093,7 +5486,7 @@ function update() {
         }
 
         // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
-        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && (tank.sandNoShootTimer || 0) <= 0 && tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'burovoy') {
+        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && (tank.sandNoShootTimer || 0) <= 0 && tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'burovoy' && !(tankType === 'myasnoy' && tank.myasnoyUltActive)) {
             const _prevBLen = bullets.length, _prevFLen = flames.length;
             shoot();
             // Apply player damage upgrade multiplier to newly created bullets/flames (except plasma which needs special handling)
@@ -5102,7 +5495,11 @@ function update() {
                 for (let _i = _prevBLen; _i < bullets.length; _i++) {
                     const _b = bullets[_i];
                     // Apply multiplier to all bullet types including plasma
-                    _b.damage = Math.round((_b.damage != null ? _b.damage : 100) * _dMult);
+                    if (_b.type === 'myasnoyBio') {
+                        _b.damage = (_b.damage != null ? _b.damage : 1.5) * _dMult;
+                    } else {
+                        _b.damage = Math.round((_b.damage != null ? _b.damage : 100) * _dMult);
+                    }
                 }
                 for (let _i = _prevFLen; _i < flames.length; _i++) {
                     const _f = flames[_i];

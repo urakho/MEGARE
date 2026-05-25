@@ -901,7 +901,7 @@ b { color: #ffcc00; }
 
 /* Reward Modal Styles */
 .reward-overlay {
-    position: absolute;
+    position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.85);
     display: none;
@@ -1127,8 +1127,7 @@ b { color: #ffcc00; }
     /* Pixelated grid overlay using pseudo-element */
 }
 
-.new-tank-card.rainbow-pixel-bg::after,
-.reward-box.rainbow-pixel-bg::after {
+.new-tank-card.rainbow-pixel-bg::after {
     content: "";
     position: absolute;
     top: 0;

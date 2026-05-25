@@ -128,9 +128,14 @@ const tankDescriptions = {
         description: "Рискованный танк для агрессивной игры. Его сила в резком врыве, хаосе и умении сломать спокойный бой за один момент. Он подходит тем, кто любит заходить ва-банк, ломать чужую оборону и навязывать свой ритм силой.",
         rarity: "Лимитированная"
     },
+    myasnoy: {
+        name: "Мясной",
+        description: "Начальная форма мясного поливает врага живыми сосудами широким веером и готовит момент для разделения. Это странный, агрессивный танк, который раскрывается лучше всего тогда, когда ты умеешь вовремя перейти из давления на дистанции в игру двумя формами.",
+        rarity: "Лимитированная"
+    },
     kvant: {
         name: "Квант",
-        description: "Хроматический танк с нестабильным квантовым оружием. Выпускает три энергетических снаряда — центральный летит прямо, боковые разделяются в полёте на два осколка. Ульта \"Перегруз сети\" (E): волна замедляет врагов на 20% и снижает их урон на 20% на 5 секунд, после чего поражённые враги взрываются и получают 80 урона.",
+        description: "Хроматический танк с нестабильным квантовым оружием. Он давит врага необычной траекторией выстрелов, ломает привычную дистанцию и заставляет постоянно подстраиваться под хаотичное поле боя. Его ульта перегружает противников, ослабляет их и превращает удачный заход в мощный перелом боя.",
         rarity: "Хроматическая"
     }
 };
@@ -165,6 +170,7 @@ const tankBgGradients = {
     robot:  ['#40f6d1', '#11a89c', '#06615b'],    // Легендарный - turquoise
     medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
     kamikaze: ['#ff4400', '#cc2200'], // Лимитированный - red-orange
+    myasnoy: ['#ff4400', '#cc2200'],  // Лимитированный — совпадает с камикадзе
     // sport removed
 };
 
@@ -194,6 +200,7 @@ const tankBaseColors = {
     pyro: '#8b2500',        // Deep orange-red for Pyro tank
     air: '#00a896',          // Teal-cyan for Air tank
     kamikaze: '#FFFFFF', // White — Japanese imperial theme
+    myasnoy: '#c03030',  // Deep flesh-red for Мясной tank
     // sport removed
 };
 
@@ -352,6 +359,228 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.restore();
         return;
     }
+
+    // Myasnoy eye form — draw as detached eyeball with blood-vessel tentacles, no turret/barrel
+    if (type === 'myasnoy' && heatState && heatState.myasnoyEyeForm) {
+        const _eyT = Date.now() * 0.0018;
+        const _eyR = Math.min(W, H) * 0.44;
+        const _sepPulse = Math.max(0, Math.min(1, heatState.myasnoySeparationPulse || 0));
+        if (_sepPulse > 0) {
+            const _memR = _eyR * (1.1 + _sepPulse * 1.15);
+            const _memG = ctx.createRadialGradient(0, 0, _eyR * 0.45, 0, 0, _memR);
+            _memG.addColorStop(0, 'rgba(255,180,150,0.18)');
+            _memG.addColorStop(0.55, `rgba(180,20,20,${0.16 + _sepPulse * 0.10})`);
+            _memG.addColorStop(1, 'rgba(80,0,0,0)');
+            ctx.fillStyle = _memG;
+            ctx.beginPath(); ctx.arc(0, 0, _memR, 0, Math.PI * 2); ctx.fill();
+            ctx.save();
+            ctx.globalAlpha = 0.45 + _sepPulse * 0.25;
+            ctx.strokeStyle = '#7a0505';
+            ctx.lineWidth = Math.max(1, _eyR * 0.08 * _sepPulse);
+            ctx.beginPath(); ctx.arc(0, 0, _memR * 0.82, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+        // Outer glow halo
+        const _eyGlow = ctx.createRadialGradient(0, 0, _eyR * 0.6, 0, 0, _eyR * 2.4);
+        _eyGlow.addColorStop(0, 'rgba(200,0,0,0.30)');
+        _eyGlow.addColorStop(1, 'rgba(200,0,0,0)');
+        ctx.fillStyle = _eyGlow;
+        ctx.beginPath(); ctx.arc(0, 0, _eyR * 2.4, 0, Math.PI * 2); ctx.fill();
+        // Branching blood vessel tendrils trailing behind the eye
+        ctx.save(); ctx.lineCap = 'round';
+        const _trailBase = turretAngle + Math.PI; // direction behind eye
+        const _trailSpread = Math.PI * 0.78;
+        const _numTrunks = 7;
+        for (let _ti = 0; _ti < _numTrunks; _ti++) {
+            const _tFrac  = _ti / (_numTrunks - 1);
+            const _tCent  = 1 - Math.abs(_tFrac - 0.5) * 2; // 0 at edges, 1 at center
+            const _phase  = _eyT * 1.3 + _ti * 0.75;
+            const _trunkAng = _trailBase - _trailSpread/2 + _tFrac * _trailSpread;
+            const _trunkLen = _eyR * (1.5 + _tCent * 1.6 + Math.sin(_phase * 0.6) * 0.25);
+            const _trunkW   = _eyR * (0.028 + _tCent * 0.022);
+            // Trunk start on eye surface
+            const _tsx = Math.cos(_trunkAng) * _eyR * 0.86;
+            const _tsy = Math.sin(_trunkAng) * _eyR * 0.86;
+            // Animated mid-control point (gives curvature)
+            const _tcx = _tsx + Math.cos(_trunkAng) * _trunkLen * 0.48 + Math.sin(_phase * 1.2) * _eyR * 0.28;
+            const _tcy = _tsy + Math.sin(_trunkAng) * _trunkLen * 0.48 + Math.cos(_phase * 0.9) * _eyR * 0.20;
+            // Trunk tip
+            const _tex = _tsx + Math.cos(_trunkAng) * _trunkLen;
+            const _tey = _tsy + Math.sin(_trunkAng) * _trunkLen;
+            // Draw trunk: dark shadow then red core
+            ctx.beginPath(); ctx.moveTo(_tsx, _tsy); ctx.quadraticCurveTo(_tcx, _tcy, _tex, _tey);
+            ctx.strokeStyle = '#1e0000'; ctx.lineWidth = _trunkW * 3.2; ctx.stroke();
+            ctx.strokeStyle = '#b81212'; ctx.lineWidth = _trunkW; ctx.stroke();
+            // Branch A — forks off to one side at the mid-control point
+            const _brAPhase = _phase + 1.3;
+            const _brAAng = _trunkAng + (0.42 + Math.sin(_brAPhase * 0.5) * 0.12);
+            const _brALen = _trunkLen * 0.58;
+            const _brAW   = _trunkW * 0.60;
+            const _brAcx  = _tcx + Math.cos(_brAAng) * _brALen * 0.46 + Math.sin(_brAPhase) * _eyR * 0.14;
+            const _brAcy  = _tcy + Math.sin(_brAAng) * _brALen * 0.46 + Math.cos(_brAPhase) * _eyR * 0.11;
+            const _brAex  = _tcx + Math.cos(_brAAng) * _brALen;
+            const _brAey  = _tcy + Math.sin(_brAAng) * _brALen;
+            ctx.beginPath(); ctx.moveTo(_tcx, _tcy); ctx.quadraticCurveTo(_brAcx, _brAcy, _brAex, _brAey);
+            ctx.strokeStyle = '#160000'; ctx.lineWidth = _brAW * 3; ctx.stroke();
+            ctx.strokeStyle = '#991010'; ctx.lineWidth = _brAW; ctx.stroke();
+            // Branch B — forks the other side
+            const _brBPhase = _phase + 2.6;
+            const _brBAng = _trunkAng - (0.40 + Math.cos(_brBPhase * 0.5) * 0.12);
+            const _brBLen = _trunkLen * 0.50;
+            const _brBW   = _trunkW * 0.52;
+            const _brBcx  = _tcx + Math.cos(_brBAng) * _brBLen * 0.46 + Math.sin(_brBPhase) * _eyR * 0.12;
+            const _brBcy  = _tcy + Math.sin(_brBAng) * _brBLen * 0.46 + Math.cos(_brBPhase) * _eyR * 0.10;
+            const _brBex  = _tcx + Math.cos(_brBAng) * _brBLen;
+            const _brBey  = _tcy + Math.sin(_brBAng) * _brBLen;
+            ctx.beginPath(); ctx.moveTo(_tcx, _tcy); ctx.quadraticCurveTo(_brBcx, _brBcy, _brBex, _brBey);
+            ctx.strokeStyle = '#160000'; ctx.lineWidth = _brBW * 3; ctx.stroke();
+            ctx.strokeStyle = '#881010'; ctx.lineWidth = _brBW; ctx.stroke();
+            // Sub-branch from branch A tip (every other trunk)
+            if (_ti % 2 === 0) {
+                const _sbPhase = _phase + 0.8;
+                const _sbAng = _brAAng + 0.5 + Math.sin(_sbPhase) * 0.2;
+                const _sbLen = _brALen * 0.45;
+                const _sbex  = _brAex + Math.cos(_sbAng) * _sbLen;
+                const _sbey  = _brAey + Math.sin(_sbAng) * _sbLen;
+                const _sbcx  = (_brAex + _sbex) * 0.5 + Math.sin(_sbPhase * 1.4) * _eyR * 0.08;
+                const _sbcy  = (_brAey + _sbey) * 0.5 + Math.cos(_sbPhase * 1.2) * _eyR * 0.07;
+                ctx.beginPath(); ctx.moveTo(_brAex, _brAey); ctx.quadraticCurveTo(_sbcx, _sbcy, _sbex, _sbey);
+                ctx.strokeStyle = '#0e0000'; ctx.lineWidth = _trunkW * 1.2; ctx.stroke();
+                ctx.strokeStyle = '#660000'; ctx.lineWidth = _trunkW * 0.38; ctx.stroke();
+            }
+            // Sub-branch from branch B tip (every other trunk, offset)
+            if (_ti % 2 === 1) {
+                const _sbPhase = _phase + 1.9;
+                const _sbAng = _brBAng - 0.48 + Math.cos(_sbPhase) * 0.18;
+                const _sbLen = _brBLen * 0.42;
+                const _sbex  = _brBex + Math.cos(_sbAng) * _sbLen;
+                const _sbey  = _brBey + Math.sin(_sbAng) * _sbLen;
+                const _sbcx  = (_brBex + _sbex) * 0.5 + Math.sin(_sbPhase * 1.3) * _eyR * 0.07;
+                const _sbcy  = (_brBey + _sbey) * 0.5 + Math.cos(_sbPhase * 1.1) * _eyR * 0.06;
+                ctx.beginPath(); ctx.moveTo(_brBex, _brBey); ctx.quadraticCurveTo(_sbcx, _sbcy, _sbex, _sbey);
+                ctx.strokeStyle = '#0e0000'; ctx.lineWidth = _trunkW * 1.1; ctx.stroke();
+                ctx.strokeStyle = '#550000'; ctx.lineWidth = _trunkW * 0.34; ctx.stroke();
+            }
+        }
+        ctx.restore();
+        // Sweeping eye beam — scans across the attack arc while the timer counts down
+        if (heatState && (heatState.myasnoyAttackTimer || 0) > 0) {
+            const _atMax  = 18;
+            const _atA    = heatState.myasnoyAttackTimer / _atMax; // 1→0 as attack fades
+            const _atRange = Math.min(W, H) * 2.2;
+            const _halfArc = Math.PI * 0.65;
+            // Sweep progress: beam starts at left edge and sweeps right
+            const _sweep  = 1 - _atA; // 0→1
+            const _beamAng = turretAngle - _halfArc + _sweep * _halfArc * 2;
+            ctx.save();
+            // Already-burned area (behind the beam)
+            ctx.globalAlpha = 0.28;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, _atRange, turretAngle - _halfArc, _beamAng);
+            ctx.closePath();
+            const _burnG = ctx.createRadialGradient(0, 0, 0, 0, 0, _atRange);
+            _burnG.addColorStop(0, 'rgba(255,80,0,0.9)');
+            _burnG.addColorStop(0.5, 'rgba(180,0,0,0.5)');
+            _burnG.addColorStop(1, 'rgba(80,0,0,0)');
+            ctx.fillStyle = _burnG;
+            ctx.fill();
+            // Central bright sweeping beam ray
+            ctx.globalAlpha = 0.85 + _atA * 0.15;
+            const _bx = Math.cos(_beamAng) * _atRange;
+            const _by = Math.sin(_beamAng) * _atRange;
+            const _beamLineG = ctx.createLinearGradient(0, 0, _bx, _by);
+            _beamLineG.addColorStop(0, 'rgba(255,240,200,1)');
+            _beamLineG.addColorStop(0.18, 'rgba(255,120,0,0.9)');
+            _beamLineG.addColorStop(1, 'rgba(180,0,0,0)');
+            ctx.strokeStyle = _beamLineG;
+            ctx.lineWidth = _atRange * 0.06;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 22;
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(_bx, _by); ctx.stroke();
+            ctx.shadowBlur = 0;
+            // Bright flare at beam tip
+            ctx.globalAlpha = 0.7;
+            const _flG = ctx.createRadialGradient(_bx, _by, 0, _bx, _by, _atRange * 0.18);
+            _flG.addColorStop(0, 'rgba(255,200,100,0.9)');
+            _flG.addColorStop(1, 'rgba(200,0,0,0)');
+            ctx.fillStyle = _flG;
+            ctx.beginPath(); ctx.arc(_bx, _by, _atRange * 0.18, 0, Math.PI*2); ctx.fill();
+            // Arc boundary line
+            ctx.globalAlpha = _atA * 0.7;
+            ctx.strokeStyle = 'rgba(255,60,0,0.8)'; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, _atRange, turretAngle - _halfArc, turretAngle + _halfArc);
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (heatState && (heatState.myasnoyHypnoBeamTimer || 0) > 0) {
+            const _hypMax = 24;
+            const _hypA = Math.max(0, Math.min(1, heatState.myasnoyHypnoBeamTimer / _hypMax));
+            const _hypRange = Math.min(W, H) * 1.6;
+            const _hypHalfArc = Math.PI * 0.48;
+            const _hypPulse = 0.7 + 0.3 * Math.sin(_eyT * 12);
+            ctx.save();
+            ctx.globalAlpha = 0.42 + _hypA * 0.22;
+            const _hypCone = ctx.createRadialGradient(0, 0, 0, 0, 0, _hypRange);
+            _hypCone.addColorStop(0, 'rgba(250,235,255,0.88)');
+            _hypCone.addColorStop(0.35, 'rgba(188,108,255,0.56)');
+            _hypCone.addColorStop(1, 'rgba(120,30,160,0)');
+            ctx.fillStyle = _hypCone;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, _hypRange, turretAngle - _hypHalfArc, turretAngle + _hypHalfArc);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 0.9;
+            const _hypBeamG = ctx.createLinearGradient(0, 0, Math.cos(turretAngle) * _hypRange, Math.sin(turretAngle) * _hypRange);
+            _hypBeamG.addColorStop(0, 'rgba(255,255,255,0.95)');
+            _hypBeamG.addColorStop(0.25, `rgba(214,149,255,${(0.95 * _hypPulse).toFixed(2)})`);
+            _hypBeamG.addColorStop(1, 'rgba(112,34,168,0)');
+            ctx.strokeStyle = _hypBeamG;
+            ctx.lineWidth = Math.max(4, _eyR * 0.28);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(turretAngle) * _hypRange, Math.sin(turretAngle) * _hypRange);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(232,200,255,${(0.55 + _hypA * 0.25).toFixed(2)})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, _hypRange, turretAngle - _hypHalfArc, turretAngle + _hypHalfArc);
+            ctx.stroke();
+            ctx.restore();
+        }
+        // Sclera
+        const _sclG = ctx.createRadialGradient(-_eyR*0.2, -_eyR*0.2, 0, 0, 0, _eyR);
+        _sclG.addColorStop(0, '#fff8ef'); _sclG.addColorStop(1, '#e8d0b0');
+        ctx.beginPath(); ctx.arc(0, 0, _eyR, 0, Math.PI * 2); ctx.fillStyle = _sclG; ctx.fill();
+        ctx.strokeStyle = 'rgba(90,0,0,0.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+        // Blood veins on sclera
+        ctx.save(); ctx.strokeStyle = 'rgba(180,0,0,0.38)'; ctx.lineWidth = 0.9;
+        for (let _vi = 0; _vi < 6; _vi++) {
+            const _va2 = (_vi / 6) * Math.PI * 2 + 0.25;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(_va2)*_eyR*0.62, Math.sin(_va2)*_eyR*0.62);
+            ctx.quadraticCurveTo(Math.cos(_va2+0.15)*_eyR*0.8, Math.sin(_va2+0.15)*_eyR*0.8,
+                Math.cos(_va2+0.22)*_eyR*0.94, Math.sin(_va2+0.22)*_eyR*0.94);
+            ctx.stroke();
+        }
+        ctx.restore();
+        // Iris
+        ctx.beginPath(); ctx.arc(0, 0, _eyR * 0.58, 0, Math.PI * 2); ctx.fillStyle = '#8c2800'; ctx.fill();
+        // Pupil tracks turret direction
+        const _pOff = _eyR * 0.13;
+        const _pX = Math.cos(turretAngle) * _pOff;
+        const _pY = Math.sin(turretAngle) * _pOff;
+        ctx.beginPath(); ctx.arc(_pX, _pY, _eyR * 0.31, 0, Math.PI * 2); ctx.fillStyle = '#080808'; ctx.fill();
+        // Highlight
+        ctx.beginPath(); ctx.arc(-_eyR*0.23, -_eyR*0.23, _eyR*0.14, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.fill();
+        ctx.restore();
+        return; // No turret or barrel for the eye
+    }
+
     if (type === 'illuminat' || type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket') {
          // See turret section for actual drawing
          // We do nothing here for body/tracks because the mech IS the body and turret united.
@@ -364,31 +593,33 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             W *= 0.9; // make narrower for agility
             H *= 1.1; // make slightly longer
         }
-        // tracks (top/bottom)
+        // tracks (top/bottom) — myasnoy uses blood vessel appendages instead
         const trackThick = Math.max(6, W * 0.12);
-        if (!isBurovoyFullyBurrowed) {
-            ctx.fillStyle = type === 'ice' ? '#F0F8FF' : '#222';
-            ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
-            ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
-        }
-        if (type === 'buratino' && !isBurovoyFullyBurrowed) {
-            // track segments
-            ctx.strokeStyle = '#444';
-            ctx.lineWidth = 1;
-            for (let x = -W/2 + 5; x < W/2; x += 10) {
-                ctx.beginPath();
-                ctx.moveTo(x, -H/2 - trackThick/2);
-                ctx.lineTo(x, -H/2 + trackThick/2);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(x, H/2 - trackThick/2);
-                ctx.lineTo(x, H/2 + trackThick/2);
-                ctx.stroke();
+        if (type !== 'myasnoy') {
+            if (!isBurovoyFullyBurrowed) {
+                ctx.fillStyle = type === 'ice' ? '#F0F8FF' : '#222';
+                ctx.fillRect(-W/2, -H/2 - trackThick/2, W, trackThick);
+                ctx.fillRect(-W/2, H/2 - trackThick/2, W, trackThick);
+            }
+            if (type === 'buratino' && !isBurovoyFullyBurrowed) {
+                // track segments
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                for (let x = -W/2 + 5; x < W/2; x += 10) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, -H/2 - trackThick/2);
+                    ctx.lineTo(x, -H/2 + trackThick/2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x, H/2 - trackThick/2);
+                    ctx.lineTo(x, H/2 + trackThick/2);
+                    ctx.stroke();
+                }
             }
         }
-        // body (between tracks)
+        // body (between tracks); myasnoy fills full height since no tracks
         const bodyW = W - 4;
-        const bodyH = H - trackThick - 4;
+        const bodyH = type === 'myasnoy' ? H - 4 : H - trackThick - 4;
 
         if (type === 'normal') {
             // Modern Military Tank
@@ -1210,6 +1441,116 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Thin dark border
             ctx.strokeStyle = '#aaaaaa';
             ctx.lineWidth = 1.5;
+            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+        } else if (type === 'myasnoy') {
+            // Blood vessel appendages on both sides only (replacing tracks, top/bottom edges)
+            const _mybvT = Date.now() * 0.0018;
+            ctx.save();
+            ctx.lineCap = 'round';
+            const _mybvCount = 5; // per side
+            for (let _vs = 0; _vs < 2; _vs++) {
+                const _vSide = _vs === 0 ? -1 : 1; // -1=top edge, +1=bottom edge
+                for (let _vi = 0; _vi < _mybvCount; _vi++) {
+                    const _vPhase = _mybvT + _vi * 0.82 + _vs * 1.6;
+                    // Attachment along the side edge (spread across body width)
+                    const _vBx = (-bodyW * 0.42 + (_vi / (_mybvCount - 1)) * bodyW * 0.84);
+                    const _vBy = _vSide * bodyH * 0.5;
+                    // Extend outward perpendicular to body (y direction)
+                    const _vLen = bodyH * (0.62 + Math.sin(_vPhase * 0.85) * 0.1);
+                    const _vWigX = Math.sin(_vPhase * 1.4) * bodyW * 0.07;
+                    const _vTipX = _vBx + _vWigX + Math.sin(_vPhase * 0.7) * bodyW * 0.04;
+                    const _vTipY = _vBy + _vSide * _vLen;
+                    const _vMidX = _vBx + Math.sin(_vPhase * 1.2) * bodyW * 0.09;
+                    const _vMidY = (_vBy + _vTipY) * 0.5;
+                    const _vW = bodyW * 0.048;
+                    // Dark outer stroke
+                    ctx.beginPath();
+                    ctx.moveTo(_vBx, _vBy);
+                    ctx.quadraticCurveTo(_vMidX, _vMidY, _vTipX, _vTipY);
+                    ctx.strokeStyle = '#5a0000'; ctx.lineWidth = _vW * 2.4; ctx.stroke();
+                    // Bright inner stroke
+                    ctx.strokeStyle = '#b01010'; ctx.lineWidth = _vW; ctx.stroke();
+                    // Branch off mid-point
+                    const _vBrOffX = Math.cos(_vPhase * 0.6) * bodyW * 0.22;
+                    const _vBrOffY = _vSide * bodyH * 0.18 + Math.sin(_vPhase * 1.1) * bodyH * 0.08;
+                    const _vBrx = _vMidX + _vBrOffX;
+                    const _vBry = _vMidY + _vBrOffY;
+                    ctx.beginPath();
+                    ctx.moveTo(_vMidX, _vMidY); ctx.lineTo(_vBrx, _vBry);
+                    ctx.strokeStyle = '#7a0000'; ctx.lineWidth = _vW * 1.2; ctx.stroke();
+                    ctx.strokeStyle = '#cc1a0a'; ctx.lineWidth = _vW * 0.5; ctx.stroke();
+                    // Pulsing bulb at tip and branch end
+                    const _vBulb = _vW * 1.3 + Math.sin(_vPhase * 2.1) * _vW * 0.3;
+                    ctx.beginPath(); ctx.arc(_vTipX, _vTipY, _vBulb, 0, Math.PI * 2);
+                    ctx.fillStyle = '#cc0000'; ctx.fill();
+                    ctx.beginPath(); ctx.arc(_vBrx, _vBry, _vBulb * 0.72, 0, Math.PI * 2);
+                    ctx.fillStyle = '#aa0000'; ctx.fill();
+                }
+            }
+            ctx.restore();
+
+            // Fleshy biological body — mottled flesh, red spikes, large eye + small eyes
+            const _mytT = Date.now() * 0.001;
+            // Base flesh gradient
+            const _mytBG = ctx.createRadialGradient(-bodyW*0.1, -bodyH*0.15, 0, 0, 0, bodyW * 0.72);
+            _mytBG.addColorStop(0, '#d03030');
+            _mytBG.addColorStop(0.5, '#aa1818');
+            _mytBG.addColorStop(1, '#750808');
+            ctx.fillStyle = _mytBG;
+            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Flesh cell spots / texture
+            ctx.fillStyle = 'rgba(55, 0, 0, 0.28)';
+            const _mytCells = [[-0.27,-0.21,0.11],[0.21,-0.3,0.09],[-0.09,0.27,0.12],[0.3,0.19,0.1],[-0.33,0.09,0.08],[0.07,0.07,0.07]];
+            for (const [_mx,_my,_mr] of _mytCells) {
+                ctx.beginPath(); ctx.arc(_mx*bodyW, _my*bodyH, _mr*bodyW, 0, Math.PI*2); ctx.fill();
+            }
+            // Red fur spikes around perimeter
+            const _mytSN = 16;
+            for (let _msi = 0; _msi < _mytSN; _msi++) {
+                const _msa = (_msi / _mytSN) * Math.PI * 2;
+                const _mBase = Math.min(bodyW, bodyH) * 0.5;
+                const _mTip  = _mBase * (1.48 + Math.sin(_mytT * 1.5 + _msi) * 0.06);
+                const _msW = 0.13;
+                ctx.fillStyle = _msi % 2 === 0 ? '#c01800' : '#951200';
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(_msa - _msW) * _mBase, Math.sin(_msa - _msW) * _mBase);
+                ctx.lineTo(Math.cos(_msa) * _mTip,          Math.sin(_msa) * _mTip);
+                ctx.lineTo(Math.cos(_msa + _msW) * _mBase, Math.sin(_msa + _msW) * _mBase);
+                ctx.closePath(); ctx.fill();
+            }
+            // Central eye socket — always hollow for myasnoy (eye is the turret)
+            if (type === 'myasnoy') {
+                // Eye has detached: show dark hollow socket with blood drips
+                ctx.beginPath(); ctx.arc(0, 0, bodyW*0.22, 0, Math.PI*2); ctx.fillStyle = '#3a0000'; ctx.fill();
+                ctx.strokeStyle = '#770000'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, 0, bodyW*0.13, 0, Math.PI*2); ctx.fillStyle = '#100000'; ctx.fill();
+                for (let _sv = 0; _sv < 5; _sv++) {
+                    const _sa = (_sv / 5) * Math.PI * 2;
+                    ctx.beginPath(); ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(_sa)*bodyW*0.22, Math.sin(_sa)*bodyW*0.22);
+                    ctx.strokeStyle = 'rgba(160,0,0,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
+                }
+            } else {
+                // Large prominent central eye (player main form)
+                const _eyeS = ctx.createRadialGradient(-bodyW*0.07, -bodyH*0.07, 0, 0, 0, bodyW*0.29);
+                _eyeS.addColorStop(0, '#fff8ef'); _eyeS.addColorStop(0.6, '#f0dcc0'); _eyeS.addColorStop(1, '#dfc090');
+                ctx.beginPath(); ctx.arc(0, 0, bodyW*0.29, 0, Math.PI*2); ctx.fillStyle = _eyeS; ctx.fill();
+                ctx.strokeStyle = 'rgba(90,0,0,0.55)'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(0, 0, bodyW*0.18, 0, Math.PI*2); ctx.fillStyle = '#8c2800'; ctx.fill();
+                ctx.beginPath(); ctx.arc(0, 0, bodyW*0.09, 0, Math.PI*2); ctx.fillStyle = '#0f0f0f'; ctx.fill();
+                ctx.beginPath(); ctx.arc(-bodyW*0.09, -bodyH*0.09, bodyW*0.055, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.fill();
+                ctx.beginPath(); ctx.arc(bodyW*0.04, bodyH*0.04, bodyW*0.027, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.32)'; ctx.fill();
+            }
+            // Small scattered eyes
+            const _mytEyes = [[-0.3,-0.26],[0.31,-0.23],[-0.27,0.27],[0.27,0.29]];
+            for (const [_mex,_mey] of _mytEyes) {
+                const _mer = bodyW * 0.073;
+                ctx.beginPath(); ctx.arc(_mex*bodyW, _mey*bodyH, _mer,       0, Math.PI*2); ctx.fillStyle = '#f0e0c0'; ctx.fill();
+                ctx.beginPath(); ctx.arc(_mex*bodyW, _mey*bodyH, _mer*0.55,  0, Math.PI*2); ctx.fillStyle = '#701800'; ctx.fill();
+                ctx.beginPath(); ctx.arc(_mex*bodyW, _mey*bodyH, _mer*0.28,  0, Math.PI*2); ctx.fillStyle = '#0a0a0a'; ctx.fill();
+            }
+            // Body border
+            ctx.strokeStyle = '#5a0000'; ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'mine') {
             // Dark olive camo body with hazard markings
@@ -2380,6 +2721,35 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0, 0, tSize * 0.22, 0, Math.PI * 2);
         ctx.fillStyle = '#cc0000';
         ctx.fill();
+    } else if (type === 'myasnoy') {
+        if (heatState && heatState.isMyasnoyBody) {
+            // Body bot — eye has detached, just a fleshy flesh dome on the body
+            const _mytTG = ctx.createRadialGradient(-tSize*0.14, -tSize*0.14, 0, 0, 0, tSize*0.58);
+            _mytTG.addColorStop(0, '#d84040');
+            _mytTG.addColorStop(0.55, '#9a1a1a');
+            _mytTG.addColorStop(1, '#6a0808');
+            ctx.fillStyle = _mytTG;
+            ctx.beginPath(); ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#5a0000'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2); ctx.stroke();
+        } else {
+            // Player — the turret IS a giant eye
+            // Sclera
+            const _myEG = ctx.createRadialGradient(-tSize*0.1, -tSize*0.12, 0, 0, 0, tSize*0.52);
+            _myEG.addColorStop(0, '#fff4e0');
+            _myEG.addColorStop(0.7, '#f0dbc0');
+            _myEG.addColorStop(1, '#d0a888');
+            ctx.beginPath(); ctx.arc(0, 0, tSize*0.52, 0, Math.PI*2); ctx.fillStyle = _myEG; ctx.fill();
+            ctx.strokeStyle = 'rgba(100,10,10,0.65)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(0, 0, tSize*0.52, 0, Math.PI*2); ctx.stroke();
+            // Iris
+            ctx.beginPath(); ctx.arc(0, 0, tSize*0.32, 0, Math.PI*2); ctx.fillStyle = '#8c2800'; ctx.fill();
+            // Pupil
+            ctx.beginPath(); ctx.arc(0, 0, tSize*0.16, 0, Math.PI*2); ctx.fillStyle = '#080808'; ctx.fill();
+            // Highlights
+            ctx.beginPath(); ctx.arc(-tSize*0.1, -tSize*0.12, tSize*0.08, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+            ctx.beginPath(); ctx.arc(tSize*0.05, tSize*0.06, tSize*0.04, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fill();
+        }
     } else if (type === 'kvant') {
         // Квант turret: hex dome with pulsing eye
         const _aiTT = Date.now() * 0.001;
@@ -3135,6 +3505,32 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
                 ctx.lineWidth = 1;
                 ctx.strokeRect(tSize/2 + dBarL - 3, yOff - dBarH/2 - 1, 3, dBarH + 2);
             }
+        } else if (type === 'myasnoy') {
+            // Bio-beam cannon: organic neck flaring into a wide cone
+            const _mybLen   = Math.min(W, H) * 0.65 * turretScale;
+            const _mybNeckH = Math.min(W, H) * 0.10 * turretScale;
+            const _mybConeH = Math.min(W, H) * 0.23 * turretScale;
+            // Fleshy neck tube
+            const _mybNG = ctx.createLinearGradient(tSize/2, 0, tSize/2 + _mybLen*0.55, 0);
+            _mybNG.addColorStop(0, '#b02020'); _mybNG.addColorStop(1, '#c83030');
+            ctx.fillStyle = _mybNG;
+            ctx.fillRect(tSize/2, -_mybNeckH/2, _mybLen * 0.55, _mybNeckH);
+            // Widening cone (the bio-beam mouth)
+            ctx.fillStyle = '#cc1a10';
+            ctx.beginPath();
+            ctx.moveTo(tSize/2 + _mybLen*0.55, -_mybNeckH/2);
+            ctx.lineTo(tSize/2 + _mybLen,       -_mybConeH/2);
+            ctx.lineTo(tSize/2 + _mybLen,        _mybConeH/2);
+            ctx.lineTo(tSize/2 + _mybLen*0.55,  _mybNeckH/2);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#7a0000'; ctx.lineWidth = 1.2; ctx.stroke();
+            // Dark opening at cone tip
+            ctx.fillStyle = 'rgba(15,0,0,0.85)';
+            ctx.beginPath();
+            ctx.moveTo(tSize/2 + _mybLen, -_mybConeH * 0.44);
+            ctx.lineTo(tSize/2 + _mybLen - 6, 0);
+            ctx.lineTo(tSize/2 + _mybLen,  _mybConeH * 0.44);
+            ctx.closePath(); ctx.fill();
         } else {
             // Standard Cannon
             const barrelLen = Math.min(W, H) * 0.6 * turretScale;
@@ -3148,6 +3544,50 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
     }
     ctx.restore();
 }
+
+    function hellLavaNoise(seed) {
+        const raw = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
+        return raw - Math.floor(raw);
+    }
+
+    function traceHellLavaPoolPath(ctx, obj, inset = 0) {
+        const centerX = obj.x + obj.w * 0.5;
+        const centerY = obj.y + obj.h * 0.5;
+        const radiusX = Math.max(18, obj.w * 0.5 - inset);
+        const radiusY = Math.max(14, obj.h * 0.5 - inset * 0.85);
+        const seedBase = obj.x * 0.017 + obj.y * 0.013 + obj.w * 0.011 + obj.h * 0.019;
+        const pointCount = 12;
+        const points = [];
+
+        for (let i = 0; i < pointCount; i++) {
+            const angle = Math.PI * 2 * i / pointCount;
+            const stretchX = 0.76 + hellLavaNoise(seedBase + i * 0.91) * 0.34;
+            const stretchY = 0.74 + hellLavaNoise(seedBase + 20 + i * 1.07) * 0.38;
+            const lobeBoost = (i % 4 === 1 || i % 4 === 2) ? 1.08 : 0.96;
+            const ridgeBoost = i % 3 === 0 ? 1.06 : 0.94;
+
+            points.push({
+                x: centerX + Math.cos(angle) * radiusX * stretchX * lobeBoost,
+                y: centerY + Math.sin(angle) * radiusY * stretchY * ridgeBoost
+            });
+        }
+
+        const firstMidX = (points[0].x + points[1].x) * 0.5;
+        const firstMidY = (points[0].y + points[1].y) * 0.5;
+
+        ctx.beginPath();
+        ctx.moveTo(firstMidX, firstMidY);
+
+        for (let i = 1; i <= pointCount; i++) {
+            const current = points[i % pointCount];
+            const next = points[(i + 1) % pointCount];
+            const midX = (current.x + next.x) * 0.5;
+            const midY = (current.y + next.y) * 0.5;
+            ctx.quadraticCurveTo(current.x, current.y, midX, midY);
+        }
+
+        ctx.closePath();
+    }
 
 // ── Boss Hell Tank custom renderer ────────────────────────────────────────────
 // Call with ctx already translated so (0,0) is the boss centre.
@@ -3397,22 +3837,28 @@ function drawPreview() {
     if (!previewCtx) return;
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
     const side = Math.min(previewCanvas.width, previewCanvas.height) / 2;
-    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, tank.turretAngle, 1, tankType, getPreviewTankHeatState(tankType), 0);
+    drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, getPreviewTankTurretAngle(tankType, tank.turretAngle), 1, tankType, getPreviewTankHeatState(tankType), 0);
+}
+
+function getPreviewTankTurretAngle(type, fallbackAngle = 0) {
+    return fallbackAngle;
 }
 
 function getPreviewTankHeatState(type) {
-    if (type !== 'burovoy') return null;
+    if (type === 'burovoy') {
+        const cycle = (Date.now() % 1800) / 1800;
+        const pulse = Math.pow((Math.sin(cycle * Math.PI * 2) + 1) * 0.5, 1.5);
 
-    const cycle = (Date.now() % 1800) / 1800;
-    const pulse = Math.pow((Math.sin(cycle * Math.PI * 2) + 1) * 0.5, 1.5);
+        return {
+            burovoyDrillAnim: 0.12 + pulse * 0.88,
+            burovoyBurrowActive: false,
+            burovoyBurrowPhase: 0,
+            burovoyDrillActive: pulse > 0.55,
+            burovoyDrillHit: pulse > 0.84
+        };
+    }
 
-    return {
-        burovoyDrillAnim: 0.12 + pulse * 0.88,
-        burovoyBurrowActive: false,
-        burovoyBurrowPhase: 0,
-        burovoyDrillActive: pulse > 0.55,
-        burovoyDrillHit: pulse > 0.84
-    };
+    return null;
 }
 
 function stopCharacterPreviewAnimations() {
@@ -4018,10 +4464,11 @@ function drawCharacterPreviews() {
 
         let side = Math.min(canvas.width, canvas.height) / 2;
         if (type === 'mechDiy' || type === 'mechShield') side *= 0.2;
+        if (type === 'myasnoy') side *= (heatState && heatState.myasnoyEyeForm) ? 0.72 : 0.56;
 
         ctx.save();
         if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
-        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, type, heatState, 0);
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, getPreviewTankTurretAngle(type, 0), 1, type, heatState, 0);
         ctx.restore();
 
         drawPreviewOverlay(ctx, canvas, type, isUnlocked);
@@ -4065,6 +4512,9 @@ function drawCharacterPreviews() {
         drawItem(airTankCtx, airTankPreview, 'air', '#00a896', tankBgGradients.air);
         drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', tankBgGradients.illuminat);
         drawItem(burovoyTankCtx, burovoyTankPreview, 'burovoy', '#8b1e13', tankBgGradients.burovoy, getPreviewTankHeatState('burovoy'));
+        if (typeof myasnoyTankCtx !== 'undefined' && myasnoyTankCtx && myasnoyTankPreview) {
+            drawItem(myasnoyTankCtx, myasnoyTankPreview, 'myasnoy', '#c03030', tankBgGradients.myasnoy);
+        }
         drawChromaticItem(timeTankCtx, timeTankPreview, 'time', '#FF00FF', '#333');
         drawChromaticItem(imitatorTankCtx, imitatorTankPreview, 'imitator', '#1a1a3e', '#111');
         drawChromaticItem(romanTankCtx, romanTankPreview, 'roman', '#1a1a2e', '#111');
@@ -4090,6 +4540,9 @@ function drawCharacterPreviews() {
 
     if (typeof kamikazeTankCtx !== 'undefined' && kamikazeTankCtx && kamikazeTankPreview) {
         drawItem(kamikazeTankCtx, kamikazeTankPreview, 'kamikaze', '#FFFFFF', tankBgGradients.kamikaze);
+    }
+    if (typeof myasnoyTankCtx !== 'undefined' && myasnoyTankCtx && myasnoyTankPreview) {
+        drawItem(myasnoyTankCtx, myasnoyTankPreview, 'myasnoy', '#c03030', tankBgGradients.myasnoy);
     }
     if (typeof mineTankCtx !== 'undefined' && mineTankCtx && mineTankPreview) {
         drawItem(mineTankCtx, mineTankPreview, 'mine', '#3d4c18', tankBgGradients.mine);
@@ -4638,33 +5091,117 @@ function draw() {
             }
             ctx.restore();
         } else if (obj.type === 'hellLava') {
-            // Boss fight lava pool — animated orange/red
+            // Boss fight lava pool — organic molten shape
             const _lt = Date.now() * 0.0012;
             const _lx = obj.x, _ly = obj.y, _lw = obj.w, _lh = obj.h;
-            const _lGrad = ctx.createLinearGradient(_lx, _ly, _lx + _lw, _ly + _lh);
-            _lGrad.addColorStop(0,   '#ff8800');
-            _lGrad.addColorStop(0.4, '#ffaa00');
-            _lGrad.addColorStop(0.7, '#ff6600');
-            _lGrad.addColorStop(1,   '#dd4400');
-            ctx.fillStyle = _lGrad;
-            ctx.fillRect(_lx, _ly, _lw, _lh);
-            // Animated lava bubbles / wave overlay
-            for (let _bi = 0; _bi < 4; _bi++) {
-                const _bpx = _lx + (_bi / 4) * _lw + Math.sin(_lt + _bi * 1.8) * _lw * 0.08;
-                const _bpy = _ly + _lh * 0.5 + Math.cos(_lt * 0.9 + _bi * 1.2) * _lh * 0.3;
-                const _br  = Math.min(_lw, _lh) * (0.12 + 0.06 * Math.sin(_lt + _bi));
+            const _cx = _lx + _lw * 0.5, _cy = _ly + _lh * 0.5;
+            const _maxSize = Math.max(_lw, _lh);
+
+            ctx.save();
+            ctx.translate(0, 5);
+            traceHellLavaPoolPath(ctx, obj);
+            ctx.fillStyle = 'rgba(34,8,0,0.42)';
+            ctx.fill();
+            ctx.restore();
+
+            ctx.save();
+            traceHellLavaPoolPath(ctx, obj);
+            ctx.clip();
+
+            const _bedGrad = ctx.createLinearGradient(_lx, _ly, _lx + _lw, _ly + _lh);
+            _bedGrad.addColorStop(0, '#341004');
+            _bedGrad.addColorStop(0.34, '#7a1f04');
+            _bedGrad.addColorStop(0.7, '#c53b00');
+            _bedGrad.addColorStop(1, '#4d1200');
+            ctx.fillStyle = _bedGrad;
+            ctx.fillRect(_lx - 16, _ly - 16, _lw + 32, _lh + 32);
+
+            const _coreGrad = ctx.createRadialGradient(
+                _cx + Math.sin(_lt * 1.5) * _lw * 0.08,
+                _cy + Math.cos(_lt * 1.1) * _lh * 0.06,
+                _maxSize * 0.06,
+                _cx,
+                _cy,
+                _maxSize * 0.72
+            );
+            _coreGrad.addColorStop(0, 'rgba(255,251,176,0.95)');
+            _coreGrad.addColorStop(0.24, 'rgba(255,194,70,0.88)');
+            _coreGrad.addColorStop(0.56, 'rgba(255,100,18,0.54)');
+            _coreGrad.addColorStop(1, 'rgba(120,24,0,0)');
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = _coreGrad;
+            ctx.fillRect(_lx - 16, _ly - 16, _lw + 32, _lh + 32);
+            ctx.globalCompositeOperation = 'source-over';
+
+            for (let _fi = 0; _fi < 3; _fi++) {
+                ctx.save();
+                ctx.translate(_cx, _cy);
+                ctx.rotate(Math.sin(_lt * 0.6 + _fi * 1.1) * 0.22 + _fi * 0.6);
+                ctx.scale(1, 0.34 + _fi * 0.09);
+                const _flowGrad = ctx.createLinearGradient(-_lw * 0.7, 0, _lw * 0.7, 0);
+                _flowGrad.addColorStop(0, 'rgba(255,120,0,0)');
+                _flowGrad.addColorStop(0.25, 'rgba(255,166,34,0.2)');
+                _flowGrad.addColorStop(0.5, 'rgba(255,235,132,0.46)');
+                _flowGrad.addColorStop(0.75, 'rgba(255,123,15,0.24)');
+                _flowGrad.addColorStop(1, 'rgba(255,120,0,0)');
+                ctx.fillStyle = _flowGrad;
+                ctx.beginPath();
+                ctx.ellipse(0, Math.sin(_lt * 1.9 + _fi) * _lh * 0.08, _lw * (0.34 + _fi * 0.07), _lh * 0.18, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            for (let _bi = 0; _bi < 6; _bi++) {
+                const _bpx = _lx + _lw * (0.14 + _bi * 0.14) + Math.sin(_lt * 1.5 + _bi * 1.7) * _lw * 0.06;
+                const _bpy = _ly + _lh * (0.32 + (_bi % 3) * 0.18) + Math.cos(_lt * 1.2 + _bi * 1.4) * _lh * 0.08;
+                const _br = Math.min(_lw, _lh) * (0.06 + 0.025 * Math.sin(_lt * 2.2 + _bi));
                 const _bGrad = ctx.createRadialGradient(_bpx, _bpy, 0, _bpx, _bpy, _br);
-                _bGrad.addColorStop(0, `rgba(255,240,100,${0.6 + 0.4 * Math.sin(_lt + _bi)})`);
+                _bGrad.addColorStop(0, `rgba(255,247,176,${0.55 + 0.2 * Math.sin(_lt * 2 + _bi)})`);
+                _bGrad.addColorStop(0.5, 'rgba(255,170,48,0.38)');
                 _bGrad.addColorStop(1, 'rgba(255,120,0,0)');
                 ctx.fillStyle = _bGrad;
-                ctx.beginPath(); ctx.arc(_bpx, _bpy, _br, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath();
+                ctx.arc(_bpx, _bpy, _br, 0, Math.PI * 2);
+                ctx.fill();
             }
-            // Glowing edge
-            ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 10;
-            ctx.strokeStyle = `rgba(255,180,0,${0.7 + 0.3 * Math.sin(_lt * 2)})`;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(_lx, _ly, _lw, _lh);
-            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = 'rgba(68,16,0,0.18)';
+            for (let _ci = 0; _ci < 3; _ci++) {
+                ctx.beginPath();
+                ctx.ellipse(
+                    _lx + _lw * (0.28 + _ci * 0.22),
+                    _ly + _lh * (0.4 + (_ci % 2) * 0.2),
+                    _lw * (0.06 + _ci * 0.015),
+                    _lh * (0.05 + _ci * 0.02),
+                    _ci * 0.6,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
+            ctx.restore();
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,174,52,0.7)';
+            ctx.shadowBlur = 16;
+            traceHellLavaPoolPath(ctx, obj);
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = 'rgba(78,18,0,0.78)';
+            ctx.stroke();
+            ctx.shadowBlur = 10;
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255,194,74,${0.6 + 0.18 * Math.sin(_lt * 2.2)})`;
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.save();
+            traceHellLavaPoolPath(ctx, obj, 12);
+            ctx.strokeStyle = `rgba(255,234,156,${0.2 + 0.12 * Math.sin(_lt * 3.1)})`;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([16, 10]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
         } else if (obj.type === 'hellRift') {
             // Boss fight dimensional rift — dark purple/crimson crack
             const _rt = Date.now() * 0.0015;
@@ -5968,8 +6505,81 @@ function draw() {
             ctx.arc(b.x, b.y, radius + 0.5, 0, Math.PI * 2);
             ctx.stroke();
             
+        } else if (b.type === 'myasnoyBio') {
+            // Thin twisting blood vessel flying along the projectile direction
+            const _mbR = Math.max(2, (b.w || 5) * 0.5);
+            const _mbAng = Math.atan2(b.vy, b.vx);
+            const _mbSeed = b.veinSeed || 0;
+            const _mbTwist = b.veinTwist || 1;
+            const _mbT = Date.now() * 0.007 + _mbSeed;
+            const _mbLen = _mbR * 8.8;
+            const _mbAmp = _mbR * 1.35;
+            const _mbPts = [];
+            const _mbSegs = 7;
+            for (let _pi = 0; _pi <= _mbSegs; _pi++) {
+                const _pf = _pi / _mbSegs;
+                const _px = -_mbLen * 0.62 + _pf * _mbLen * 1.24;
+                const _fade = 0.35 + Math.sin(_pf * Math.PI) * 0.65;
+                const _waveA = Math.sin(_mbT * 1.25 + _pf * 6.4 * _mbTwist) * _mbAmp;
+                const _waveB = Math.sin(_mbT * 2.1 + _pf * 10.8) * _mbR * 0.42;
+                const _py = (_waveA + _waveB) * _fade;
+                _mbPts.push({ x: _px, y: _py });
+            }
+            const _drawVein = (pts, outerColor, innerColor, outerW, innerW) => {
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, pts[0].y);
+                for (let _vi = 1; _vi < pts.length; _vi++) {
+                    const _prev = pts[_vi - 1];
+                    const _cur = pts[_vi];
+                    const _mx = (_prev.x + _cur.x) * 0.5;
+                    const _my = (_prev.y + _cur.y) * 0.5;
+                    ctx.quadraticCurveTo(_prev.x, _prev.y, _mx, _my);
+                }
+                const _last = pts[pts.length - 1];
+                ctx.lineTo(_last.x, _last.y);
+                ctx.strokeStyle = outerColor;
+                ctx.lineWidth = outerW;
+                ctx.stroke();
+                ctx.strokeStyle = innerColor;
+                ctx.lineWidth = innerW;
+                ctx.stroke();
+            };
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(_mbAng);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            const _mbGrad = ctx.createLinearGradient(-_mbLen * 0.65, 0, _mbLen * 0.65, 0);
+            _mbGrad.addColorStop(0, 'rgba(80,0,0,0.25)');
+            _mbGrad.addColorStop(0.55, 'rgba(155,18,18,0.95)');
+            _mbGrad.addColorStop(1, 'rgba(255,120,120,0.92)');
+            _drawVein(_mbPts, 'rgba(20,0,0,0.92)', _mbGrad, _mbR * 1.05, Math.max(0.9, _mbR * 0.42));
+
+            const _branchBase = _mbPts[2];
+            const _branchLen = _mbR * 3.1;
+            const _branchWave = Math.sin(_mbT * 1.4) * _mbR * 0.55;
+            const _branchA = [
+                { x: _branchBase.x - _mbR * 0.2, y: _branchBase.y },
+                { x: _branchBase.x - _branchLen * 0.25, y: _branchBase.y - _mbR * 0.95 + _branchWave },
+                { x: _branchBase.x - _branchLen * 0.7, y: _branchBase.y - _mbR * 1.45 + _branchWave * 0.8 },
+                { x: _branchBase.x - _branchLen, y: _branchBase.y - _mbR * 1.9 + _branchWave }
+            ];
+            const _branchB = [
+                { x: _branchBase.x + _mbR * 0.1, y: _branchBase.y + _mbR * 0.05 },
+                { x: _branchBase.x - _branchLen * 0.18, y: _branchBase.y + _mbR * 0.95 - _branchWave * 0.65 },
+                { x: _branchBase.x - _branchLen * 0.58, y: _branchBase.y + _mbR * 1.35 - _branchWave * 0.55 },
+                { x: _branchBase.x - _branchLen * 0.92, y: _branchBase.y + _mbR * 1.8 - _branchWave * 0.7 }
+            ];
+            _drawVein(_branchA, 'rgba(18,0,0,0.85)', 'rgba(120,10,10,0.95)', _mbR * 0.62, Math.max(0.7, _mbR * 0.22));
+            _drawVein(_branchB, 'rgba(18,0,0,0.82)', 'rgba(120,10,10,0.92)', _mbR * 0.56, Math.max(0.6, _mbR * 0.20));
+
+            ctx.fillStyle = 'rgba(255,170,170,0.65)';
+            ctx.beginPath();
+            ctx.ellipse(_mbLen * 0.6, _mbPts[_mbPts.length - 1].y * 0.35, _mbR * 0.45, _mbR * 0.25, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
         } else {
-            ctx.fillStyle = '#5c4033';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
             ctx.fillStyle = '#fdb813'; 
             const m = 2;
@@ -6497,7 +7107,7 @@ function draw() {
             ctx.restore();
         }
         const _aBurovoyDrill = getBurovoyDrillRenderState(a);
-        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit }, 0);
+        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit, isMyasnoyBody: !!(a.isMyasnoyBody) }, 0);
         drawSandCurseOverlay(ctx, Math.max(a.w, a.h) * 0.85, a.sandCurseTimer || 0);
         // Hit flash - radial impact burst
         const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
@@ -6520,7 +7130,7 @@ function draw() {
         ctx.fillStyle = 'blue';
         ctx.fillRect(a.x, a.y - 10, a.w, 5);
         ctx.fillStyle = 'black';
-        const maxAllyHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || a.maxHp || 300;
+        const maxAllyHp = a.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || 300;
         const missingHp = maxAllyHp - a.hp;
         if (missingHp > 0) {
             ctx.fillRect(a.x + a.w * (a.hp / maxAllyHp), a.y - 10, a.w * (missingHp / maxAllyHp), 5);
@@ -6886,6 +7496,30 @@ function draw() {
             ctx.fillText('⚡', _ovCx, enemy.y - 13);
             ctx.restore();
         }
+        if ((enemy.myasnoyHypnoTimer || 0) > 0) {
+            const _hyProg = Math.max(0, Math.min(1, (enemy.myasnoyHypnoTimer || 0) / 300));
+            const _hyPulse = 0.68 + 0.32 * Math.sin(Date.now() * 0.012 + enemy.x * 0.03);
+            const _hyCx = enemy.x + enemy.w / 2;
+            const _hyCy = enemy.y - 16;
+            const _hyR = Math.max(enemy.w, enemy.h) * 0.22;
+            ctx.save();
+            ctx.strokeStyle = `rgba(185,115,255,${(0.8 * _hyPulse).toFixed(2)})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(_hyCx, _hyCy, _hyR + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(235,210,255,0.92)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(_hyCx, _hyCy, _hyR + 6, -Math.PI / 2, -Math.PI / 2 + _hyProg * Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = `rgba(249,240,255,${(0.92 * _hyPulse).toFixed(2)})`;
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('◎', _hyCx, _hyCy + 0.5);
+            ctx.restore();
+        }
         if ((enemy.tankType === 'mechShield') && typeof drawShieldActiveOverlay === 'function') {
             const _eFadeR = enemy.mechShieldActive ? 1 : Math.max(0, (enemy.mechShieldFadeTimer || 0) / 30);
             const _eDmgP = enemy.mechShieldDamagePercent || 0;
@@ -6965,7 +7599,9 @@ function draw() {
             moveAnim = Math.min(1, Math.abs(tank.speed) * 0.3);
         }
         const _playerBurovoyDrill = getBurovoyDrillRenderState(tank);
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit }, moveAnim);
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
+            ? ((tank.myasnoySeparationAnim || 0) / Math.max(1, tank.myasnoySeparationAnimMax || 18))
+            : 0 }, moveAnim);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
 
         // Draw Квант overload indicator on player tank (when debuffed by enemy bot)
@@ -7720,19 +8356,117 @@ function renderTankUpgradesUI(tt) {
 // Function to show tank detail modal
 function showTankDetail(tankType) {
     const modal = document.getElementById('tankDetailModal');
+    const modalBox = modal ? modal.querySelector('.modal-box') : null;
     const title = document.getElementById('tankDetailTitle');
     const rarity = document.getElementById('tankDetailRarity');
+    const tabsEl = document.getElementById('tankDetailTabs');
     const canvas = document.getElementById('tankDetailCanvas');
     const description = document.getElementById('tankDetailDescription');
+    const statsEl = document.getElementById('tankDetailStats');
+    const upgradesEl = document.getElementById('tankDetailUpgrades');
+    const rankEl = document.getElementById('tankDetailRank');
     const ctx = canvas.getContext('2d');
 
     // Reference to the modal primary action button (style updated elsewhere)
     const tankDetailSelectBtn = document.getElementById('tankDetailSelect');
+    const tankDetailTryBtn = document.getElementById('tankDetailTry');
 
     // Resolve unit description — mechs use their own data, tanks use tankDescriptions
     const unitDesc = (window.isMech && window.isMech(tankType))
         ? (window.mechDescriptions && window.mechDescriptions[tankType])
         : tankDescriptions[tankType];
+    const isMyasnoyDetail = tankType === 'myasnoy';
+    const myasnoyTabKey = isMyasnoyDetail && (window._myasnoyDetailTab === 'body' || window._myasnoyDetailTab === 'eye')
+        ? window._myasnoyDetailTab
+        : 'base';
+    const myasnoyForms = isMyasnoyDetail ? {
+        base: {
+            label: 'Начальная',
+            description: unitDesc.description,
+            hpMultiplier: 1,
+            speedBase: ((typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType.myasnoy) || 3.0),
+            damageBase: 1.5,
+            damageNote: '/сосуд',
+            fractionalDamage: true,
+            sideScale: 0.66,
+            heatState: null
+        },
+        body: {
+            label: 'Форма бота',
+            description: 'Форма бота превращает корпус в самостоятельную огневую точку. Тело удерживает линию, поливает врага сосудами и заставляет противника делить внимание между двумя угрозами сразу.',
+            hpMultiplier: 0.7,
+            speedBase: 3.2,
+            damageBase: 1.5,
+            damageNote: '/сосуд',
+            fractionalDamage: true,
+            sideScale: 0.66,
+            heatState: { isMyasnoyBody: true }
+        },
+        eye: {
+            label: 'Глаз',
+            description: 'Глаз — быстрая охотничья форма мясного. Он испепеляет сектор лазером вблизи, а ультой проводит гипнотический луч и ломает поведение врагов, заставляя их тянуться за игроком.',
+            hpMultiplier: 0.55,
+            speedBase: 3.6,
+            damageBase: 80,
+            damageNote: '/удар',
+            fractionalDamage: false,
+            sideScale: 0.84,
+            heatState: { myasnoyEyeForm: true, myasnoyAttackTimer: 12, myasnoySeparationPulse: 0.14 }
+        }
+    } : null;
+    const myasnoyForm = myasnoyForms ? (myasnoyForms[myasnoyTabKey] || myasnoyForms.base) : null;
+    const roundMyasnoyDisplayHp = (value) => Math.max(10, Math.round((value || 0) / 10) * 10);
+    const useCompactCard = false;
+    const infoRow = canvas.parentElement;
+    const infoSide = description ? description.parentElement : null;
+    const actionsRow = tankDetailTryBtn ? tankDetailTryBtn.parentElement : null;
+
+    canvas.width = useCompactCard ? 240 : 200;
+    canvas.height = useCompactCard ? 240 : 200;
+    canvas.style.width = useCompactCard ? '240px' : '200px';
+    canvas.style.height = useCompactCard ? '240px' : '200px';
+    canvas.style.border = useCompactCard ? '2px solid #ff5a1f' : '2px solid #444';
+    canvas.style.boxShadow = useCompactCard ? '0 0 22px rgba(255,90,31,0.28)' : 'none';
+    canvas.style.background = useCompactCard ? 'radial-gradient(circle at 50% 35%, rgba(90,18,18,0.55), rgba(20,0,0,0.92))' : '';
+    if (infoRow) {
+        infoRow.style.justifyContent = useCompactCard ? 'center' : 'space-between';
+        infoRow.style.alignItems = useCompactCard ? 'center' : 'flex-start';
+        infoRow.style.marginBottom = useCompactCard ? '18px' : '14px';
+        infoRow.style.gap = useCompactCard ? '0px' : '16px';
+    }
+    if (infoSide) infoSide.style.display = useCompactCard ? 'none' : 'flex';
+    if (description) description.style.display = useCompactCard ? 'none' : 'block';
+    if (tabsEl) {
+        tabsEl.style.display = useCompactCard || !isMyasnoyDetail ? 'none' : 'flex';
+        if (useCompactCard || !isMyasnoyDetail) tabsEl.innerHTML = '';
+    }
+    if (statsEl) {
+        statsEl.style.display = useCompactCard ? 'none' : 'block';
+        if (useCompactCard) statsEl.innerHTML = '';
+    }
+    if (upgradesEl) {
+        upgradesEl.style.display = useCompactCard ? 'none' : 'block';
+        if (useCompactCard) upgradesEl.innerHTML = '';
+    }
+    if (rankEl) rankEl.style.display = useCompactCard ? 'none' : 'flex';
+    if (modalBox) {
+        modalBox.style.maxWidth = useCompactCard ? '430px' : '';
+        modalBox.style.width = useCompactCard ? 'min(430px, 92vw)' : '';
+        modalBox.style.background = useCompactCard ? 'linear-gradient(180deg, rgba(40,8,8,0.98), rgba(16,0,0,0.98))' : '';
+        modalBox.style.border = useCompactCard ? '2px solid #ff5a1f' : '';
+        modalBox.style.boxShadow = useCompactCard ? '0 0 32px rgba(255,90,31,0.2)' : '';
+    }
+    title.style.marginBottom = useCompactCard ? '8px' : '';
+    title.style.letterSpacing = useCompactCard ? '0.04em' : '';
+    rarity.style.margin = useCompactCard ? '0 0 14px 0' : '';
+    if (actionsRow) {
+        actionsRow.style.display = useCompactCard ? 'grid' : 'flex';
+        actionsRow.style.gridTemplateColumns = useCompactCard ? '1fr 1fr' : '';
+        actionsRow.style.gap = useCompactCard ? '10px' : '14px';
+        actionsRow.style.alignItems = 'stretch';
+    }
+    if (tankDetailTryBtn) tankDetailTryBtn.style.width = useCompactCard ? '100%' : '';
+    if (tankDetailSelectBtn) tankDetailSelectBtn.style.width = useCompactCard ? '100%' : '';
 
     // Set title, rarity and description
     title.textContent = unitDesc.name;
@@ -7761,10 +8495,33 @@ function showTankDetail(tankType) {
         glowStyle = 'text-shadow: 0 0 12px #ff4400, 0 0 24px #ff6600, 0 0 36px #ff4400;';
     }
     rarity.innerHTML = `<span style="color:${rarityColor}; ${glowStyle}">${rarityText}</span>`;
-    description.textContent = unitDesc.description;
+    description.textContent = myasnoyForm ? myasnoyForm.description : unitDesc.description;
+
+    if (tabsEl) {
+        if (isMyasnoyDetail && !useCompactCard) {
+            const _myasnoyTabDefs = [
+                ['base', 'Начальная'],
+                ['body', 'Форма бота'],
+                ['eye', 'Глаз']
+            ];
+            tabsEl.innerHTML = _myasnoyTabDefs.map(([_key, _label]) => {
+                const _active = _key === myasnoyTabKey;
+                return `<button type="button" data-myasnoy-tab="${_key}" style="padding:7px 12px; border-radius:999px; border:1px solid ${_active ? '#ff7a44' : 'rgba(255,120,90,0.28)'}; background:${_active ? 'linear-gradient(135deg, rgba(122,0,0,0.92), rgba(196,42,24,0.88))' : 'rgba(50,8,8,0.52)'}; color:${_active ? '#fff4ef' : '#d8b3ad'}; font-size:12px; font-weight:${_active ? '700' : '600'}; letter-spacing:0.02em; cursor:pointer; box-shadow:${_active ? '0 0 12px rgba(255,90,50,0.18)' : 'none'};">${_label}</button>`;
+            }).join('');
+            tabsEl.querySelectorAll('[data-myasnoy-tab]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const nextTab = btn.getAttribute('data-myasnoy-tab') || 'base';
+                    if (nextTab === myasnoyTabKey) return;
+                    window._myasnoyDetailTab = nextTab;
+                    showTankDetail('myasnoy');
+                });
+            });
+        } else {
+            tabsEl.innerHTML = '';
+        }
+    }
 
     // Rank badge based on per-tank trophies
-    const rankEl = document.getElementById('tankDetailRank');
     if (rankEl) {
         const tt = (typeof getTankTrophies === 'function') ? getTankTrophies(tankType) : 0;
         const info = getRankInfo(tt, tankType);
@@ -7810,83 +8567,94 @@ function showTankDetail(tankType) {
         rankEl.onclick = () => {
             if (typeof showRankModal === 'function') showRankModal(tankType);
         };
+        if (useCompactCard) rankEl.style.display = 'none';
     }
 
     // Trio badge
     const trioEl = document.getElementById('tankDetailTrio');
     if (trioEl) {
-        const trio = tankTrios[tankType];
-        if (trio) {
-            const c = trio.color;
-            // Build member chips: emoji + short name, highlight current tank, gray out locked tanks
-            const chips = trio.members.map(([mType, mIcon]) => {
-                const mName = (tankDescriptions[mType] || window.mechDescriptions?.[mType])?.name || mType;
-                const isActive = mType === tankType;
-                const isUnlocked = unlockedTanks && unlockedTanks.includes(mType);
-                let bgColor, borderColor, textColor, fontWeight, opacity;
-                if (isActive) {
-                    bgColor = c + '55';
-                    borderColor = c;
-                    textColor = '#fff';
-                    fontWeight = '800';
-                    opacity = '1';
-                } else if (isUnlocked) {
-                    bgColor = c + '22';
-                    borderColor = c;
-                    textColor = '#fff';
-                    fontWeight = '600';
-                    opacity = '1';
-                } else {
-                    bgColor = 'rgba(100,100,100,0.15)';
-                    borderColor = 'rgba(150,150,150,0.3)';
-                    textColor = '#888';
-                    fontWeight = 'normal';
-                    opacity = '0.5';
-                }
-                return `<span style="
-                    display:inline-flex; align-items:center; gap:4px;
-                    background:${bgColor};
-                    border:1px solid ${borderColor};
-                    border-radius:20px; padding:3px 9px 3px 7px;
-                    font-size:12px; color:${textColor};
-                    font-weight:${fontWeight};
-                    opacity:${opacity};
-                ">${mIcon} ${mName}</span>`;
-            }).join('');
-            trioEl.style.display = 'block';
-            trioEl.innerHTML = `
-                <div style="
-                    background: linear-gradient(135deg, ${c}18, ${c}08);
-                    border: 1px solid ${c}55;
-                    border-left: 3px solid ${c};
-                    border-radius: 8px;
-                    padding: 8px 12px;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                ">
-                    <span style="font-size:24px; line-height:1; flex-shrink:0;">${trio.icon}</span>
-                    <div style="display:flex; flex-direction:column; gap:5px;">
-                        <div style="font-size:12px; font-weight:bold; color:${c}; letter-spacing:0.8px; text-transform:uppercase;">${trio.name}</div>
-                        <div style="display:flex; flex-wrap:wrap; gap:5px;">${chips}</div>
-                    </div>
-                </div>`;
-        } else {
+        if (useCompactCard) {
             trioEl.style.display = 'none';
+        } else {
+            const trio = tankTrios[tankType];
+            if (trio) {
+                const c = trio.color;
+                // Build member chips: emoji + short name, highlight current tank, gray out locked tanks
+                const chips = trio.members.map(([mType, mIcon]) => {
+                    const mName = (tankDescriptions[mType] || window.mechDescriptions?.[mType])?.name || mType;
+                    const isActive = mType === tankType;
+                    const isUnlocked = unlockedTanks && unlockedTanks.includes(mType);
+                    let bgColor, borderColor, textColor, fontWeight, opacity;
+                    if (isActive) {
+                        bgColor = c + '55';
+                        borderColor = c;
+                        textColor = '#fff';
+                        fontWeight = '800';
+                        opacity = '1';
+                    } else if (isUnlocked) {
+                        bgColor = c + '22';
+                        borderColor = c;
+                        textColor = '#fff';
+                        fontWeight = '600';
+                        opacity = '1';
+                    } else {
+                        bgColor = 'rgba(100,100,100,0.15)';
+                        borderColor = 'rgba(150,150,150,0.3)';
+                        textColor = '#888';
+                        fontWeight = 'normal';
+                        opacity = '0.5';
+                    }
+                    return `<span style="
+                        display:inline-flex; align-items:center; gap:4px;
+                        background:${bgColor};
+                        border:1px solid ${borderColor};
+                        border-radius:20px; padding:3px 9px 3px 7px;
+                        font-size:12px; color:${textColor};
+                        font-weight:${fontWeight};
+                        opacity:${opacity};
+                    ">${mIcon} ${mName}</span>`;
+                }).join('');
+                trioEl.style.display = 'block';
+                trioEl.innerHTML = `
+                    <div style="
+                        background: linear-gradient(135deg, ${c}18, ${c}08);
+                        border: 1px solid ${c}55;
+                        border-left: 3px solid ${c};
+                        border-radius: 8px;
+                        padding: 8px 12px;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    ">
+                        <span style="font-size:24px; line-height:1; flex-shrink:0;">${trio.icon}</span>
+                        <div style="display:flex; flex-direction:column; gap:5px;">
+                            <div style="font-size:12px; font-weight:bold; color:${c}; letter-spacing:0.8px; text-transform:uppercase;">${trio.name}</div>
+                            <div style="display:flex; flex-wrap:wrap; gap:5px;">${chips}</div>
+                        </div>
+                    </div>`;
+            } else {
+                trioEl.style.display = 'none';
+            }
         }
     }
 
     // Fill stats block (with inline upgrade buttons)
-    const statsEl = document.getElementById('tankDetailStats');
     if (statsEl) {
+        if (useCompactCard) {
+            statsEl.innerHTML = '';
+        } else {
         const hpBase = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || window.mechMaxHpByType?.[tankType] || 300;
-        const spdBase = (typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType[tankType]) || window.mechMaxSpeedByType?.[tankType] || 3.2;
+        const defaultSpdBase = (typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType[tankType]) || window.mechMaxSpeedByType?.[tankType] || 3.2;
         const hpLvl   = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'hp')  : 0;
         const spdLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'spd') : 0;
         const dmgLvl  = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'dmg') : 0;
-        const hp  = hpBase  + hpLvl  * 50;
+        const hp  = myasnoyForm
+            ? roundMyasnoyDisplayHp((hpBase + hpLvl * 50) * myasnoyForm.hpMultiplier)
+            : hpBase + hpLvl * 50;
         // per-type maximum (base + full upgrades)
-        const hpMaxPossible = (tankMaxHpByType[tankType] || window.mechMaxHpByType?.[tankType] || 300) + (UPGRADE_MAX * 50);
+        const hpMaxPossible = myasnoyForm
+            ? roundMyasnoyDisplayHp(((tankMaxHpByType[tankType] || window.mechMaxHpByType?.[tankType] || 300) + (UPGRADE_MAX * 50)) * myasnoyForm.hpMultiplier)
+            : (tankMaxHpByType[tankType] || window.mechMaxHpByType?.[tankType] || 300) + (UPGRADE_MAX * 50);
         const hpStars  = Math.min(10, Math.round((hp / hpMaxPossible) * 10));
         // speed current and per-type max
         let spdBonus = 0;
@@ -7896,8 +8664,9 @@ function showTankDetail(tankType) {
             const _incs = [0.2, 0.2, 0.3];
             for (let _i = 0; _i < spdLvl; _i++) spdBonus += (_incs[_i] || 0);
         }
+        const spdBase = myasnoyForm ? myasnoyForm.speedBase : defaultSpdBase;
         const spd = parseFloat((spdBase + spdBonus).toFixed(1));
-        const spdMaxPossible = (tankMaxSpeedByType[tankType] || window.mechMaxSpeedByType?.[tankType] || 3.2) + (typeof SPEED_INCREMENTS !== 'undefined' ? SPEED_INCREMENTS.reduce((a,b)=>a+b,0) : 0.7);
+        const spdMaxPossible = spdBase + (typeof SPEED_INCREMENTS !== 'undefined' ? SPEED_INCREMENTS.reduce((a,b)=>a+b,0) : 0.7);
         const spdStars = Math.min(10, Math.round((spd / spdMaxPossible) * 10));
         const bar = (val, max = 10) => {
             const filled = Math.min(val, max);
@@ -7906,9 +8675,9 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, ai: 80
+            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 1.5, ai: 80
         };
-        const dmgRaw = tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100;
+        const dmgRaw = myasnoyForm ? myasnoyForm.damageBase : (tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100);
         // Use multiplier table if present, compute raw (float) boosted damage
         const dmgMultAtLvl = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[dmgLvl] : (1 + dmgLvl*0.1);
         const dmgMultMax = (typeof DMG_MULT_TABLE !== 'undefined') ? DMG_MULT_TABLE[UPGRADE_MAX] : 1.6;
@@ -7918,7 +8687,7 @@ function showTankDetail(tankType) {
         // Prepare displayed values: for continuous/tick weapons (waterjet, illuminat) show per-second values in the modal
         let displayDmgBoosted = tankType === 'fire' ? dmgBoostedRaw.toFixed(1) : Math.round(dmgBoostedRaw);
         let displayDmgMaxPossible = dmgMaxPossible;
-        let displayDmgNote  = { buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3', fire: '/ч', burovoy: '/сек' }[tankType] || '';
+        let displayDmgNote  = myasnoyForm ? myasnoyForm.damageNote : ({ buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3', fire: '/ч', burovoy: '/сек', myasnoy: '/сосуд' }[tankType] || '');
         // Квант: show main bullet + all 3 morph variants
         let displayDmgExtra = '';
         if (tankType === 'kvant') {
@@ -7931,6 +8700,14 @@ function showTankDetail(tankType) {
             displayDmgBoosted = Math.round(dmgBoostedRaw * 60);
             displayDmgMaxPossible = dmgMaxPossible * 60;
             displayDmgNote = '/сек';
+        } else if (tankType === 'myasnoy') {
+            if (myasnoyForm && myasnoyForm.fractionalDamage) {
+                displayDmgBoosted = dmgBoostedRaw.toFixed(1);
+                displayDmgMaxPossible = dmgMaxPossible.toFixed(1);
+            } else {
+                displayDmgBoosted = Math.round(dmgBoostedRaw);
+                displayDmgMaxPossible = Math.round(dmgMaxPossible);
+            }
         }
         const dmgStars = Math.min(10, Math.round((dmgBoostedRaw / Math.max(1, dmgMaxPossible)) * 10));
 
@@ -8026,6 +8803,7 @@ function showTankDetail(tankType) {
                 showTankDetail(type);
             });
         });
+        }
     }
 
     // Draw background: normal uses single grass color, others use rarity gradient
@@ -8142,6 +8920,37 @@ function showTankDetail(tankType) {
         };
         drawFrame();
         return;
+    } else if (tankType === 'myasnoy') {
+        if (window.tankDetailAnimId) cancelAnimationFrame(window.tankDetailAnimId);
+        modal.style.display = 'flex';
+        const drawFrame = () => {
+            if (modal.style.display === 'none') {
+                window.tankDetailAnimId = null;
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const bg = tankBgGradients.myasnoy || ['#701010', '#180000'];
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, bg[0]);
+            grad.addColorStop(1, bg[1]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const side = (Math.min(canvas.width, canvas.height) / 2) * (myasnoyForm ? myasnoyForm.sideScale : 0.66);
+            const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#c03030';
+            const angle = myasnoyTabKey === 'eye'
+                ? Math.sin(Date.now() * 0.0018) * 0.65
+                : Math.sin(Date.now() * 0.0011) * 0.28;
+            const heatState = myasnoyForm && myasnoyForm.heatState ? { ...myasnoyForm.heatState } : null;
+            if (heatState && heatState.myasnoyEyeForm) {
+                heatState.myasnoyAttackTimer = 10 + Math.round((Math.sin(Date.now() * 0.004) + 1) * 4);
+            }
+            drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, angle, 1, tankType, heatState, 0);
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+        return;
     } else if (tankType === 'mechDiy') {
         // Modal animation delegated to mechs.js
         if (typeof showMechDiyModal === 'function') showMechDiyModal(ctx, canvas, modal);
@@ -8162,7 +8971,7 @@ function showTankDetail(tankType) {
 
         const side = Math.min(canvas.width, canvas.height) / 2;
         const baseColor = (tankBaseColors && tankBaseColors[tankType]) ? tankBaseColors[tankType] : '#000000';
-        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, 0, 1, tankType, null, 0);
+        drawTankOn(ctx, canvas.width / 2, canvas.height / 2, side, side, baseColor, getPreviewTankTurretAngle(tankType), 1, tankType, null, 0);
 
         modal.style.display = 'flex';
         return;
