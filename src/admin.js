@@ -6,7 +6,7 @@
 //   'off' → console is fully hidden; button/shortcut do nothing
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ADMIN_ENABLED = 'on'; // ← set to 'off' to completely hide the console
+const ADMIN_ENABLED = 'off'; // ← set to 'off' to completely hide the console
 
 // If admin is disabled, expose a no-op and hide all entry points
 if (ADMIN_ENABLED !== 'on') {
