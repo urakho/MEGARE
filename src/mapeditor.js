@@ -91,6 +91,8 @@
         if (!Array.isArray(data.objects))      return 'Нет данных объектов';
         const ww = data.worldW || 900;
         const wh = data.worldH || 700;
+        if (!Number.isFinite(ww) || !Number.isFinite(wh) || ww <= 0 || wh <= 0) return 'Некорректный размер карты';
+        if (data.objects.some(o => !o || typeof o !== 'object' || Array.isArray(o))) return 'Некорректный объект карты';
         const physObjs = data.objects.filter(o => o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel');
         const enemyObjs = data.objects.filter(o => o.type === 'enemy');
         const allyObjs = data.objects.filter(o => o.type === 'ally');
@@ -100,12 +102,23 @@
 
         for (const obj of data.objects) {
             if (!OBJ_TYPES[obj.type]) return `Неизвестный тип объекта: ${obj.type}`;
-            if (typeof obj.x !== 'number' || typeof obj.y !== 'number') return 'Некорректные координаты';
-            if (typeof obj.w !== 'number' || typeof obj.h !== 'number') return 'Некорректный размер';
+            if (!Number.isFinite(obj.x) || !Number.isFinite(obj.y)) return 'Некорректные координаты';
+            if (!Number.isFinite(obj.w) || !Number.isFinite(obj.h) || obj.w <= 0 || obj.h <= 0) return 'Некорректный размер';
             if (obj.x < 0 || obj.y < 0 || obj.x + obj.w > ww + 50 || obj.y + obj.h > wh + 50)
                 return 'Объект за пределами карты';
         }
+        if (hasBlockedPlayerSpawn(data.objects)) return 'Место появления игрока занято препятствием';
         return null; // ok
+    }
+
+    function overlaps(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function hasBlockedPlayerSpawn(objList) {
+        const players = objList.filter(o => o.type === 'player');
+        return players.some(player => objList.some(o =>
+            (o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && overlaps(player, o)));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -360,14 +373,25 @@
 
         // Player tool: only 1 allowed, replaces any existing
         if (activeTool === 'player') {
+            const spawn = { x: gx, y: gy, w: gridSize, h: gridSize };
+            if (meObjects.some(o => (o.type === 'wall' || o.type === 'woodenWall' || o.type === 'box' || o.type === 'barrel') && overlaps(spawn, o))) {
+                showEditorToast('Место появления игрока занято препятствием');
+                return;
+            }
             meObjects = meObjects.filter(o => o.type !== 'player');
-            meObjects.push({ type: 'player', x: gx, y: gy, w: gridSize, h: gridSize });
+            meObjects.push({ type: 'player', ...spawn });
             updateHUD(); render();
             return;
         }
 
         // Check for duplicate on same cell
         if (meObjects.some(o => o.x === gx && o.y === gy)) return;
+
+        if (['wall', 'woodenWall', 'box', 'barrel'].includes(activeTool) &&
+            meObjects.some(o => o.type === 'player' && overlaps(o, { x: gx, y: gy, w: gridSize, h: gridSize }))) {
+            showEditorToast('Нельзя ставить препятствие на место появления игрока');
+            return;
+        }
 
         if (activeTool === 'enemy') {
             if (meObjects.filter(o => o.type === 'enemy').length >= MAX_ENEMIES) {
@@ -492,10 +516,11 @@
                 playBtn.className = 'btn me-btn me-btn-red';
                 playBtn.style.cssText = 'font-size:12px;padding:5px 10px;margin:0;min-height:30px;';
                 playBtn.onclick = () => {
-                    // Restore enemy mode before launching
+                    // Restore all settings belonging to the selected map.
                     enemyMode = map.enemyMode || 'group';
-                    mapsModal.style.display = 'none';
-                    launchCustomMap(map.objects, map.worldW || 900, map.worldH || 700);
+                    customWinMsg = map.customWinMsg || '';
+                    customLoseMsg = map.customLoseMsg || '';
+                    if (launchCustomMap(map.objects, map.worldW || 900, map.worldH || 700)) mapsModal.style.display = 'none';
                 };
 
                 const delBtn = document.createElement('button');
@@ -551,7 +576,14 @@
 
             pushUndo();
             meObjects = data.objects;
-            if (nameInput && data.name) nameInput.value = data.name;
+            const baseName = (typeof data.name === 'string' && data.name.trim()) || 'imported_map';
+            const existingMaps = listMaps();
+            let mapName = baseName;
+            let copy = 2;
+            while (Object.prototype.hasOwnProperty.call(existingMaps, mapName)) {
+                mapName = `${baseName} (импорт ${copy++})`;
+            }
+            if (nameInput) nameInput.value = mapName;
             // Restore map size
             if (data.worldW && data.worldH) {
                 curWorldW = data.worldW; curWorldH = data.worldH;
@@ -569,14 +601,12 @@
             undoStack = [];
 
             // Auto-save imported map so it appears in the list
-            const mapName = data.name || 'imported_map';
-            // Note: saveMap will now include the restored enemyMode
             saveMap(mapName, meObjects);
 
             updateHUD();
             if (!window.deviceModeMobile) render();
 
-            showEditorToast('\u041a\u0430\u0440\u0442\u0430 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u0430 \u0443\u0441\u043f\u0435\u0448\u043d\u043e', false);
+            showEditorToast(`Карта «${mapName}» загружена`, false);
 
             // On mobile: refresh the maps list so the imported map appears
             if (window.deviceModeMobile) {
@@ -608,6 +638,10 @@
         }
 
         const playerSpawn = playerSpawns[0];
+        if (hasBlockedPlayerSpawn(objList)) {
+            showEditorToast('Место появления игрока занято препятствием. Уберите его в редакторе.');
+            return false;
+        }
 
         // Close editor
         modal.style.display = 'none';
@@ -628,6 +662,7 @@
                 customWinMsg,
                 customLoseMsg
             );
+            return true;
         } else {
             // Fallback: direct injection
             if (typeof objects !== 'undefined') {
@@ -645,6 +680,7 @@
                     gameState = 'playing';
                 }
             }
+            return true;
         }
     }
 

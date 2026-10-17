@@ -909,7 +909,7 @@ function showRankModal(tankType) {
 
         <!-- Trophies count -->
         <div style="text-align:center;font-size:18px;margin:6px 0 0;color:#aaa;">
-            🏆 <span style="font-weight:bold;color:#fff;">${trophies}</span> трофеев
+            <span class="currency-icon currency-icon--trophy" role="img" aria-label="Трофеи"></span> <span style="font-weight:bold;color:#fff;">${trophies}</span> трофеев
         </div>
 
         <!-- Progress bar -->

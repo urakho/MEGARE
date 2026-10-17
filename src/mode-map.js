@@ -84,7 +84,7 @@ function generateMap() {
             x: p.x, y: p.y, w: 38, h: 38,
             color: typeColors[tt] || ['#8B0000', '#006400', '#FFD700'][i],
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
+            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
             turretAngle: 0, baseAngle: 0, speed: 2.5, trackOffset: 0,
             alive: true, stuckCount: 0, fireCooldown: 0, team: i+1,
             dodgeAccuracy: 0.75 + Math.random() * 0.2,
@@ -113,8 +113,6 @@ function generateBossFightMap() {
         [120, 610, 170, 80],
         [1510, 610, 170, 80]
     ].forEach(([x, y, w, h]) => lava(x, y, w, h));
-
-    // hellRift objects removed
 
     for (let x = 0; x < W; x += B) { wall(x, 0, B, B); wall(x, H - B, B, B); }
     for (let y = B; y < H - B; y += B) { wall(0, y, B, B); wall(W - B, y, B, B); }
@@ -232,7 +230,7 @@ function spawnTeamMode() {
     const allyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical', 'illuminat', 'mirror', 'egyptian', 'time', 'machinegun', 'waterjet','electric','burovoy','robot','medical','mine','roman'];
     const allyType = allyTypes[Math.floor(Math.random()*allyTypes.length)];
     const allySpawn = getTeamSpawn(playerCorner.x + 44, playerCorner.y + 10, 180);
-    allies.push({ x: allySpawn.x, y: allySpawn.y, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
+    allies.push({ x: allySpawn.x, y: allySpawn.y, w: 38, h: 38, color: tank.color, tankType: allyType, hp: (tankMaxHpByType[allyType] || window.mechMaxHpByType?.[allyType] || 300), turretAngle:0, baseAngle:0, speed: (tankMaxSpeedByType[allyType] || window.mechMaxSpeedByType?.[allyType] || 3.2), trackOffset:0, alive:true, team:0, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.78 + Math.random()*0.15, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
 
     const enemyColors = ['#006400', '#FFD700', '#00BFFF'];
     for (let ci = 1; ci < 4; ci++) {
@@ -247,7 +245,7 @@ function spawnTeamMode() {
             
             const p = getTeamSpawn(sx, sy, 200);
             if (p) {
-                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tankMaxHpByType[tt] || 300), turretAngle:0, baseAngle:0, speed:(tankMaxSpeedByType[tt] || 3.2), trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
+                enemies.push({ x: p.x, y: p.y, w:38, h:38, color: typeColor[tt] || enemyColors[(ci-1)%enemyColors.length], tankType: tt, hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300), turretAngle:0, baseAngle: 0, speed:(tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2), trackOffset:0, alive:true, team:ci, stuckCount:0, fireCooldown:0, dodgeAccuracy: 0.7 + Math.random()*0.25, paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0 });
             }
         }
     }
@@ -284,8 +282,8 @@ function spawnDuelMode() {
         x: enemyPos.x, y: enemyPos.y, w: 38, h: 38,
         color: typeColors[tt] || '#B22222',
         tankType: tt,
-        hp: (tankMaxHpByType[tt] || 300),
-        turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
+        hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+        turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2), trackOffset: 0,
         alive: true, team: 1, stuckCount: 0, fireCooldown: 0,
         dodgeAccuracy: 0.8 + Math.random() * 0.15,
         paralyzed: false, paralyzedTime: 0, robotDroneCooldown: 0
@@ -334,8 +332,8 @@ function spawnTrialMode() {
             x: pos.x, y: pos.y, w: 38, h: 38,
             color: typeColor[tt] || '#B22222',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
+            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2), trackOffset: 0,
             alive: true,
             team: i + 1,
             fireCooldown: 0, stuckCount: 0,
@@ -381,7 +379,7 @@ function spawnOneVsAllMode() {
             x: bp.x, y: bp.y, w: 38, h: 38,
             color: typeColors[tt] || '#B22222',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
+            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
             turretAngle: Math.random() * Math.PI * 2, baseAngle: 0, speed: 2.5, trackOffset: 0,
             alive: true, team: 1,
             fireCooldown: Math.floor(Math.random() * 60), stuckCount: 0,
@@ -493,64 +491,6 @@ function spawnTrainingMode() {
     enemies.push(shooterDummy);
     trainingShooterDummy = shooterDummy;
     trainingShooterTimer = 0;
-
-    navNeedsRebuild = true;
-}
-
-function spawnLeaderHuntMode() {
-    enemies = [];
-    allies = [];
-    objects = objects || [];
-    leaderHuntLeader = null;
-
-    const cx = worldWidth / 2, cy = worldHeight / 2;
-    const ps = findFreeSpot(cx - 19, cy - 19, 38, 38, 600, 32) || { x: cx, y: cy };
-    tank.x = ps.x; tank.y = ps.y; tank.team = 0;
-    setTankHP(tankType);
-    tank.alive = true; tank.respawnTimer = 0;
-
-    const spreadPositions = [
-        { x: 120, y: 120 },
-        { x: worldWidth - 120, y: 120 },
-        { x: 120, y: worldHeight - 120 },
-        { x: worldWidth - 120, y: worldHeight - 120 },
-        { x: cx, y: 120 },
-        { x: 120, y: cy },
-        { x: worldWidth - 120, y: cy }
-    ];
-    const leaderHuntTankTypes = ['normal','ice','fire','buratino','toxic','plasma','musical','illuminat','mirror','egyptian','machinegun','waterjet','buckshot','electric','burovoy','imitator','robot','medical','mine','pyro','spartan','air','kvant'];
-    const typeColor = { normal:'#8B0000', ice:'#00BFFF', fire:'#FF4500', buratino:'#6E38B0', toxic:'#27ae60', plasma:'#8e44ad', musical:'#00ffff', illuminat:'#f39c12', mirror:'#bdc3c7', egyptian:'#c89b3c', machinegun:'#A0522D', waterjet:'#2e86c1', buckshot:'#455A64', electric:'#6c3483', burovoy:'#8b1e13', imitator:'#6c3483', robot:'#263238', pyro:'#8b2500', kvant:'#0d1b2a' };
-
-    for (let i = 0; i < 7; i++) {
-        const sp = spreadPositions[i];
-        const pos = findFreeSpot(sp.x - 19, sp.y - 19, 38, 38, 600, 32) || sp;
-        const tt = leaderHuntTankTypes[Math.floor(Math.random() * leaderHuntTankTypes.length)];
-        const enemy = {
-            x: pos.x, y: pos.y, w: 38, h: 38,
-            color: typeColor[tt] || '#B22222',
-            tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            turretAngle: 0, baseAngle: 0, speed: (tankMaxSpeedByType[tt] || 3.2), trackOffset: 0,
-            alive: true,
-            team: i + 1,
-            fireCooldown: 0, stuckCount: 0,
-            dodgeAccuracy: 0.75 + Math.random() * 0.2,
-            respawnCount: 0, paralyzed: false, paralyzedTime: 0
-        };
-        enemies.push(enemy);
-    }
-
-    const leaderIndex = Math.floor(Math.random() * enemies.length);
-    leaderHuntLeader = enemies[leaderIndex];
-    leaderHuntLeader.hp += 100;
-    leaderHuntLeader.isLeader = true;
-
-    for (let b = 0; b < 15; b++) {
-        const rx = 180 + Math.random() * (worldWidth - 360);
-        const ry = 180 + Math.random() * (worldHeight - 360);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
-    }
 
     navNeedsRebuild = true;
 }
@@ -669,7 +609,7 @@ function updateBossFight() {
                 if (tank.alive) {
                     const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
                     if (Math.sqrt(ddx * ddx + ddy * ddy) < 80) {
-                        if (!tank.mirrorShieldActive)
+                        if (!tank.mirrorShieldActive && !isPlayerDamageProtected())
                             tank.hp = Math.max(0, tank.hp - damageAmount);
                     }
                 }
@@ -681,7 +621,7 @@ function updateBossFight() {
             if (m.fireTimer > 0 && tank.alive && Math.random() < dotChance) {
                 const ddx = (tank.x + 19) - m.x, ddy = (tank.y + 19) - m.y;
                 if (Math.sqrt(ddx * ddx + ddy * ddy) < 45) {
-                    if (!tank.mirrorShieldActive)
+                    if (!tank.mirrorShieldActive && !isPlayerDamageProtected())
                         tank.hp = Math.max(0, tank.hp - dotDamage);
                 }
             }
@@ -701,5 +641,4 @@ window.spawnTrialMode = spawnTrialMode;
 window.spawnOneVsAllMode = spawnOneVsAllMode;
 window.spawnBossFightMode = spawnBossFightMode;
 window.spawnTrainingMode = spawnTrainingMode;
-window.spawnLeaderHuntMode = spawnLeaderHuntMode;
 window.updateBossFight = updateBossFight;

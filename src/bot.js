@@ -41,6 +41,7 @@ function pathClearFor(entity, angle, dist, samples = 4) {
     // use entity center for sampling so narrow passages are tested correctly
     const cx = entity.x + (entity.w || 0) / 2;
     const cy = entity.y + (entity.h || 0) / 2;
+    const nearbyObjects = getPathObstacleCandidates(entity, angle, dist, 2);
     for (let s = 1; s <= samples; s++) {
         const t = s / samples;
         const sampleCx = cx + Math.cos(angle) * dist * t;
@@ -49,7 +50,7 @@ function pathClearFor(entity, angle, dist, samples = 4) {
         const ty = sampleCy - (entity.h || 0) / 2;
         const inflate = 2;
         const rect = { x: tx - inflate, y: ty - inflate, w: (entity.w || 0) + inflate * 2, h: (entity.h || 0) + inflate * 2 };
-        for (const obj of objects) {
+        for (const obj of nearbyObjects) {
             if (checkRectCollision(rect, obj)) return false;
         }
     }
@@ -62,11 +63,26 @@ function pathClearFor(entity, angle, dist, samples = 4) {
     return true;
 }
 
+// Keep the exact collision tests, but scan distant objects only once per path.
+function getPathObstacleCandidates(entity, angle, dist, inflate = 0, candidates = objects) {
+    const endX = entity.x + Math.cos(angle) * dist;
+    const endY = entity.y + Math.sin(angle) * dist;
+    const left = Math.min(entity.x, endX) - inflate;
+    const top = Math.min(entity.y, endY) - inflate;
+    const right = Math.max(entity.x, endX) + (entity.w || 0) + inflate;
+    const bottom = Math.max(entity.y, endY) + (entity.h || 0) + inflate;
+    return candidates.filter(obj =>
+        obj.x < right && obj.x + obj.w > left &&
+        obj.y < bottom && obj.y + obj.h > top
+    );
+}
+
 // Быстрая оценка свободного расстояния вперед по траектории
-function clearanceAhead(entity, angle, maxDist, step = 8) {
+function clearanceAhead(entity, angle, maxDist, step = 8, candidates = objects) {
     const cx = entity.x + (entity.w || 0) / 2;
     const cy = entity.y + (entity.h || 0) / 2;
     const effStep = Math.max(6, Math.min(step, (entity.w || 16) * 0.4));
+    const nearbyObjects = getPathObstacleCandidates(entity, angle, maxDist, 0, candidates);
     let lastFree = 0;
     for (let d = effStep; d <= maxDist; d += effStep) {
         const px = cx + Math.cos(angle) * d;
@@ -75,7 +91,7 @@ function clearanceAhead(entity, angle, maxDist, step = 8) {
         // Canvas bounds
         if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > worldWidth || rect.y + rect.h > worldHeight) return lastFree;
         let hit = false;
-        for (const obj of objects) {
+        for (const obj of nearbyObjects) {
             if (checkRectCollision(rect, obj)) { hit = true; break; }
         }
         if (hit) return lastFree;
@@ -88,6 +104,11 @@ function clearanceAhead(entity, angle, maxDist, step = 8) {
 function steerAroundObstacles(entity, desiredAngle, dist) {
     // Always look at least 2 navCells ahead so steering can anticipate walls early
     const lookDist = Math.max(dist * 4, navCell * 2);
+    const left = entity.x - lookDist, top = entity.y - lookDist;
+    const right = entity.x + (entity.w || 0) + lookDist;
+    const bottom = entity.y + (entity.h || 0) + lookDist;
+    const candidates = objects.filter(obj => obj.x < right && obj.x + obj.w > left &&
+        obj.y < bottom && obj.y + obj.h > top);
     // Denser sampling for smoother avoidance
     const samples = [0, Math.PI/12, -Math.PI/12, Math.PI/8, -Math.PI/8,
                      Math.PI/6, -Math.PI/6, Math.PI/4, -Math.PI/4,
@@ -98,7 +119,7 @@ function steerAroundObstacles(entity, desiredAngle, dist) {
     let bestClear = 0;
     for (const off of samples) {
         const a = desiredAngle + off;
-        const clear = clearanceAhead(entity, a, lookDist);
+        const clear = clearanceAhead(entity, a, lookDist, 8, candidates);
         // Prefer angles close to desired direction
         const devPenalty = Math.abs(off) * navCell * 0.4;
         const score = clear - devPenalty;
@@ -194,22 +215,29 @@ function buildNavGrid(cellSize = navCell) {
     navGrid = new Array(navCols * navRows).fill(0);
     for (let j = 0; j < navRows; j++) {
         for (let i = 0; i < navCols; i++) {
-            // Проверяем, можно ли поместить агента (танк) с центром в центре клетки
-            const center = cellCenter(i, j);
-            const agentRect = { x: center.x - navAgentW/2, y: center.y - navAgentH/2, w: navAgentW, h: navAgentH };
-            let blocked = false;
-            for (const o of objects) {
-                if (o.type === 'wall' || o.type === 'woodenWall') {
-                    if (checkRectCollision(agentRect, o)) { blocked = true; break; }
-                }
-                // Для ящиков считаем клетку блокированной, если ящик занимает значительную часть клетки
-                if (o.type === 'box') {
-                    if (checkRectCollision(agentRect, o)) { blocked = true; break; }
-                }
+            const x = (i + 0.5) * navCell - navAgentW / 2;
+            const y = (j + 0.5) * navCell - navAgentH / 2;
+            if (x < 0 || y < 0 || x + navAgentW > worldWidth || y + navAgentH > worldHeight) {
+                navGrid[j * navCols + i] = 1;
             }
-            // Также учитываем границы канвы
-            if (agentRect.x < 0 || agentRect.y < 0 || agentRect.x + agentRect.w > worldWidth || agentRect.y + agentRect.h > worldHeight) blocked = true;
-            navGrid[j * navCols + i] = blocked ? 1 : 0;
+        }
+    }
+    // Visit only cells close enough to overlap each solid obstacle.
+    for (const obj of objects) {
+        if (obj.type !== 'wall' && obj.type !== 'woodenWall' && obj.type !== 'box') continue;
+        const firstCol = Math.max(0, Math.floor((obj.x - navAgentW / 2) / navCell) - 1);
+        const lastCol = Math.min(navCols - 1, Math.ceil((obj.x + obj.w + navAgentW / 2) / navCell));
+        const firstRow = Math.max(0, Math.floor((obj.y - navAgentH / 2) / navCell) - 1);
+        const lastRow = Math.min(navRows - 1, Math.ceil((obj.y + obj.h + navAgentH / 2) / navCell));
+        for (let j = firstRow; j <= lastRow; j++) {
+            for (let i = firstCol; i <= lastCol; i++) {
+                const agentRect = {
+                    x: (i + 0.5) * navCell - navAgentW / 2,
+                    y: (j + 0.5) * navCell - navAgentH / 2,
+                    w: navAgentW, h: navAgentH
+                };
+                if (checkRectCollision(agentRect, obj)) navGrid[j * navCols + i] = 1;
+            }
         }
     }
 }
@@ -223,11 +251,12 @@ function cellCenter(i, j) { return { x: (i + 0.5) * navCell, y: (j + 0.5) * navC
 
 // Найти путь от мировых координат start->goal, вернуть массив контрольных точек (центры ячеек)
 function findPath(sx, sy, gx, gy) {
-    if (!navGrid) buildNavGrid();
+    if (!navGrid) {
+        buildNavGrid();
+        navNeedsRebuild = false;
+    }
     const start = worldToCell(sx, sy);
     const goal = worldToCell(gx, gy);
-    const startKey = start.ci + ',' + start.rj;
-    const goalKey = goal.ci + ',' + goal.rj;
     if (navGrid[start.rj * navCols + start.ci]) {
         // try to find nearby free start
         let found = false;
@@ -256,19 +285,42 @@ function findPath(sx, sy, gx, gy) {
         if (!found) return null;
     }
 
-    const key = (i, j) => i + ',' + j;
-    const open = new Map();
+    const startIndex = start.rj * navCols + start.ci;
+    const goalIndex = goal.rj * navCols + goal.ci;
+    const gScore = new Map();
+    const cameFrom = new Map();
     const closed = new Set();
-    const gScore = {};
-    const fScore = {};
-    const cameFrom = {};
-
-    function heuristic(i, j) { return Math.hypot(i - goal.ci, j - goal.rj); }
-
-    const startK = key(start.ci, start.rj);
-    gScore[startK] = 0;
-    fScore[startK] = heuristic(start.ci, start.rj);
-    open.set(startK, { i: start.ci, j: start.rj, f: fScore[startK] });
+    const open = [];
+    const heuristic = (i, j) => Math.hypot(i - goal.ci, j - goal.rj);
+    const pushOpen = node => {
+        let pos = open.length;
+        open.push(node);
+        while (pos > 0) {
+            const parent = (pos - 1) >> 1;
+            if (open[parent].f <= node.f) break;
+            open[pos] = open[parent];
+            pos = parent;
+        }
+        open[pos] = node;
+    };
+    const popOpen = () => {
+        const first = open[0];
+        const last = open.pop();
+        if (open.length) {
+            let pos = 0;
+            while (pos * 2 + 1 < open.length) {
+                let child = pos * 2 + 1;
+                if (child + 1 < open.length && open[child + 1].f < open[child].f) child++;
+                if (last.f <= open[child].f) break;
+                open[pos] = open[child];
+                pos = child;
+            }
+            open[pos] = last;
+        }
+        return first;
+    };
+    gScore.set(startIndex, 0);
+    pushOpen({ index: startIndex, i: start.ci, j: start.rj, g: 0, f: heuristic(start.ci, start.rj) });
 
     const neigh = [ [1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1] ];
     // Optimization: Limit max A* iterations to prevent long freezes on large maps
@@ -277,42 +329,37 @@ function findPath(sx, sy, gx, gy) {
     let iter = 0;
     const startTime = Date.now();
     
-    while (open.size && iter++ < maxIter) {
+    while (open.length && iter < maxIter) {
         // Safety Break: Don't spend more than 3ms on a single pathfinding call
-        if (iter % 50 === 0 && (Date.now() - startTime > 3)) return null;
+        if (iter > 0 && iter % 50 === 0 && (Date.now() - startTime > 3)) return null;
 
-        // get node in open with min f
-        let curKey = null, curNode = null;
-        for (const [k,v] of open) { if (!curNode || v.f < curNode.f) { curNode = v; curKey = k; } }
-        if (!curNode) break;
-        open.delete(curKey);
-        if (curNode.i === goal.ci && curNode.j === goal.rj) {
+        const curNode = popOpen();
+        const curIndex = curNode.index;
+        if (closed.has(curIndex) || curNode.g !== gScore.get(curIndex)) continue;
+        iter++;
+        if (curIndex === goalIndex) {
             // reconstruct path
             const path = [];
-            let ck = curKey;
-            while (ck && cameFrom[ck]) {
-                const parts = ck.split(',').map(Number);
-                path.push(cellCenter(parts[0], parts[1]));
-                ck = cameFrom[ck];
+            let index = curIndex;
+            while (index !== undefined) {
+                path.push(cellCenter(index % navCols, Math.floor(index / navCols)));
+                index = cameFrom.get(index);
             }
-            path.push(cellCenter(start.ci, start.rj));
             path.reverse();
             return path;
         }
-        closed.add(curKey);
+        closed.add(curIndex);
 
         for (const d of neigh) {
             const ni = curNode.i + d[0], nj = curNode.j + d[1];
             if (ni < 0 || nj < 0 || ni >= navCols || nj >= navRows) continue;
-            const nk = key(ni, nj);
-            if (closed.has(nk)) continue;
-            if (navGrid[nj * navCols + ni]) continue; // blocked
-            const tentativeG = (gScore[curKey] || 0) + ((d[0] && d[1]) ? Math.SQRT2 : 1);
-            if (open.has(nk) && tentativeG >= (gScore[nk] || Infinity)) continue;
-            cameFrom[nk] = curKey;
-            gScore[nk] = tentativeG;
-            fScore[nk] = tentativeG + heuristic(ni, nj);
-            open.set(nk, { i: ni, j: nj, f: fScore[nk] });
+            const nextIndex = nj * navCols + ni;
+            if (closed.has(nextIndex) || navGrid[nextIndex]) continue;
+            const tentativeG = curNode.g + ((d[0] && d[1]) ? Math.SQRT2 : 1);
+            if (tentativeG >= (gScore.get(nextIndex) ?? Infinity)) continue;
+            cameFrom.set(nextIndex, curIndex);
+            gScore.set(nextIndex, tentativeG);
+            pushOpen({ index: nextIndex, i: ni, j: nj, g: tentativeG, f: tentativeG + heuristic(ni, nj) });
         }
     }
     return null;
@@ -1167,7 +1214,7 @@ function updateEnemyAI() {
             // Построим/обновим путь при необходимости
             if (!enemy.path || !enemy.path.length || (enemy.pathRecalc || 0) <= 0) {
                 // Throttle A* calls
-                if (globalPathBudget > 0) {
+                if (globalPathBudget > allyPathReserve) {
                     globalPathBudget--;
                     const sx = enemy.x + enemy.w/2, sy = enemy.y + enemy.h/2;
                     // Always track player's current position, no prediction
@@ -1960,11 +2007,16 @@ function updateAllyAI() {
             const tryDist = ally.speed;
 
             if (!ally.path || !ally.path.length || (ally.pathRecalc || 0) <= 0) {
-                const sx = ally.x + ally.w/2, sy = ally.y + ally.h/2;
-                const newPath = findPath(sx, sy, targetCx, targetCy);
-                if (newPath && newPath.length) {
-                    ally.path = newPath; ally.pathIndex = 0; ally.pathRecalc = 20;
-                } else { ally.path = []; ally.pathIndex = 0; ally.pathRecalc = 10; }
+                if (globalPathBudget > 0) {
+                    globalPathBudget--;
+                    const sx = ally.x + ally.w/2, sy = ally.y + ally.h/2;
+                    const newPath = findPath(sx, sy, targetCx, targetCy);
+                    if (newPath && newPath.length) {
+                        ally.path = newPath; ally.pathIndex = 0; ally.pathRecalc = 20;
+                    } else { ally.path = []; ally.pathIndex = 0; ally.pathRecalc = 10; }
+                } else {
+                    ally.pathRecalc = 1;
+                }
             } else ally.pathRecalc--;
 
             // Dodge was already checked at the top of the loop

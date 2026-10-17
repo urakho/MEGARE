@@ -26,17 +26,40 @@
     const toMenuBtn  = document.getElementById('pauseMenuBtn');
 
     let paused = false;
+    let pausedAt = 0;
+
+    function clearPressedKeys() {
+        if (typeof keys !== 'undefined') Object.keys(keys).forEach(key => { keys[key] = false; });
+    }
 
     // Show / hide helpers
     function openPause() {
-        if (!pauseMenu) return;
+        if (!pauseMenu || paused) return;
         paused = true;
+        pausedAt = Date.now();
+        clearPressedKeys();
         pauseMenu.style.display = 'flex';
     }
 
     function closePause() {
         if (!pauseMenu) return;
+        if (paused) {
+            const pauseDuration = Date.now() - pausedAt;
+            if (typeof gameStartTime !== 'undefined' && gameStartTime != null) gameStartTime += pauseDuration;
+            const units = [];
+            if (typeof tank !== 'undefined' && tank) units.push(tank);
+            if (typeof enemies !== 'undefined') units.push(...enemies);
+            if (typeof allies !== 'undefined') units.push(...allies);
+            for (const unit of units) {
+                if (!unit) continue;
+                for (const field of ['beamStart', 'beamStartTime', 'lastHitTime', 'hitFlashTime', 'burovoyDrillAnimUntil']) {
+                    if (typeof unit[field] === 'number' && unit[field] > 0) unit[field] += pauseDuration;
+                }
+            }
+        }
         paused = false;
+        pausedAt = 0;
+        clearPressedKeys();
         pauseMenu.style.display = 'none';
     }
 
@@ -57,6 +80,10 @@
     // Return to main menu
     if (toMenuBtn) toMenuBtn.addEventListener('click', () => {
         closePause();
+        if (typeof window.goToMenuNoReload === 'function') {
+            window.goToMenuNoReload();
+            return;
+        }
         const mainMenu = document.getElementById('mainMenu');
         if (mainMenu) mainMenu.style.display = 'flex';
         // Stop game loop if possible
@@ -69,6 +96,7 @@
     // Keyboard: Escape toggles pause (only during gameplay)
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
+        if (typeof gameState !== 'undefined' && gameState !== 'playing') return;
         const mainMenu = document.getElementById('mainMenu');
         const mainVisible = mainMenu && mainMenu.style.display !== 'none';
         if (mainVisible) return; // Don't intercept Escape on main menu

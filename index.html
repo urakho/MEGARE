@@ -39,12 +39,12 @@
             <p><strong>⚡ Специальные способности (клавиша E):</strong><br>
             Каждый танк имеет уникальную боевую способность. Например: Toxic создаёт облако газа, Time перематывает позицию на 5 секунд назад, Mirror отражает атаки, Robot спавнит 3 боевых дрона, Electric пускает цепную молнию.</p>
             
-            <p><strong>💰 Система прогрессии:</strong></p>
+            <p><strong><span class="currency-icon currency-icon--coin" role="img" aria-label="Монеты"></span> Система прогрессии:</strong></p>
             <ul style="margin:6px 0;padding-left:20px;">
-                <li><strong>Монеты (💰)</strong> — зарабатываются в боях, тратятся на новые танки</li>
-                <li><strong>Кристаллы (💎)</strong> — редкая премиум-валюта</li>
-                <li><strong>Детали (🔧)</strong> — использются для улучшений</li>
-                <li><strong>Трофеи (🏆)</strong> — за экстраординарные победы</li>
+                <li><strong>Монеты (<span class="currency-icon currency-icon--coin" role="img" aria-label="монеты"></span>)</strong> — зарабатываются в боях, тратятся на новые танки</li>
+                <li><strong>Кристаллы (<span class="currency-icon currency-icon--gem" role="img" aria-label="кристаллы"></span>)</strong> — редкая премиум-валюта</li>
+                <li><strong>Детали (<span class="currency-icon currency-icon--part" role="img" aria-label="детали"></span>)</strong> — использются для улучшений</li>
+                <li><strong>Трофеи (<span class="currency-icon currency-icon--trophy" role="img" aria-label="трофеи"></span>)</strong> — за экстраординарные победы</li>
             </ul>
             
             <p><strong>🤖 ИИ противников:</strong> Боты используют A* патфайндинг и адаптивную тактику. Они избегают препятствий, координируют атаки и применяют специальные способности.</p>
@@ -67,10 +67,10 @@
         <div class="menu-header">
             <h1 class="megare-title">MEGARE</h1>
             <div class="menu-currency">
-                <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
-                <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-                <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
-                <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+                <span class="currency-total" style="color:#f1c40f" aria-label="Монеты"><span class="currency-icon currency-icon--coin" aria-hidden="true"></span><span class="currency-coin">0</span></span>
+                <span class="currency-total" style="color:#2ecc71" aria-label="Кристаллы"><span class="currency-icon currency-icon--gem" aria-hidden="true"></span><span class="currency-gem">0</span></span>
+                <span class="currency-total" style="color:#95a5a6" aria-label="Детали"><span class="currency-icon currency-icon--part" aria-hidden="true"></span><span class="currency-part">0</span></span>
+                <span class="currency-total" style="color:#e67e22" aria-label="Трофеи"><span class="currency-icon currency-icon--trophy" aria-hidden="true"></span><span class="currency-trophy">0</span></span>
             </div>
         </div>
 
@@ -156,7 +156,7 @@
         <div id="avatarBuyPanel" style="display:none;background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;text-align:center;">
             <div id="avatarBuyInfo" style="font-size:14px;color:#fff;margin-bottom:8px;"></div>
             <div style="display:flex;gap:8px;justify-content:center;">
-                <button id="avatarBuyConfirmBtn" class="btn" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;padding:7px 18px;font-size:13px;border-radius:8px;">💰 Купить</button>
+                <button id="avatarBuyConfirmBtn" class="btn" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;padding:7px 18px;font-size:13px;border-radius:8px;"><span class="currency-icon currency-icon--coin" aria-hidden="true"></span> Купить</button>
                 <button id="avatarBuyCancelBtn" class="btn btn-secondary" style="padding:7px 12px;font-size:13px;border-radius:8px;">✕ Отмена</button>
             </div>
         </div>
@@ -198,9 +198,9 @@
     <div class="modal-box">
         <h2 class="modal-title">🛒 Магазин</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
-            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
-            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
+            <span class="currency-total" style="color:#f1c40f" aria-label="Монеты"><span class="currency-icon currency-icon--coin" aria-hidden="true"></span><span class="currency-coin">0</span></span>
+            <span class="currency-total" style="color:#2ecc71" aria-label="Кристаллы"><span class="currency-icon currency-icon--gem" aria-hidden="true"></span><span class="currency-gem">0</span></span>
+            <span class="currency-total" style="color:#95a5a6" aria-label="Детали"><span class="currency-icon currency-icon--part" aria-hidden="true"></span><span class="currency-part">0</span></span>
         </div>
         
         <!-- Shop tab buttons -->
@@ -231,40 +231,40 @@
         <div id="shopTabContainers" class="shop-tab-pane">
             <!-- Section: Контейнеры -->
             <p style="width:80%;text-align:left;margin:4px 0 8px 0;font-size:13px;font-weight:700;color:#aaa;letter-spacing:0.08em;text-transform:uppercase;">📦 Контейнеры</p>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/mini-cont.png" alt="Мини Контейнер" style="width:240px; height:240px; margin-bottom:10px; object-fit: contain;">
+            <div class="container-shop-card" data-container-type="mini">
+                <canvas class="container-shop-art" data-container-art="mini" width="240" height="200" role="img" aria-label="Мини контейнер"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#3498db;">Мини Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Небольшой контейнер только с монетами.</p>
                 <button id="buyMiniContainer" class="btn btn-buy">Купить (25 монет)</button>
             </div>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/cont1.png" alt="Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+            <div class="container-shop-card" data-container-type="bronze">
+                <canvas class="container-shop-art" data-container-art="bronze" width="240" height="200" role="img" aria-label="Бронзовый контейнер"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#f1c40f;">Бронзовый Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Контейнер с монетами и иногда гемами. Танки не выпадают.</p>
                 <button id="buyContainer" class="btn btn-buy">Купить (100 монет)</button>
             </div>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/super-cont.png" alt="Супер Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+            <div class="container-shop-card" data-container-type="legendary">
+                <canvas class="container-shop-art" data-container-art="legendary" width="240" height="200" role="img" aria-label="Легендарный контейнер"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e91e63; text-shadow:0 0 5px #ff00de;">Легендарный Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Ценный контейнер с монетами, гемами и шансом на танк.</p>
                 <button id="buySuperContainer" class="btn btn-buy">Купить (1000 монет)</button>
             </div>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/omega-cont.png" alt="Омега Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+            <div class="container-shop-card" data-container-type="omega">
+                <canvas class="container-shop-art" data-container-art="omega" width="240" height="200" role="img" aria-label="Омега контейнер"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#9b59b6; text-shadow:0 0 5px #8e44ad;">Омега Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Щедрый контейнер с монетами, гемами и шансом на редкий танк.</p>
                 <button id="buyOmegaContainer" class="btn btn-buy">Купить (4000 монет)</button>
             </div>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/alpha-cont.png" alt="Альфа Контейнер" style="width:160px; height:160px; margin-bottom:10px;">
+            <div class="container-shop-card" data-container-type="alpha">
+                <canvas class="container-shop-art" data-container-art="alpha" width="240" height="200" role="img" aria-label="Альфа контейнер"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#e74c3c; text-shadow:0 0 8px #ff4444;">Альфа Контейнер</p>
                 <p style="margin:5px 0; font-size:14px;">Премиальный контейнер с гарантированным танком и дополнительными ценными наградами.</p>
                 <button id="buyAlphaContainer" class="btn btn-buy">Купить (12000 монет)</button>
             </div>
             <!-- Section: Ящики -->
             <p style="width:80%;text-align:left;margin:14px 0 8px 0;font-size:13px;font-weight:700;color:#aaa;letter-spacing:0.08em;text-transform:uppercase;">🗃️ Ящики</p>
-            <div style="background: rgba(255,255,255,0.1); padding:15px; border-radius:10px; width:80%; flex-shrink: 0;">
-                <img src="png/cont-png/mech-cont.png" alt="Ящик деталей" style="width:160px; height:160px; margin-bottom:10px;">
+            <div class="container-shop-card" data-container-type="mechParts">
+                <canvas class="container-shop-art" data-container-art="mechParts" width="240" height="200" role="img" aria-label="Ящик деталей"></canvas>
                 <p style="margin:5px 0; font-size:16px; font-weight:bold; color:#95a5a6;">Ящик деталей</p>
                 <p style="margin:5px 0; font-size:14px;">Ящик с монетами и деталями для улучшений.</p>
                 <button id="buyMechPartsContainer" class="btn btn-buy">Купить (750 монет)</button>
@@ -278,8 +278,9 @@
                 .clock-hand { transform-origin: 50% 50%; animation: rotateClock 4s linear infinite; }
                 .clock-hand-sec { transform-origin: 50% 50%; animation: rotateClock 1s linear infinite; }
             </style>
+
             <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:10px; padding:8px 16px;">
-                <!-- SVG animated clock on tab button -->
+                <!-- Limited offers emblem -->
                 <svg width="32" height="32" viewBox="0 0 28 28" style="vertical-align:middle;">
                     <!-- Outer glow circle -->
                     <circle cx="14" cy="14" r="12.5" fill="none" stroke="#e91e63" stroke-width="0.8" opacity="0.3"/>
@@ -313,32 +314,32 @@
 
         <!-- RESOURCES TAB -->
         <div id="shopTabResources" class="shop-tab-pane" style="display:none;">
-            <p style="margin:0 0 4px; font-size:13px; color:rgba(255,255,255,0.55); text-align:center;">Курс: 30 💰 = 1 💎  |  1 💎 = 10 💰</p>
+            <p style="margin:0 0 4px; font-size:13px; color:rgba(255,255,255,0.55); text-align:center;">Курс: 100 <span class="currency-icon currency-icon--coin" aria-label="монет"></span> = 1 <span class="currency-icon currency-icon--gem" aria-label="гем"></span> &nbsp;|&nbsp; 1 <span class="currency-icon currency-icon--gem" aria-label="гем"></span> = 10 <span class="currency-icon currency-icon--coin" aria-label="монет"></span></p>
 
             <!-- Buy gems with coins -->
             <div style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.3);border-radius:12px;padding:14px 18px;width:80%;box-sizing:border-box;">
-                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#2ecc71;">💰 → 💎 Обменять монеты на гемы</p>
-                <p style="margin:0 0 10px; font-size:12px; color:rgba(255,255,255,0.6);">Курс: 30 монет = 1 гем</p>
+                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#2ecc71;"><span class="currency-icon currency-icon--coin" aria-label="Монеты"></span> → <span class="currency-icon currency-icon--gem" aria-label="Гемы"></span> Обменять монеты на гемы</p>
+                <p style="margin:0 0 10px; font-size:12px; color:rgba(255,255,255,0.6);">Курс: 100 монет = 1 гем</p>
                 <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
                     <input id="coinsExchangeInput" type="number" min="100" step="100" value="100" placeholder="Кол-во монет"
                         style="max-width:120px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;">
-                    <span style="font-size:13px;">💰</span>
+                    <span class="currency-icon currency-icon--coin" role="img" aria-label="Монеты"></span>
                     <span style="color:rgba(255,255,255,0.5);">→</span>
-                    <span id="coinsExchangeResult" style="font-size:13px;color:#2ecc71;font-weight:bold;min-width:60px;text-align:center;">1 💎</span>
+                    <span id="coinsExchangeResult" style="font-size:13px;color:#2ecc71;font-weight:bold;min-width:60px;text-align:center;"><span class="exchange-amount">1</span> <span class="currency-icon currency-icon--gem" role="img" aria-label="Гемы"></span></span>
                     <button id="exchangeCoinsBtn" class="btn" style="background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;padding:8px 16px;font-size:13px;border-radius:7px;">Обменять</button>
                 </div>
             </div>
 
             <!-- Sell gems for coins -->
             <div style="background:rgba(241,196,15,0.1);border:1px solid rgba(241,196,15,0.3);border-radius:12px;padding:14px 18px;width:80%;box-sizing:border-box;">
-                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#f1c40f;">💎 → 💰 Обменять гемы на монеты</p>
+                <p style="margin:0 0 10px; font-size:15px; font-weight:bold; color:#f1c40f;"><span class="currency-icon currency-icon--gem" aria-label="Гемы"></span> → <span class="currency-icon currency-icon--coin" aria-label="Монеты"></span> Обменять гемы на монеты</p>
                 <p style="margin:0 0 10px; font-size:12px; color:rgba(255,255,255,0.6);">Курс: 1 гем = 10 монет</p>
                 <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
                     <input id="gemsExchangeInput" type="number" min="1" value="1" placeholder="Кол-во гемов"
                         style="max-width:120px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;">
-                    <span style="font-size:13px;">💎</span>
+                    <span class="currency-icon currency-icon--gem" role="img" aria-label="Гемы"></span>
                     <span style="color:rgba(255,255,255,0.5);">→</span>
-                    <span id="gemsExchangeResult" style="font-size:13px;color:#f1c40f;font-weight:bold;min-width:60px;text-align:center;">10 💰</span>
+                    <span id="gemsExchangeResult" style="font-size:13px;color:#f1c40f;font-weight:bold;min-width:60px;text-align:center;"><span class="exchange-amount">10</span> <span class="currency-icon currency-icon--coin" role="img" aria-label="Монеты"></span></span>
                     <button id="exchangeGemsBtn" class="btn" style="background:linear-gradient(135deg,#b7950b,#f1c40f);color:#fff;padding:8px 16px;font-size:13px;border-radius:7px;">Обменять</button>
                 </div>
             </div>
@@ -369,9 +370,9 @@
     <div class="modal-box">
         <h2 class="modal-title">👤 Персонажи</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
-            <span style="color:#f1c40f">💰 <span class="currency-coin">0</span></span>
-            <span style="color:#2ecc71">💎 <span class="currency-gem">0</span></span>
-            <span style="color:#95a5a6">🔧 <span class="currency-part">0</span></span>
+            <span class="currency-total" style="color:#f1c40f" aria-label="Монеты"><span class="currency-icon currency-icon--coin" aria-hidden="true"></span><span class="currency-coin">0</span></span>
+            <span class="currency-total" style="color:#2ecc71" aria-label="Кристаллы"><span class="currency-icon currency-icon--gem" aria-hidden="true"></span><span class="currency-gem">0</span></span>
+            <span class="currency-total" style="color:#95a5a6" aria-label="Детали"><span class="currency-icon currency-icon--part" aria-hidden="true"></span><span class="currency-part">0</span></span>
             </div>
         <!-- Tab bar -->
         <div class="char-tabs">
@@ -591,7 +592,7 @@
 <div id="containerFlowModal" class="modal-overlay" style="z-index: 170;">
     <div class="container-flow-box">
         <div class="container-flow-content">
-            <img id="containerFlowPreview" class="container-flow-img" src="png/cont-png/cont1.png" alt="Контейнер">
+            <canvas id="containerFlowPreview" class="container-flow-img" width="300" height="250" role="button" tabindex="0" aria-label="Открыть контейнер"></canvas>
             <div class="container-flow-text-group">
                 <p id="containerFlowText" class="container-flow-text"></p>
                 <p class="container-flow-hint">👆 Нажми на контейнер, чтобы его открыть</p>
@@ -644,7 +645,7 @@
     <div class="modal-box">
         <h2 id="resultStatus" class="modal-title">Победа</h2>
         
-        <div id="resultEmblem" style="font-size: 64px; margin-bottom: 10px;">🏆</div>
+        <div id="resultEmblem" style="font-size: 64px; margin-bottom: 10px;"><span class="currency-icon currency-icon--trophy" aria-hidden="true"></span></div>
         
         <h3 id="resultHeadline" style="color: #fff; margin: 10px 0;">ЗОНА ОЧИЩЕНА</h3>
         <p id="resultMessage" style="color: #ccc; margin-bottom: 20px;">Награда уже зачислена на твой счет.</p>
@@ -683,7 +684,7 @@
     <div class="modal-box">
         <h2 class="modal-title">🏆 Трофейная дорога</h2>
         <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px; flex-shrink:0;">
-            <span style="color:#e67e22">🏆 <span class="currency-trophy">0</span></span>
+            <span class="currency-total" style="color:#e67e22" aria-label="Трофеи"><span class="currency-icon currency-icon--trophy" aria-hidden="true"></span><span class="currency-trophy">0</span></span>
         </div>
         
         <div id="trophyRoadContainer" style="width:100%; padding:10px;">
@@ -950,6 +951,7 @@
 <script src="src/pause-menu.js"></script>
 <script src="src/mode-map.js"></script>
 <script src="src/admin.js"></script>
+<script src="src/container-art.js"></script>
 <script src="src/main.js"></script>
 <script src="src/mechs.js"></script>
 <script src="src/rank.js"></script>
@@ -975,34 +977,7 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // What "theme" is currently active based on the visible modal
-    function getTheme() {
-        const vis = id => { const el = document.getElementById(id); return el && el.style.display !== 'none' && el.style.display !== ''; };
-        if (vis('characterModal'))  return 'purple';
-        if (vis('shopModal'))       return 'blue';
-        if (vis('settingsModal'))   return 'steel';
-        if (vis('achievementsModal'))return 'gold';
-        if (vis('newsModal'))       return 'dark';
-        if (vis('trophyRoadModal')) return 'bronze';
-        if (vis('modeModal'))       return 'green';
-        if (vis('resultOverlay'))   return 'dark';
-        if (vis('tankDetailModal')) return 'purple';
-        if (vis('choiceModal'))     return 'blue';
-        if (vis('mainMenu'))        return 'menu';
-        return 'menu';
-    }
-
-    // Color palettes per theme
-    const PALETTES = {
-        menu:   ['#f39c12','#e74c3c','#2ecc71','#3498db','#fff','#f1c40f'],
-        purple: ['#9b59b6','#8e44ad','#c39bd3','#d7bde2','#fff'],
-        blue:   ['#3498db','#2980b9','#5dade2','#85c1e9','#fff'],
-        steel:  ['#7f8c8d','#95a5a6','#bdc3c7','#aab7b8','#fff'],
-        gold:   ['#f39c12','#f1c40f','#fad7a0','#e59866','#fff'],
-        dark:   ['#555','#777','#999','#333'],
-        bronze: ['#d35400','#e67e22','#f0b27a','#dc7633','#fff'],
-        green:  ['#2ecc71','#27ae60','#a9dfbf','#52be80','#fff'],
-    };
+    const PARTICLE_COLORS = ['#f39c12','#e74c3c','#2ecc71','#3498db','#fff','#f1c40f'];
 
     // Shape types
     const SHAPES = ['circle', 'triangle', 'cross', 'hex', 'dot', 'spark'];
@@ -1011,12 +986,11 @@
     const MAX_P = 60;
     const particles = [];
 
-    function randColor(theme) {
-        const p = PALETTES[theme] || PALETTES.menu;
-        return p[Math.floor(Math.random() * p.length)];
+    function randColor() {
+        return PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
     }
 
-    function spawnParticle(theme) {
+    function spawnParticle() {
         return {
             x: Math.random() * pc.width,
             y: pc.height + 20,
@@ -1026,7 +1000,7 @@
             alpha: 0,
             maxAlpha: 0.12 + Math.random() * 0.22,
             shape: SHAPES[Math.floor(Math.random() * SHAPES.length)],
-            color: randColor(theme),
+            color: randColor(),
             rot: Math.random() * Math.PI * 2,
             rotV: (Math.random() - 0.5) * 0.025,
             life: 0,
@@ -1074,30 +1048,37 @@
         cx.restore();
     }
 
-    let lastTheme = 'menu';
     let frame = 0;
+    let animationFrameId = null;
+    const menuEl = document.getElementById('mainMenu');
+    const menuVisible = () => menuEl && menuEl.style.display !== 'none' && menuEl.style.display !== '' && !document.hidden;
+
+    function start() {
+        if (animationFrameId === null && menuVisible()) {
+            animationFrameId = requestAnimationFrame(tick);
+        }
+    }
+
+    function stop() {
+        if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        cx.clearRect(0, 0, pc.width, pc.height);
+        particles.length = 0;
+    }
 
     function tick() {
-        requestAnimationFrame(tick);
-
-        // Only show particles when the main menu is visible (not during gameplay)
-        const menuEl = document.getElementById('mainMenu');
-        const menuVisible = menuEl && menuEl.style.display !== 'none' && menuEl.style.display !== '';
-        if (!menuVisible) {
-            cx.clearRect(0, 0, pc.width, pc.height);
-            particles.length = 0;
+        animationFrameId = null;
+        if (!menuVisible()) {
+            stop();
             return;
         }
 
         frame++;
         cx.clearRect(0, 0, pc.width, pc.height);
 
-        const theme = 'menu';
-        if (theme !== lastTheme) { particles.length = 0; lastTheme = theme; }
-
         // Spawn
         if (particles.length < MAX_P && frame % 3 === 0) {
-            particles.push(spawnParticle(theme));
+            particles.push(spawnParticle());
         }
 
         // Update + draw
@@ -1117,8 +1098,14 @@
             if (p.life >= p.maxLife || p.y < -20) { particles.splice(i, 1); continue; }
             drawShape(p);
         }
+        start();
     }
-    tick();
+    if (menuEl) {
+        new MutationObserver(() => menuVisible() ? start() : stop())
+            .observe(menuEl, { attributes: true, attributeFilter: ['style'] });
+    }
+    document.addEventListener('visibilitychange', () => menuVisible() ? start() : stop());
+    start();
 })();
 </script>
 
@@ -1173,4 +1160,6 @@
     }
 })();
 </script>
+
+<script src="src/ui-icons.js"></script>
 </html>

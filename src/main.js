@@ -77,6 +77,7 @@ let battleEnemyCount = 0;
 
 // Throttling AI counters
 let globalPathBudget = 0;
+let allyPathReserve = 0;
 const MAX_PATH_BUDGET = 2; // max A* searches per frame
 const MAX_PATH_BUDGET_ONEVSALL = 1; // reduced for one vs all mode
 const MAX_STEPS_FALLBACK = 16; // increased from 8 — more angle coverage for wall avoidance
@@ -92,7 +93,6 @@ let navNeedsRebuild = true;
 
 // Boss Fight mode: active meteors array
 let bossMeteors = [];
-let leaderHuntLeader = null; // kept for legacy compatibility
 
 // God mode: makes tank invincible with 100000 HP and 1000 damage
 let godMode = false;
@@ -113,7 +113,7 @@ const PROFILE_SAVE_KEYS = [
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
     'tankAvatarUnlocks','tankPromoUsed','tankSelectedAvatars',
-    'playerTitle','playerTitleUnlocks'
+    'playerTitle','playerTitleUnlocks','pendingFreeContainers'
 ];
 
 // Atmospheric titles unlocked at 8000 trophies per tank
@@ -425,6 +425,7 @@ function getTankUpgrade(type, stat) {
 function saveTankUpgrades() {
     if (window._isProfileSwitching) return;
     localStorage.setItem('tankUpgrades', JSON.stringify(tankUpgrades));
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
 }
 // Returns damage multiplier for the player's current tank type
 // lvl 0→1.0, lvl 1→1.1, lvl 2→1.3, lvl 3→1.6
@@ -703,6 +704,8 @@ function saveProgress() {
     if (window._isProfileSwitching) return;
     localStorage.setItem('tankCoins', coins);
     localStorage.setItem('tankGems', gems);
+    localStorage.setItem('tankParts', parts);
+    localStorage.setItem('tankUpgrades', JSON.stringify(tankUpgrades));
     localStorage.setItem('tankTrophies', trophies);
     localStorage.setItem('tankClaimedRewards', JSON.stringify(claimedRewards));
     localStorage.setItem('tankUnlockedTanks', JSON.stringify(unlockedTanks));
@@ -1043,9 +1046,7 @@ window.onkeydown = (e) => {
     // F5 to return to main menu
     if (e.code === 'F5') {
         e.preventDefault();
-        gameState = 'menu';
-        _lastMusicKey = ''; // force music switch on next updateMusic()
-        if (mainMenu) mainMenu.style.display = 'flex';
+        if (typeof window.goToMenuNoReload === 'function') window.goToMenuNoReload();
     }
 };
 window.onkeyup = (e) => keys[e.code] = false;
@@ -1179,6 +1180,8 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
         if (window._preTankType) { tankType = window._preTankType; window._preTankType = null; }
         if (typeof saveProgress === 'function') saveProgress();
         try {
+            if (typeof window.closePauseMenu === 'function') window.closePauseMenu();
+            window._customMapActive = false;
             gameState = 'menu';
             currentMode = 'menu';
             window.currentMode = currentMode;
@@ -1217,6 +1220,9 @@ exfightMusic.volume = window.musicVolume;
 
 // Music management
 let _lastMusicKey = '';
+let _musicPlaybackBlocked = false;
+let _musicPendingTrack = null;
+let _musicRetryAt = 0;
 
 function _getTargetMusicKey() {
     if (gameState === 'menu') return 'menu';
@@ -1248,6 +1254,23 @@ function _getMusicTrack(key) {
     return null;
 }
 
+function _tryPlayMusic(track) {
+    if (!track || !track.paused || _musicPendingTrack === track || _musicPlaybackBlocked || performance.now() < _musicRetryAt) return;
+    _musicPendingTrack = track;
+    const failed = (error) => {
+        if (_musicPendingTrack === track) _musicPendingTrack = null;
+        if (_getMusicTrack(_lastMusicKey) !== track) return;
+        if (error && error.name === 'NotAllowedError') _musicPlaybackBlocked = true;
+        else _musicRetryAt = performance.now() + 5000;
+    };
+    try {
+        Promise.resolve(track.play()).then(() => {
+            if (_musicPendingTrack === track) _musicPendingTrack = null;
+            if (_getMusicTrack(_lastMusicKey) === track) _musicRetryAt = 0;
+        }, failed);
+    } catch (error) { failed(error); }
+}
+
 function updateMusic() {
     const vol = window.musicVolume;
     const targetKey = (vol > 0) ? _getTargetMusicKey() : 'none';
@@ -1256,6 +1279,7 @@ function updateMusic() {
     // If music key changed — stop everything and switch
     if (targetKey !== _lastMusicKey) {
         _lastMusicKey = targetKey;
+        _musicRetryAt = 0;
         menuMusic.pause();
         fightMusic.pause();
         duelMusic.pause();
@@ -1266,7 +1290,7 @@ function updateMusic() {
         angryBossMusic.pause();
         if (track) {
             track.volume = vol;
-            track.play().catch(() => {});
+            _tryPlayMusic(track);
         }
         return;
     }
@@ -1274,13 +1298,50 @@ function updateMusic() {
     // Same key: if the track should be playing but got paused (e.g. autoplay blocked, then user clicked)
     if (track && track.paused) {
         track.volume = vol;
-        track.play().catch(() => {});
+        _tryPlayMusic(track);
     }
 }
+
+function _retryMusicAfterInteraction(event) {
+    if (event.repeat) return;
+    if (!_musicPlaybackBlocked && !_musicRetryAt) return;
+    _musicPlaybackBlocked = false;
+    _musicRetryAt = 0;
+    updateMusic();
+}
+document.addEventListener('pointerdown', _retryMusicAfterInteraction, true);
+document.addEventListener('keydown', _retryMusicAfterInteraction, true);
+
+// Opt-in measurements for diagnosing real battles without per-frame logging.
+let _gamePerformanceStats = null;
+function _measureGamePhase(name, action) {
+    if (!_gamePerformanceStats) return action();
+    const stats = _gamePerformanceStats;
+    const start = performance.now();
+    try { return action(); } finally {
+        const duration = performance.now() - start;
+        const phase = stats[name] || (stats[name] = { count: 0, totalMs: 0, maxMs: 0 });
+        phase.count++;
+        phase.totalMs += duration;
+        phase.maxMs = Math.max(phase.maxMs, duration);
+    }
+}
+window.startGamePerformanceProfile = () => { _gamePerformanceStats = {}; };
+window.stopGamePerformanceProfile = () => {
+    const stats = _gamePerformanceStats;
+    _gamePerformanceStats = null;
+    if (!stats) return null;
+    return Object.fromEntries(Object.entries(stats).map(([name, phase]) => [name, {
+        count: phase.count,
+        averageMs: phase.totalMs / phase.count,
+        maxMs: phase.maxMs
+    }]));
+};
 
 // ========================
 // MOBILE CONTROLS
 // ========================
+let updateMobileHud = null;
 (function() {
     const JOYSTICK_RADIUS = 60;
     const ATTACK_RADIUS   = 55;
@@ -1318,7 +1379,6 @@ function updateMusic() {
     let IS_MOBILE = typeof window.deviceModeMobile !== 'undefined'
         ? window.deviceModeMobile
         : (navigator.maxTouchPoints > 0 || ('ontouchstart' in window));
-    // Re-read from settings each interval tick so toggling takes effect live
     window.addEventListener('touchstart', () => {}, { once: true, passive: true });
 
     // ---- Move joystick ----
@@ -1653,8 +1713,8 @@ function updateMusic() {
         }, { passive: false });
     }
 
-    // ---- Show/hide: only on mobile, only when playing ----
-    function mobileHudLoop() {
+    // Show/hide mobile controls from the main game loop.
+    updateMobileHud = function() {
         if (!mobileControls) return;
         const isMob = window.deviceModeMobile;
         const playing = typeof gameState !== 'undefined' && gameState === 'playing';
@@ -1668,9 +1728,7 @@ function updateMusic() {
             keys['KeyE'] = false;
         }
         updateUltHud();
-        requestAnimationFrame(mobileHudLoop);
-    }
-    requestAnimationFrame(mobileHudLoop);
+    };
 })();
 
 window.addEventListener('wheel', (e) => {
@@ -1763,6 +1821,7 @@ function startGame(mode) {
     if (typeof mode !== 'string' || !mode) {
         mode = (typeof currentMode === 'string' && currentMode && currentMode !== 'menu' && currentMode !== 'custom') ? currentMode : 'single';
     }
+    if (mode === 'leaderhunt') mode = 'bossfight';
 
     if (commandInput) commandInput.blur();
     if (commandModal) commandModal.style.display = 'none';
@@ -1773,6 +1832,7 @@ function startGame(mode) {
         if (tankType !== 'normal' && !unlockedTanks.includes(tankType)) {
             tankType = 'normal';
             localStorage.setItem('tankSelected', 'normal');
+            if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
         }
     }
 
@@ -1920,6 +1980,7 @@ function startGame(mode) {
     tank.ultimateCooldown = 0;
     tank.iceUltimate = false;
     
+    navGrid = null;
     navNeedsRebuild = true;
     lastResultState = null;
     syncResultOverlay('playing');
@@ -1995,13 +2056,6 @@ function startGame(mode) {
         generateMap();
         spawnOneVsAllMode();
         cameraFollow = true;
-    } else if (mode === 'leaderhunt') {
-        // Boss Fight mode replaces leaderhunt (removed)
-        worldWidth = 1800; worldHeight = 1400;
-        canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
-        generateBossFightMap();
-        spawnBossFightMode();
-        cameraFollow = true;
     } else if (mode === 'bossfight') {
         // Boss Fight: large fixed arena, player vs Hell Tank boss
         worldWidth = 1800; worldHeight = 1400;
@@ -2033,7 +2087,7 @@ function startGame(mode) {
     
     _lastMusicKey = ''; // force music switch on next updateMusic()
     navNeedsRebuild = true;
-    try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
+    if (typeof draw === 'function') draw();
 }
 
 // ─── Custom Map Mode (Map Editor → Play) ────────────────────────────────────
@@ -2086,6 +2140,16 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.poisonTimer = 0; tank.invertedControls = 0; tank.disoriented = 0;
     tank.windPushVx = 0; tank.windPushVy = 0;
     resetTankMatchUltState(tank);
+    tank.isAutopilotActive = false; tank.autoPilotTimer = 0; tank.autoPilotCooldown = 0;
+    const mechEnergyLevel = (typeof getTankUpgrade === 'function') ? getTankUpgrade(tankType, 'energy') : 0;
+    const mechBaseEnergy = tankType === 'mechShield' ? 130 : (tankType === 'mechRocket' ? 150 : 110);
+    tank.mechMaxEnergy = mechBaseEnergy + mechEnergyLevel * 20;
+    tank.mechEnergy = tank.mechMaxEnergy;
+    tank.mechBurstShots = 0; tank.mechBurstDelay = 0; tank.mechBurstCannon = 0;
+    tank.mechBurstCooldown = 0; tank.mechRocketUltCooldown = 0;
+    tank.mechShieldActive = tankType === 'mechShield';
+    tank.mechShieldFadeTimer = 0; tank.mechShieldHP = 300;
+    tank.mechShieldMaxHP = 300; tank.mechShieldDamagePercent = 0;
     tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0; tank.iceUltimate = false;
     tank.romanShieldActive = false; tank.romanShieldTimer = 0; tank.romanShieldCooldown = 0;
     tank.myasnoyUltActive = false; tank.myasnoyUltTimer = 0; tank.myasnoyUltCooldown = 0;
@@ -2125,12 +2189,6 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     const OBJ_COLORS = { wall: '#3a3a3a', woodenWall: '#6e4f35', box: '#8b5a2b', barrel: '#7a4d2a' };
     objects = customObjects.map(o => ({ ...o, color: OBJ_COLORS[o.type] || '#888' }));
 
-    // Ensure player spawn area is clear
-    objects = objects.filter(o => Math.hypot(
-        o.x + o.w / 2 - (tank.x + 19),
-        o.y + o.h / 2 - (tank.y + 19)
-    ) > 80);
-
     // Spawn enemies: use editor-placed markers if provided, otherwise corners
     // Full type pool matching other game modes
     const _allEnemyTypes = ['normal','ice','fire','buratino','toxic','plasma','musical',
@@ -2160,10 +2218,10 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
             x: pos.x, y: pos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#e74c3c',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            maxHp: (tankMaxHpByType[tt] || 300),
+            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+            maxHp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
             turretAngle: 0, baseAngle: 0,
-            speed: (tankMaxSpeedByType[tt] || 3.2),
+            speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2),
             trackOffset: 0, alive: true, team: teamId,
             stuckCount: 0, fireCooldown: 0,
             dodgeAccuracy: 0.7 + Math.random() * 0.25,
@@ -2181,10 +2239,10 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
             x: spawnPos.x, y: spawnPos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#2ecc71',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || 300),
-            maxHp: (tankMaxHpByType[tt] || 300),
+            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+            maxHp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
             turretAngle: 0, baseAngle: 0,
-            speed: (tankMaxSpeedByType[tt] || 3.2),
+            speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2),
             trackOffset: 0, alive: true, team: 0,  // Team 0 = player team (allies)
             stuckCount: 0, fireCooldown: 0,
             dodgeAccuracy: 0.7 + Math.random() * 0.25,
@@ -2218,8 +2276,9 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     battleEnemyCount = enemies.length;
 
     _lastMusicKey = '';
+    navGrid = null;
     navNeedsRebuild = true;
-    try { if (typeof draw === 'function') draw(); } catch (e) { /* ignore */ }
+    if (typeof draw === 'function') draw();
 };
 
                 // very large world (6x single)
@@ -2264,12 +2323,14 @@ if (shopBtn) shopBtn.addEventListener('click', () => {
         // Reset to Containers tab
         document.querySelectorAll('.shop-tab-pane').forEach(p => p.style.display = 'none');
         const firstPane = document.getElementById('shopTabContainers');
-        if (firstPane) firstPane.style.display = 'flex';
+        if (firstPane) firstPane.style.display = 'grid';
         document.querySelectorAll('.shop-tab-btn').forEach(b => b.classList.remove('shop-tab-active'));
         const firstBtn = document.querySelector('[data-shop-tab="shopTabContainers"]');
         if (firstBtn) firstBtn.classList.add('shop-tab-active');
+        window.ContainerArt?.showShop();
     }
     _renderLimitedShopItems();
+    processNextContainer();
 });
 if (characterBtn) characterBtn.addEventListener('click', () => { 
     if (_quickResourceScan()) return;
@@ -2297,8 +2358,15 @@ if (characterBtn) characterBtn.addEventListener('click', () => {
     } 
 });
 if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoadModal) { trophyRoadModal.style.display = 'flex'; generateTrophyRoad(); } });
-if (shopCancel) shopCancel.addEventListener('click', () => { if (shopModal) shopModal.style.display = 'none'; });
-if (characterCancel) characterCancel.addEventListener('click', () => { if (characterModal) characterModal.style.display = 'none'; });
+if (shopCancel) shopCancel.addEventListener('click', () => {
+    if (shopModal) shopModal.style.display = 'none';
+    window.ContainerArt?.hideShop();
+});
+function closeCharacterModal() {
+    if (characterModal) characterModal.style.display = 'none';
+    if (typeof stopCharacterPreviewAnimations === 'function') stopCharacterPreviewAnimations();
+}
+if (characterCancel) characterCancel.addEventListener('click', closeCharacterModal);
 
 // Character tabs switching
 const charTabTanks = document.getElementById('charTabTanks');
@@ -2312,12 +2380,14 @@ if (charTabTanks && charTabMechs && charGridTanks && charGridMechs) {
         charGridMechs.style.display = 'none';
         charTabTanks.classList.add('char-tab-active');
         charTabMechs.classList.remove('char-tab-active');
+        if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
     });
     charTabMechs.addEventListener('click', () => {
         charGridTanks.style.display = 'none';
         charGridMechs.style.display = 'grid';
         charTabMechs.classList.add('char-tab-active');
         charTabTanks.classList.remove('char-tab-active');
+        if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
     });
 }
 
@@ -2331,7 +2401,9 @@ if (shopTabBtns.length) {
             document.querySelectorAll('.shop-tab-pane').forEach(p => p.style.display = 'none');
             // Show selected pane
             const target = document.getElementById(targetId);
-            if (target) target.style.display = 'flex';
+            if (target) target.style.display = targetId === 'shopTabContainers' ? 'grid' : 'flex';
+            if (targetId === 'shopTabContainers') window.ContainerArt?.showShop();
+            else window.ContainerArt?.hideShop();
             // Update active button
             shopTabBtns.forEach(b => b.classList.remove('shop-tab-active'));
             btn.classList.add('shop-tab-active');
@@ -2358,7 +2430,7 @@ if (coinsInput && coinsResult) {
     const updateCoinsResult = () => {
         const coinsAmount = parseInt(coinsInput.value) || 100;
         const gemsAmount = Math.floor(coinsAmount / 100);
-        coinsResult.textContent = `${gemsAmount} 💎`;
+        coinsResult.querySelector('.exchange-amount').textContent = gemsAmount;
     };
     coinsInput.addEventListener('input', updateCoinsResult);
     updateCoinsResult();
@@ -2386,7 +2458,7 @@ if (exchangeCoinsBtn) {
         saveProgress();
         _showExchangeResult(`Обмен выполнен! +${gemsAmount} 💎`, true);
         coinsInput.value = '100';
-        coinsResult.textContent = '1 💎';
+        coinsResult.querySelector('.exchange-amount').textContent = '1';
     });
 }
 
@@ -2399,7 +2471,7 @@ if (gemsInput && gemsResult) {
     const updateGemsResult = () => {
         const gemsAmount = parseInt(gemsInput.value) || 1;
         const coinsAmount = gemsAmount * 10;  // 1 gem = 10 coins
-        gemsResult.textContent = `${coinsAmount} 💰`;
+        gemsResult.querySelector('.exchange-amount').textContent = coinsAmount;
     };
     gemsInput.addEventListener('input', updateGemsResult);
     updateGemsResult();
@@ -2423,7 +2495,7 @@ if (exchangeGemsBtn) {
         saveProgress();
         _showExchangeResult(`Обмен выполнен! +${coinsAmount} 💰`, true);
         gemsInput.value = '1';
-        gemsResult.textContent = '10 💰';
+        gemsResult.querySelector('.exchange-amount').textContent = '10';
     });
 }
 
@@ -2594,17 +2666,27 @@ const containerFlowCancel = document.getElementById('containerFlowCancel');
 let containerFlowType = null;
 let containerDropTimers = [];
 let containerDropActive = false;
-let containerQueue = []; // Queue for multiple containers
+let containerQueue = (() => {
+    try {
+        const saved = JSON.parse(localStorage.getItem('pendingFreeContainers') || '[]');
+        const validTypes = ['mini', 'bronze', 'legendary', 'omega', 'alpha', 'mechParts'];
+        return Array.isArray(saved) ? saved.filter(type => validTypes.includes(type)) : [];
+    } catch (e) { return []; }
+})();
 let isFromTrophyRoad = false; // Track if container is from trophy road
 
 // Process next container in queue
 function processNextContainer() {
-    if (containerQueue.length > 0) {
-        const nextType = containerQueue.shift();
-        setTimeout(() => {
-            showFreeContainerFlow(nextType);
-        }, 500); // Small delay for better UX
+    if (containerFlowType || containerDropActive || !containerQueue.length) return;
+    isFromTrophyRoad = true;
+    containerFlowType = containerQueue[0];
+    updateContainerFlowStage('intro');
+    if (containerDropArea) {
+        containerDropArea.innerHTML = '';
+        containerDropArea.classList.remove('active');
     }
+    if (containerFlowModal) containerFlowModal.style.display = 'flex';
+    window.ContainerArt?.showFlow(containerFlowType);
 }
 
 function clearContainerDropTimers() {
@@ -2616,71 +2698,41 @@ function clearContainerDropTimers() {
 
 function closeContainerFlow() {
     if (containerFlowModal) containerFlowModal.style.display = 'none';
+    window.ContainerArt?.hideFlow();
     clearContainerDropTimers();
     if (containerDropArea) containerDropArea.innerHTML = '';
     const hintEl = document.querySelector('.container-flow-hint');
     if (hintEl) hintEl.style.display = '';
     containerFlowType = null;
-    // Don't reset isFromTrophyRoad here - it will be reset after rewards are shown
+    isFromTrophyRoad = false;
 }
 
 function updateContainerFlowStage(stage) {
     if (!containerFlowType || !containerFlowText || !containerFlowPreview) return;
-    const isBronze = containerFlowType === 'bronze';
-    const isOmega = containerFlowType === 'omega';
-    const isMini = containerFlowType === 'mini';
-    const isMechParts = containerFlowType === 'mechParts';
-    const isAlpha = containerFlowType === 'alpha';
-    
+    if (containerFlowModal) containerFlowModal.dataset.containerType = containerFlowType;
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
-        // If stage is intro, show cancel. If open/animating, hide it.
         containerFlowCancel.style.display = (stage === 'intro') ? '' : 'none';
         containerFlowCancel.disabled = (stage !== 'intro');
     }
-
-    // No filter needed as we have specific images
-    containerFlowPreview.style.filter = '';
-
-    if (stage === 'intro') {
-        if (isAlpha) {
-            containerFlowPreview.src = 'png/cont-png/alpha-cont.png';
-            containerFlowText.textContent = 'Нажми на АЛЬФА контейнер!';
-        } else if (isOmega) {
-            containerFlowPreview.src = 'png/cont-png/omega-cont.png';
-            containerFlowText.textContent = 'Нажми на ОМЕГА контейнер!';
-        } else if (isMini) {
-            containerFlowPreview.src = 'png/cont-png/mini-cont.png';
-            containerFlowText.textContent = 'Нажми на мини контейнер!';
-        } else if (isMechParts) {
-            containerFlowPreview.src = 'png/cont-png/mech-cont.png';
-            containerFlowText.textContent = 'Нажми на ящик деталей!';
-        } else {
-            containerFlowPreview.src = isBronze ? 'png/cont-png/cont1.png' : 'png/cont-png/super-cont.png';
-            containerFlowText.textContent = isBronze
-                ? 'Нажми на контейнер, чтобы открыть'
-                : 'Нажми на контейнер, чтобы открыть';
-        }
-    } else {
-        if (isAlpha) {
-            containerFlowPreview.src = 'png/cont-png/alpha-cont2.png';
-            containerFlowText.textContent = 'АЛЬФА контейнер взрывается наградами!';
-        } else if (isOmega) {
-            containerFlowPreview.src = 'png/cont-png/omega-cont2.png';
-            containerFlowText.textContent = 'ОМЕГА контейнер взрывается наградами!';
-        } else if (isMini) {
-            containerFlowPreview.src = 'png/cont-png/mini-cont2.png';
-            containerFlowText.textContent = 'Мини контейнер раскрывается!';
-        } else if (isMechParts) {
-            containerFlowPreview.src = 'png/cont-png/mech-cont2.png';
-            containerFlowText.textContent = 'Ящик деталей раскрывается!';
-        } else {
-            containerFlowPreview.src = isBronze ? 'png/cont-png/cont2.png' : 'png/cont-png/super-cont2.png';
-            containerFlowText.textContent = isBronze
-                ? 'Из контейнера высыпаются награды!'
-                : 'Легендарный контейнер раскрывается!';
-        }
-    }
+    const introText = {
+        mini: 'Нажми на мини контейнер!',
+        bronze: 'Нажми на бронзовый контейнер!',
+        legendary: 'Нажми на легендарный контейнер!',
+        omega: 'Нажми на ОМЕГА контейнер!',
+        alpha: 'Нажми на АЛЬФА контейнер!',
+        mechParts: 'Нажми на ящик деталей!'
+    };
+    const openingText = {
+        mini: 'Мини контейнер раскрывается!',
+        bronze: 'Из контейнера высыпаются награды!',
+        legendary: 'Легендарный контейнер раскрывается!',
+        omega: 'ОМЕГА контейнер взрывается наградами!',
+        alpha: 'АЛЬФА контейнер взрывается наградами!',
+        mechParts: 'Ящик деталей раскрывается!'
+    };
+    containerFlowText.textContent = (stage === 'intro' ? introText : openingText)[containerFlowType] || introText.bronze;
+    window.ContainerArt?.setFlowStage(stage, containerFlowType);
 }
 
 function animateContainerDrops(rewards, done) {
@@ -2717,9 +2769,13 @@ function animateContainerDrops(rewards, done) {
         const reward = rewards[dropped] || {};
         const item = document.createElement('div');
         item.className = 'container-drop-item';
-        // Use emoji for resource icons (fallback to reward.icon if provided)
-        const iconText = reward.icon || (reward.type === 'gems' ? '💎' : reward.type === 'parts' ? '🔧' : reward.type === 'tank' ? '🏆' : '💰');
-        item.textContent = iconText;
+        const currencyKind = { coins: 'coin', gems: 'gem', parts: 'part', trophies: 'trophy' }[reward.type];
+        if (currencyKind) {
+            item.classList.add('container-drop-item--currency', `currency-icon--${currencyKind}`);
+            item.setAttribute('aria-label', reward.desc || reward.type);
+        } else {
+            item.textContent = reward.icon || '🏆';
+        }
         const label = reward.type === 'tank'
             ? (reward.tankType ? reward.tankType.toUpperCase() : 'TANK')
             : reward.amount ? '+' + reward.amount : '';
@@ -2737,6 +2793,7 @@ function animateContainerDrops(rewards, done) {
 
 function showContainerFlow(type) {
     if (containerFlowType) return;
+    isFromTrophyRoad = false;
     const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : (type === 'alpha' ? 12000 : 1000))));
     if (coins < price) {
         showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
@@ -2749,23 +2806,15 @@ function showContainerFlow(type) {
         containerDropArea.classList.remove('active');
     }
     if (containerFlowModal) containerFlowModal.style.display = 'flex';
+    window.ContainerArt?.showFlow(type);
 }
 
 // Free version for trophy road rewards
-function showFreeContainerFlow(type) {
-    if (containerFlowType) {
-        // If busy, add to queue
-        containerQueue.push(type);
-        return;
-    }
-    isFromTrophyRoad = true;
-    containerFlowType = type;
-    updateContainerFlowStage('intro');
-    if (containerDropArea) {
-        containerDropArea.innerHTML = '';
-        containerDropArea.classList.remove('active');
-    }
-    if (containerFlowModal) containerFlowModal.style.display = 'flex';
+function showFreeContainerFlow(type, count = 1) {
+    for (let i = 0; i < count; i++) containerQueue.push(type);
+    localStorage.setItem('pendingFreeContainers', JSON.stringify(containerQueue));
+    saveProgress();
+    processNextContainer();
 }
 
 // Free container confirm handler
@@ -2792,6 +2841,8 @@ function handleFreeContainerConfirm() {
                 reward = openContainer({ suppressRewardModal: true, ctx });
             } else if (currentType === 'mini') {
                 reward = openMiniContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'mechParts') {
+                reward = openMechPartsContainer({ suppressRewardModal: true, ctx });
             } else {
                 reward = openSuperContainer({ suppressRewardModal: true, ctx });
             }
@@ -2799,6 +2850,9 @@ function handleFreeContainerConfirm() {
         }
     }
 
+    containerQueue.shift();
+    localStorage.setItem('pendingFreeContainers', JSON.stringify(containerQueue));
+    saveProgress();
     updateContainerFlowStage('open');
     animateContainerDrops(rewards, () => {
         closeContainerFlow();
@@ -2809,7 +2863,7 @@ function handleFreeContainerConfirm() {
 
 function showContainerRewards(rewards, index = 0) {
     if (!rewards || index >= rewards.length) {
-        // All rewards shown
+        processNextContainer();
         return;
     }
     
@@ -2854,11 +2908,7 @@ function showContainerRewards(rewards, index = 0) {
             modal.classList.remove('visible');
             setTimeout(() => {
                 modal.style.display = 'none';
-                // If this was from trophy road, process next container in queue
-                if (isFromTrophyRoad) {
-                    isFromTrophyRoad = false; // Reset the flag
-                    processNextContainer();
-                }
+                processNextContainer();
             }, 300);
         } else {
             // Instantly show next reward without closing modal
@@ -2879,7 +2929,6 @@ function handleContainerConfirm() {
         return;
     }
     coins -= price;
-    updateCoinDisplay();
     const rewards = [];
 
     if (currentType === 'alpha') {
@@ -2911,6 +2960,8 @@ function handleContainerConfirm() {
         }
     }
 
+    saveProgress();
+    updateCoinDisplay();
     updateContainerFlowStage('open');
     animateContainerDrops(rewards, () => {
         closeContainerFlow();
@@ -2929,6 +2980,12 @@ function handleContainerClick() {
 }
 
 if (containerFlowPreview) containerFlowPreview.addEventListener('click', handleContainerClick);
+if (containerFlowPreview) containerFlowPreview.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handleContainerClick();
+    }
+});
 if (containerFlowText) containerFlowText.addEventListener('click', handleContainerClick);
 if (containerFlowCancel) containerFlowCancel.addEventListener('click', () => {
     closeContainerFlow();
@@ -3163,6 +3220,10 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
 
     if (!modal) return;
 
+    // A previous chromatic reward may have been replaced while the modal stayed open.
+    if (window.rewardTankAnimId) cancelAnimationFrame(window.rewardTankAnimId);
+    window.rewardTankAnimId = null;
+
     modal.classList.add('visible');
     modal.style.display = 'flex';
     
@@ -3218,8 +3279,14 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     // Explicitly reset shadow to the CSS default (or clear inline 'none' from previous calls)
     title.style.textShadow = ''; 
 
-    // Render icon as emoji/text
-    icon.textContent = resolvedIcon || '';
+    const currencyKind = { coins: 'coin', gems: 'gem', parts: 'part', trophies: 'trophy' }[type];
+    if (currencyKind) {
+        icon.classList.add('currency-reward', `currency-icon--${currencyKind}`);
+        icon.setAttribute('role', 'img');
+        icon.setAttribute('aria-label', resolvedTitle);
+    } else {
+        icon.textContent = resolvedIcon || '';
+    }
 
     if (type === 'tank') {
         const tName = (window.tankDescriptions && window.tankDescriptions[tankType]) ? window.tankDescriptions[tankType].name : (tankType || 'Tank').toUpperCase();
@@ -3318,7 +3385,10 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
-                 if (modal.style.display === 'none') return;
+                 if (modal.style.display === 'none' || !canvas.isConnected) {
+                     window.rewardTankAnimId = null;
+                     return;
+                 }
                  
                  ctx.clearRect(0, 0, canvas.width, canvas.height);
                  const t = Date.now() * 0.05; // Slightly faster for responsiveness
@@ -3340,7 +3410,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                                  // Draw the tank on top
                                  const _side = Math.min(canvas.width, canvas.height) * 0.4;
                                  drawTankOn(ctx, canvas.width / 2, canvas.height / 2, _side, _side, '#fff', -Math.PI/2, 1, tankType);
-                 requestAnimationFrame(drawFrame);
+                 window.rewardTankAnimId = requestAnimationFrame(drawFrame);
                };
                drawFrame();
             } else {
@@ -3689,22 +3759,7 @@ function updateAutopilotEvasion() {
     }
 }
 
-// Построить навигационную сетку: 1 = блокировано, 0 = свободно
-function update() {
-    updateMusic();
-    if (gameState !== 'playing') {
-        syncResultOverlay(gameState);
-        if (gameState === 'win' || gameState === 'lose') {
-            // Do not restart on Space — use Enter to restart instead
-            if (keys['Enter']) {
-                saveProgress(); // Save before reload
-                maybeReload();
-                keys['Enter'] = false;
-            }
-        }
-        return;
-    }
-
+function updateTrainingMode() {
     // TRAINING MODE: respawn dead dummies every 10 seconds (600 frames)
     if (currentMode === 'training' && typeof trainingDummies !== 'undefined') {
         for (let i = 0; i < trainingDummies.length; i++) {
@@ -3771,7 +3826,9 @@ function update() {
             }
         }
     }
-    
+}
+
+function updateDuelZone() {
     // DUEL MODE: Shrinking Zone Logic (Grid Based)
     if (currentMode === 'duel' && duelState) {
         // Shrink timer
@@ -3788,18 +3845,18 @@ function update() {
                 duelState.maxY -= duelState.stepSize;
             }
         }
-        
+
         // Helper: is entity inside safe zone?
         function isSafe(ent) {
             const cx = ent.x + ent.w/2;
             const cy = ent.y + ent.h/2;
-            return (cx >= duelState.minX && cx <= duelState.maxX && 
+            return (cx >= duelState.minX && cx <= duelState.maxX &&
                     cy >= duelState.minY && cy <= duelState.maxY);
         }
 
         // Damage Check Player
         if (!isSafe(tank) && tank.alive !== false) {
-            if ((Date.now() % 1000) < 16) tank.hp -= 100; // 100 dmg/sec
+            if (!isPlayerDamageProtected()) tank.hp -= 100 / 60; // 100 HP per simulation second
             if (Math.random() > 0.8) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#FF0000');
             if (tank.hp <= 0) {
                 tank.alive = false;
@@ -3809,14 +3866,14 @@ function update() {
                 spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
             }
         }
-        
+
         // Damage Check Enemies
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
             if (!e || !e.alive) continue;
-            
+
             if (!isSafe(e)) {
-                if ((Date.now() % 1000) < 16) e.hp -= 100;
+                e.hp -= 100 / 60;
                 if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
                 if (e.hp <= 0) {
                     enemies.splice(i, 1);
@@ -3825,18 +3882,39 @@ function update() {
             }
         }
     }
+}
+
+function update() {
+    updateMusic();
+    if (typeof window.isPaused === 'function' && window.isPaused()) return;
+    if (gameState !== 'playing') {
+        if (typeof syncResultOverlay === 'function' &&
+            (typeof lastResultState === 'undefined' || lastResultState !== gameState)) {
+            syncResultOverlay(gameState);
+        }
+        if (gameState === 'win' || gameState === 'lose') {
+            // Do not restart on Space — use Enter to restart instead
+            if (keys['Enter']) {
+                saveProgress(); // Save before reload
+                maybeReload();
+                keys['Enter'] = false;
+            }
+        }
+        return;
+    }
+
+    updateTrainingMode();
+    updateDuelZone();
 
     // Reset AI budget for this frame (reduced for onevsall)
-    globalPathBudget = (currentMode === 'onevsall') ? MAX_PATH_BUDGET_ONEVSALL : MAX_PATH_BUDGET;
+    allyPathReserve = allies.some(ally => ally && ally.alive !== false) ? 1 : 0;
+    globalPathBudget = ((currentMode === 'onevsall') ? MAX_PATH_BUDGET_ONEVSALL : MAX_PATH_BUDGET) + allyPathReserve;
 
-    // Optimization: Throttle nav rebuild - only once every 4 frames (skip for onevsall)
-    if (navNeedsRebuild && currentMode !== 'onevsall') { 
-        if ((window.frameCount || 0) % 4 === 0) {
-            buildNavGrid(); 
-            navNeedsRebuild = false; 
-        }
-    } else if (currentMode === 'onevsall') {
-        navNeedsRebuild = false; // disable navgrid for onevsall
+    // Rebuild immediately for a new map, then throttle changes to terrain.
+    const navRebuildInterval = currentMode === 'onevsall' ? 12 : 4;
+    if (navNeedsRebuild && (!navGrid || (window.frameCount || 0) % navRebuildInterval === 0)) {
+        buildNavGrid();
+        navNeedsRebuild = false;
     }
     
     // player input only when alive
@@ -4849,7 +4927,7 @@ function update() {
                     const _pa = Math.random() * Math.PI * 2, _pd = Math.random() * 45;
                     if (typeof spawnParticle === 'function') spawnParticle(_ptx + Math.cos(_pa)*_pd, _pty + Math.sin(_pa)*_pd, '#00e5ff', 0.85);
                 }
-                tank.hp -= 80;
+                if (!isPlayerDamageProtected()) tank.hp -= 80;
                 if (tank.hp <= 0 && gameState === 'playing') {
                     tank.alive = false;
                     gameState = 'lose';
@@ -4954,7 +5032,7 @@ function update() {
         if (tank.burning) {
             tank.burnTimer = (tank.burnTimer || 0) - 1;
             if (!tank.mirrorShieldActive) {
-                tank.hp -= (tank.burnDps || 10) / 60;
+                if (!isPlayerDamageProtected()) tank.hp -= (tank.burnDps || 10) / 60;
                 if (Math.random() > 0.6) spawnParticle(tank.x + Math.random() * tank.w, tank.y + Math.random() * tank.h, '#ff6600', 0.5);
             }
             if (tank.burnTimer <= 0) { tank.burning = false; tank.burnTimer = 0; }
@@ -5046,7 +5124,7 @@ function update() {
                     const dy = (tank.y + tank.h / 2) - mine.y;
                     if (Math.hypot(dx, dy) < mine.radius + tank.w / 2) {
                         spawnExplosion(mine.x, mine.y, 55);
-                        tank.hp -= mine.damage;
+                        if (!isPlayerDamageProtected()) tank.hp -= mine.damage;
                         for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                         triggered = true;
                     }
@@ -5519,24 +5597,23 @@ function update() {
         updateAutopilotEvasion();
     }
     if (currentMode === 'bossfight') {
-        updateBossFight();
+        _measureGamePhase('enemyAI', updateBossFight);
     } else {
-        updateEnemyAI();
+        _measureGamePhase('enemyAI', updateEnemyAI);
     }
 // --- APPEND_POINT_UPDATE_AI_ALLIES ---
-    updateAllyAI();
+    _measureGamePhase('allyAI', updateAllyAI);
 // --- APPEND_POINT_UPDATE_REST ---
-    // Save HP before physics to restore if the player is temporarily untouchable
-    const _protectedPlayerHp = (typeof tank !== 'undefined' && (tank.kamikazeInvincible || (tankType === 'burovoy' && tank.burovoyBurrowActive))) ? tank.hp : -1;
-    updatePhysics();
-    // Restore HP and cancel lose if the player was untouchable this frame
-    if (_protectedPlayerHp >= 0 && typeof tank !== 'undefined' && (tank.kamikazeInvincible || (tankType === 'burovoy' && tank.burovoyBurrowActive))) {
-        if (tank.hp < _protectedPlayerHp) tank.hp = _protectedPlayerHp;
-        if (gameState === 'lose') gameState = 'playing';
-    }
+    updateSpecialProjectiles();
+    if (gameState !== 'playing') return;
+    _measureGamePhase('physics', updatePhysics);
 }
 
+let _lastDisplayedResources = null;
 function updateCoinDisplay() {
+    const resources = `${coins}|${gems}|${trophies}|${parts}`;
+    if (resources === _lastDisplayedResources) return;
+    _lastDisplayedResources = resources;
     // Optimization: Cache DOM elements
     _ensureDOMCache();
     
@@ -5759,43 +5836,43 @@ function generateTrophyRoad() {
             currentStage = 'stage1';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage1';
-            stageDiv.textContent = '🟢 Начальный этап';
+            stageDiv.textContent = 'Начальный этап';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 30 && currentStage !== 'stage2') {
             currentStage = 'stage2';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage2';
-            stageDiv.textContent = '🟡 Ранний этап';
+            stageDiv.textContent = 'Ранний этап';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 100 && currentStage !== 'stage3') {
             currentStage = 'stage3';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage3';
-            stageDiv.textContent = '🟠 Этап развития';
+            stageDiv.textContent = 'Этап развития';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 200 && currentStage !== 'stage4') {
             currentStage = 'stage4';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage4';
-            stageDiv.textContent = '🔵 Продвинутый этап';
+            stageDiv.textContent = 'Продвинутый этап';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 500 && currentStage !== 'stage5') {
             currentStage = 'stage5';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage5';
-            stageDiv.textContent = '🟣 Мастерство';
+            stageDiv.textContent = 'Мастерство';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 900 && currentStage !== 'stage6') {
             currentStage = 'stage6';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage6';
-            stageDiv.textContent = '🔴 Этап истины';
+            stageDiv.textContent = 'Этап истины';
             container.appendChild(stageDiv);
         } else if (reward.trophies === 1200 && currentStage !== 'stage7') {
             currentStage = 'stage7';
             const stageDiv = document.createElement('div');
             stageDiv.className = 'trophy-stage stage7';
-            stageDiv.textContent = '⚫ Этап легенд';
+            stageDiv.textContent = 'Этап легенд';
             container.appendChild(stageDiv);
         }
         
@@ -5814,7 +5891,7 @@ function generateTrophyRoad() {
         }
         
         itemDiv.innerHTML = `
-            <div class="trophy-milestone">${reward.trophies} 🏆</div>
+            <div class="trophy-milestone">${reward.trophies} <span class="currency-icon currency-icon--trophy" role="img" aria-label="трофеев"></span></div>
             <div class="trophy-reward">${reward.reward}</div>
             <button class="trophy-claim" ${!isAvailable || isClaimed ? 'disabled' : ''} 
                 onclick="claimTrophyReward(${index})">
@@ -5861,34 +5938,10 @@ function claimTrophyReward(index) {
             showNotification(`Получен ${reward.reward}!`, '#9b59b6');
             break;
         case 'containers':
-            // Add all containers to queue and start with first one
             showNotification(`Получено ${reward.amount} контейнеров!`, '#9b59b6');
-            
-            // Clear queue first
-            containerQueue = [];
-            
-            // Add remaining containers to queue (first one will be shown immediately)
-            for (let i = 1; i < reward.amount; i++) {
-                if (reward.level === 'mini') {
-                    containerQueue.push('mini');
-                } else if (reward.level === 'normal') {
-                    containerQueue.push('bronze');
-                } else if (reward.level === 'super') {
-                    containerQueue.push('legendary');
-                } else if (reward.level === 'omega') {
-                    containerQueue.push('omega');
-                }
-            }
-            
-            // Show first container immediately
-            if (reward.level === 'mini') {
-                showFreeContainerFlow('mini');
-            } else if (reward.level === 'normal') {
-                showFreeContainerFlow('bronze');
-            } else if (reward.level === 'super') {
-                showFreeContainerFlow('legendary');
-            } else if (reward.level === 'omega') {
-                showFreeContainerFlow('omega');
+            {
+                const types = { mini: 'mini', normal: 'bronze', super: 'legendary', omega: 'omega' };
+                if (types[reward.level]) showFreeContainerFlow(types[reward.level], reward.amount);
             }
             break;
         case 'choice':
@@ -6000,27 +6053,49 @@ function _ensureDOMCache() {
 // Optimization: Limit max particles to prevent performance degradation
 const MAX_PARTICLES = 200;
 
-// Постоянный цикл обновления физики
+// One frame loop for simulation and rendering.
 window.frameCount = 0;
 let lastGameLoopTime = performance.now();
 let gameLoopAccumulator = 0;
 const GAME_LOOP_STEP = 1000 / 60;
+const MAX_CATCHUP_STEPS = 12;
+const MAX_CATCHUP_MS = 1000;
+let lastMobileHudState = '';
 function gameLoop(now) {
-    const delta = Math.min(100, now - lastGameLoopTime);
+    const delta = Math.max(0, Math.min(MAX_CATCHUP_MS, now - lastGameLoopTime));
     lastGameLoopTime = now;
-    gameLoopAccumulator += delta;
-    while (gameLoopAccumulator >= GAME_LOOP_STEP) {
-        window.frameCount++;
+    const paused = typeof window.isPaused === 'function' && window.isPaused();
+    if (typeof gameState !== 'undefined' && gameState === 'playing' && !paused) {
+        gameLoopAccumulator = Math.min(MAX_CATCHUP_MS, gameLoopAccumulator + delta);
+        const start = performance.now();
+        let steps = 0;
+        while (gameLoopAccumulator >= GAME_LOOP_STEP && steps < MAX_CATCHUP_STEPS && gameState === 'playing') {
+            window.frameCount++;
+            _measureGamePhase('update', update);
+            gameLoopAccumulator -= GAME_LOOP_STEP;
+            steps++;
+            if (performance.now() - start >= 8) break;
+        }
+    } else {
+        gameLoopAccumulator = 0;
         update();
-        gameLoopAccumulator -= GAME_LOOP_STEP;
     }
+    if (typeof window.renderActiveGameFrame === 'function') _measureGamePhase('render', window.renderActiveGameFrame);
+    const mobileHudState = `${typeof gameState === 'undefined' ? '' : gameState}|${!!window.deviceModeMobile}`;
+    if (typeof updateMobileHud === 'function' && ((typeof gameState !== 'undefined' && gameState === 'playing') || mobileHudState !== lastMobileHudState)) updateMobileHud();
+    lastMobileHudState = mobileHudState;
     requestAnimationFrame(gameLoop);
-    // draw is called via requestAnimationFrame usually, but here checking existing interval
 }
-requestAnimationFrame(gameLoop);
+
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+    gameLoopAccumulator = 0;
+    lastGameLoopTime = performance.now();
+});
 
 // Инициализация после загрузки страницы — защищаем от ранних ошибок
 window.addEventListener('load', () => {
+    lastGameLoopTime = performance.now();
+    requestAnimationFrame(gameLoop);
     try {
         console.log('Game init');
         generateMap();
@@ -6034,8 +6109,6 @@ window.addEventListener('load', () => {
             }
         };
         tryStart();
-        // Also draw character previews which should now be available from tanks.js
-        if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
     } catch (err) {
         console.error('Init error', err);
     }
@@ -6046,6 +6119,7 @@ window.setSelectedTank = function(selectedType) {
     console.log('Setting selected tank to: ' + selectedType);
     tankType = selectedType;
     localStorage.setItem('tankSelected', selectedType);
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
     // Update selection highlight in char-grid
     document.querySelectorAll('.char-grid > div').forEach(d => d.classList.remove('tank-selected'));
     const _selPreview = document.getElementById(selectedType + 'TankPreview');
@@ -6202,9 +6276,8 @@ window.addEventListener('load', () => {
             const tryModeModal = document.getElementById('tryModeModal');
             if (tryModeModal) tryModeModal.style.display = 'none';
             const detailModal = document.getElementById('tankDetailModal');
-            const charModal = document.getElementById('characterModal');
             if (detailModal) detailModal.style.display = 'none';
-            if (charModal) charModal.style.display = 'none';
+            closeCharacterModal();
             startGame('trial');
         });
     }
@@ -6215,9 +6288,8 @@ window.addEventListener('load', () => {
             const tryModeModal = document.getElementById('tryModeModal');
             if (tryModeModal) tryModeModal.style.display = 'none';
             const detailModal = document.getElementById('tankDetailModal');
-            const charModal = document.getElementById('characterModal');
             if (detailModal) detailModal.style.display = 'none';
-            if (charModal) charModal.style.display = 'none';
+            closeCharacterModal();
             startGame('training');
         });
     }
@@ -6264,7 +6336,7 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
     const unlockTankReward = (tankType) => {
         const tankDesc = tankDescriptions[tankType] ? tankDescriptions[tankType].name : tankType.toUpperCase();
         unlockedTanks.push(tankType);
-        saveProgress();
+        if (!suppressRewardModal) saveProgress();
         if (!suppressRewardModal) showReward('tank', 1, `Разблокирован ${tankDesc}!`, tankType);
         updateTankDetailButton(tankType);
         return { type: 'tank', tankType: tankType, desc: `${tankDesc} разблокирован!`, icon: '🚜', rarity: rarity };
@@ -6305,7 +6377,7 @@ function unlockRandomTankNew(fromSuper = false, options = {}) {
             ctx.duplicatesInOpening = (ctx.duplicatesInOpening || 0) + 1;
         }
         gems += comp;
-        saveProgress();
+        if (!suppressRewardModal) saveProgress();
         if (!suppressRewardModal) showReward('gems', comp, `Дубликат ${tDesc} конвертирован в Гемы!`);
         return { type: 'gems', amount: comp, desc: `Дубликат танка конвертирован в Гемы!`, icon: '💎', rarity: rarity };
     }
@@ -6485,6 +6557,7 @@ let achievementData = (function() {
 function saveAchievements() {
     if (window._isProfileSwitching) return;
     try { localStorage.setItem('achievementData', JSON.stringify(achievementData)); } catch(e) {}
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
 }
 
 function checkAchievements() {
@@ -6602,10 +6675,10 @@ window.claimAchievement = function(id) {
     if (!def) return;
 
     achievementData.claimed[id] = true;
-    saveAchievements();
 
     // Icon reward — just unlock the button, no container
     if (def.reward.type === 'icon') {
+        saveAchievements();
         _refreshSpecialIconButtons();
         const _iconPrettyNames = { rome: 'Щит', time: 'Часы', imit: 'Имитация', tank: 'Tank' };
         showNotification('🏆 Получена уникальная иконка «' + (_iconPrettyNames[def.reward.icon] || def.reward.icon) + '»!', '#f1c40f');
@@ -6617,9 +6690,8 @@ window.claimAchievement = function(id) {
     // mini=мини, normal=bronze(обычный), super=legendary(супер/легендарный)
     const contTypeMap = { mini: 'mini', normal: 'bronze', super: 'legendary' };
     const flowType = contTypeMap[def.reward.type] || 'mini';
-    for (let i = 0; i < def.reward.count; i++) {
-        showFreeContainerFlow(flowType);
-    }
+    localStorage.setItem('achievementData', JSON.stringify(achievementData));
+    showFreeContainerFlow(flowType, def.reward.count);
 
     // Re-render
     renderAchievementsModal();
@@ -6855,6 +6927,7 @@ function renderProfilesList() {
 
         // Avatar circle
         const avatar = document.createElement('div');
+        avatar.dataset.keepEmoji = 'true';
         avatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2c5282);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.2)') + ';';
         const pAv = p.avatar || '🎮';
         if (pAv.startsWith('img:')) {
@@ -6872,7 +6945,7 @@ function renderProfilesList() {
         const titleId = p.active ? (localStorage.getItem('playerTitle') || 'none') : 'none';
         const titleColor = (titleId && titleId !== 'none') ? _getAtmosphericTitleColor(titleId) : '#f1c40f';
         info.innerHTML = '<div style="font-weight:700;font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-            escapeHtml(p.name) + (p.active ? ' <span style="color:#2ecc71;font-size:11px;">(активный)</span>' : '') + '</div>' +
+            '<span data-keep-emoji>' + escapeHtml(p.name) + '</span>' + (p.active ? ' <span style="color:#2ecc71;font-size:11px;">(активный)</span>' : '') + '</div>' +
             '<div style="font-size:12px;color:#aaa;margin-top:2px;">' +
             (titleLabel ? '<span style="color:' + titleColor + ';font-size:11px;font-weight:700;text-shadow:0 0 6px ' + titleColor + '88;">' + escapeHtml(titleLabel) + '</span>&nbsp;·&nbsp;' : '') +
             '🏆 ' + p.trophies + ' трофеев</div>';
@@ -6947,7 +7020,9 @@ function openProfileEditModal(mode, idx) {
     document.getElementById('profileEditName').value = existing ? existing.name : ('Игрок ' + (list.length + 1));
     _updateEditAvatarPreview(_profileEditAvatar);
     _buildAvatarGrid();
-    _buildTitleSelect();
+    const titleSection = document.getElementById('profileEditTitleSection');
+    if (titleSection) titleSection.style.display = mode === 'edit' ? '' : 'none';
+    if (mode === 'edit') _buildTitleSelect();
     modal.style.display = 'flex';
 }
 
@@ -6984,6 +7059,7 @@ function _buildAvatarGrid() {
     const grid = document.getElementById('profileAvatarGrid');
     if (!grid) return;
     grid.innerHTML = '';
+    const lockBadge = '<span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
 
     // Show current tank type
     const tankHeader = document.createElement('div');
@@ -7029,14 +7105,14 @@ function _buildAvatarGrid() {
                     btn.innerHTML = imgHtml;
                     btn.onclick = () => _updateEditAvatarPreview(av);
                 } else {
-                    btn.innerHTML = imgHtml + '<span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
+                    btn.innerHTML = imgHtml + lockBadge;
                     btn.onclick = () => _showAvatarBuyPanel(av, tier);
                 }
             } else if (unlocked) {
                 btn.innerHTML = '<span style="font-size:22px;">' + av + '</span>';
                 btn.onclick = () => _updateEditAvatarPreview(av);
             } else {
-                btn.innerHTML = '<span style="font-size:16px;">' + av + '</span><span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
+                btn.innerHTML = '<span style="font-size:16px;">' + av + '</span>' + lockBadge;
                 btn.onclick = () => _showAvatarBuyPanel(av, tier);
             }
             row.appendChild(btn);
@@ -7228,16 +7304,14 @@ if (profileEditSave) profileEditSave.addEventListener('click', () => {
     if (!nameVal) { document.getElementById('profileEditName').focus(); return; }
     const finalAvatar = _profileEditAvatar;
 
-    // Save selected title
-    try { localStorage.setItem('playerTitle', _profileEditTitleId || 'none'); } catch(e) {}
-    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
-
     if (_profileEditIdx === -1) {
         // Create mode
         if (typeof saveProgress === 'function') saveProgress();
         window.createProfile(nameVal, finalAvatar);
     } else {
         // Edit mode
+        try { localStorage.setItem('playerTitle', _profileEditTitleId || 'none'); } catch(e) {}
+        if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
         window.editProfile(_profileEditIdx, nameVal, finalAvatar);
         document.getElementById('profileEditModal').style.display = 'none';
         renderProfilesList();

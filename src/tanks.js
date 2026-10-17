@@ -171,7 +171,6 @@ const tankBgGradients = {
     medical: ['#9b59b6', '#8e44ad'],   // Медицинский - purple (Эпический)
     kamikaze: ['#ff4400', '#cc2200'], // Лимитированный - red-orange
     myasnoy: ['#ff4400', '#cc2200'],  // Лимитированный — совпадает с камикадзе
-    // sport removed
 };
 
 // Base colors used in preview rendering (keeps menu and modal consistent)
@@ -201,7 +200,6 @@ const tankBaseColors = {
     air: '#00a896',          // Teal-cyan for Air tank
     kamikaze: '#FFFFFF', // White — Japanese imperial theme
     myasnoy: '#c03030',  // Deep flesh-red for Мясной tank
-    // sport removed
 };
 
 // Make available globally
@@ -3833,8 +3831,16 @@ function drawBossOn(ctx, w, h, turretAngle, phase) {
     ctx.restore(); // end turret rotation
 }
 
+let lastPreviewDrawAt = -Infinity;
+let lastPreviewDrawKey = '';
 function drawPreview() {
-    if (!previewCtx) return;
+    if (!previewCtx || gameState !== 'menu') return;
+    const now = performance.now();
+    const previewKey = [tankType, tank.color, tank.turretAngle,
+        previewCanvas.width, previewCanvas.height].join(':');
+    if (previewKey === lastPreviewDrawKey && now - lastPreviewDrawAt < 1000 / 30) return;
+    lastPreviewDrawAt = now;
+    lastPreviewDrawKey = previewKey;
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
     const side = Math.min(previewCanvas.width, previewCanvas.height) / 2;
     drawTankOn(previewCtx, previewCanvas.width/2, previewCanvas.height/2, side, side, tank.color, getPreviewTankTurretAngle(tankType, tank.turretAngle), 1, tankType, getPreviewTankHeatState(tankType), 0);
@@ -3862,64 +3868,21 @@ function getPreviewTankHeatState(type) {
 }
 
 function stopCharacterPreviewAnimations() {
-    const ids = [
-        'characterPreviewsAnimId',
-        'airTankAnimId',
-        'illuminatTankAnimId',
-        'burovoyTankAnimId',
-        'timeTankAnimId',
-        'imitatorTankAnimId',
-        'romanTankAnimId'
-    ];
-
-    for (const key of ids) {
-        if (window[key]) {
-            cancelAnimationFrame(window[key]);
-            window[key] = null;
-        }
+    if (window.characterPreviewsAnimId) {
+        cancelAnimationFrame(window.characterPreviewsAnimId);
+        window.characterPreviewsAnimId = null;
+    }
+    if (window.characterPreviewObserver) {
+        window.characterPreviewObserver.disconnect();
+        window.characterPreviewObserver = null;
+    }
+    for (const key of ['mechDiyAnimId', 'mechShieldAnimId', 'mechRocketAnimId']) {
+        if (window[key] != null) cancelAnimationFrame(window[key]);
+        window[key] = null;
     }
 }
 
 function drawFrozenOverlay(ctx, x, y, w, h, life) {
-    const cx = x + w/2;
-    const cy = y + h/2;
-    const alpha = Math.max(0.12, Math.min(0.95, life / 180));
-    ctx.save();
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, `rgba(200,230,255,${0.02 * alpha})`);
-    g.addColorStop(0.5, `rgba(180,215,240,${0.06 * alpha})`);
-    g.addColorStop(1, `rgba(220,245,255,${0.03 * alpha})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-
-    ctx.globalAlpha = 0.6 * alpha;
-    ctx.strokeStyle = 'rgba(220,240,255,0.6)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-        const off = (i - 1) * (h * 0.18);
-        ctx.beginPath();
-        ctx.moveTo(x - w * 0.1, y + h * 0.2 + off);
-        ctx.lineTo(x + w * 1.05, y + h * 0.05 + off);
-        ctx.stroke();
-    }
-
-    const t = (Date.now() % 1000) / 1000;
-    const shimmerX = x + (t * (w + 40)) - 20;
-    ctx.globalCompositeOperation = 'lighter';
-    const shimmerGrad = ctx.createLinearGradient(shimmerX - 20, y, shimmerX + 20, y + h);
-    shimmerGrad.addColorStop(0, `rgba(255,255,255,${0.0 * alpha})`);
-    shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${0.35 * alpha})`);
-    shimmerGrad.addColorStop(1, `rgba(255,255,255,${0.0 * alpha})`);
-    ctx.fillStyle = shimmerGrad;
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
-}
-
-// drawParalysisOverlay moved to mechs.js
-
-function drawFrozenOverlay(ctx, x, y, w, h, life) {
-    const cx = x + w/2;
-    const cy = y + h/2;
     const alpha = Math.max(0.12, Math.min(0.95, life / 180));
     ctx.save();
     const g = ctx.createLinearGradient(x, y, x + w, y + h);
@@ -4395,13 +4358,20 @@ function drawSandBlindScreenOverlay(ctx, width, height, timer) {
 function drawCharacterPreviews() {
     stopCharacterPreviewAnimations();
 
+    const characterModal = document.getElementById('characterModal');
+    if (!characterModal || getComputedStyle(characterModal).display === 'none') return;
+    const visiblePreviews = new Set();
+    const renderedStaticPreviews = new Set();
+    const isPreviewVisible = canvas => !!canvas && visiblePreviews.has(canvas);
+
     const shouldAnimateTankPreviews = () => {
-        const characterModal = document.getElementById('characterModal');
         const tanksGrid = document.getElementById('charGridTanks');
+        const mechsGrid = document.getElementById('charGridMechs');
         return !!(
             characterModal &&
-            characterModal.style.display !== 'none' &&
-            (!tanksGrid || tanksGrid.style.display !== 'none')
+            getComputedStyle(characterModal).display !== 'none' &&
+            ((!tanksGrid || getComputedStyle(tanksGrid).display !== 'none') ||
+             (mechsGrid && getComputedStyle(mechsGrid).display !== 'none'))
         );
     };
 
@@ -4443,8 +4413,9 @@ function drawCharacterPreviews() {
         }
     };
 
-    const drawItem = (ctx, canvas, type, baseColor, bgGrad, heatState = null) => {
-        if (!ctx || !canvas || !bgGrad) return;
+    const drawItem = (ctx, canvas, type, baseColor, bgGrad, heatState = null, animated = false) => {
+        if (!ctx || !isPreviewVisible(canvas) || !bgGrad ||
+            (!animated && renderedStaticPreviews.has(canvas))) return;
 
         const isUnlocked = isUnlockedTank(type);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4472,10 +4443,11 @@ function drawCharacterPreviews() {
         ctx.restore();
 
         drawPreviewOverlay(ctx, canvas, type, isUnlocked);
+        if (!animated) renderedStaticPreviews.add(canvas);
     };
 
     const drawChromaticItem = (ctx, canvas, type, baseColor, lockedBg) => {
-        if (!ctx || !canvas) return;
+        if (!ctx || !isPreviewVisible(canvas)) return;
 
         const isUnlocked = isUnlockedTank(type);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4509,100 +4481,174 @@ function drawCharacterPreviews() {
     };
 
     const renderAnimatedCharacterPreviews = () => {
-        drawItem(airTankCtx, airTankPreview, 'air', '#00a896', tankBgGradients.air);
-        drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', tankBgGradients.illuminat);
-        drawItem(burovoyTankCtx, burovoyTankPreview, 'burovoy', '#8b1e13', tankBgGradients.burovoy, getPreviewTankHeatState('burovoy'));
-        if (typeof myasnoyTankCtx !== 'undefined' && myasnoyTankCtx && myasnoyTankPreview) {
-            drawItem(myasnoyTankCtx, myasnoyTankPreview, 'myasnoy', '#c03030', tankBgGradients.myasnoy);
+        const tanksGrid = document.getElementById('charGridTanks');
+        const mechsGrid = document.getElementById('charGridMechs');
+        if (!tanksGrid || getComputedStyle(tanksGrid).display !== 'none') {
+            drawItem(airTankCtx, airTankPreview, 'air', '#00a896', tankBgGradients.air, null, true);
+            drawItem(illuminatTankCtx, illuminatTankPreview, 'illuminat', '#0000FF', tankBgGradients.illuminat, null, true);
+            drawItem(burovoyTankCtx, burovoyTankPreview, 'burovoy', '#8b1e13', tankBgGradients.burovoy, getPreviewTankHeatState('burovoy'), true);
+            if (typeof myasnoyTankCtx !== 'undefined' && myasnoyTankCtx && myasnoyTankPreview) {
+                drawItem(myasnoyTankCtx, myasnoyTankPreview, 'myasnoy', '#c03030', tankBgGradients.myasnoy, null, true);
+            }
+            drawChromaticItem(timeTankCtx, timeTankPreview, 'time', '#FF00FF', '#333');
+            drawChromaticItem(imitatorTankCtx, imitatorTankPreview, 'imitator', '#1a1a3e', '#111');
+            drawChromaticItem(romanTankCtx, romanTankPreview, 'roman', '#1a1a2e', '#111');
+            if (typeof kvantTankCtx !== 'undefined' && kvantTankCtx && kvantTankPreview) {
+                drawChromaticItem(kvantTankCtx, kvantTankPreview, 'kvant', '#0d1b2a', '#06111e');
+            }
         }
-        drawChromaticItem(timeTankCtx, timeTankPreview, 'time', '#FF00FF', '#333');
-        drawChromaticItem(imitatorTankCtx, imitatorTankPreview, 'imitator', '#1a1a3e', '#111');
-        drawChromaticItem(romanTankCtx, romanTankPreview, 'roman', '#1a1a2e', '#111');
-        if (typeof kvantTankCtx !== 'undefined' && kvantTankCtx && kvantTankPreview) {
-            drawChromaticItem(kvantTankCtx, kvantTankPreview, 'kvant', '#0d1b2a', '#06111e');
+        if (!mechsGrid || getComputedStyle(mechsGrid).display !== 'none') {
+            if (isPreviewVisible(mechDiyTankPreview) && typeof drawMechDiyPreview === 'function')
+                drawMechDiyPreview(mechDiyTankPreview, isUnlockedTank('mechDiy'));
+            if (isPreviewVisible(mechShieldTankPreview) && typeof drawMechShieldPreview === 'function')
+                drawMechShieldPreview(mechShieldTankPreview, isUnlockedTank('mechShield'));
+            if (isPreviewVisible(mechRocketTankPreview) && typeof drawMechRocketPreview === 'function')
+                drawMechRocketPreview(mechRocketTankPreview, isUnlockedTank('mechRocket'));
         }
     };
 
-    drawItem(normalTankCtx, normalTankPreview, 'normal', '#0000FF', tankBgGradients.normal);
-    drawItem(iceTankCtx, iceTankPreview, 'ice', '#54d1e8', tankBgGradients.ice);
-    drawItem(machinegunTankCtx, machinegunTankPreview, 'machinegun', '#0000FF', tankBgGradients.machinegun);
-    drawItem(buckshotTankCtx, buckshotTankPreview, 'buckshot', '#2ecc71', tankBgGradients.buckshot);
-    if (typeof pyroTankCtx !== 'undefined' && pyroTankCtx && pyroTankPreview) {
-        drawItem(pyroTankCtx, pyroTankPreview, 'pyro', '#8b2500', tankBgGradients.pyro);
-    }
+    const staticPreviews = [
+        [normalTankCtx, normalTankPreview, 'normal', '#0000FF'],
+        [iceTankCtx, iceTankPreview, 'ice', '#54d1e8'],
+        [machinegunTankCtx, machinegunTankPreview, 'machinegun', '#0000FF'],
+        [buckshotTankCtx, buckshotTankPreview, 'buckshot', '#2ecc71'],
+        [pyroTankCtx, pyroTankPreview, 'pyro', '#8b2500'],
+        [fireTankCtx, fireTankPreview, 'fire', '#4c00ff'],
+        [waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360'],
+        [medicalTankCtx, medicalTankPreview, 'medical', '#0033ff'],
+        [spartanTankCtx, spartanTankPreview, 'spartan', '#b87333'],
+        [kamikazeTankCtx, kamikazeTankPreview, 'kamikaze', '#FFFFFF'],
+        [mineTankCtx, mineTankPreview, 'mine', '#3d4c18'],
+        [buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF'],
+        [musicalTankCtx, musicalTankPreview, 'musical', '#0000FF'],
+        [toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF'],
+        [mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF'],
+        [egyptianTankCtx, egyptianTankPreview, 'egyptian', '#8c6a25'],
+        [plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF'],
+        [electricTankCtx, electricTankPreview, 'electric', '#1a1a2e'],
+        [robotTankCtx, robotTankPreview, 'robot', '#0d0d1e']
+    ];
 
-    drawItem(fireTankCtx, fireTankPreview, 'fire', '#4c00ff', tankBgGradients.fire);
-    drawItem(waterjetTankCtx, waterjetTankPreview, 'waterjet', '#154360', tankBgGradients.waterjet);
-    drawItem(medicalTankCtx, medicalTankPreview, 'medical', '#0033ff', tankBgGradients.medical);
-    if (typeof spartanTankCtx !== 'undefined' && spartanTankCtx && spartanTankPreview) {
-        drawItem(spartanTankCtx, spartanTankPreview, 'spartan', '#b87333', tankBgGradients.spartan);
-    }
-
-    if (typeof kamikazeTankCtx !== 'undefined' && kamikazeTankCtx && kamikazeTankPreview) {
-        drawItem(kamikazeTankCtx, kamikazeTankPreview, 'kamikaze', '#FFFFFF', tankBgGradients.kamikaze);
-    }
-    if (typeof myasnoyTankCtx !== 'undefined' && myasnoyTankCtx && myasnoyTankPreview) {
-        drawItem(myasnoyTankCtx, myasnoyTankPreview, 'myasnoy', '#c03030', tankBgGradients.myasnoy);
-    }
-    if (typeof mineTankCtx !== 'undefined' && mineTankCtx && mineTankPreview) {
-        drawItem(mineTankCtx, mineTankPreview, 'mine', '#3d4c18', tankBgGradients.mine);
-    }
-
-    if (typeof mechDiyTankPreview !== 'undefined' && mechDiyTankPreview) {
-        const mechDiyUnlocked = isUnlockedTank('mechDiy');
-        if (typeof drawMechDiyPreview === 'function') {
-            drawMechDiyPreview(mechDiyTankPreview, mechDiyUnlocked);
-        } else if (mechDiyTankCtx) {
-            drawItem(mechDiyTankCtx, mechDiyTankPreview, 'mechDiy', '#1a8a3e', tankBgGradients.mechDiy);
+    const renderStaticCharacterPreviews = () => {
+        for (const [ctx, canvas, type, color] of staticPreviews) {
+            drawItem(ctx, canvas, type, color, tankBgGradients[type]);
         }
-    }
-    if (typeof mechShieldTankPreview !== 'undefined' && mechShieldTankPreview) {
-        const mechShieldUnlocked = isUnlockedTank('mechShield');
-        if (typeof drawMechShieldPreview === 'function') {
-            drawMechShieldPreview(mechShieldTankPreview, mechShieldUnlocked);
-        } else if (mechShieldTankCtx) {
-            drawItem(mechShieldTankCtx, mechShieldTankPreview, 'mechShield', '#1a3a6e', tankBgGradients.mechShield);
+
+        if (isPreviewVisible(mechDiyTankPreview) && !renderedStaticPreviews.has(mechDiyTankPreview)) {
+            const mechDiyUnlocked = isUnlockedTank('mechDiy');
+            if (typeof drawMechDiyPreview === 'function') {
+                drawMechDiyPreview(mechDiyTankPreview, mechDiyUnlocked);
+            } else if (mechDiyTankCtx) {
+                drawItem(mechDiyTankCtx, mechDiyTankPreview, 'mechDiy', '#1a8a3e', tankBgGradients.mechDiy);
+            }
+            renderedStaticPreviews.add(mechDiyTankPreview);
         }
-    }
-    if (typeof mechRocketTankPreview !== 'undefined' && mechRocketTankPreview) {
-        const mechRocketUnlocked = isUnlockedTank('mechRocket');
-        if (typeof drawMechRocketPreview === 'function') {
-            drawMechRocketPreview(mechRocketTankPreview, mechRocketUnlocked);
+        if (isPreviewVisible(mechShieldTankPreview) && !renderedStaticPreviews.has(mechShieldTankPreview)) {
+            const mechShieldUnlocked = isUnlockedTank('mechShield');
+            if (typeof drawMechShieldPreview === 'function') {
+                drawMechShieldPreview(mechShieldTankPreview, mechShieldUnlocked);
+            } else if (mechShieldTankCtx) {
+                drawItem(mechShieldTankCtx, mechShieldTankPreview, 'mechShield', '#1a3a6e', tankBgGradients.mechShield);
+            }
+            renderedStaticPreviews.add(mechShieldTankPreview);
         }
+        if (isPreviewVisible(mechRocketTankPreview) && !renderedStaticPreviews.has(mechRocketTankPreview)) {
+            const mechRocketUnlocked = isUnlockedTank('mechRocket');
+            if (typeof drawMechRocketPreview === 'function') {
+                drawMechRocketPreview(mechRocketTankPreview, mechRocketUnlocked);
+            }
+            renderedStaticPreviews.add(mechRocketTankPreview);
+        }
+    };
+
+    const previewCanvases = characterModal.querySelectorAll('.char-grid canvas');
+    if (typeof IntersectionObserver === 'function') {
+        const modalBounds = characterModal.getBoundingClientRect();
+        for (const canvas of previewCanvases) {
+            const bounds = canvas.getBoundingClientRect();
+            if (bounds.width && bounds.height && bounds.bottom >= Math.max(0, modalBounds.top - 120) &&
+                bounds.top <= Math.min(window.innerHeight, modalBounds.bottom + 120) &&
+                bounds.right >= 0 && bounds.left <= window.innerWidth) {
+                visiblePreviews.add(canvas);
+            }
+        }
+        window.characterPreviewObserver = new IntersectionObserver(entries => {
+            let newlyVisible = false;
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    if (!visiblePreviews.has(entry.target)) newlyVisible = true;
+                    visiblePreviews.add(entry.target);
+                } else {
+                    visiblePreviews.delete(entry.target);
+                }
+            }
+            if (newlyVisible) renderStaticCharacterPreviews();
+        }, { rootMargin: '120px' });
+        for (const canvas of previewCanvases) window.characterPreviewObserver.observe(canvas);
+    } else {
+        for (const canvas of previewCanvases) visiblePreviews.add(canvas);
     }
 
-    drawItem(buratinoTankCtx, buratinoTankPreview, 'buratino', '#0000FF', tankBgGradients.buratino);
-    drawItem(musicalTankCtx, musicalTankPreview, 'musical', '#0000FF', tankBgGradients.musical);
-    drawItem(toxicTankCtx, toxicTankPreview, 'toxic', '#0000FF', tankBgGradients.toxic);
-    drawItem(mirrorTankCtx, mirrorTankPreview, 'mirror', '#0000FF', tankBgGradients.mirror);
-    drawItem(egyptianTankCtx, egyptianTankPreview, 'egyptian', '#8c6a25', tankBgGradients.egyptian);
-    drawItem(plasmaTankCtx, plasmaTankPreview, 'plasma', '#0000FF', tankBgGradients.plasma);
-    drawItem(electricTankCtx, electricTankPreview, 'electric', '#1a1a2e', tankBgGradients.electric);
-
-    if (typeof robotTankCtx !== 'undefined' && robotTankCtx && robotTankPreview) {
-        drawItem(robotTankCtx, robotTankPreview, 'robot', '#0d0d1e', tankBgGradients.robot);
-    }
-
+    renderStaticCharacterPreviews();
     renderAnimatedCharacterPreviews();
 
     if (shouldAnimateTankPreviews()) {
-        const animateCharacterPreviews = () => {
+        let lastPreviewRender = 0;
+        const animateCharacterPreviews = (now) => {
             if (!shouldAnimateTankPreviews()) {
-                window.characterPreviewsAnimId = null;
+                if (getComputedStyle(characterModal).display === 'none') {
+                    stopCharacterPreviewAnimations();
+                } else {
+                    window.characterPreviewsAnimId = null;
+                }
                 return;
             }
 
-            renderAnimatedCharacterPreviews();
+            if (now - lastPreviewRender >= 1000 / 30 - 1) {
+                renderAnimatedCharacterPreviews();
+                lastPreviewRender = now;
+            }
             window.characterPreviewsAnimId = requestAnimationFrame(animateCharacterPreviews);
         };
 
         window.characterPreviewsAnimId = requestAnimationFrame(animateCharacterPreviews);
     }
 
-    // SPORT Soccer Tank preview removed
 }
 
-function draw() {
+let menuBackdropWidth = 0;
+let menuBackdropHeight = 0;
+let menuBackdropObjects = null;
+let menuBackdropObjectCount = 0;
+function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    const gridStep = navCell;
+    const minX = Math.max(0, Math.floor(viewLeft / gridStep) * gridStep);
+    const minY = Math.max(0, Math.floor(viewTop / gridStep) * gridStep);
+    const maxX = Math.min(worldWidth, viewRight);
+    const maxY = Math.min(worldHeight, viewBottom);
+
+    ctx.beginPath();
+    for (let x = minX; x <= maxX; x += gridStep) {
+        ctx.moveTo(x, minY); ctx.lineTo(x, maxY);
+    }
+    for (let y = minY; y <= maxY; y += gridStep) {
+        ctx.moveTo(minX, y); ctx.lineTo(maxX, y);
+    }
+    ctx.stroke();
+}
+
+function renderGameFrame() {
+    const isMenuBackdrop = gameState === 'menu' && mainMenu && mainMenu.style.display !== 'none';
+    if (isMenuBackdrop && menuBackdropWidth === canvas.width &&
+        menuBackdropHeight === canvas.height && menuBackdropObjects === objects &&
+        menuBackdropObjectCount === objects.length) {
+        drawPreview();
+        updateCoinDisplay();
+        return;
+    }
+    menuBackdropWidth = 0;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // ensure normal drawing mode
     ctx.globalCompositeOperation = 'source-over';
@@ -4643,26 +4689,8 @@ function draw() {
         return (x + w > viewLeft && x < viewRight && y + h > viewTop && y < viewBottom);
     }
 
-    // 1. Фон (сетка) — cell grid aligned to nav cells (visible window only)
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
-    const gridStep = navCell;  // defaults to 25 usually
-    
-    const minX = Math.max(0, Math.floor(viewLeft / gridStep) * gridStep);
-    const minY = Math.max(0, Math.floor(viewTop / gridStep) * gridStep);
-    const maxX = Math.min(worldWidth, viewRight);
-    const maxY = Math.min(worldHeight, viewBottom);
-    
-    // Use beginPath outside loop for better performance if possible, but we need separate strokes for large lines?
-    // Actually drawing one huge path is faster than many strokes
-    ctx.beginPath();
-    for (let x = minX; x <= maxX; x += gridStep) {
-        ctx.moveTo(x, minY); ctx.lineTo(x, maxY);
-    }
-    for (let y = minY; y <= maxY; y += gridStep) {
-        ctx.moveTo(minX, y); ctx.lineTo(maxX, y);
-    }
-    ctx.stroke();
+    // 1. Фон (сетка)
+    drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom);
 
     objects.forEach(obj => {
         const rad = obj.radius || 0;
@@ -5262,6 +5290,7 @@ function draw() {
     // 3.5. Пули
     bullets.forEach(b => {
         if (!isVisible(b.x - b.w, b.y - b.h, b.w * 2, b.h * 2)) return;
+        ctx.save();
         if (b.type === 'fire') {
             const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.w/2 + 4);
             grad.addColorStop(0, 'rgba(255, 255, 100, 0.9)');
@@ -6580,6 +6609,7 @@ function draw() {
             ctx.restore();
 
         } else {
+            ctx.fillStyle = '#a5660b';
             ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
             ctx.fillStyle = '#fdb813'; 
             const m = 2;
@@ -6589,6 +6619,7 @@ function draw() {
             ctx.fillStyle = 'rgba(255,255,255,0.5)';
             ctx.fillRect(b.x - b.w/2 + 1, b.y - b.h/2 + 1, b.w/3, b.h/3);
         }
+        ctx.restore();
     });
 
     // 3.5.4. Электрические лучи (молнии)
@@ -6744,12 +6775,8 @@ function draw() {
             
             ctx.restore();
             
-            // Decrease life
-            ray.life--;
         });
         
-        // Remove dead rays
-        electricRays = electricRays.filter(ray => ray.life > 0);
     }
 
     // 3.5.5. Медицинские зоны (лечение)
@@ -6806,70 +6833,9 @@ function draw() {
         medicalZones = medicalZones.filter(zone => zone.life > 0);
     }
 
-    // 3.5.5c. Buratino barrage projectiles
-    if (typeof buratinoBarrages !== 'undefined' && buratinoBarrages && buratinoBarrages.length > 0) {
-        for (let i = buratinoBarrages.length - 1; i >= 0; i--) {
-            const proj = buratinoBarrages[i];
-            
-            // Move projectile
-            proj.x += proj.vx;
-            proj.y += proj.vy;
-            proj.vy += 0.2; // gravity
-            proj.life--;
-            
-            // Check collisions with walls
-            let hitWall = false;
-            for (const obj of objects) {
-                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
-                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
-                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
-                    hitWall = true;
-                    break;
-                }
-            }
-            
-            // Check collisions with enemies
-            for (const enemy of enemies) {
-                const dx = proj.x - (enemy.x + enemy.w/2);
-                const dy = proj.y - (enemy.y + enemy.h/2);
-                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
-                    hitWall = true;
-                    break;
-                }
-            }
-            
-            // Explode on collision, timeout, or out of bounds
-            if (hitWall || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
-                // Explosion effect
-                spawnExplosion(proj.x, proj.y, proj.explosionRadius);
-                if (typeof applyDamage === 'function') {
-                    let explosionDamage = proj.damage;
-                    if (typeof godMode !== 'undefined' && godMode) explosionDamage = explosionDamage * 1000;
-                    applyDamage(proj.x, proj.y, proj.explosionRadius, explosionDamage, proj.team);
-                } else {
-                    // Damage enemies in explosion radius
-                    for (let e of enemies) {
-                        const dx = e.x + e.w/2 - proj.x;
-                        const dy = e.y + e.h/2 - proj.y;
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist < proj.explosionRadius) {
-                            let dmg = proj.damage * (1 - dist / proj.explosionRadius);
-                            if (typeof godMode !== 'undefined' && godMode) dmg = dmg * 1000;
-                            e.hp -= dmg;
-                            if (e.hp < 0) e.hp = 0;
-                        }
-                    }
-                }
-                
-                // Spawn particles
-                for (let p = 0; p < 15; p++) {
-                    spawnParticle(proj.x + (Math.random()-0.5)*50, proj.y + (Math.random()-0.5)*50, '#ff6600', 0.6);
-                }
-                
-                buratinoBarrages.splice(i, 1);
-                continue;
-            }
-            
+    // Buratino barrage projectiles
+    if (typeof buratinoBarrages !== 'undefined' && buratinoBarrages) {
+        for (const proj of buratinoBarrages) {
             // Draw projectile
             if (!isVisible(proj.x - proj.radius, proj.y - proj.radius, proj.radius*2, proj.radius*2)) continue;
             
@@ -6884,85 +6850,9 @@ function draw() {
         }
     }
 
-    // 3.5.5d. Musical tank sound ricochet projectiles
-    if (typeof musicalSoundWaves !== 'undefined' && musicalSoundWaves && musicalSoundWaves.length > 0) {
-        for (let i = musicalSoundWaves.length - 1; i >= 0; i--) {
-            const proj = musicalSoundWaves[i];
-            
-            // Move projectile
-            proj.x += proj.vx;
-            proj.y += proj.vy;
-            proj.life--;
-            
-            // Check collisions with walls and bounce
-            for (const obj of objects) {
-                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
-                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
-                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
-                    // Calculate bounce direction
-                    const overlapX = (proj.radius + 5) - Math.abs(proj.x - (obj.x + obj.w/2));
-                    const overlapY = (proj.radius + 5) - Math.abs(proj.y - (obj.y + obj.h/2));
-                    if (overlapX < overlapY) {
-                        proj.vx = -proj.vx;
-                    } else {
-                        proj.vy = -proj.vy;
-                    }
-                    proj.bounces++;
-                    if (obj.type === 'woodenWall' && typeof damageWoodenWall === 'function') {
-                        damageWoodenWall(obj, proj.damage || 200, { hitColor: '#00ffff', hitParticles: 4, destroyColor: '#00c2c2' });
-                    }
-                    spawnParticle(proj.x, proj.y, '#00ffff', 0.5);
-                    break;
-                }
-            }
-            
-            // Check collisions with player (if enemy wave)
-            if (proj.team !== tank.team) {
-                const pdx = proj.x - (tank.x + tank.w/2);
-                const pdy = proj.y - (tank.y + tank.h/2);
-                if (pdx*pdx + pdy*pdy < (proj.radius + tank.w/2)*(proj.radius + tank.w/2)) {
-                    tank.hp -= proj.damage;
-                    tank.confused = 30;
-                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
-                    if (tank.hp <= 0) {
-                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
-                        if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
-                        else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
-                    }
-                    const pang = Math.atan2(pdy, pdx);
-                    proj.vx = Math.cos(pang) * 5;
-                    proj.vy = Math.sin(pang) * 5;
-                    proj.bounces++;
-                }
-            }
-            // Check collisions with enemies (skip same-team to avoid friendly fire / self-damage)
-            for (let ei = enemies.length - 1; ei >= 0; ei--) {
-                const enemy = enemies[ei];
-                if (enemy.team === proj.team) continue; // No friendly fire
-                const dx = proj.x - (enemy.x + enemy.w/2);
-                const dy = proj.y - (enemy.y + enemy.h/2);
-                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
-                    enemy.hp -= proj.damage;
-                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
-                    if (enemy.hp <= 0) {
-                        spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65);
-                        enemies.splice(ei, 1);
-                    }
-                    const ang = Math.atan2(dy, dx);
-                    proj.vx = Math.cos(ang) * 5;
-                    proj.vy = Math.sin(ang) * 5;
-                    proj.bounces++;
-                    break;
-                }
-            }
-            
-            // Remove if too many bounces or out of bounds or timed out
-            if (proj.bounces > proj.maxBounces || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
-                spawnParticle(proj.x, proj.y, '#00ffff', 0.6);
-                musicalSoundWaves.splice(i, 1);
-                continue;
-            }
-            
+    // Musical sound waves
+    if (typeof musicalSoundWaves !== 'undefined' && musicalSoundWaves) {
+        for (const proj of musicalSoundWaves) {
             // Draw projectile
             if (!isVisible(proj.x - proj.radius, proj.y - proj.radius, proj.radius*2, proj.radius*2)) continue;
             
@@ -7732,8 +7622,6 @@ function draw() {
             ctx.restore();
         }
 
-        // Sport visuals removed
-
         // Rainbow aura when imitator transformation is active
         if (tank.imitatorActive) {
             const auraR = Math.max(tank.w, tank.h) * 0.72;
@@ -8163,10 +8051,10 @@ function draw() {
             ctx.fillStyle = '#330000';
             ctx.fillRect(bx, by, bw, bh);
             // HP fill
-            ctx.fillStyle = boss.isPhase2 ? '#FF4500' : '#CC0000';
+            ctx.fillStyle = boss.phase >= 2 ? '#FF4500' : '#CC0000';
             ctx.fillRect(bx, by, bw * hpRatio, bh);
             // Gold border
-            ctx.strokeStyle = boss.isPhase2 ? '#FF6600' : '#880000';
+            ctx.strokeStyle = boss.phase >= 2 ? '#FF6600' : '#880000';
             ctx.lineWidth = 2;
             ctx.strokeRect(bx, by, bw, bh);
             // Label
@@ -8174,7 +8062,7 @@ function draw() {
             ctx.font = 'bold 11px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(
-                '👹 АДСКИЙ ТАНК  ' + Math.ceil(boss.hp) + ' / ' + boss.maxHp + (boss.isPhase2 ? '  ⚡ ЯРОСТЬ!' : ''),
+                '👹 АДСКИЙ ТАНК  ' + Math.ceil(boss.hp) + ' / ' + boss.maxHp + (boss.phase >= 2 ? '  ⚡ ЯРОСТЬ!' : ''),
                 canvas.width / 2, by + bh - 3
             );
         }
@@ -8220,18 +8108,6 @@ function draw() {
         ctx.restore();
     }
 
-    // DEBUG: Ultimate status (if electric tank)
-    if (gameState === 'play' && typeof tankType !== 'undefined' && tankType === 'electric') {
-        ctx.fillStyle = '#ffff00'; ctx.font = '14px monospace'; ctx.textAlign = 'left';
-        const debugY = 60;
-        if (typeof tank !== 'undefined') {
-            ctx.fillText('Ultimate: ' + (tank.isUltimateActive ? 'ACTIVE' : 'idle'), 10, debugY);
-            ctx.fillText('Timer: ' + (tank.ultimateTimer || 0), 10, debugY + 20);
-            ctx.fillText('Cooldown: ' + (tank.ultimateCooldown || 0), 10, debugY + 40);
-            ctx.fillText('Rays: ' + (typeof electricRays !== 'undefined' ? electricRays.length : 0), 10, debugY + 60);
-        }
-    }
-
     if (tank.alive === false && currentMode === 'war' && tank.respawnTimer > 0 && gameState !== 'lose') {
         ctx.fillStyle = 'white'; ctx.font = '18px Arial'; ctx.textAlign = 'center';
         ctx.fillText('Возрождение через ' + Math.ceil(tank.respawnTimer / 60) + ' с', canvas.width/2, 40);
@@ -8245,15 +8121,31 @@ function draw() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    if (typeof syncResultOverlay === 'function') syncResultOverlay();
+    if (typeof syncResultOverlay === 'function' &&
+        (typeof lastResultState === 'undefined' || lastResultState !== gameState)) {
+        syncResultOverlay();
+    }
 
+    if (isMenuBackdrop) {
+        menuBackdropWidth = canvas.width;
+        menuBackdropHeight = canvas.height;
+        menuBackdropObjects = objects;
+        menuBackdropObjectCount = objects.length;
+    }
     drawPreview();
     updateCoinDisplay();
-    requestAnimationFrame(draw);
+}
+
+let drawLoopStarted = false;
+function draw() {
+    if (drawLoopStarted) return;
+    drawLoopStarted = true;
+    renderGameFrame();
 }
 
 // Ensure global access
 window.draw = draw;
+window.renderActiveGameFrame = () => { if (drawLoopStarted) renderGameFrame(); };
 
 // ─── Upgrade costs per level (1→2→3) ─────────────────────────────────────────
 const UPGRADE_COSTS = [150, 350, 500]; // cost to reach level 1, 2, 3 (in parts)
@@ -8326,11 +8218,11 @@ function renderTankUpgradesUI(tt) {
             // Deduct parts
             parts -= cost;
             localStorage.setItem('tankParts', parts);
-            if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
             // Store upgrade
             if (!tankUpgrades[type]) tankUpgrades[type] = {};
             tankUpgrades[type][stat] = (tankUpgrades[type][stat] || 0) + 1;
             saveTankUpgrades();
+            if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
             // Always re-apply HP and speed immediately (in case player buys mid-session)
             if (typeof setTankHP    === 'function') setTankHP(type);
             if (typeof setTankSpeed === 'function') setTankSpeed(type);
@@ -8791,11 +8683,11 @@ function showTankDetail(tankType) {
                 // Deduct parts
                 parts -= cost;
                 localStorage.setItem('tankParts', parts);
-                if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
                 // Store upgrade
                 if (!tankUpgrades[type]) tankUpgrades[type] = {};
                 tankUpgrades[type][stat] = (tankUpgrades[type][stat] || 0) + 1;
                 saveTankUpgrades();
+                if (typeof updateCoinDisplay === 'function') updateCoinDisplay();
                 // Always re-apply HP and speed immediately (in case player buys mid-session)
                 if (typeof setTankHP    === 'function') setTankHP(type);
                 if (typeof setTankSpeed === 'function') setTankSpeed(type);

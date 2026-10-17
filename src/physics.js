@@ -343,8 +343,13 @@ function applyTargetDamageModifiers(entity, damage) {
     return damage;
 }
 
+function isPlayerDamageProtected() {
+    return typeof tank !== 'undefined' && !!tank &&
+        (tank.kamikazeInvincible || (typeof tankType !== 'undefined' && tankType === 'burovoy' && tank.burovoyBurrowActive));
+}
+
 function dealDamageToEntity(entity, damage) {
-    if (isBurovoyBurrowActive(entity)) return 0;
+    if (isBurovoyBurrowActive(entity) || (typeof tank !== 'undefined' && entity === tank && isPlayerDamageProtected())) return 0;
     const finalDamage = applyTargetDamageModifiers(entity, damage);
     entity.hp = (entity.hp || 0) - finalDamage;
     return finalDamage;
@@ -388,6 +393,41 @@ function tickSandstormDebuff(entity) {
 function checkRectCollision(r1, r2) {
     return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x &&
            r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+// Broad phase for solid terrain hit by ordinary bullets. Preserve object order.
+function buildTerrainCollisionIndex(terrain, cellSize = 100) {
+    const cells = new Map();
+    terrain.forEach((obj, order) => {
+        if (!isBlockingTerrainObject(obj)) return;
+        const entry = { obj, order };
+        const left = Math.floor(obj.x / cellSize);
+        const right = Math.floor((obj.x + obj.w) / cellSize);
+        const top = Math.floor(obj.y / cellSize);
+        const bottom = Math.floor((obj.y + obj.h) / cellSize);
+        for (let y = top; y <= bottom; y++) {
+            for (let x = left; x <= right; x++) {
+                const key = `${x},${y}`;
+                if (!cells.has(key)) cells.set(key, []);
+                cells.get(key).push(entry);
+            }
+        }
+    });
+    return { cells, cellSize };
+}
+
+function queryTerrainCollisionIndex(index, rect) {
+    const entries = new Set();
+    const left = Math.floor(rect.x / index.cellSize);
+    const right = Math.floor((rect.x + rect.w) / index.cellSize);
+    const top = Math.floor(rect.y / index.cellSize);
+    const bottom = Math.floor((rect.y + rect.h) / index.cellSize);
+    for (let y = top; y <= bottom; y++) {
+        for (let x = left; x <= right; x++) {
+            for (const entry of index.cells.get(`${x},${y}`) || []) entries.add(entry);
+        }
+    }
+    return [...entries].sort((a, b) => a.order - b.order).map(entry => entry.obj);
 }
 
 function circleIntersectsRect(cx, cy, radius, rect) {
@@ -457,6 +497,7 @@ function getNearestPharaohSwarmTarget(swarm) {
 
 function applyPharaohSwarmDamage(entity, damage) {
     if (!entity || entity.alive === false) return;
+    if (isBurovoyBurrowActive(entity) || (typeof tank !== 'undefined' && entity === tank && isPlayerDamageProtected())) return;
     entity.hp = (entity.hp || 0) - damage;
     if (entity.hp > 0) return;
 
@@ -1222,14 +1263,6 @@ function canPlaceAt(entity, nx, ny) {
     return true;
 }
 
-// Найти первый объект, пересекающий прямоугольник (или null)
-function getCollidingObject(rect) {
-    for (const obj of objects) {
-        if (checkRectCollision(rect, obj)) return obj;
-    }
-    return null;
-}
-
 // Попытаться сдвинуть entity на расстояние dist в направлении angle малыми шагами.
 // Если на пути ящик — предпринять попытку безопасно его толкнуть (только если у ящика есть куда сдвинуться).
 
@@ -1857,6 +1890,161 @@ function shoot() {
 }
 // --- APPEND_POINT_UPDATE ---
 
+function updateSpecialProjectiles() {
+    if (typeof electricRays !== 'undefined' && electricRays) {
+        for (const ray of electricRays) ray.life--;
+        electricRays = electricRays.filter(ray => ray.life > 0);
+    }
+    // 3.5.5c. Buratino barrage projectiles
+    if (typeof buratinoBarrages !== 'undefined' && buratinoBarrages && buratinoBarrages.length > 0) {
+        for (let i = buratinoBarrages.length - 1; i >= 0; i--) {
+            const proj = buratinoBarrages[i];
+            
+            // Move projectile
+            proj.x += proj.vx;
+            proj.y += proj.vy;
+            proj.vy += 0.2; // gravity
+            proj.life--;
+            
+            // Check collisions with walls
+            let hitWall = false;
+            for (const obj of objects) {
+                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
+                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
+                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
+                    hitWall = true;
+                    break;
+                }
+            }
+            
+            // Check collisions with enemies
+            for (const enemy of enemies) {
+                const dx = proj.x - (enemy.x + enemy.w/2);
+                const dy = proj.y - (enemy.y + enemy.h/2);
+                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
+                    hitWall = true;
+                    break;
+                }
+            }
+            
+            // Explode on collision, timeout, or out of bounds
+            if (hitWall || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
+                // Explosion effect
+                spawnExplosion(proj.x, proj.y, proj.explosionRadius);
+                if (typeof applyDamage === 'function') {
+                    let explosionDamage = proj.damage;
+                    if (typeof godMode !== 'undefined' && godMode) explosionDamage = explosionDamage * 1000;
+                    applyDamage(proj.x, proj.y, proj.explosionRadius, explosionDamage, proj.team);
+                } else {
+                    // Damage enemies in explosion radius
+                    for (let e of enemies) {
+                        const dx = e.x + e.w/2 - proj.x;
+                        const dy = e.y + e.h/2 - proj.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist < proj.explosionRadius) {
+                            let dmg = proj.damage * (1 - dist / proj.explosionRadius);
+                            if (typeof godMode !== 'undefined' && godMode) dmg = dmg * 1000;
+                            e.hp -= dmg;
+                            if (e.hp < 0) e.hp = 0;
+                        }
+                    }
+                }
+                
+                // Spawn particles
+                for (let p = 0; p < 15; p++) {
+                    spawnParticle(proj.x + (Math.random()-0.5)*50, proj.y + (Math.random()-0.5)*50, '#ff6600', 0.6);
+                }
+                
+                buratinoBarrages.splice(i, 1);
+                continue;
+            }
+            
+        }
+    }
+
+    // 3.5.5d. Musical tank sound ricochet projectiles
+    if (typeof musicalSoundWaves !== 'undefined' && musicalSoundWaves && musicalSoundWaves.length > 0) {
+        for (let i = musicalSoundWaves.length - 1; i >= 0; i--) {
+            const proj = musicalSoundWaves[i];
+            
+            // Move projectile
+            proj.x += proj.vx;
+            proj.y += proj.vy;
+            proj.life--;
+            
+            // Check collisions with walls and bounce
+            for (const obj of objects) {
+                const dx = proj.x - Math.max(obj.x, Math.min(proj.x, obj.x + obj.w));
+                const dy = proj.y - Math.max(obj.y, Math.min(proj.y, obj.y + obj.h));
+                if (dx*dx + dy*dy < (proj.radius + 5)*(proj.radius + 5)) {
+                    // Calculate bounce direction
+                    const overlapX = (proj.radius + 5) - Math.abs(proj.x - (obj.x + obj.w/2));
+                    const overlapY = (proj.radius + 5) - Math.abs(proj.y - (obj.y + obj.h/2));
+                    if (overlapX < overlapY) {
+                        proj.vx = -proj.vx;
+                    } else {
+                        proj.vy = -proj.vy;
+                    }
+                    proj.bounces++;
+                    if (obj.type === 'woodenWall' && typeof damageWoodenWall === 'function') {
+                        damageWoodenWall(obj, proj.damage || 200, { hitColor: '#00ffff', hitParticles: 4, destroyColor: '#00c2c2' });
+                    }
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.5);
+                    break;
+                }
+            }
+            
+            // Check collisions with player (if enemy wave)
+            if (proj.team !== tank.team) {
+                const pdx = proj.x - (tank.x + tank.w/2);
+                const pdy = proj.y - (tank.y + tank.h/2);
+                if (pdx*pdx + pdy*pdy < (proj.radius + tank.w/2)*(proj.radius + tank.w/2)) {
+                    if (!isPlayerDamageProtected()) tank.hp -= proj.damage;
+                    tank.confused = 30;
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
+                    if (tank.hp <= 0) {
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                        else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+                    }
+                    const pang = Math.atan2(pdy, pdx);
+                    proj.vx = Math.cos(pang) * 5;
+                    proj.vy = Math.sin(pang) * 5;
+                    proj.bounces++;
+                }
+            }
+            // Check collisions with enemies (skip same-team to avoid friendly fire / self-damage)
+            for (let ei = enemies.length - 1; ei >= 0; ei--) {
+                const enemy = enemies[ei];
+                if (enemy.team === proj.team) continue; // No friendly fire
+                const dx = proj.x - (enemy.x + enemy.w/2);
+                const dy = proj.y - (enemy.y + enemy.h/2);
+                if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
+                    if (!isBurovoyBurrowActive(enemy)) enemy.hp -= proj.damage;
+                    spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
+                    if (enemy.hp <= 0) {
+                        spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65);
+                        enemies.splice(ei, 1);
+                    }
+                    const ang = Math.atan2(dy, dx);
+                    proj.vx = Math.cos(ang) * 5;
+                    proj.vy = Math.sin(ang) * 5;
+                    proj.bounces++;
+                    break;
+                }
+            }
+            
+            // Remove if too many bounces or out of bounds or timed out
+            if (proj.bounces > proj.maxBounces || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
+                spawnParticle(proj.x, proj.y, '#00ffff', 0.6);
+                musicalSoundWaves.splice(i, 1);
+                continue;
+            }
+            
+        }
+    }
+}
+
 function updatePhysics() {
 
     // Safety: if player is stuck inside a wall/box/barrel, teleport to a nearby free spot
@@ -1886,6 +2074,10 @@ function updatePhysics() {
             tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
         }
     })();
+
+    // The index is local to this physics tick; removed objects are checked below.
+    const terrainIndex = objects.length >= 60 && bullets.length >= 10 && objects.length * bullets.length >= 2500
+        ? buildTerrainCollisionIndex(objects) : null;
 
     // Обновление пуль
     for (let i = bullets.length - 1; i >= 0; i--) {
@@ -2051,9 +2243,11 @@ function updatePhysics() {
         // Check collision with objects (but toxic/megabomb/plasmaBlast/musical pass through standard logic differently)
         let hit = false;
         if (b.type !== 'rocket' && b.type !== 'toxic' && b.type !== 'megabomb' && b.type !== 'plasmaBlast' && b.type !== 'musical' && b.type !== 'meteorMini' && b.type !== 'romanBlade') {
-            for (const obj of objects) {
+            const terrainCandidates = terrainIndex ? queryTerrainCollisionIndex(terrainIndex, bRect) : objects;
+            for (const obj of terrainCandidates) {
                 if (!isBlockingTerrainObject(obj)) continue; // only solid objects stop bullets
                 if (checkRectCollision(bRect, obj)) {
+                    if (terrainIndex && !objects.includes(obj)) continue;
                     // Toxic/mega bombs pass through walls but explode on other objects
                     if ((b.type === 'toxic' || b.type === 'megabomb') && obj.type === 'wall') {
                         // pass through walls, don't explode
@@ -2217,7 +2411,7 @@ function updatePhysics() {
             if (b.team !== (tank.team ?? 0)) {
                 const mdx = (tank.x + 19) - b.x, mdy = (tank.y + 19) - b.y;
                 if (Math.sqrt(mdx*mdx + mdy*mdy) < 40) {
-                    tank.hp = Math.max(0, tank.hp - (b.damage || 75));
+                    if (!isPlayerDamageProtected()) tank.hp = Math.max(0, tank.hp - (b.damage || 75));
                     if (tank.hp <= 0 && gameState === 'playing') {
                         spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
                         gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
@@ -3687,8 +3881,6 @@ function moveWithCollision(dx, dy) {
             }
         }
     }
-
-    // Sport shield removed
 
     // Края мира
     tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));

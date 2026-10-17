@@ -25,13 +25,13 @@ function determineOutcomeType(isWin) {
         if (battleDuration < fastWinThreshold) {
             return 'fast';
         }
-        // Crushing win: took minimal damage (< 30%) - domination
-        else if (damagePercent < 0.3) {
-            return 'crushing';
-        }
         // Hard win: took ZERO damage (perfect victory)
         else if (playerDamage === 0) {
             return 'hard';
+        }
+        // Crushing win: took minimal damage (< 30%) - domination
+        else if (damagePercent < 0.3) {
+            return 'crushing';
         }
         // Normal win
         return 'normal';
@@ -46,7 +46,7 @@ function determineOutcomeType(isWin) {
         // Bossfight: overwhelm if boss entered phase 2
         if (currentMode === 'bossfight') {
             const boss = enemies.find(e => e.isBoss);
-            if (boss && boss.isPhase2) return 'overwhelm';
+            if (boss && boss.phase >= 2) return 'overwhelm';
         }
         // Check if nearest enemy is very low on HP (almost win condition)
         const nearestEnemyHp = enemies.length > 0
@@ -500,7 +500,6 @@ function describeMode(mode) {
     if (mode === 'trial') return 'Испытание';
     if (mode === 'duel') return 'Дуэль';
     if (mode === 'onevsall') return 'Один против всех';
-    if (mode === 'leaderhunt') return 'Охота на лидера';
     if (mode === 'bossfight') return 'Босс-файт';
     if (mode === 'custom') return 'Своя карта';
     return 'Свободный бой';
@@ -598,7 +597,9 @@ function syncResultOverlay(state = gameState) {
         
         // Update emblem
         if (resultEmblem) {
-            resultEmblem.textContent = isWin ? '🏆' : '☠️';
+            resultEmblem.innerHTML = isWin
+                ? '<span class="currency-icon currency-icon--trophy" aria-hidden="true"></span>'
+                : '☠️';
         }
 
         // Update headline  
@@ -667,10 +668,10 @@ function syncResultOverlay(state = gameState) {
             console.error('resultReward element not found!');
         }
         
-        // Bonus trophies for fast and crushing wins
+        // Bonus trophies for fast, flawless and crushing wins
         if (isWin) {
             // Use the SAME outcomeType we determined at the start
-            if (outcomeType === 'fast' || outcomeType === 'crushing') {
+            if (outcomeType === 'fast' || outcomeType === 'hard' || outcomeType === 'crushing') {
                 // Add bonus trophies based on mode and outcome type
                 let bonusAmount = 0;
                 if (currentMode === 'single') {
@@ -686,6 +687,7 @@ function syncResultOverlay(state = gameState) {
                 }
                 if (bonusAmount > 0) {
                     trophies += bonusAmount;
+                    if (currentMode === 'bossfight') coins += 100;
                     // Add bonus to tank-specific trophy counter as well
                     if (typeof addIndividualTankTrophies === 'function' && typeof tankType !== 'undefined') {
                         addIndividualTankTrophies(tankType, bonusAmount);

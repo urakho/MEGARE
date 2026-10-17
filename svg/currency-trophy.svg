@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="cup" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff0a4"/><stop offset=".38" stop-color="#efae42"/><stop offset=".8" stop-color="#ad5f22"/><stop offset="1" stop-color="#f7ca63"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="32" cy="59" rx="23" ry="3" fill="#111c22" opacity=".35"/>
+  <path d="M14 13H5v8c0 11 7 17 17 16M50 13h9v8c0 11-7 17-17 16" fill="none" stroke="#67401f" stroke-width="6" stroke-linecap="round"/>
+  <path d="M14 13H6v8c0 9 6 14 15 14M50 13h8v8c0 9-6 14-15 14" fill="none" stroke="#f4bc54" stroke-width="3" stroke-linecap="round"/>
+  <path d="M16 7h32l-2 21c-1 10-6 16-14 16s-13-6-14-16Z" fill="#673c20" stroke="#18242b" stroke-width="2"/>
+  <path d="M18 9h28l-2 19c-1 9-5 14-12 14s-11-5-12-14Z" fill="url(#cup)" stroke="#ffe394" stroke-width="1.5"/>
+  <path d="M24 11h7c-5 7-5 18-1 27-6-2-9-8-10-16Z" fill="#fff4ba" opacity=".55"/>
+  <path d="m32 17 3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1Z" fill="#fff0a1" stroke="#a45f22" stroke-width="1"/>
+  <path d="M28 43h8v8h-8Z" fill="url(#cup)" stroke="#72471e"/>
+  <path d="M21 52h22v5H21Z" fill="#bb762e" stroke="#f8d67a" stroke-width="1.5"/>
+  <path d="M17 57h30v4H17Z" fill="url(#cup)" stroke="#73441e" stroke-width="1.5"/>
+</svg>

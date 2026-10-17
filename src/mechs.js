@@ -269,9 +269,6 @@ function drawMechDiyPreview(canvasEl, isUnlocked) {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
     
-    // Cancel any existing animation
-    if (window.mechDiyAnimId) cancelAnimationFrame(window.mechDiyAnimId);
-    
     const W = canvasEl.width;
     const H = canvasEl.height;
     
@@ -327,8 +324,6 @@ function drawMechDiyPreview(canvasEl, isUnlocked) {
             ctx.fillText('🔒', W / 2, H / 2);
         }
         
-        // Continue animation loop
-        window.mechDiyAnimId = requestAnimationFrame(drawFrame);
     };
     
     drawFrame();
@@ -680,8 +675,6 @@ function drawMechShieldPreview(canvasEl, isUnlocked) {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    if (window.mechShieldAnimId) cancelAnimationFrame(window.mechShieldAnimId);
-
     const W = canvasEl.width;
     const H = canvasEl.height;
 
@@ -732,7 +725,6 @@ function drawMechShieldPreview(canvasEl, isUnlocked) {
             ctx.fillText('🔒', W / 2, H / 2);
         }
 
-        window.mechShieldAnimId = requestAnimationFrame(drawFrame);
     };
 
     drawFrame();
@@ -1006,7 +998,6 @@ function drawMechRocketPreview(canvasEl, isUnlocked) {
     if (!canvasEl) return;
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
-    if (window.mechRocketAnimId) cancelAnimationFrame(window.mechRocketAnimId);
     const W = canvasEl.width;
     const H = canvasEl.height;
     const drawFrame = () => {
@@ -1050,7 +1041,6 @@ function drawMechRocketPreview(canvasEl, isUnlocked) {
             ctx.fillStyle = '#fff';
             ctx.fillText('🔒', W / 2, H / 2);
         }
-        window.mechRocketAnimId = requestAnimationFrame(drawFrame);
     };
     drawFrame();
 }
