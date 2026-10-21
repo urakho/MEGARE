@@ -6,6 +6,11 @@ const vm = require('node:vm');
 
 const read = name => fs.readFileSync(path.join(__dirname, '..', 'src', name), 'utf8');
 const main = read('main.js'), editor = read('mapeditor.js'), results = read('win-lose.js');
+function loadTerrain(context) {
+    context.window ||= {};
+    vm.runInNewContext(read('terrain.js'), context);
+    context.GameTerrain = context.window.GameTerrain;
+}
 function section(source, first, last) {
     const start = source.indexOf(first), end = source.indexOf(last, start + first.length);
     assert.ok(start >= 0 && end > start, `Missing section ${first}`);
@@ -39,6 +44,7 @@ test('custom map restart resets mech combat state and preserves placed obstacles
         setTankHP() {}, setTankSpeed() {}, getTankUpgrade: () => 0,
         sanitizeBattleSpawns() {}, draw() {}, Date, Math: controlledMath, lastResultState: null
     };
+    loadTerrain(context);
     vm.runInNewContext(section(main, 'function resetTankMatchUltState(unit)', '// Apply saved tank type properties'), context);
     const start = main.indexOf('window.startCustomMapMode = function(');
     const end = main.indexOf('    if (typeof draw === \'function\') draw();', start);
@@ -47,6 +53,7 @@ test('custom map restart resets mech combat state and preserves placed obstacles
     const box = { type: 'box', x: 110, y: 62, w: 50, h: 50 };
     const spawn = { x: 50, y: 50, w: 50, h: 50 };
     window.startCustomMapMode([box], 900, 700, [{ x: 500, y: 300, w: 50, h: 50 }], [], spawn, 'group', '', '');
+    assert.equal(window.currentTerrain, 'rain');
     assert.equal(context.tank.mechEnergy, 110);
     assert.equal(context.tank.mechBurstShots, 0);
     assert.equal(context.objects.length, 1);
@@ -100,23 +107,26 @@ test('importing a map with an existing name keeps both maps', () => {
         window: { deviceModeMobile: false }, validateMegData: () => null,
         pushUndo() {}, updateHUD() {}, render() {}, showEditorToast() {}
     };
+    loadTerrain(context);
     vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
     vm.runInNewContext(section(editor, '    function importMeg(file)', '    function launchCustomMap('), context);
     context.importMeg(JSON.stringify({ name: 'Arena', objects: [{ type: 'player', x: 50, y: 50, w: 50, h: 50 }],
-        worldW: 900, worldH: 700, enemyMode: 'solo', customWinMsg: 'Новая победа' }));
+        worldW: 900, worldH: 700, enemyMode: 'solo', terrainType: 'snow', customWinMsg: 'Новая победа' }));
     const maps = JSON.parse(store.get('me_maps'));
     assert.ok(maps.Arena);
     assert.ok(maps['Arena (импорт 2)']);
     assert.equal(maps['Arena (импорт 2)'].customWinMsg, 'Новая победа');
     assert.equal(context.nameInput.value, 'Arena (импорт 2)');
+    assert.equal(maps['Arena (импорт 2)'].terrainType, undefined);
 });
 
 test('playing a saved map uses that map’s messages', () => {
     let launched;
-    const runtime = { map: { enemyMode: 'solo', customWinMsg: 'Победа карты', customLoseMsg: 'Поражение карты',
+    const runtime = { map: { enemyMode: 'solo', terrainType: 'night', customWinMsg: 'Победа карты', customLoseMsg: 'Поражение карты',
             objects: [], worldW: 900, worldH: 700 }, mapsModal: { style: {} },
         enemyMode: 'group', customWinMsg: 'Старое сообщение', customLoseMsg: 'Старое поражение',
         playBtn: {} };
+    loadTerrain(runtime);
     runtime.launchCustomMap = () => { launched = [runtime.customWinMsg, runtime.customLoseMsg]; return true; };
     vm.runInNewContext(section(editor, '                playBtn.onclick = () => {', '                const delBtn ='), runtime);
     runtime.playBtn.onclick();

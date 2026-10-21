@@ -958,6 +958,8 @@ function resetTankMatchUltState(unit) {
     unit.megaGasUsed = false;
     unit.plasmaBlastUsed = 0;
     unit.inversionUsed = 0;
+    unit.illuminatVisualStart = 0;
+    unit.illuminatVisualUntil = 0;
     unit.teleportCooldown = 0;
     unit.medicalZoneCooldown = 0;
     unit.barrageCooldown = 0;
@@ -1183,6 +1185,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
             if (typeof window.closePauseMenu === 'function') window.closePauseMenu();
             window._customMapActive = false;
             gameState = 'menu';
+            window.currentTerrain = 'forest';
             currentMode = 'menu';
             window.currentMode = currentMode;
             _lastMusicKey = '';
@@ -1822,6 +1825,8 @@ function startGame(mode) {
         mode = (typeof currentMode === 'string' && currentMode && currentMode !== 'menu' && currentMode !== 'custom') ? currentMode : 'single';
     }
     if (mode === 'leaderhunt') mode = 'bossfight';
+    window.currentTerrain = GameTerrain.randomType();
+    GameTerrain.resetBattle();
 
     if (commandInput) commandInput.blur();
     if (commandModal) commandModal.style.display = 'none';
@@ -1986,8 +1991,8 @@ function startGame(mode) {
     syncResultOverlay('playing');
 
     if (mode === 'single') {
-        // normal world
-        worldWidth = 1350; worldHeight = 1050;
+        // Single-player arena: 1.5 times the original width and height.
+        worldWidth = 2025; worldHeight = 1575;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         tank.x = 50; tank.y = 50;
         generateMap();
@@ -2037,8 +2042,9 @@ function startGame(mode) {
         spawnTrialMode();
         cameraFollow = true;
     } else if (mode === 'training') {
-        // Training mode: open map, dummy targets that respawn every 10s
-        worldWidth = 1200; worldHeight = 900;
+        // A clear, large practice ground with four specialized areas.
+        window.currentTerrain = 'forest';
+        worldWidth = 2300; worldHeight = 1550;
         canvas.width = DISPLAY_W; canvas.height = DISPLAY_H;
         generateTrainingMap();
         spawnTrainingMode();
@@ -2093,6 +2099,8 @@ function startGame(mode) {
 // ─── Custom Map Mode (Map Editor → Play) ────────────────────────────────────
 // Loads player-created map objects and starts a single-player game with no rewards.
 window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns, allySpawns, playerSpawn, enemyMode, customWinMsg, customLoseMsg) {
+    window.currentTerrain = GameTerrain.randomType();
+    GameTerrain.resetBattle();
     // Store custom messages for result overlay (split by newlines into array)
     window._customMapWinMsg  = (customWinMsg  || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
     window._customMapLoseMsg = (customLoseMsg || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
@@ -3242,6 +3250,9 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
 
     const customTitle = options.title;
     const customIcon = options.icon;
+    const rewardUnit = window.tankDescriptions?.[tankType] || window.mechDescriptions?.[tankType];
+    const rewardGradient = window.tankBgGradients?.[tankType] || window.mechBgGradients?.[tankType];
+    const isMechReward = type === 'tank' && !!window.mechDescriptions?.[tankType];
     const isChromaticRewardTank = type === 'tank'
         && !!tankType
         && !!(window.tankDescriptions && window.tankDescriptions[tankType] && window.tankDescriptions[tankType].rarity === 'Хроматическая');
@@ -3251,13 +3262,13 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     if (type === 'coins') titleColor = '#f1c40f';
     else if (type === 'gems') titleColor = '#2ecc71';
     else if (type === 'parts') titleColor = '#95a5a6';
-    else if (type === 'tank' && tankType && window.tankBgGradients && window.tankBgGradients[tankType]) {
+    else if (type === 'tank' && rewardGradient) {
         // Use the second color of the gradient for text as it's usually solid
-        titleColor = window.tankBgGradients[tankType][1]; 
+        titleColor = rewardGradient[1];
     }
     if (isChromaticRewardTank) titleColor = '#00ffcc';
 
-    const defaultTitle = type === 'coins' ? 'МОНЕТЫ!' : type === 'gems' ? 'ГЕМЫ!' : type === 'parts' ? 'ДЕТАЛИ!' : 'НОВЫЙ ТАНК!';
+    const defaultTitle = type === 'coins' ? 'МОНЕТЫ!' : type === 'gems' ? 'ГЕМЫ!' : type === 'parts' ? 'ДЕТАЛИ!' : isMechReward ? 'НОВЫЙ МЕХ!' : 'НОВЫЙ ТАНК!';
     const iconTextFallback = type === 'coins' ? '💰' : type === 'gems' ? '💎' : type === 'parts' ? '🔧' : '🏆';
     const resolvedTitle = customTitle || defaultTitle;
     const resolvedIcon = customIcon || iconTextFallback;
@@ -3289,7 +3300,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     }
 
     if (type === 'tank') {
-        const tName = (window.tankDescriptions && window.tankDescriptions[tankType]) ? window.tankDescriptions[tankType].name : (tankType || 'Tank').toUpperCase();
+        const tName = rewardUnit?.name || (tankType || 'Tank').toUpperCase();
         amountText.textContent = tName;
         // Text color matches rarity by default
         amountText.style.color = titleColor; 
@@ -3341,8 +3352,8 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                 title.style.textShadow = '2px 2px 0 #000';
                 descText.style.color = '#bdc3c7';
                
-            } else if (window.tankBgGradients && window.tankBgGradients[tankType]) {
-                const [c1, c2] = window.tankBgGradients[tankType];
+            } else if (rewardGradient) {
+                const [c1, c2] = rewardGradient;
                 // Apply solid background color matching the menu (second value in array usually)
                 card.style.background = c1; 
                 // Remove border/shadow if user wants it plain? 
@@ -3709,7 +3720,7 @@ function updateAutopilotEvasion() {
     const pcy = tank.y + tank.h / 2;
     
     for (const e of enemies) {
-        if (!e.alive) continue;
+        if (!e.alive || !GameTerrain.canSee(tank, e, objects)) continue;
         const ecx = e.x + e.w / 2;
         const ecy = e.y + e.h / 2;
         const dist = Math.hypot(ecx - pcx, ecy - pcy);
@@ -3728,7 +3739,7 @@ function updateAutopilotEvasion() {
         const angleAwayFrom = Math.atan2(pcy - ecy, pcx - ecx);
         
         // Move away with evasion speed
-        const evadeSpeed = tank.speed * 1.2; // Slightly faster during evasion
+        const evadeSpeed = GameTerrain.movementSpeed(tank.speed) * 1.2; // Slightly faster during evasion
         const dx = Math.cos(angleAwayFrom) * evadeSpeed;
         const dy = Math.sin(angleAwayFrom) * evadeSpeed;
         
@@ -3759,8 +3770,42 @@ function updateAutopilotEvasion() {
     }
 }
 
+function resetTrainingDummyEffects(dummy) {
+    dummy.paralyzed = false; dummy.paralyzedTime = 0; dummy.frozenEffect = 0;
+    dummy.iceSlowed = false; dummy.iceSlowedTime = 0;
+    dummy.burning = false; dummy.burnTimer = 0; dummy.burnDps = 0;
+    dummy.poisonTimer = 0; dummy.confused = 0; dummy.disoriented = 0; dummy.invertedControls = 0;
+    dummy.sandCurseTimer = 0; dummy.sandBlindTimer = 0; dummy.sandNoShootTimer = 0;
+    dummy._kvantOverload = false; dummy._kvantOverloadTimer = 0; dummy._kvantBaseSpeed = null;
+    dummy.windPushVx = 0; dummy.windPushVy = 0;
+    dummy._iceFieldTouchState = {};
+}
+
+function updateTrainingDummyEffects(dummy) {
+    // Training targets skip bot AI, so their control effects need their own timers.
+    if (dummy.paralyzedTime > 0) dummy.paralyzedTime--;
+    dummy.paralyzed = (dummy.paralyzedTime || 0) > 0;
+    if (dummy.iceSlowedTime > 0) dummy.iceSlowedTime--;
+    dummy.iceSlowed = (dummy.iceSlowedTime || 0) > 0;
+    if (dummy.frozenEffect > 0) dummy.frozenEffect--;
+    for (const effect of ['confused', 'disoriented', 'invertedControls']) {
+        if (dummy[effect] > 0) dummy[effect]--;
+    }
+    if (dummy.windPushVx || dummy.windPushVy) {
+        const nextX = dummy.x + dummy.windPushVx;
+        const nextY = dummy.y + dummy.windPushVy;
+        if (typeof canPlaceAt !== 'function' || canPlaceAt(dummy, nextX, dummy.y)) dummy.x = nextX;
+        if (typeof canPlaceAt !== 'function' || canPlaceAt(dummy, dummy.x, nextY)) dummy.y = nextY;
+        dummy.windPushVx *= 0.78; dummy.windPushVy *= 0.78;
+        if (Math.abs(dummy.windPushVx) < 0.3) dummy.windPushVx = 0;
+        if (Math.abs(dummy.windPushVy) < 0.3) dummy.windPushVy = 0;
+    } else {
+        dummy.x += (dummy.spawnX - dummy.x) * 0.08;
+        dummy.y += (dummy.spawnY - dummy.y) * 0.08;
+    }
+}
+
 function updateTrainingMode() {
-    // TRAINING MODE: respawn dead dummies every 10 seconds (600 frames)
     if (currentMode === 'training' && typeof trainingDummies !== 'undefined') {
         for (let i = 0; i < trainingDummies.length; i++) {
             const dummy = trainingDummies[i];
@@ -3771,12 +3816,13 @@ function updateTrainingMode() {
                 const ei = enemies.indexOf(dummy);
                 if (ei !== -1) enemies.splice(ei, 1);
                 dummy.alive = false;
-                if (trainingRespawnTimers[i] >= 600) {
+                if (trainingRespawnTimers[i] >= 240) {
                     // Respawn: reset dummy and re-add to enemies
                     dummy.hp = dummy.maxHp || 300;
                     dummy.alive = true;
                     dummy.x = dummy.spawnX;
                     dummy.y = dummy.spawnY;
+                    resetTrainingDummyEffects(dummy);
                     enemies.push(dummy);
                     trainingRespawnTimers[i] = 0;
                     spawnParticle(dummy.x + 19, dummy.y + 19, '#00ff88');
@@ -3788,25 +3834,38 @@ function updateTrainingMode() {
                 // Dummies don't move at all
                 dummy.speed = 0;
                 dummy.fireCooldown = 9999;
+                updateTrainingDummyEffects(dummy);
             }
         }
         // SHOOTER DUMMY: stationary armed tank — aims at player, fires, respawns after 15s
         if (trainingShooterDummy) {
             const sd = trainingShooterDummy;
             if (sd.alive && sd.hp > 0) {
-                sd.x = sd.spawnX; sd.y = sd.spawnY; sd.speed = 0;
+                sd.speed = 0;
                 sd.hp = Math.min(sd.hp, sd.maxHp);
-                const dx = (tank.x + 19) - (sd.x + 19);
-                const dy = (tank.y + 19) - (sd.y + 19);
-                sd.turretAngle = Math.atan2(dy, dx);
-                sd.baseAngle = sd.turretAngle;
-                if (sd.fireCooldown > 0) {
-                    const fireCooldownStep = (typeof getEntityFireCooldownStep === 'function') ? getEntityFireCooldownStep(sd) : 1;
+                updateTrainingDummyEffects(sd);
+                const zone = window.trainingShooterZone;
+                const px = tank.x + tank.w / 2, py = tank.y + tank.h / 2;
+                const playerInZone = zone && px >= zone.x && px <= zone.x + zone.w && py >= zone.y && py <= zone.y + zone.h;
+                const canShoot = playerInZone && tank.alive !== false && !sd.paralyzed &&
+                    (sd.sandNoShootTimer || 0) <= 0 &&
+                    (typeof GameTerrain === 'undefined' || GameTerrain.canSee(sd, tank, objects));
+                if (canShoot) {
+                    const dx = px - (sd.x + sd.w / 2), dy = py - (sd.y + sd.h / 2);
+                    const aim = Math.atan2(dy, dx);
+                    sd.turretAngle = sd.confused > 0 ? aim + Math.sin((window.frameCount || 0) * 0.12) * 0.8 :
+                        (sd.disoriented > 0 || sd.invertedControls > 0 ? aim + Math.PI : aim);
+                    const fireCooldownStep = (typeof getEntityFireCooldownStep === 'function' ? getEntityFireCooldownStep(sd) : 1) *
+                        (sd.iceSlowed ? 0.5 : 1);
                     sd.fireCooldown = Math.max(0, sd.fireCooldown - fireCooldownStep);
+                } else if (!playerInZone) {
+                    sd.fireCooldown = Math.max(sd.fireCooldown, 25);
                 }
-                else {
+                if (canShoot && sd.fireCooldown <= 0) {
                     const ang = sd.turretAngle;
-                    bullets.push({ x: sd.x+19+Math.cos(ang)*25, y: sd.y+19+Math.sin(ang)*25, w:5, h:5, vx:Math.cos(ang)*5, vy:Math.sin(ang)*5, life:130, owner:'enemy', team: sd.team, type:'fire', damage:100 });
+                    bullets.push({ x: sd.x+19+Math.cos(ang)*25, y: sd.y+19+Math.sin(ang)*25, w:5, h:5,
+                        vx:Math.cos(ang)*6, vy:Math.sin(ang)*6, life:150, owner:'enemy', team: sd.team,
+                        type:'fire', damage:sd._kvantOverload ? 80 : 100, trainingZone: zone });
                     sd.fireCooldown = 80;
                 }
             } else {
@@ -3814,9 +3873,10 @@ function updateTrainingMode() {
                 const ei = enemies.indexOf(sd);
                 if (ei !== -1) enemies.splice(ei, 1);
                 trainingShooterTimer++;
-                if (trainingShooterTimer >= 900) {
+                if (trainingShooterTimer >= 420) {
                     sd.hp = sd.maxHp; sd.alive = true;
                     sd.x = sd.spawnX; sd.y = sd.spawnY;
+                    resetTrainingDummyEffects(sd);
                     sd.fireCooldown = 80;
                     enemies.push(sd);
                     trainingShooterTimer = 0;
@@ -4048,6 +4108,8 @@ function update() {
         if (isS) { dy += tank.speed; tank.baseAngle = Math.PI/2; }
         if (isA) { dx -= tank.speed; tank.baseAngle = Math.PI; }
         if (isD) { dx += tank.speed; tank.baseAngle = 0; }
+        const terrainSpeedFactor = GameTerrain.speedFactor();
+        dx *= terrainSpeedFactor; dy *= terrainSpeedFactor;
         // Apply ice-slow 50% movement penalty
         if (tank.iceSlowed) { dx *= 0.5; dy *= 0.5; }
         // Store velocity so flames inherit it (bug fix: flames don't drift back when moving)
@@ -4222,6 +4284,7 @@ function update() {
                 // Affect Allies (if friendly fire/confusion enabled? No, usually beneficial only)
                 
                 tank.inversionUsed = (tank.inversionUsed || 0) + 1;
+                GameTerrain.activateIlluminatSuper(tank);
             }
             keys['KeyE'] = false;
         }
@@ -5161,7 +5224,7 @@ function update() {
                 let nearestEnemy = null;
                 let nearestDist = Infinity;
                 for (const e of enemies) {
-                    if (!e.alive) continue;
+                    if (!e.alive || !GameTerrain.canSee(d, e, objects)) continue;
                     const dist = Math.hypot((e.x + e.w/2) - (d.x + d.w/2), (e.y + e.h/2) - (d.y + d.h/2));
                     if (dist < nearestDist) { nearestDist = dist; nearestEnemy = e; }
                 }
@@ -5252,7 +5315,7 @@ function update() {
                 let nearestDist = Infinity;
                 const potentialTargets = [tank, ...allies];
                 for (const t of potentialTargets) {
-                    if (!t || !t.alive) continue;
+                    if (!t || !t.alive || !GameTerrain.canSee(d, t, objects)) continue;
                     const dist = Math.hypot((t.x + t.w/2) - (d.x + d.w/2), (t.y + t.h/2) - (d.y + d.h/2));
                     if (dist < nearestDist) { nearestDist = dist; nearestTarget = t; }
                 }
@@ -5607,6 +5670,7 @@ function update() {
     updateSpecialProjectiles();
     if (gameState !== 'playing') return;
     _measureGamePhase('physics', updatePhysics);
+    GameTerrain.updateMovement(tank, enemies, allies, tankType);
 }
 
 let _lastDisplayedResources = null;
@@ -6192,6 +6256,12 @@ function updateTankDetailButton(type) {
     btn.className = classes;
 }
 
+window.setCurrentTankDetail = function(type) {
+    currentTankType = type;
+    window._currentDetailTankType = type;
+    updateTankDetailButton(type);
+};
+
 if (tankDetailClose) tankDetailClose.addEventListener('click', () => {
     hideTankDetail();
 });
@@ -6240,23 +6310,16 @@ if (tankDetailSelect) tankDetailSelect.addEventListener('click', () => {
         };
 
         if (gems >= price) {
-            showBuyModal('Подтвердите покупку', `Купить ${tankDescriptions[currentTankType].name} за ${price} гемов?`, true);
+            const unitName = tankDescriptions[currentTankType]?.name || window.mechDescriptions?.[currentTankType]?.name || currentTankType;
+            showBuyModal('Подтвердите покупку', `Купить ${unitName} за ${price} гемов?`, true);
         } else {
             showBuyModal('Недостаточно гемов', `У вас: ${gems}, нужно: ${price}`, false);
         }
     }
 });
 
-// Override showTankDetail after tanks.js loads
+// Set up trial controls once the page has loaded.
 window.addEventListener('load', () => {
-    const originalShowTankDetail = window.showTankDetail;
-    window.showTankDetail = function(tankType) {
-        currentTankType = tankType;
-        window._currentDetailTankType = tankType; // track for Try button
-        if (originalShowTankDetail) originalShowTankDetail(tankType);
-        updateTankDetailButton(tankType);
-    };
-
     // Try button — launch FFA trial with the previewed tank
     const tankDetailTry = document.getElementById('tankDetailTry');
     if (tankDetailTry) {

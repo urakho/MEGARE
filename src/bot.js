@@ -26,7 +26,7 @@ function isBurovoyHiddenFromAI(target) {
 }
 
 function filterTargetsByVision(unit, targets) {
-    const visibleTargets = targets.filter(target => !isBurovoyHiddenFromAI(target));
+    const visibleTargets = targets.filter(target => !isBurovoyHiddenFromAI(target) && GameTerrain.canSee(unit, target, objects));
     if (!unit || (unit.sandBlindTimer || 0) <= 0) return visibleTargets;
     const ux = unit.x + (unit.w || 0) / 2;
     const uy = unit.y + (unit.h || 0) / 2;
@@ -171,7 +171,7 @@ function tryDodgeIncoming(entity) {
     const perpA = bulletAng + Math.PI/2;
     const perpB = bulletAng - Math.PI/2;
     const backAng = Math.atan2(ey - b.y, ex - b.x);
-    const dodgeSpeed = (entity.speed || 2.5) * 1.15; // smooth but fast dodge
+    const dodgeSpeed = GameTerrain.movementSpeed(entity.speed || 2.5) * 1.15; // smooth but fast dodge
 
     // If already committed to a dodge direction recently, keep it (avoid jitter)
     if (entity._dodgeDir !== undefined && (entity._dodgeDirTimer || 0) > 0) {
@@ -597,7 +597,7 @@ function updateEnemyAI() {
             const ey = enemy.y + enemy.h/2;
             const escapeAngle = Math.atan2(ey - poisonGasPos.y, ex - poisonGasPos.x);
             
-            const baseDist = enemy.speed * 0.6;
+            const baseDist = GameTerrain.movementSpeed(enemy.speed) * 0.6;
             let escaped = false;
             
             if (moveSmallSteps(enemy, escapeAngle, baseDist)) {
@@ -631,7 +631,7 @@ function updateEnemyAI() {
             enemy.lastSeenPlayerTimer = SANDSTORM_LAST_SEEN_TICKS;
         }
         let targets = visibleTargets;
-        if ((enemy.sandBlindTimer || 0) > 0 && !playerVisibleToEnemy && (enemy.lastSeenPlayerTimer || 0) > 0) {
+        if (GameTerrain.current() !== 'night' && (enemy.sandBlindTimer || 0) > 0 && !playerVisibleToEnemy && (enemy.lastSeenPlayerTimer || 0) > 0) {
             targets = [{
                 x: enemy.lastSeenPlayerX,
                 y: enemy.lastSeenPlayerY,
@@ -647,12 +647,12 @@ function updateEnemyAI() {
             enemy.path = [];
             enemy.pathIndex = 0;
             enemy.pathRecalc = 0;
-            if (typeof tank !== 'undefined' && tank && tank.alive !== false) {
+            if (typeof tank !== 'undefined' && tank && tank.alive !== false && GameTerrain.canSee(enemy, tank, objects)) {
                 const _hypDx = (tank.x + tank.w / 2) - (enemy.x + enemy.w / 2);
                 const _hypDy = (tank.y + tank.h / 2) - (enemy.y + enemy.h / 2);
                 const _hypAng = Math.atan2(_hypDy, _hypDx);
                 const _hypDist = Math.hypot(_hypDx, _hypDy);
-                const _hypMoveDist = Math.max(0.6, (enemy.speed || 0) / 1.5);
+                const _hypMoveDist = GameTerrain.movementSpeed(Math.max(0.6, (enemy.speed || 0) / 1.5));
                 smoothTurretRotation(enemy, _hypAng, 0.08);
                 enemy.baseAngle = _hypAng;
                 if (_hypDist > Math.max(enemy.w || 38, enemy.h || 38) * 1.05) {
@@ -679,7 +679,7 @@ function updateEnemyAI() {
                 enemy.searchTurnTimer = 35 + Math.floor(Math.random() * 40);
                 enemy.searchAngle += (Math.random() - 0.5) * (Math.PI * 0.9);
             }
-            moveSmallSteps(enemy, enemy.searchAngle, Math.max(0.8, (enemy.speed || 0) * 0.6));
+            moveSmallSteps(enemy, enemy.searchAngle, GameTerrain.movementSpeed(Math.max(0.8, (enemy.speed || 0) * 0.6)));
             enemy.baseAngle = enemy.searchAngle;
             enemy.turretAngle += (Math.random() - 0.5) * 0.08;
             if ((enemy.sandBlindTimer || 0) > 0) {
@@ -777,6 +777,7 @@ function updateEnemyAI() {
                     }
                 }
                 enemy.inversionUsed = (enemy.inversionUsed || 0) + 1;
+                GameTerrain.activateIlluminatSuper(enemy);
                 enemy.fireCooldown = 60;
             }
 
@@ -1025,13 +1026,13 @@ function updateEnemyAI() {
                 let nearestType = null;
                 let nearestDist = Infinity;
                 // Check player
-                if (tank && tank.alive !== false) {
+                if (tank && tank.alive !== false && GameTerrain.canSee(enemy, tank, objects)) {
                     const d = Math.hypot((tank.x + tank.w/2) - ex, (tank.y + tank.h/2) - ey);
                     if (d < nearestDist) { nearestDist = d; nearestType = tankType || 'normal'; }
                 }
                 // Check other enemies
                 for (const other of enemies) {
-                    if (other === enemy || !other || other.alive === false) continue;
+                    if (other === enemy || !other || other.alive === false || !GameTerrain.canSee(enemy, other, objects)) continue;
                     const d = Math.hypot((other.x + other.w/2) - ex, (other.y + other.h/2) - ey);
                     if (d < nearestDist) { nearestDist = d; nearestType = other.tankType || 'normal'; }
                 }
@@ -1194,7 +1195,7 @@ function updateEnemyAI() {
         if (mdist > 0) {
             const targetCx = nearest.x + (nearest.w||0)/2;
             const targetCy = nearest.y + (nearest.h||0)/2;
-            const tryDist = enemy.speed; // per-tick movement distance
+            const tryDist = GameTerrain.movementSpeed(enemy.speed); // per-tick movement distance
 
             // Burrowed burovoy phases through walls — skip A* and move in straight line
             if (enemy.tankType === 'burovoy' && enemy.burovoyBurrowActive) {
@@ -1207,7 +1208,7 @@ function updateEnemyAI() {
                 // Keep within world bounds
                 enemy.x = Math.max(0, Math.min(worldWidth - enemy.w, enemy.x));
                 enemy.y = Math.max(0, Math.min(worldHeight - enemy.h, enemy.y));
-                if (enemy.fireCooldown > 0) enemy.fireCooldown--;
+                if (enemy.fireCooldown > 0) enemy.fireCooldown = Math.max(0, enemy.fireCooldown - getEntityFireCooldownStep(enemy));
                 continue;
             }
 
@@ -1355,8 +1356,8 @@ function updateEnemyAI() {
                     if (!moved) { 
                         // desperation backup
                         const retreatAng = enemy.baseAngle; 
-                        enemy.x -= Math.cos(retreatAng) * enemy.speed * 0.25; 
-                        enemy.y -= Math.sin(retreatAng) * enemy.speed * 0.25; 
+                        enemy.x -= Math.cos(retreatAng) * GameTerrain.movementSpeed(enemy.speed) * 0.25;
+                        enemy.y -= Math.sin(retreatAng) * GameTerrain.movementSpeed(enemy.speed) * 0.25;
                     }
                 }
             }
@@ -1847,6 +1848,12 @@ function updateAllyAI() {
                 ally.turretAngle += (Math.random() - 0.5) * 0.16;
                 ally.fireCooldown = Math.max(ally.fireCooldown || 0, 10);
             }
+            if (GameTerrain.current() === 'night') {
+                ally.searchAngle = (ally.searchAngle || ally.baseAngle || 0) + (Math.random() - 0.5) * 0.08;
+                if (!moveSmallSteps(ally, ally.searchAngle, GameTerrain.movementSpeed(ally.speed) * 0.6)) ally.searchAngle += Math.PI / 2;
+                ally.baseAngle = ally.searchAngle;
+                ally.path = []; ally.pathIndex = 0;
+            }
             continue;
         }
         let nearest = targets[0];
@@ -2004,7 +2011,7 @@ function updateAllyAI() {
         if (mdist > 0) {
             const targetCx = nearest.x + (nearest.w||0)/2;
             const targetCy = nearest.y + (nearest.h||0)/2;
-            const tryDist = ally.speed;
+            const tryDist = GameTerrain.movementSpeed(ally.speed);
 
             if (!ally.path || !ally.path.length || (ally.pathRecalc || 0) <= 0) {
                 if (globalPathBudget > 0) {
@@ -2105,8 +2112,8 @@ function updateAllyAI() {
                     } 
                     if (!moved) { 
                         const retreatAng = ally.baseAngle; 
-                        ally.x -= Math.cos(retreatAng)*ally.speed*0.25; 
-                        ally.y -= Math.sin(retreatAng)*ally.speed*0.25; 
+                        ally.x -= Math.cos(retreatAng)*GameTerrain.movementSpeed(ally.speed)*0.25;
+                        ally.y -= Math.sin(retreatAng)*GameTerrain.movementSpeed(ally.speed)*0.25;
                     } 
                 }
             }

@@ -7,14 +7,22 @@
 (function () {
     // Inject pause-menu HTML into the page
     const pauseHTML = `
-<div id="pauseMenu" class="modal-overlay" style="display:none;z-index:200;">
-    <div class="modal-box" style="max-width:380px;width:92%;text-align:center;">
-        <h2 class="modal-title" style="margin-bottom:22px;">⏸ Пауза</h2>
-        <div style="display:flex;flex-direction:column;gap:12px;align-items:center;">
-            <button id="pauseResumeBtn" class="btn btn-start" style="width:80%;">▶ Продолжить</button>
-            <button id="pauseRestartBtn" class="btn btn-mode" style="width:80%;">🔄 Перезапустить</button>
-            <button id="pauseMenuBtn" class="btn btn-secondary" style="width:80%;">🏠 Главное меню</button>
+<div id="pauseMenu" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+    <div class="pause-panel">
+        <div class="pause-panel-header">
+            <div class="pause-badge" aria-hidden="true"><span></span><span></span></div>
+            <div class="pause-heading">
+                <div class="pause-eyebrow">MEGARE <span>•</span> БОЙ</div>
+                <h2 id="pauseTitle">ПАУЗА</h2>
+                <p>Бой приостановлен</p>
+            </div>
         </div>
+        <div class="pause-actions">
+            <button id="pauseResumeBtn" type="button" class="pause-action pause-resume"><span class="pause-action-icon" aria-hidden="true">▶</span><span>Продолжить</span><span class="pause-arrow" aria-hidden="true">›</span></button>
+            <button id="pauseRestartBtn" type="button" class="pause-action pause-restart"><span class="pause-action-icon" aria-hidden="true">🔄</span><span>Перезапустить</span><span class="pause-arrow" aria-hidden="true">›</span></button>
+            <button id="pauseMenuBtn" type="button" class="pause-action pause-exit"><span class="pause-action-icon" aria-hidden="true">🏠</span><span>Главное меню</span><span class="pause-arrow" aria-hidden="true">›</span></button>
+        </div>
+        <div class="pause-footer"><span>Нажми <kbd>ESC</kbd>, чтобы продолжить</span><span class="pause-footer-stripes" aria-hidden="true"></span></div>
     </div>
 </div>`;
 

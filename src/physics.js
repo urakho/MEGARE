@@ -45,8 +45,8 @@ function refreshBurovoyFireSlow(entity, duration = 20) {
 }
 
 function getEntityFireCooldownStep(entity) {
-    if (!entity || (entity.burovoyFireSlowTimer || 0) <= 0) return 1;
-    return entity._burovoyFireSlowTick ? 1 : 0;
+    const baseStep = !entity || (entity.burovoyFireSlowTimer || 0) <= 0 || entity._burovoyFireSlowTick ? 1 : 0;
+    return baseStep * GameTerrain.reloadFactor();
 }
 
 function canBurovoyPhaseThroughWalls(entity) {
@@ -2093,6 +2093,11 @@ function updatePhysics() {
         b.x += b.vx;
         b.y += b.vy;
         b.life--;
+        if (b.trainingZone && (b.x < b.trainingZone.x || b.x > b.trainingZone.x + b.trainingZone.w ||
+            b.y < b.trainingZone.y || b.y > b.trainingZone.y + b.trainingZone.h)) {
+            bullets.splice(i, 1);
+            continue;
+        }
 
         // КВАНТ kvantMain MORPH: after 1.5s, one of 3 random effects triggers
         if (b.type === 'kvantMain' && typeof b.morphTimer !== 'undefined') {
@@ -3743,7 +3748,8 @@ function updatePhysics() {
                 tank.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
             }
             tank.alive = true;
-            tank.x = 150; tank.y = worldHeight / 2 - 19;
+            const spawn = window.trainingSpawn || { x: 250, y: 750 };
+            tank.x = spawn.x; tank.y = spawn.y;
         }
         return;
     }

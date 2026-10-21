@@ -6,8 +6,7 @@
 
 /**
  * Draws the "Штурмовой мех" (mechDiy) unit centred at (cx, cy).
- * Top-down visually strictly from above, removing the side-view legs.
- * Entire unit rotates towards the turretAngle to face its cannons.
+ * Top-down chassis follows weapon aim, with subtle movement sway.
  *
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} cx - centre x (world space)
@@ -17,6 +16,11 @@
  * @param {number} turretAngle - radians, direction the mech faces
  * @param {string} mechType    - e.g. 'mechDiy'
  */
+function mechWalkPose(animation, angle) {
+    if (animation && typeof animation === 'object') return animation;
+    return { phase: Date.now() * 0.007, strength: Number(animation) || 0, angle };
+}
+
 function drawMechOn(ctx, cx, cy, W, H, turretAngle, mechType, moveAnimation = 0) {
     if (mechType !== 'mechDiy') return;
 
@@ -30,13 +34,15 @@ function drawMechOn(ctx, cx, cy, W, H, turretAngle, mechType, moveAnimation = 0)
     // Dynamic scale/pulse effects
     const pulse = Math.sin(now * 0.005) * 0.5 + 0.5;
     // Movement animation: bobbing/walking motion
-    const moveWave = Math.sin(now * 0.008) * moveAnimation;
+    const walk = mechWalkPose(moveAnimation, turretAngle);
+    const moveWave = Math.sin(walk.phase) * walk.strength;
 
     // ── SHADOW ─────────────────────────────────────────────────────────────
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.beginPath();
     ctx.roundRect(-s*0.45, -s*0.4 + moveWave, s*0.9, s*0.8, 8);
     ctx.fill();
+    ctx.translate(-Math.abs(Math.sin(walk.phase)) * walk.strength * s * 0.025, moveWave * s * 0.018);
 
     // ── ARM JOINTS / ACTUATORS ─────────────────────────────────────────────
     ctx.fillStyle = '#111';
@@ -463,13 +469,15 @@ function drawMechShieldOn(ctx, cx, cy, W, H, turretAngle, mechType, moveAnimatio
 
     const pulse = Math.sin(now * 0.004) * 0.5 + 0.5;
     // Slower, heavier movement wave
-    const moveWave = Math.sin(now * 0.006) * moveAnimation * 1.2;
+    const walk = mechWalkPose(moveAnimation, turretAngle);
+    const moveWave = Math.sin(walk.phase) * walk.strength * 1.2;
 
     // ── SHADOW ─────────────────────────────────────────────────────────────
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.beginPath();
     ctx.roundRect(-s*0.48, -s*0.42 + moveWave, s*0.96, s*0.84, 6);
     ctx.fill();
+    ctx.translate(-Math.abs(Math.sin(walk.phase)) * walk.strength * s * 0.018, moveWave * s * 0.015);
 
     // ── SHOULDER CANNONS ───────────────────────────────────────────────────
     const barLen = s * 0.58;
@@ -845,10 +853,12 @@ function drawMechRocketOn(ctx, cx, cy, W, H, turretAngle, mechType, moveAnimatio
     ctx.rotate(turretAngle);
 
     const pulse = Math.sin(now * 0.005) * 0.5 + 0.5;
-    const moveWave = Math.sin(now * 0.008) * moveAnimation * 1.0;
+    const walk = mechWalkPose(moveAnimation, turretAngle);
+    const moveWave = Math.sin(walk.phase) * walk.strength;
 
     // Scale up the mech body for better visibility
     ctx.scale(1.15, 1.15);
+    ctx.translate(-Math.abs(Math.sin(walk.phase)) * walk.strength * s * 0.022, moveWave * s * 0.02);
 
     // ── SHOULDER ROCKET PODS (top + bottom, like mechShield's cannons) ──────
     const podLen = s * 0.50;

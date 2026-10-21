@@ -9,6 +9,10 @@ const start = source.indexOf('    // 3.5. Пули');
 const end = source.indexOf('    // 3.5.4. Электрические лучи', start);
 assert.ok(start >= 0 && end > start, 'Bullet drawing section must exist');
 const renderBullets = new vm.Script(source.slice(start, end));
+const plasmaStart = source.indexOf('function drawPlasmaBolt(');
+const plasmaEnd = source.indexOf('function drawWorldGrid(', plasmaStart);
+assert.ok(plasmaStart >= 0 && plasmaEnd > plasmaStart);
+const renderPlasma = new vm.Script(source.slice(plasmaStart, plasmaEnd));
 
 function canvasContext(initialFill = '#initial') {
     const state = {
@@ -39,10 +43,12 @@ function canvasContext(initialFill = '#initial') {
 
 function draw(bullets, initialFill = '#initial') {
     const canvas = canvasContext(initialFill);
-    renderBullets.runInNewContext({
+    const context = vm.createContext({
         ctx: canvas.ctx, bullets, isVisible: () => true,
         window: { effectsEnabled: false }, particles: []
     });
+    renderPlasma.runInContext(context);
+    renderBullets.runInContext(context);
     return canvas;
 }
 

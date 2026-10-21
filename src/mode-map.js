@@ -20,6 +20,7 @@ function generateMap() {
                 if (isVertical) {
                     const blockCount = (length * step) / blockSize;
                     for (let i = 0; i < blockCount; i++) {
+                        if (y + (i + 1) * blockSize > worldHeight) break;
                         // 30% chance this wall segment is wooden
                         const isWooden = Math.random() < 0.3;
                        objects.push({
@@ -33,6 +34,7 @@ function generateMap() {
                 } else {
                     const blockCount = (length * step) / blockSize;
                     for (let i = 0; i < blockCount; i++) {
+                        if (x + (i + 1) * blockSize > worldWidth) break;
                         const isWooden = Math.random() < 0.3;
                        objects.push({
                            x: x + i * blockSize, y: y, w: blockSize, h: blockSize, 
@@ -151,7 +153,9 @@ function generateBossFightMap() {
 function generateTrainingMap() {
     objects = [];
     const bw = 50;
-    
+    window.trainingShooterZone = { x: 1250, y: 900, w: 1000, h: 600 };
+    window.trainingSpawn = { x: 250, y: 750 };
+
     for (let y = 0; y < worldHeight; y += bw) {
         objects.push({ x: 0, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
         objects.push({ x: worldWidth - bw, y, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
@@ -160,30 +164,29 @@ function generateTrainingMap() {
         objects.push({ x, y: 0, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
         objects.push({ x, y: worldHeight - bw, w: bw, h: bw, type: 'wall', color: '#2d4a1e' });
     }
-    
-    for (let y = bw; y < worldHeight - bw; y += bw) {
-        if (y >= 375 && y < 475) continue;
-        objects.push({ x: 700, y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
+
+    // Four rooms open onto a shared corridor through tank-width doorways.
+    for (const y of [650, 850]) {
+        for (let x = bw; x < worldWidth - bw; x += bw) {
+            if ((x >= 250 && x < 400) || (x >= 1600 && x < 1750)) continue;
+            objects.push({ x, y, w: bw, h: bw, type: 'wall', color: '#535a51' });
+        }
     }
-    
-    const roomPillars = [
-        { x: 800, y: 300 }, { x: 1050, y: 300 },
-        { x: 800, y: 550 }, { x: 1050, y: 550 },
-    ];
-    for (const p of roomPillars) {
-        objects.push({ x: p.x, y: p.y, w: bw, h: bw, type: 'wall', color: '#4a1a0a' });
+    for (const y of [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600,
+        900, 950, 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1350, 1400, 1450]) {
+        objects.push({ x: 1200, y, w: bw, h: bw, type: 'wall', color: '#535a51' });
     }
-    
-    const barrelPos = [
-        { x: 100, y: 100 }, { x: 100, y: 750 },
-        { x: 200, y: 800 }, { x: 580, y: 70 },
-        { x: 580, y: 790 }, { x: 660, y: 240 },
-        { x: 660, y: 620 }, { x: 870, y: 200 },
-        { x: 870, y: 680 }, { x: 1090, y: 200 },
-        { x: 1090, y: 680 },
+
+    const coverBlocks = [
+        [550, 995], [600, 995], [650, 995], [760, 1145], [810, 1145],
+        [510, 1270], [560, 1270], [920, 1280], [970, 1280]
     ];
-    for (const p of barrelPos) {
-        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#7a4a21' });
+    for (const [x, y] of coverBlocks) objects.push({ x, y, w: bw, h: bw, type: 'wall', color: '#535a51' });
+    for (const [x, y] of [[400, 1100], [730, 1330], [1050, 1080], [1520, 1050], [1690, 1210]]) {
+        objects.push({ x, y, w: 42, h: 42, type: 'box', color: '#7a5b3b' });
+    }
+    for (const [x, y] of [[1120, 280], [1580, 580], [1150, 750], [2130, 760]]) {
+        objects.push({ x, y, w: 34, h: 34, type: 'barrel', color: '#7a4a21' });
     }
     navNeedsRebuild = true;
 }
@@ -442,25 +445,26 @@ function spawnTrainingMode() {
     trainingDummies = [];
     trainingRespawnTimers = [];
 
-    tank.x = 150; tank.y = worldHeight / 2 - 19;
+    tank.x = window.trainingSpawn.x; tank.y = window.trainingSpawn.y;
     tank.team = 0;
     setTankHP(tankType);
     tank.alive = true;
 
     const dummyPositions = [
-        { x: 480, y: 130 }, { x: 570, y: 130 }, { x: 660, y: 130 },
-        { x: 480, y: 280 }, { x: 570, y: 280 }, { x: 660, y: 280 },
-        { x: 480, y: 570 }, { x: 570, y: 570 }, { x: 660, y: 570 },
-        { x: 480, y: 720 }, { x: 570, y: 720 }, { x: 660, y: 720 },
+        { x: 445, y: 230 }, { x: 690, y: 230 }, { x: 955, y: 230 },
+        { x: 445, y: 385 }, { x: 690, y: 385 }, { x: 955, y: 385 },
+        { x: 445, y: 540 }, { x: 690, y: 540 }, { x: 955, y: 540 },
+        { x: 850, y: 1050 }, { x: 1030, y: 1190 },
+        { x: 1750, y: 355, w: 88, h: 88, hp: 5000 }
     ];
 
     for (let i = 0; i < dummyPositions.length; i++) {
         const pos = dummyPositions[i];
         const dummy = {
-            x: pos.x, y: pos.y, w: 38, h: 38,
+            x: pos.x, y: pos.y, w: pos.w || 38, h: pos.h || 38,
             color: '#888888',
             tankType: 'dummy',
-            hp: 300, maxHp: 300,
+            hp: pos.hp || 300, maxHp: pos.hp || 300,
             turretAngle: 0, baseAngle: 0, speed: 0,
             alive: true,
             team: 99,
@@ -476,7 +480,7 @@ function spawnTrainingMode() {
     }
 
     const shooterDummy = {
-        x: 930, y: 431, w: 38, h: 38,
+        x: 1980, y: 1100, w: 38, h: 38,
         color: '#880000',
         tankType: 'boss_dummy',
         hp: 1000, maxHp: 1000,
@@ -486,7 +490,7 @@ function spawnTrainingMode() {
         fireCooldown: 80,
         stuckCount: 0, dodgeAccuracy: 0,
         isDummy: true, isShooterDummy: true,
-        spawnX: 930, spawnY: 431,
+        spawnX: 1980, spawnY: 1100,
     };
     enemies.push(shooterDummy);
     trainingShooterDummy = shooterDummy;
@@ -502,6 +506,7 @@ function spawnTrainingMode() {
 function updateBossFight() {
     const boss = enemies.find(e => e.isBoss && e.alive);
     if (!boss) return;
+    const seesPlayer = tank.alive && GameTerrain.canSee(boss, tank, objects);
 
     if (boss.phase === 1 && boss.hp <= 5000) {
         boss.phase = 2;
@@ -512,15 +517,15 @@ function updateBossFight() {
         boss.speed = 1.2;
     }
 
-    if (tank.alive) {
+    if (seesPlayer) {
         const dx = (tank.x + 19) - (boss.x + 57);
         const dy = (tank.y + 19) - (boss.y + 57);
         const dist = Math.sqrt(dx * dx + dy * dy);
         boss.turretAngle = Math.atan2(dy, dx);
         if (dist > 260) {
             const nx = dx / dist, ny = dy / dist;
-            boss.x += nx * boss.speed;
-            boss.y += ny * boss.speed;
+            boss.x += nx * GameTerrain.movementSpeed(boss.speed);
+            boss.y += ny * GameTerrain.movementSpeed(boss.speed);
             boss.baseAngle = Math.atan2(ny, nx);
             
             if (boss.phase === 3) {
@@ -533,6 +538,13 @@ function updateBossFight() {
         }
     }
 
+    if (!seesPlayer && GameTerrain.current() === 'night') {
+        boss.searchAngle = (boss.searchAngle || boss.baseAngle || 0) + (Math.random() - 0.5) * 0.06;
+        if (!moveSmallSteps(boss, boss.searchAngle, GameTerrain.movementSpeed(boss.speed) * 0.6)) boss.searchAngle += Math.PI / 2;
+        boss.baseAngle = boss.searchAngle;
+        boss.turretAngle = boss.searchAngle;
+    }
+
     if (boss.fireTrail) {
         for (let i = boss.fireTrail.length - 1; i >= 0; i--) {
             const trail = boss.fireTrail[i];
@@ -543,8 +555,8 @@ function updateBossFight() {
         }
     }
 
-    if (boss.fireCooldown > 0) boss.fireCooldown--;
-    if (boss.fireCooldown <= 0 && tank.alive) {
+    if (boss.fireCooldown > 0) boss.fireCooldown = Math.max(0, boss.fireCooldown - getEntityFireCooldownStep(boss));
+    if (boss.fireCooldown <= 0 && seesPlayer) {
         const ang = boss.turretAngle;
         bullets.push({
             x: boss.x + 57 + Math.cos(ang) * 60, y: boss.y + 57 + Math.sin(ang) * 60,
@@ -562,7 +574,7 @@ function updateBossFight() {
     }
 
     if (boss.meteorTimer > 0) boss.meteorTimer--;
-    if (boss.meteorTimer <= 0 && tank.alive) {
+    if (boss.meteorTimer <= 0 && seesPlayer) {
         const count = boss.phase === 3 ? 5 : (boss.phase === 2 ? 4 : 3);
         for (let i = 0; i < count; i++) {
             bossMeteors.push({
@@ -580,7 +592,7 @@ function updateBossFight() {
         }
     }
 
-    if (boss.phase >= 2) {
+    if (boss.phase >= 2 && seesPlayer) {
         if (boss.miniTimer > 0) boss.miniTimer--;
         if (boss.miniTimer <= 0) {
             const miniCount = boss.phase === 3 ? 12 : 8;
