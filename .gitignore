@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-pages-dist/
 
 # Secret files — never commit these
 # (all secrets now hardcoded with base64 encoding)
