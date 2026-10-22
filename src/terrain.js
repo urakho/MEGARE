@@ -606,7 +606,7 @@
             state.idleFrames = 0; state.idleMarkPlaced = false;
             const width = Math.min(unit.w, unit.h) * (unitType === 'mechRocket' ? 1.4375 : 1);
             const hovering = unitType === 'illuminat' || unitType === 'air' || (unitType === 'myasnoy' && unit.myasnoyUltActive);
-            const phaseAdvance = distance * Math.PI / (width * 0.32);
+            const phaseAdvance = distance * Math.PI / (width * (unitType === 'myasnoy' ? 0.72 : 0.32));
             const landing = Math.floor((state.phase + phaseAdvance) / Math.PI) !== Math.floor(state.phase / Math.PI);
             state.phase = (state.phase + phaseAdvance) % (Math.PI * 2);
             state.travel = (state.travel + distance) % 17.6;

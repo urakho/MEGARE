@@ -252,6 +252,96 @@ window.tankBgGradients = tankBgGradients;
 
 // Preview canvas global access (defined in main.js, used here)
 
+function drawMyasnoyTentacles(ctx, halfW, halfH, moveAnimation) {
+    const motion = moveAnimation && typeof moveAnimation === 'object' ? moveAnimation : null;
+    const strength = motion ? Math.max(0, Math.min(1, motion.strength || 0)) : 0;
+    const phase = motion ? motion.phase || 0 : 0;
+    const turn = motion ? Math.max(-0.16, Math.min(0.16, motion.turnVelocity || 0)) : 0;
+    const size = Math.min(halfW, halfH);
+    const count = 10;
+    const swayTime = Date.now() * 0.0008;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < count; i++) {
+        const angle = i * Math.PI * 2 / count + Math.PI / count;
+        const nx = Math.cos(angle), ny = Math.sin(angle);
+        const edge = Math.min(halfW / Math.max(0.01, Math.abs(nx)), halfH / Math.max(0.01, Math.abs(ny)));
+        const rootX = nx * edge * 0.88;
+        const rootY = ny * edge * 0.88;
+        const stride = Math.sin(phase + (i % 2) * Math.PI) * strength;
+        const sway = Math.sin(swayTime + i * 1.7) * size * 0.025;
+        const reach = size * 0.68;
+        const tipX = rootX + nx * reach + stride * size * 0.25 - turn * size * 1.2;
+        const tipY = rootY + ny * reach + sway + Math.abs(stride) * ny * size * 0.08;
+        const elbowX = rootX + nx * reach * 0.48 - stride * size * 0.08;
+        const elbowY = rootY + ny * reach * 0.64 + sway * 0.5;
+        const width = Math.max(0.9, size * 0.14);
+        ctx.beginPath();
+        ctx.moveTo(rootX, rootY);
+        ctx.quadraticCurveTo(elbowX, elbowY, tipX, tipY);
+        ctx.strokeStyle = '#430909';
+        ctx.lineWidth = width * 2.2;
+        ctx.stroke();
+        ctx.strokeStyle = i % 3 === 0 ? '#db3b29' : '#af201a';
+        ctx.lineWidth = width;
+        ctx.stroke();
+        ctx.fillStyle = '#7c1512';
+        ctx.beginPath();
+        ctx.ellipse(tipX, tipY, width * 0.95, width * 0.68, angle, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawMyasnoyEyeVessels(ctx, radius, moveAnimation) {
+    const motion = moveAnimation && typeof moveAnimation === 'object' ? moveAnimation : null;
+    const strength = motion ? Math.max(0, Math.min(1, motion.strength || 0)) : 0;
+    const time = Date.now() * 0.0008;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < 7; i++) {
+        const fan = (i - 3) / 3;
+        const angle = Math.PI + fan * 0.85;
+        const directionX = Math.cos(angle), directionY = Math.sin(angle);
+        const normalX = -directionY, normalY = directionX;
+        const rootX = directionX * radius * 0.86;
+        const rootY = directionY * radius * 0.86;
+        const length = radius * (1.1 + (1 - Math.abs(fan)) * 0.42);
+        const bend = Math.sin(time + i * 0.95) * radius * (0.14 + strength * 0.07) + fan * radius * 0.07;
+        const tipX = rootX + directionX * length + normalX * bend * 0.4;
+        const tipY = rootY + directionY * length + normalY * bend * 0.4;
+        const midX = rootX + directionX * length * 0.58 + normalX * bend * 0.3;
+        const midY = rootY + directionY * length * 0.58 + normalY * bend * 0.3;
+        const width = Math.max(1, radius * (0.11 + (1 - Math.abs(fan)) * 0.035));
+        ctx.beginPath();
+        ctx.moveTo(rootX, rootY);
+        ctx.bezierCurveTo(rootX + directionX * length * 0.27 + normalX * bend,
+            rootY + directionY * length * 0.27 + normalY * bend,
+            rootX + directionX * length * 0.68 - normalX * bend * 0.35,
+            rootY + directionY * length * 0.68 - normalY * bend * 0.35, tipX, tipY);
+        ctx.strokeStyle = '#390606'; ctx.lineWidth = width * 2.2; ctx.stroke();
+        ctx.strokeStyle = i % 2 ? '#a71b17' : '#ca3327'; ctx.lineWidth = width; ctx.stroke();
+
+        for (const side of [-1, 1]) {
+            const branchRootX = side < 0 ? midX : rootX + directionX * length * 0.38 + normalX * bend * 0.35;
+            const branchRootY = side < 0 ? midY : rootY + directionY * length * 0.38 + normalY * bend * 0.35;
+            const branchAngle = angle + side * (0.43 + (i % 2) * 0.08);
+            const branchLength = length * (side < 0 ? 0.42 : 0.32);
+            const branchX = branchRootX + Math.cos(branchAngle) * branchLength;
+            const branchY = branchRootY + Math.sin(branchAngle) * branchLength;
+            ctx.beginPath();
+            ctx.moveTo(branchRootX, branchRootY);
+            ctx.quadraticCurveTo(branchRootX + directionX * branchLength * 0.55,
+                branchRootY + directionY * branchLength * 0.55, branchX, branchY);
+            ctx.strokeStyle = '#390606'; ctx.lineWidth = width * 1.15; ctx.stroke();
+            ctx.strokeStyle = '#a82119'; ctx.lineWidth = width * 0.5; ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null, moveAnimation = 0) {
     if (!isFinite(cx) || !isFinite(cy) || !W || !H || !isFinite(W) || !isFinite(H)) return;
     
@@ -263,6 +353,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
     
     ctx.save();
     ctx.translate(cx, cy);
+    const spartanRage = type === 'spartan' && !!heatState?.spartanRage;
 
     let isBurovoyFullyBurrowed = false;
 
@@ -395,82 +486,12 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         _eyGlow.addColorStop(1, 'rgba(200,0,0,0)');
         ctx.fillStyle = _eyGlow;
         ctx.beginPath(); ctx.arc(0, 0, _eyR * 2.4, 0, Math.PI * 2); ctx.fill();
-        // Branching blood vessel tendrils trailing behind the eye
-        ctx.save(); ctx.lineCap = 'round';
-        const _trailBase = turretAngle + Math.PI; // direction behind eye
-        const _trailSpread = Math.PI * 0.78;
-        const _numTrunks = 7;
-        for (let _ti = 0; _ti < _numTrunks; _ti++) {
-            const _tFrac  = _ti / (_numTrunks - 1);
-            const _tCent  = 1 - Math.abs(_tFrac - 0.5) * 2; // 0 at edges, 1 at center
-            const _phase  = _eyT * 1.3 + _ti * 0.75;
-            const _trunkAng = _trailBase - _trailSpread/2 + _tFrac * _trailSpread;
-            const _trunkLen = _eyR * (1.5 + _tCent * 1.6 + Math.sin(_phase * 0.6) * 0.25);
-            const _trunkW   = _eyR * (0.028 + _tCent * 0.022);
-            // Trunk start on eye surface
-            const _tsx = Math.cos(_trunkAng) * _eyR * 0.86;
-            const _tsy = Math.sin(_trunkAng) * _eyR * 0.86;
-            // Animated mid-control point (gives curvature)
-            const _tcx = _tsx + Math.cos(_trunkAng) * _trunkLen * 0.48 + Math.sin(_phase * 1.2) * _eyR * 0.28;
-            const _tcy = _tsy + Math.sin(_trunkAng) * _trunkLen * 0.48 + Math.cos(_phase * 0.9) * _eyR * 0.20;
-            // Trunk tip
-            const _tex = _tsx + Math.cos(_trunkAng) * _trunkLen;
-            const _tey = _tsy + Math.sin(_trunkAng) * _trunkLen;
-            // Draw trunk: dark shadow then red core
-            ctx.beginPath(); ctx.moveTo(_tsx, _tsy); ctx.quadraticCurveTo(_tcx, _tcy, _tex, _tey);
-            ctx.strokeStyle = '#1e0000'; ctx.lineWidth = _trunkW * 3.2; ctx.stroke();
-            ctx.strokeStyle = '#b81212'; ctx.lineWidth = _trunkW; ctx.stroke();
-            // Branch A — forks off to one side at the mid-control point
-            const _brAPhase = _phase + 1.3;
-            const _brAAng = _trunkAng + (0.42 + Math.sin(_brAPhase * 0.5) * 0.12);
-            const _brALen = _trunkLen * 0.58;
-            const _brAW   = _trunkW * 0.60;
-            const _brAcx  = _tcx + Math.cos(_brAAng) * _brALen * 0.46 + Math.sin(_brAPhase) * _eyR * 0.14;
-            const _brAcy  = _tcy + Math.sin(_brAAng) * _brALen * 0.46 + Math.cos(_brAPhase) * _eyR * 0.11;
-            const _brAex  = _tcx + Math.cos(_brAAng) * _brALen;
-            const _brAey  = _tcy + Math.sin(_brAAng) * _brALen;
-            ctx.beginPath(); ctx.moveTo(_tcx, _tcy); ctx.quadraticCurveTo(_brAcx, _brAcy, _brAex, _brAey);
-            ctx.strokeStyle = '#160000'; ctx.lineWidth = _brAW * 3; ctx.stroke();
-            ctx.strokeStyle = '#991010'; ctx.lineWidth = _brAW; ctx.stroke();
-            // Branch B — forks the other side
-            const _brBPhase = _phase + 2.6;
-            const _brBAng = _trunkAng - (0.40 + Math.cos(_brBPhase * 0.5) * 0.12);
-            const _brBLen = _trunkLen * 0.50;
-            const _brBW   = _trunkW * 0.52;
-            const _brBcx  = _tcx + Math.cos(_brBAng) * _brBLen * 0.46 + Math.sin(_brBPhase) * _eyR * 0.12;
-            const _brBcy  = _tcy + Math.sin(_brBAng) * _brBLen * 0.46 + Math.cos(_brBPhase) * _eyR * 0.10;
-            const _brBex  = _tcx + Math.cos(_brBAng) * _brBLen;
-            const _brBey  = _tcy + Math.sin(_brBAng) * _brBLen;
-            ctx.beginPath(); ctx.moveTo(_tcx, _tcy); ctx.quadraticCurveTo(_brBcx, _brBcy, _brBex, _brBey);
-            ctx.strokeStyle = '#160000'; ctx.lineWidth = _brBW * 3; ctx.stroke();
-            ctx.strokeStyle = '#881010'; ctx.lineWidth = _brBW; ctx.stroke();
-            // Sub-branch from branch A tip (every other trunk)
-            if (_ti % 2 === 0) {
-                const _sbPhase = _phase + 0.8;
-                const _sbAng = _brAAng + 0.5 + Math.sin(_sbPhase) * 0.2;
-                const _sbLen = _brALen * 0.45;
-                const _sbex  = _brAex + Math.cos(_sbAng) * _sbLen;
-                const _sbey  = _brAey + Math.sin(_sbAng) * _sbLen;
-                const _sbcx  = (_brAex + _sbex) * 0.5 + Math.sin(_sbPhase * 1.4) * _eyR * 0.08;
-                const _sbcy  = (_brAey + _sbey) * 0.5 + Math.cos(_sbPhase * 1.2) * _eyR * 0.07;
-                ctx.beginPath(); ctx.moveTo(_brAex, _brAey); ctx.quadraticCurveTo(_sbcx, _sbcy, _sbex, _sbey);
-                ctx.strokeStyle = '#0e0000'; ctx.lineWidth = _trunkW * 1.2; ctx.stroke();
-                ctx.strokeStyle = '#660000'; ctx.lineWidth = _trunkW * 0.38; ctx.stroke();
-            }
-            // Sub-branch from branch B tip (every other trunk, offset)
-            if (_ti % 2 === 1) {
-                const _sbPhase = _phase + 1.9;
-                const _sbAng = _brBAng - 0.48 + Math.cos(_sbPhase) * 0.18;
-                const _sbLen = _brBLen * 0.42;
-                const _sbex  = _brBex + Math.cos(_sbAng) * _sbLen;
-                const _sbey  = _brBey + Math.sin(_sbAng) * _sbLen;
-                const _sbcx  = (_brBex + _sbex) * 0.5 + Math.sin(_sbPhase * 1.3) * _eyR * 0.07;
-                const _sbcy  = (_brBey + _sbey) * 0.5 + Math.cos(_sbPhase * 1.1) * _eyR * 0.06;
-                ctx.beginPath(); ctx.moveTo(_brBex, _brBey); ctx.quadraticCurveTo(_sbcx, _sbcy, _sbex, _sbey);
-                ctx.strokeStyle = '#0e0000'; ctx.lineWidth = _trunkW * 1.1; ctx.stroke();
-                ctx.strokeStyle = '#550000'; ctx.lineWidth = _trunkW * 0.34; ctx.stroke();
-            }
-        }
+        // Blood vessels stream behind the eye while the pupil tracks aim.
+        ctx.save();
+        const eyeMotion = moveAnimation && typeof moveAnimation === 'object' ? moveAnimation : null;
+        const eyeHeading = eyeMotion && (eyeMotion.strength || 0) > 0.05 ? (eyeMotion.angle || 0) : turretAngle;
+        ctx.rotate(eyeHeading);
+        drawMyasnoyEyeVessels(ctx, _eyR, moveAnimation);
         ctx.restore();
         // Sweeping eye beam — scans across the attack arc while the timer counts down
         if (heatState && (heatState.myasnoyAttackTimer || 0) > 0) {
@@ -606,39 +627,21 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         }
         // Draw the running gear before the hull.
         const trackThick = Math.max(4, W * 0.12);
-        if (type === 'roman' || type === 'egyptian') {
+        if (type === 'roman' || type === 'egyptian' || type === 'spartan') {
             const wheelLength = W * 0.25, wheelWidth = Math.max(5, W * 0.16);
             const rotation = moveAnimation && typeof moveAnimation === 'object' ? (moveAnimation.travel || 0) * Math.PI * 2 / 17.6 : 0;
             const egyptianWheel = type === 'egyptian';
+            const spartanWheel = type === 'spartan';
             for (const side of [-1, 1]) for (const axle of [-1, 1]) {
                 const x = axle * W * 0.31, y = side * H / 2;
-                ctx.fillStyle = egyptianWheel ? '#51412a' : '#382c21'; ctx.strokeStyle = '#201912'; ctx.lineWidth = 0.8;
+                ctx.fillStyle = egyptianWheel ? '#51412a' : spartanWheel ? '#4c3020' : '#382c21'; ctx.strokeStyle = '#201912'; ctx.lineWidth = 0.8;
                 ctx.beginPath(); ctx.roundRect(x - wheelLength / 2, y - wheelWidth / 2, wheelLength, wheelWidth, wheelWidth * 0.25); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = egyptianWheel ? '#b08a50' : '#9c713b';
+                ctx.fillStyle = egyptianWheel ? '#b08a50' : spartanWheel ? '#b8793d' : '#9c713b';
                 ctx.beginPath(); ctx.roundRect(x - wheelLength * 0.36, y - wheelWidth * 0.3, wheelLength * 0.72, wheelWidth * 0.6, 1); ctx.fill();
-                ctx.strokeStyle = egyptianWheel ? '#e1c184' : '#d0a665'; ctx.lineWidth = Math.max(0.6, W * 0.012);
+                ctx.strokeStyle = egyptianWheel ? '#e1c184' : spartanWheel ? (spartanRage ? '#f2cd8b' : '#e1b978') : '#d0a665'; ctx.lineWidth = Math.max(0.6, W * 0.012);
                 ctx.beginPath(); ctx.moveTo(x + Math.cos(rotation) * wheelLength * 0.23, y - wheelWidth * 0.23);
                 ctx.lineTo(x - Math.cos(rotation) * wheelLength * 0.23, y + wheelWidth * 0.23); ctx.stroke();
                 ctx.fillStyle = '#e2bd79'; ctx.beginPath(); ctx.arc(x, y, Math.max(0.7, W * 0.018), 0, Math.PI * 2); ctx.fill();
-            }
-        } else if (type === 'spartan') {
-            const rotation = moveAnimation && typeof moveAnimation === 'object' ? (moveAnimation.travel || 0) * Math.PI * 2 / 17.6 : 0;
-            for (const side of [-1, 1]) {
-                const x = -W * 0.34, y = side * H * 0.43, radius = H * 0.17;
-                ctx.fillStyle = '#30251d';
-                ctx.beginPath(); ctx.arc(x, y, radius + 1.2, 0, Math.PI * 2); ctx.fill();
-                const wheel = ctx.createRadialGradient(x-radius*0.25, y-radius*0.3, 0, x, y, radius);
-                wheel.addColorStop(0, '#e7b86a'); wheel.addColorStop(0.7, '#a8692c'); wheel.addColorStop(1, '#563315');
-                ctx.fillStyle = wheel;
-                ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#e6c185'; ctx.lineWidth = Math.max(0.75, H * 0.024);
-                for (let spoke = 0; spoke < 6; spoke++) {
-                    const angle = rotation + spoke * Math.PI / 3;
-                    ctx.beginPath(); ctx.moveTo(x, y);
-                    ctx.lineTo(x + Math.cos(angle) * radius * 0.82, y + Math.sin(angle) * radius * 0.82); ctx.stroke();
-                }
-                ctx.fillStyle = '#f1d59e';
-                ctx.beginPath(); ctx.arc(x, y, radius*0.2, 0, Math.PI*2); ctx.fill();
             }
         } else if (type === 'air') {
             // Two floating ribbons of wind take the place of physical tracks.
@@ -695,7 +698,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         }
         // body (between tracks); myasnoy fills full height since no tracks
         const bodyW = W - 4;
-        const bodyH = type === 'myasnoy' || type === 'spartan' ? H - 8 : H - trackThick - 4;
+        const bodyH = type === 'myasnoy' ? H - 8 : H - trackThick - 4;
 
         if (type === 'normal') {
             // Modern Military Tank
@@ -850,52 +853,53 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'machinegun') {
-            // Machinegun Tank Body - Heavy assault vehicle
-            // Dark Gunmetal / Urban Camo
-            const grad = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
-            grad.addColorStop(0, '#263238');   // Dark Blue Grey
-            grad.addColorStop(0.5, '#37474F'); // Blue Grey
-            grad.addColorStop(1, '#212121');   // Almost Black
-            ctx.fillStyle = grad;
-            
-            // Armored Chassis with angled front
+            // Angled gunmetal hull with inset deck and protected side armor.
+            const hull = ctx.createLinearGradient(0, -bodyH/2, 0, bodyH/2);
+            hull.addColorStop(0, '#68757a');
+            hull.addColorStop(0.48, '#3c4b51');
+            hull.addColorStop(1, '#222e34');
+            ctx.fillStyle = hull;
+            ctx.strokeStyle = '#182329';
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
-            ctx.moveTo(-bodyW/2, -bodyH/2);
-            ctx.lineTo(bodyW/2 - 10, -bodyH/2); // Front right cut
-            ctx.lineTo(bodyW/2, -bodyH/4);
-            ctx.lineTo(bodyW/2, bodyH/4);
-            ctx.lineTo(bodyW/2 - 10, bodyH/2);  // Front left cut
-            ctx.lineTo(-bodyW/2, bodyH/2);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Side Armor Plates (Reactive Armor)
-            ctx.fillStyle = '#455A64'; // Lighter Grey
-            ctx.fillRect(-bodyW/2 + 5, -bodyH/2 - 2, bodyW - 15, 4); // Top side
-            ctx.fillRect(-bodyW/2 + 5, bodyH/2 - 2, bodyW - 15, 4);  // Bottom side
-            
-            // Engine Vents (Rear)
-            ctx.fillStyle = '#000';
-            for(let i=0; i<3; i++) {
-                ctx.fillRect(-bodyW/2 + 2, -bodyH/4 + i*6, 4, 3);
-            }
-            
-            // Ammo Feed System (Gold Line from body to turret center)
-            ctx.fillStyle = '#FFC107'; 
-            ctx.beginPath();
-            ctx.moveTo(-bodyW/4, -bodyH/4);
-            ctx.lineTo(0, 0); 
-            ctx.lineTo(-bodyW/4, bodyH/4);
-            ctx.stroke(); // Wait, fillStyle set but using stroke? need strokeStyle
-            
-            ctx.strokeStyle = '#FFB300';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.moveTo(-bodyW*0.48, -bodyH*0.46);
+            ctx.lineTo(bodyW*0.28, -bodyH*0.46);
+            ctx.lineTo(bodyW*0.49, -bodyH*0.26);
+            ctx.lineTo(bodyW*0.49, bodyH*0.26);
+            ctx.lineTo(bodyW*0.28, bodyH*0.46);
+            ctx.lineTo(-bodyW*0.48, bodyH*0.46);
+            ctx.closePath(); ctx.fill(); ctx.stroke();
 
-            // Heavy tread look
-            ctx.strokeStyle = '#263238';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            ctx.fillStyle = '#29373c';
+            ctx.fillRect(-bodyW*0.34, -bodyH*0.32, bodyW*0.58, bodyH*0.64);
+            ctx.strokeStyle = '#768287';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(-bodyW*0.34, -bodyH*0.32, bodyW*0.58, bodyH*0.64);
+
+            for (const side of [-1, 1]) {
+                const edgeY = side < 0 ? -bodyH*0.46 : bodyH*0.32;
+                const plate = ctx.createLinearGradient(0, edgeY, 0, edgeY + bodyH*0.14);
+                plate.addColorStop(0, side < 0 ? '#a2aaa7' : '#3b494c');
+                plate.addColorStop(1, side < 0 ? '#526065' : '#697579');
+                ctx.fillStyle = plate;
+                ctx.fillRect(-bodyW*0.37, edgeY, bodyW*0.59, bodyH*0.14);
+                ctx.fillStyle = '#b1a079';
+                ctx.fillRect(-bodyW*0.2, edgeY + bodyH*0.055, bodyW*0.23, Math.max(1, bodyH*0.025));
+            }
+
+            // Rear cooling grille and two recessed ammunition cases.
+            ctx.fillStyle = '#142025';
+            ctx.fillRect(-bodyW*0.44, -bodyH*0.18, bodyW*0.09, bodyH*0.36);
+            ctx.fillStyle = '#819095';
+            for (let i = -1; i <= 1; i++) {
+                ctx.fillRect(-bodyW*0.43, i*bodyH*0.11 - bodyH*0.015, bodyW*0.07, Math.max(1, bodyH*0.03));
+            }
+            ctx.fillStyle = '#857456';
+            ctx.fillRect(-bodyW*0.23, -bodyH*0.24, bodyW*0.16, bodyH*0.13);
+            ctx.fillRect(-bodyW*0.23, bodyH*0.11, bodyW*0.16, bodyH*0.13);
+            ctx.fillStyle = '#c5ad78';
+            ctx.fillRect(-bodyW*0.2, -bodyH*0.21, bodyW*0.1, Math.max(1, bodyH*0.025));
+            ctx.fillRect(-bodyW*0.2, bodyH*0.14, bodyW*0.1, Math.max(1, bodyH*0.025));
         } else if (type === 'buckshot') {
             // Breaching chassis with faceted armor and recessed ammunition.
             const armor = ctx.createLinearGradient(0, -bodyH/2, 0, bodyH/2);
@@ -1456,102 +1460,46 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             }
             
         } else if (type === 'spartan') {
-            // Bronze chariot with a pair of harnessed horses in front.
+            // Keep the same bronze hull in both phases.
             const spBG = ctx.createLinearGradient(-bodyW/2, -bodyH/2, bodyW/2, bodyH/2);
-            spBG.addColorStop(0,   '#c8722a');
+            spBG.addColorStop(0, '#c8722a');
             spBG.addColorStop(0.45, '#d79b4b');
-            spBG.addColorStop(1,   '#75451d');
+            spBG.addColorStop(1, '#75451d');
             ctx.fillStyle = spBG;
             ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-
-            // Horizontal armour ridges
             ctx.strokeStyle = 'rgba(60,20,0,0.55)';
             ctx.lineWidth = 1.2;
             for (let ri = -1; ri <= 1; ri++) {
                 ctx.beginPath();
                 ctx.moveTo(-bodyW/2 + 3, ri * bodyH * 0.26);
-                ctx.lineTo(bodyW/2 - 3,  ri * bodyH * 0.26);
+                ctx.lineTo(bodyW/2 - 3, ri * bodyH * 0.26);
                 ctx.stroke();
             }
-
-            // Red war cloak stripe down the centre
             ctx.fillStyle = 'rgba(180,0,0,0.45)';
             ctx.fillRect(-bodyW * 0.08, -bodyH/2, bodyW * 0.16, bodyH);
-
-            // Bronze highlight sheen
             ctx.fillStyle = 'rgba(255,200,100,0.12)';
             ctx.beginPath();
             ctx.moveTo(-bodyW/2, -bodyH/2);
             ctx.lineTo(bodyW * 0.2, -bodyH/2);
             ctx.lineTo(-bodyW/2, bodyH * 0.3);
-            ctx.closePath();
-            ctx.fill();
-
-            // Dark border
+            ctx.closePath(); ctx.fill();
             ctx.strokeStyle = '#3a1a00';
             ctx.lineWidth = 2;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-            const gait = moveAnimation && typeof moveAnimation === 'object' ? (moveAnimation.travel || 0) * 0.4 : 0;
-            for (const side of [-1, 1]) {
-                const y = side * H * 0.32;
-                const coat = side < 0 ? '#8c5133' : '#b9804c';
-                const lightCoat = side < 0 ? '#b5794e' : '#dca66a';
-                const step = Math.sin(gait + (side > 0 ? Math.PI : 0)) * W * 0.025;
-
-                // Shaft, reins and tail are kept behind the horse's body.
-                ctx.strokeStyle = '#a8753f'; ctx.lineWidth = Math.max(1, H * 0.035);
-                ctx.beginPath(); ctx.moveTo(bodyW * 0.35, y); ctx.lineTo(W * 0.76, y); ctx.stroke();
-                ctx.strokeStyle = '#3c281e'; ctx.lineWidth = Math.max(1, H * 0.045);
-                ctx.beginPath(); ctx.moveTo(W * 0.41, y);
-                ctx.quadraticCurveTo(W * 0.28, y + side * H * 0.06, W * 0.25, y + side * H * 0.15); ctx.stroke();
-
-                // Four separated hooves make the top-down silhouette read as a horse.
-                ctx.strokeStyle = coat; ctx.lineWidth = Math.max(1.3, H * 0.065);
-                ctx.lineCap = 'round';
-                for (const legX of [0.48, 0.71]) {
-                    for (const legSide of [-1, 1]) {
-                        const hoofX = W * legX + step * (legSide < 0 ? 1 : -1);
-                        const hoofY = y + legSide * H * 0.17;
-                        ctx.beginPath(); ctx.moveTo(W * legX, y + legSide * H * 0.075);
-                        ctx.lineTo(hoofX, hoofY); ctx.stroke();
-                        ctx.fillStyle = '#2d2925';
-                        ctx.beginPath(); ctx.ellipse(hoofX + W * 0.023, hoofY, W * 0.043, H * 0.029, 0, 0, Math.PI * 2); ctx.fill();
-                    }
-                }
-
-                const coatGrad = ctx.createLinearGradient(0, y - H * 0.13, 0, y + H * 0.13);
-                coatGrad.addColorStop(0, lightCoat); coatGrad.addColorStop(0.55, coat); coatGrad.addColorStop(1, '#593b2b');
-                ctx.fillStyle = coatGrad; ctx.strokeStyle = '#513326'; ctx.lineWidth = Math.max(0.7, W * 0.012);
-                ctx.beginPath(); ctx.ellipse(W * 0.59, y, W * 0.225, H * 0.13, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-                // Tapered neck, long muzzle, mane and upright ears.
-                ctx.fillStyle = coat;
-                ctx.beginPath(); ctx.moveTo(W * 0.71, y - H * 0.085);
-                ctx.lineTo(W * 0.91, y - H * 0.07); ctx.lineTo(W * 0.98, y - H * 0.045);
-                ctx.lineTo(W * 0.98, y + H * 0.045); ctx.lineTo(W * 0.91, y + H * 0.07);
-                ctx.lineTo(W * 0.71, y + H * 0.085); ctx.closePath(); ctx.fill();
-                ctx.fillStyle = lightCoat;
-                ctx.beginPath(); ctx.moveTo(W * 0.88, y - H * 0.047);
-                ctx.quadraticCurveTo(W * 1.04, y - H * 0.07, W * 1.12, y - H * 0.041);
-                ctx.quadraticCurveTo(W * 1.19, y, W * 1.12, y + H * 0.041);
-                ctx.quadraticCurveTo(W * 1.04, y + H * 0.07, W * 0.88, y + H * 0.047);
-                ctx.closePath(); ctx.fill();
-                ctx.strokeStyle = '#382820'; ctx.lineWidth = Math.max(1, H * 0.032);
-                ctx.beginPath(); ctx.moveTo(W * 0.73, y - H * 0.077);
-                ctx.lineTo(W * 0.86, y - H * 0.075); ctx.lineTo(W * 0.96, y - H * 0.041); ctx.stroke();
-                ctx.fillStyle = '#473127';
-                for (const ear of [-1, 1]) {
-                    ctx.beginPath(); ctx.moveTo(W * 0.93, y + ear * H * 0.038);
-                    ctx.lineTo(W * 0.88, y + ear * H * 0.115);
-                    ctx.lineTo(W * 1.01, y + ear * H * 0.045); ctx.closePath(); ctx.fill();
-                }
-                ctx.fillStyle = '#2c2925';
-                ctx.beginPath(); ctx.ellipse(W * 1.14, y, W * 0.032, H * 0.031, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#f7e7bf';
-                ctx.beginPath(); ctx.arc(W * 1.02, y - H * 0.036, Math.max(0.7, H * 0.015), 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = '#922e24'; ctx.lineWidth = Math.max(0.9, H * 0.025);
-                ctx.beginPath(); ctx.moveTo(W * 0.72, y - H * 0.105);
-                ctx.lineTo(W * 0.76, y + H * 0.105); ctx.stroke();
+            if (spartanRage) {
+                // Reinforced bronze rim and a broader crimson cloak mark signal the boost.
+                ctx.strokeStyle = '#f1cb85';
+                ctx.lineWidth = Math.max(1, bodyW * 0.035);
+                ctx.strokeRect(-bodyW/2 + 2, -bodyH/2 + 2, bodyW - 4, bodyH - 4);
+                ctx.fillStyle = 'rgba(156,22,31,0.58)';
+                ctx.fillRect(-bodyW*0.11, -bodyH*0.42, bodyW*0.22, bodyH*0.84);
+                ctx.strokeStyle = '#efc780';
+                ctx.lineWidth = Math.max(0.8, bodyW*0.022);
+                ctx.beginPath();
+                ctx.moveTo(-bodyW*0.34, -bodyH*0.23);
+                ctx.lineTo(-bodyW*0.24, 0);
+                ctx.lineTo(-bodyW*0.34, bodyH*0.23);
+                ctx.stroke();
             }
         } else if (type === 'kamikaze') {
             // White body — Japanese imperial theme
@@ -1586,51 +1534,8 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.lineWidth = 1.5;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
         } else if (type === 'myasnoy') {
-            // Blood vessel appendages on both sides only (replacing tracks, top/bottom edges)
-            const _mybvT = Date.now() * 0.0018;
-            ctx.save();
-            ctx.lineCap = 'round';
-            const _mybvCount = 5; // per side
-            for (let _vs = 0; _vs < 2; _vs++) {
-                const _vSide = _vs === 0 ? -1 : 1; // -1=top edge, +1=bottom edge
-                for (let _vi = 0; _vi < _mybvCount; _vi++) {
-                    const _vPhase = _mybvT + _vi * 0.82 + _vs * 1.6;
-                    // Attachment along the side edge (spread across body width)
-                    const _vBx = (-bodyW * 0.42 + (_vi / (_mybvCount - 1)) * bodyW * 0.84);
-                    const _vBy = _vSide * bodyH * 0.5;
-                    // Extend outward perpendicular to body (y direction)
-                    const _vLen = bodyH * (0.62 + Math.sin(_vPhase * 0.85) * 0.1);
-                    const _vWigX = Math.sin(_vPhase * 1.4) * bodyW * 0.07;
-                    const _vTipX = _vBx + _vWigX + Math.sin(_vPhase * 0.7) * bodyW * 0.04;
-                    const _vTipY = _vBy + _vSide * _vLen;
-                    const _vMidX = _vBx + Math.sin(_vPhase * 1.2) * bodyW * 0.09;
-                    const _vMidY = (_vBy + _vTipY) * 0.5;
-                    const _vW = bodyW * 0.048;
-                    // Dark outer stroke
-                    ctx.beginPath();
-                    ctx.moveTo(_vBx, _vBy);
-                    ctx.quadraticCurveTo(_vMidX, _vMidY, _vTipX, _vTipY);
-                    ctx.strokeStyle = '#5a0000'; ctx.lineWidth = _vW * 2.4; ctx.stroke();
-                    // Bright inner stroke
-                    ctx.strokeStyle = '#b01010'; ctx.lineWidth = _vW; ctx.stroke();
-                    // Branch off mid-point
-                    const _vBrOffX = Math.cos(_vPhase * 0.6) * bodyW * 0.22;
-                    const _vBrOffY = _vSide * bodyH * 0.18 + Math.sin(_vPhase * 1.1) * bodyH * 0.08;
-                    const _vBrx = _vMidX + _vBrOffX;
-                    const _vBry = _vMidY + _vBrOffY;
-                    ctx.beginPath();
-                    ctx.moveTo(_vMidX, _vMidY); ctx.lineTo(_vBrx, _vBry);
-                    ctx.strokeStyle = '#7a0000'; ctx.lineWidth = _vW * 1.2; ctx.stroke();
-                    ctx.strokeStyle = '#cc1a0a'; ctx.lineWidth = _vW * 0.5; ctx.stroke();
-                    // Pulsing bulb at tip and branch end
-                    const _vBulb = _vW * 1.3 + Math.sin(_vPhase * 2.1) * _vW * 0.3;
-                    ctx.beginPath(); ctx.arc(_vTipX, _vTipY, _vBulb, 0, Math.PI * 2);
-                    ctx.fillStyle = '#cc0000'; ctx.fill();
-                    ctx.beginPath(); ctx.arc(_vBrx, _vBry, _vBulb * 0.72, 0, Math.PI * 2);
-                    ctx.fillStyle = '#aa0000'; ctx.fill();
-                }
-            }
-            ctx.restore();
+            // Alternating tentacle steps wrap around the entire hull.
+            drawMyasnoyTentacles(ctx, bodyW / 2, bodyH / 2, moveAnimation);
 
             // Fleshy biological body — mottled flesh, red spikes, large eye + small eyes
             const _mytT = Date.now() * 0.001;
@@ -2376,40 +2281,33 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.fill();
 
     } else if (type === 'machinegun') {
-        // Machinegun Turret - Multiple barrels
-        ctx.fillStyle = '#A0522D';
-        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
-        
-        // Multiple small barrels arrangement
-        ctx.fillStyle = '#654321';
-        for(let i = 0; i < 4; i++) {
-            const offset = (i - 1.5) * 3;
-            ctx.fillRect(0, offset, tSize/2, 2);
-        }
-        
-        // Turret center (Pivot) - Larger, darker mount
-        const tGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, tSize/2);
-        tGrad.addColorStop(0, '#607D8B');
-        tGrad.addColorStop(1, '#37474F');
-        ctx.fillStyle = tGrad;
+        // Low faceted turret with a visible cannon cradle.
+        const turretArmor = ctx.createLinearGradient(0, -tSize*0.52, 0, tSize*0.52);
+        turretArmor.addColorStop(0, '#9ca7a5');
+        turretArmor.addColorStop(0.42, '#52636a');
+        turretArmor.addColorStop(1, '#29383e');
+        ctx.fillStyle = turretArmor;
+        ctx.strokeStyle = '#16232a';
+        ctx.lineWidth = 1.1;
         ctx.beginPath();
-        ctx.arc(0, 0, tSize/2.5, 0, Math.PI*2);
-        ctx.fill();
-        
-        ctx.strokeStyle = '#263238';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        
-        // Inner mechanical details (Bolt circle)
-        ctx.fillStyle = '#CFD8DC';
-        for (let i = 0; i < 4; i++) {
-            const rot = (i / 4) * Math.PI * 2 + Math.PI/4;
-            const bx = Math.cos(rot) * tSize/5;
-            const by = Math.sin(rot) * tSize/5;
-            ctx.beginPath();
-            ctx.arc(bx, by, 1.5, 0, Math.PI*2);
-            ctx.fill();
-        }
+        ctx.moveTo(-tSize*0.5, -tSize*0.28);
+        ctx.lineTo(-tSize*0.26, -tSize*0.52);
+        ctx.lineTo(tSize*0.27, -tSize*0.48);
+        ctx.lineTo(tSize*0.52, -tSize*0.27);
+        ctx.lineTo(tSize*0.52, tSize*0.27);
+        ctx.lineTo(tSize*0.27, tSize*0.48);
+        ctx.lineTo(-tSize*0.26, tSize*0.52);
+        ctx.lineTo(-tSize*0.5, tSize*0.28);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#26343a';
+        ctx.fillRect(-tSize*0.13, -tSize*0.29, tSize*0.55, tSize*0.58);
+        ctx.fillStyle = '#9b8a69';
+        ctx.fillRect(-tSize*0.38, -tSize*0.36, tSize*0.18, tSize*0.07);
+        ctx.fillRect(-tSize*0.38, tSize*0.29, tSize*0.18, tSize*0.07);
+        ctx.fillStyle = '#6e7e82';
+        ctx.beginPath(); ctx.arc(-tSize*0.16, 0, tSize*0.18, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#1c2b30';
+        ctx.beginPath(); ctx.arc(-tSize*0.16, 0, tSize*0.09, 0, Math.PI*2); ctx.fill();
 
     } else if (type === 'buckshot') {
         // Buckshot Turret — Side-by-side double-barrel shotgun
@@ -2810,22 +2708,26 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
     } else if (type === 'spartan') {
         // Spartan turret — Corinthian helmet silhouette
         const spT = ctx.createRadialGradient(-tSize*0.12, -tSize*0.12, 0, 0, 0, tSize*0.65);
-        spT.addColorStop(0,   '#d4892a');
-        spT.addColorStop(0.55, '#b87333');
-        spT.addColorStop(1,   '#6b3e10');
+        spT.addColorStop(0, spartanRage ? '#e8ad53' : '#d4892a');
+        spT.addColorStop(0.55, spartanRage ? '#c48138' : '#b87333');
+        spT.addColorStop(1, spartanRage ? '#704014' : '#6b3e10');
         ctx.fillStyle = spT;
         // Rounded helm-dome
         ctx.beginPath();
         ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
         ctx.fill();
         // Red crest stripe (top of helmet)
-        ctx.fillStyle = 'rgba(200,0,0,0.6)';
-        ctx.fillRect(-tSize*0.07, -tSize*0.52, tSize*0.14, tSize*0.52);
+        ctx.fillStyle = spartanRage ? '#ae2835' : 'rgba(200,0,0,0.6)';
+        ctx.fillRect(-tSize*(spartanRage ? 0.11 : 0.07), -tSize*0.6, tSize*(spartanRage ? 0.22 : 0.14), tSize*0.6);
+        if (spartanRage) {
+            ctx.fillStyle = '#d5aa6d';
+            ctx.fillRect(-tSize*0.17, -tSize*0.42, tSize*0.34, Math.max(1, tSize*0.055));
+        }
         // Eye slit
         ctx.fillStyle = 'rgba(20,0,0,0.7)';
         ctx.fillRect(-tSize*0.22, -tSize*0.1, tSize*0.44, tSize*0.12);
         // Border
-        ctx.strokeStyle = '#3a1a00';
+        ctx.strokeStyle = spartanRage ? '#e0b477' : '#3a1a00';
         ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
@@ -3249,74 +3151,34 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
              ctx.fillStyle = '#fff';
              ctx.fillRect(tSize/2 + barrelLen - 4, -barrelH/2 - 2, 4, barrelH + 4);
         } else if (type === 'machinegun') {
-            // Heavy Rotary Cannon
-            const barrelLen = Math.min(W, H) * 0.75 * turretScale; // Longer
-            const barrelH = Math.min(W, H) * 0.22 * turretScale;   // Thicker base
-            
-            // Mounting (connects turret to barrels)
-            ctx.fillStyle = '#455A64';
-            ctx.fillRect(tSize/2 - 4, -barrelH/2 - 2, 8, barrelH + 4);
-            
-            // Main Barrel Assembly (Rotating Cylinder Block)
-            const cylGrad = ctx.createLinearGradient(0, -barrelH/2, 0, barrelH/2);
-            cylGrad.addColorStop(0, '#263238');
-            cylGrad.addColorStop(0.5, '#546E7A');
-            cylGrad.addColorStop(1, '#263238');
-            ctx.fillStyle = cylGrad;
-            
-            ctx.fillRect(tSize/2 + 2, -barrelH/2, barrelLen, barrelH);
-            
-            // Detail: Cooling Rings along the assembly
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            for(let k=1; k<5; k++) {
-                ctx.fillRect(tSize/2 + 2 + k * (barrelLen/5), -barrelH/2, 2, barrelH);
-            }
-            
-            // Individual Barrels (Visible protruding at the end or as lines)
-            // We draw 3 parallel lines to represent the visible sector of the 6-barrel cluster
-            let barrelColor = '#90A4AE'; // Bright Steel
-            let muzzleColor = '#37474F';
-            
-            if (heatState && heatState.heat > 0) {
-                 const t = Math.min(1, heatState.heat / 240); // 240 is max heat
-                 // Interpolate #90A4AE (144,164,174) to #FF0000 (255,0,0)
-                 const r = Math.floor(144 + (255 - 144) * t);
-                 const g = Math.floor(164 * (1 - t));
-                 const b = Math.floor(174 * (1 - t));
-                 barrelColor = `rgb(${r},${g},${b})`;
-                 
-                 if (heatState.overheated) {
-                      muzzleColor = '#FF4500';
-                      // Flashing red
-                      if (Math.floor(Date.now() / 100) % 2 === 0) {
-                          barrelColor = '#FF0000';
-                      } else {
-                          barrelColor = '#8B0000';
-                      }
-                 }
+            // Three exposed barrels sit inside a short ventilated shroud.
+            const cannonLength = Math.min(W, H) * 0.67 * turretScale;
+            const cannonHalfHeight = Math.min(W, H) * 0.12 * turretScale;
+            const cannonX = tSize * 0.3;
+            const heat = Math.max(0, Math.min(1, (heatState?.heat || 0) / MACHINEGUN_MAX_HEAT));
+            const hotColor = heatState?.overheated ? '#d47855' : `rgb(${Math.round(145 + heat*55)},${Math.round(163 - heat*55)},${Math.round(166 - heat*80)})`;
+
+            ctx.fillStyle = '#17252b';
+            ctx.fillRect(cannonX, -cannonHalfHeight*1.22, cannonLength, cannonHalfHeight*2.44);
+            ctx.fillStyle = '#718085';
+            ctx.fillRect(cannonX, -cannonHalfHeight*1.22, cannonLength*0.79, Math.max(1, cannonHalfHeight*0.18));
+            ctx.fillStyle = '#34454b';
+            ctx.fillRect(cannonX, cannonHalfHeight*1.04, cannonLength*0.79, Math.max(1, cannonHalfHeight*0.18));
+
+            for (const offset of [-0.7, 0, 0.7]) {
+                const barrelY = offset * cannonHalfHeight;
+                ctx.fillStyle = hotColor;
+                ctx.fillRect(cannonX + cannonLength*0.08, barrelY - cannonHalfHeight*0.13, cannonLength*0.95, Math.max(1, cannonHalfHeight*0.26));
+                ctx.fillStyle = '#111c21';
+                ctx.fillRect(cannonX + cannonLength*1.02, barrelY - cannonHalfHeight*0.17, cannonLength*0.11, Math.max(1.2, cannonHalfHeight*0.34));
             }
 
-            ctx.fillStyle = barrelColor;
-            const bH = barrelH / 4;
-            // Top barrel
-            ctx.fillRect(tSize/2 + 2, -barrelH/2 + bH*0.5, barrelLen + 4, bH/2);
-            // Middle barrel
-            ctx.fillRect(tSize/2 + 2, -bH/4, barrelLen + 4, bH/2);
-            // Bottom barrel
-            ctx.fillRect(tSize/2 + 2, barrelH/2 - bH, barrelLen + 4, bH/2);
-            
-            // Muzzle disk (Front plate holding barrels together)
-            const mX = tSize/2 + barrelLen + 2;
-            ctx.fillStyle = muzzleColor;
-            ctx.beginPath();
-            ctx.ellipse(mX, 0, 3, barrelH/2 + 2, 0, 0, Math.PI*2);
-            ctx.fill();
-            
-            // Muzzle Holes (Black dots on the disk)
-            ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.arc(mX, -barrelH/3, 1.5, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(mX, 0, 1.5, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(mX, barrelH/3, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#59696d';
+            for (const ring of [0.28, 0.55, 0.8]) {
+                ctx.fillRect(cannonX + cannonLength*ring, -cannonHalfHeight*1.22, Math.max(1, cannonLength*0.045), cannonHalfHeight*2.44);
+            }
+            ctx.fillStyle = '#a4ada9';
+            ctx.fillRect(cannonX + cannonLength*0.8, -cannonHalfHeight*1.25, Math.max(1, cannonLength*0.045), cannonHalfHeight*0.24);
 
         } else if (type === 'waterjet') {
             // High-pressure water hose with contrasted nozzle and highlights
@@ -3559,13 +3421,13 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             const spBarH   = Math.min(W, H) * 0.075 * turretScale;
             // Wooden shaft (dark tan)
             const shaftGrad = ctx.createLinearGradient(0, -spBarH/2, 0, spBarH/2);
-            shaftGrad.addColorStop(0, '#8b5a2b');
-            shaftGrad.addColorStop(0.5, '#a0693a');
-            shaftGrad.addColorStop(1, '#6b3f18');
+            shaftGrad.addColorStop(0, spartanRage ? '#8c6441' : '#8b5a2b');
+            shaftGrad.addColorStop(0.5, spartanRage ? '#d2a36b' : '#a0693a');
+            shaftGrad.addColorStop(1, spartanRage ? '#443238' : '#6b3f18');
             ctx.fillStyle = shaftGrad;
             ctx.fillRect(tSize/2, -spBarH/2, spBarLen * 0.72, spBarH);
             // Bronze grip wrap
-            ctx.strokeStyle = 'rgba(184,115,51,0.7)';
+            ctx.strokeStyle = spartanRage ? '#b12f38' : 'rgba(184,115,51,0.7)';
             ctx.lineWidth = 1.3;
             for (let wi = 0; wi < 3; wi++) {
                 const wx = tSize/2 + spBarLen * (0.1 + wi * 0.2);
@@ -3577,9 +3439,9 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             // Iron spear tip
             const tipX = tSize/2 + spBarLen * 0.72;
             const tipGrad = ctx.createLinearGradient(tipX, -spBarH, tipX + spBarLen*0.28, 0);
-            tipGrad.addColorStop(0, '#9aa0a8');
-            tipGrad.addColorStop(0.4, '#d8dde2');
-            tipGrad.addColorStop(1, '#5c6870');
+            tipGrad.addColorStop(0, spartanRage ? '#776f70' : '#9aa0a8');
+            tipGrad.addColorStop(0.4, spartanRage ? '#f0dcbb' : '#d8dde2');
+            tipGrad.addColorStop(1, spartanRage ? '#a87158' : '#5c6870');
             ctx.fillStyle = tipGrad;
             ctx.beginPath();
             ctx.moveTo(tipX,                    -spBarH * 1.2);
@@ -4520,7 +4382,7 @@ function drawCharacterPreviews() {
 
         let side = Math.min(canvas.width, canvas.height) / 2;
         if (type === 'mechDiy' || type === 'mechShield') side *= 0.2;
-        if (type === 'myasnoy') side *= (heatState && heatState.myasnoyEyeForm) ? 0.72 : 0.56;
+        if (type === 'myasnoy') side *= (heatState && heatState.myasnoyEyeForm) ? 0.78 : 0.90;
 
         ctx.save();
         if (!isUnlocked) ctx.filter = 'grayscale(100%) contrast(0.8)';
@@ -4803,6 +4665,42 @@ function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
         ctx.moveTo(minX, y); ctx.lineTo(maxX, y);
     }
     ctx.stroke();
+}
+
+function drawReloadBar(ctx, unit, type, color) {
+    // The machinegun reloads only after its full firing burst overheats.
+    const remaining = type === 'machinegun'
+        ? (unit.overheated ? Math.max(0, unit.heat || 0) : 0)
+        : Math.max(0, unit.fireCooldown || 0);
+    if (type === 'myasnoy' && !unit.myasnoyUltActive && remaining > 0 &&
+        remaining <= 12 && (unit._reloadBarTotal || 0) <= 12 && !unit.myasnoyReloading) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const elapsed = Math.max(0, Math.min(50, now - (unit._reloadBarTime ?? now - 16)));
+    unit._reloadBarTime = now;
+    const fade = 1 - Math.exp(-elapsed / 60);
+    unit._reloadBarOpacity = (unit._reloadBarOpacity || 0) + ((remaining > 0 ? 1 : 0) - (unit._reloadBarOpacity || 0)) * fade;
+    if (remaining <= 0) {
+        unit._reloadBarPrevious = 0;
+        unit._reloadBarTotal = 0;
+    } else if (!unit._reloadBarTotal || remaining > (unit._reloadBarPrevious || 0)) {
+        unit._reloadBarTotal = type === 'machinegun' ? MACHINEGUN_MAX_HEAT : remaining;
+        unit._reloadBarProgress = 0;
+    }
+    unit._reloadBarPrevious = remaining;
+    const targetProgress = remaining > 0 ? Math.max(0, Math.min(1, 1 - remaining / unit._reloadBarTotal)) : 1;
+    unit._reloadBarProgress = (unit._reloadBarProgress || 0)
+        + (targetProgress - (unit._reloadBarProgress || 0)) * (1 - Math.exp(-elapsed / 45));
+    if (unit._reloadBarOpacity < 0.015) return;
+    const isMech = type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket';
+    const barY = unit.y - (isMech ? 23 : 17);
+    const fillWidth = unit.w * unit._reloadBarProgress;
+    ctx.save();
+    ctx.globalAlpha *= unit._reloadBarOpacity;
+    ctx.fillStyle = 'rgba(12, 19, 26, 0.85)';
+    ctx.fillRect(unit.x - 1, barY - 1, unit.w + 2, 6);
+    ctx.fillStyle = color;
+    ctx.fillRect(unit.x, barY, fillWidth, 4);
+    ctx.restore();
 }
 
 function renderGameFrame() {
@@ -7045,7 +6943,7 @@ function renderGameFrame() {
             ctx.restore();
         }
         const _aBurovoyDrill = getBurovoyDrillRenderState(a);
-        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, illuminatUltStrength: GameTerrain.illuminatSuperStrength(a), burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit, isMyasnoyBody: !!(a.isMyasnoyBody) }, GameTerrain.getMotion(a));
+        drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, spartanRage: a.hp < (a.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(a), burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit, isMyasnoyBody: !!(a.isMyasnoyBody) }, GameTerrain.getMotion(a));
         drawSandCurseOverlay(ctx, Math.max(a.w, a.h) * 0.85, a.sandCurseTimer || 0);
         // Hit flash - radial impact burst
         const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
@@ -7078,6 +6976,7 @@ function renderGameFrame() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(a.hp) + '/' + maxAllyHp, a.x + a.w / 2, a.y - 7);
+        drawReloadBar(ctx, a, a.tankType, '#86aebd');
     });
 
     // Helper for beam drawing (applied to all)
@@ -7377,7 +7276,7 @@ function renderGameFrame() {
             const _moveAnim = GameTerrain.getMotion(enemy);
             const _eTankType = enemy.tankType || 'normal';
             _enemyBurovoyDrill = getBurovoyDrillRenderState(enemy);
-            drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated, illuminatUltStrength: GameTerrain.illuminatSuperStrength(enemy), burovoyDrillAnim: _enemyBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _enemyBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _enemyBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _enemyBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _enemyBurovoyDrill.burovoyDrillHit }, _moveAnim);
+            drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated, spartanRage: enemy.hp < (enemy.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(enemy), burovoyDrillAnim: _enemyBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _enemyBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _enemyBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _enemyBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _enemyBurovoyDrill.burovoyDrillHit }, _moveAnim);
             drawSandCurseOverlay(ctx, Math.max(enemy.w, enemy.h) * 0.85, enemy.sandCurseTimer || 0);
         }
         // Hit flash - radial impact burst
@@ -7529,7 +7428,7 @@ function renderGameFrame() {
         // Calculate movement animation for mech tanks
         const moveAnim = GameTerrain.getMotion(tank);
         const _playerBurovoyDrill = getBurovoyDrillRenderState(tank);
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, spartanRage: tank.hp < tank.maxHp * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
             ? ((tank.myasnoySeparationAnim || 0) / Math.max(1, tank.myasnoySeparationAnimMax || 18))
             : 0 }, moveAnim);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
@@ -7699,6 +7598,7 @@ function renderGameFrame() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(tank.hp) + '/' + maxTankHp, tank.x + tank.w / 2, tank.y - 7);
+        drawReloadBar(ctx, tank, tankType, '#cba46e');
         // mech energy bars — rendered by mechs.js
         if ((tankType === 'mechDiy' || tankType === 'mechShield' || tankType === 'mechRocket') && typeof drawMechEnergyBar === 'function') {
             drawMechEnergyBar(ctx, tank);
@@ -8335,7 +8235,7 @@ function showTankDetail(tankType) {
             damageBase: 1.5,
             damageNote: '/сосуд',
             fractionalDamage: true,
-            sideScale: 0.66,
+            sideScale: 0.86,
             heatState: null
         },
         body: {
@@ -8346,7 +8246,7 @@ function showTankDetail(tankType) {
             damageBase: 1.5,
             damageNote: '/сосуд',
             fractionalDamage: true,
-            sideScale: 0.66,
+            sideScale: 0.86,
             heatState: { isMyasnoyBody: true }
         },
         eye: {
@@ -8357,7 +8257,7 @@ function showTankDetail(tankType) {
             damageBase: 80,
             damageNote: '/удар',
             fractionalDamage: false,
-            sideScale: 0.84,
+            sideScale: 0.80,
             heatState: { myasnoyEyeForm: true, myasnoyAttackTimer: 12, myasnoySeparationPulse: 0.14 }
         }
     } : null;
@@ -8622,7 +8522,7 @@ function showTankDetail(tankType) {
         const tankDamageByType = {
             normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, egyptian: 100, time: 100, machinegun: 20, buckshot: 125, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 1.5, ai: 80
+            mirror: 100, egyptian: 100, time: 100, machinegun: MACHINEGUN_BULLET_DAMAGE, buckshot: BUCKSHOT_PELLET_DAMAGE, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 1.5, ai: 80
         };
         const dmgRaw = myasnoyForm ? myasnoyForm.damageBase : (tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100);
         // Use multiplier table if present, compute raw (float) boosted damage

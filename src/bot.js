@@ -371,10 +371,11 @@ function moveSmallSteps(entity, angle, dist) {
     // Optimization: Check the full distance first if short, otherwise step by entity size
     // Walls are grid based (usually > 20px), bullets are small but tanks are huge (38px).
     // Stepping by 1px is too slow. Stepping by 1/2 tank size is safe enough.
+    if (!(dist > 0)) return true;
     const step = Math.min(dist, 10);
     const steps = Math.ceil(dist / step);
-    const dxStep = Math.cos(angle) * step;
-    const dyStep = Math.sin(angle) * step;
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
     const canPhaseWalls = (typeof canBurovoyPhaseThroughWalls === 'function') && canBurovoyPhaseThroughWalls(entity);
     
     // Optimization: Pre-screen destination to avoid loop if possible
@@ -382,7 +383,9 @@ function moveSmallSteps(entity, angle, dist) {
     // So we iterate steps.
 
     for (let i = 0; i < steps; i++) {
-        // Correct last step distance if needed, but linear steps are fine for AI movement smoothness
+        const stepDistance = Math.min(step, dist - i * step);
+        const dxStep = dirX * stepDistance;
+        const dyStep = dirY * stepDistance;
         const nx = entity.x + dxStep;
         const ny = entity.y + dyStep;
 
@@ -415,42 +418,13 @@ function moveSmallSteps(entity, angle, dist) {
 
         // Проверяем, не пересекается ли с ящиком — тогда попробуем его сдвинуть
         if (collider && collider.type === 'box') {
-            const boxNx = collider.x + dxStep;
-            const boxNy = collider.y + dyStep;
-            
-            // Проверяем, можно ли сдвинуть ящик (не врезается в стену/другой объект и в пределах канвы)
-            let boxBlocked = false;
-            // Map bounds for box
-            if (boxNx < 0 || boxNy < 0 || boxNx + collider.w > worldWidth || boxNy + collider.h > worldHeight) boxBlocked = true;
-            else {
-                 for (const o of objects) {
-                    if (o === collider) continue;
-                    if (boxNx < o.x + o.w && boxNx + collider.w > o.x &&
-                        boxNy < o.y + o.h && boxNy + collider.h > o.y) { 
-                        boxBlocked = true; break; 
-                    }
-                }
-                // Also prevent pushing a box into another tank (player, allies, enemies, illusions)
-                if (!boxBlocked) {
-                    const boxRect = { x: boxNx, y: boxNy, w: collider.w, h: collider.h };
-                    if (typeof tank !== 'undefined' && tank !== entity && tank.alive !== false && checkRectCollision(boxRect, tank)) boxBlocked = true;
-                    for (const a of allies) { if (!boxBlocked && a && a.alive !== false && a !== entity && checkRectCollision(boxRect, a)) boxBlocked = true; }
-                    for (const e of enemies) { if (!boxBlocked && e && e.alive !== false && e !== entity && checkRectCollision(boxRect, e)) boxBlocked = true; }
-                    for (const il of illusions) { if (!boxBlocked && il && il.life > 0 && il !== entity && checkRectCollision(boxRect, il)) boxBlocked = true; }
-                }
-            }
-            if (boxBlocked) {
+            if (!pushBoxChain(entity, dxStep, dyStep, true)) {
                 // Cannot push box — mark it so AI can shoot to break it
                 entity._blockingBox = collider;
                 entity._blockingBoxTimer = 30;
                 return false;
             }
-
-            // Толкаем ящик на один шаг
-            collider.x = boxNx; collider.y = boxNy;
-            // Only update visuals/grid occasionally or flag it
-            if (Math.random() > 0.5) spawnParticle(collider.x + collider.w / 2, collider.y + collider.h / 2);
-            navNeedsRebuild = true;
+            continue;
         }
 
         // Перед окончательным перемещением проверяем пересечение с другими танками
@@ -492,10 +466,14 @@ function updateEnemyAI() {
     
     // AI для врагов: выбирать ближайшую цель (игрок или другой враг) и действовать
     for (let enemy of enemies) {
+      let machinegunHeatUpdated = false;
       try {
         if (!enemy || !enemy.alive) continue;
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
+        if (enemy.fireCooldown > 0) {
+            enemy.fireCooldown = Math.max(0, enemy.fireCooldown - getEntityFireCooldownStep(enemy));
+        }
         if (enemy.tankType === 'burovoy' && typeof syncBurovoyState === 'function') {
             syncBurovoyState(enemy);
         }
@@ -621,7 +599,7 @@ function updateEnemyAI() {
         
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
-        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...(typeof playerDrones !== 'undefined' ? playerDrones.filter(d => d && d.alive) : [])];
+        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...playerDrones.filter(d => d && d.alive), ...enemyDrones.filter(d => d && d.alive)];
         if ((enemy.lastSeenPlayerTimer || 0) > 0) enemy.lastSeenPlayerTimer--;
         const visibleTargets = filterTargetsByVision(enemy, potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team)));
         const playerVisibleToEnemy = visibleTargets.includes(tank);
@@ -1208,7 +1186,6 @@ function updateEnemyAI() {
                 // Keep within world bounds
                 enemy.x = Math.max(0, Math.min(worldWidth - enemy.w, enemy.x));
                 enemy.y = Math.max(0, Math.min(worldHeight - enemy.h, enemy.y));
-                if (enemy.fireCooldown > 0) enemy.fireCooldown = Math.max(0, enemy.fireCooldown - getEntityFireCooldownStep(enemy));
                 continue;
             }
 
@@ -1414,12 +1391,13 @@ function updateEnemyAI() {
         // --- AI MACHINEGUN HEAT LOGIC (exact same as player) ---
         const tt = enemy.tankType || 'normal';
         if (tt === 'machinegun') {
+            machinegunHeatUpdated = true;
             enemy.heat = enemy.heat || 0;
-            const HEAT_MAX = 240; // 4 seconds at 60fps
-            const COOL_RATE = 2;  // 2 seconds to cool down
+            const HEAT_MAX = MACHINEGUN_MAX_HEAT;
+            const COOL_RATE = MACHINEGUN_COOL_RATE;
             if (enemy.overheated) {
                 // Overheated: cool down, can't shoot
-                enemy.heat -= COOL_RATE;
+                enemy.heat = Math.max(0, enemy.heat - COOL_RATE);
                 if (enemy.heat <= 0) { enemy.heat = 0; enemy.overheated = false; }
                 if (Math.random() > 0.5) spawnParticle(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#555', 0.5);
             } else if (enemyDisarmed) {
@@ -1436,7 +1414,7 @@ function updateEnemyAI() {
         } else { enemy.heat = 0; enemy.overheated = false; }
         // --------------------------------
 
-        const mgShootProb = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : shootProb;
+        const mgShootProb = (tt === 'machinegun' || tt === 'waterjet') ? 1.0 : (tt === 'myasnoy') ? 0.55 : shootProb;
         const burovoyTargetClose = tt === 'burovoy' && !enemy.burovoyBurrowActive && nearest && Math.hypot(
             (nearest.x + (nearest.w || 0) / 2) - (enemy.x + enemy.w / 2),
             (nearest.y + (nearest.h || 0) / 2) - (enemy.y + enemy.h / 2)
@@ -1444,11 +1422,8 @@ function updateEnemyAI() {
         if (tt === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
             updateBurovoyDrillAttack(enemy, burovoyTargetClose && !enemy.overheated && !enemyDisarmed, { damagePerSecond: 30 });
             enemy.fireCooldown = 0;
-        } else if (enemy.fireCooldown > 0) {
-            const fireCooldownStep = (typeof getEntityFireCooldownStep === 'function') ? getEntityFireCooldownStep(enemy) : 1;
-            enemy.fireCooldown = Math.max(0, enemy.fireCooldown - fireCooldownStep);
         }
-        if (tt !== 'burovoy' && enemy.fireCooldown <= 0 && Math.random() < mgShootProb && !enemy.overheated && !enemyDisarmed) {
+        if (tt !== 'burovoy' && tt !== 'mechDiy' && !(tt === 'waterjet' && enemy.waterjetActive) && enemy.fireCooldown <= 0 && Math.random() < mgShootProb && !enemy.overheated && !enemyDisarmed) {
             // No extra heat here — heat is managed per-frame above based on fireCooldown state
 
             let b = null;
@@ -1530,9 +1505,7 @@ function updateEnemyAI() {
                     enemy.fireCooldown = 240;
                 }
             } else if (tt === 'waterjet') {
-                // Water jet: activate continuous stream for ~1.5s
-                enemy.waterjetActive = true;
-                enemy.waterjetTimer = 90;
+                startWaterjetBurst(enemy);
             } else if (tt === 'buckshot') {
                 // Buckshot: 5 pellets in a spread pattern
                 const speed = 6;
@@ -1555,10 +1528,10 @@ function updateEnemyAI() {
                         owner: 'enemy',
                         team: enemy.team,
                         type: 'buckshot',
-                        damage: 125 // Each pellet deals 125 damage
+                        damage: BUCKSHOT_PELLET_DAMAGE
                     });
                 }
-                enemy.fireCooldown = 40; // ~667ms (2x slower than normal 333ms)
+                enemy.fireCooldown = getTankShotCooldown(tt);
             } else if (tt === 'mirror') {
                 // Mirror Tank (Enemy) - Copycat Logic
                 let pType = 'mirror';
@@ -1595,6 +1568,8 @@ function updateEnemyAI() {
                 } else if (pType === 'egyptArrow') {
                     props.type = 'egyptArrow'; props.damage = 100; props.w = 10; props.h = 4; props.life = 110;
                     props.vx = Math.cos(enemy.turretAngle) * 7.2; props.vy = Math.sin(enemy.turretAngle) * 7.2;
+                } else if (pType === 'machinegun') {
+                    props.damage = MACHINEGUN_BULLET_DAMAGE; props.w = 7; props.h = 7;
                 } else if (pType === 'mechRocketBullet') {
                     props.type = 'mechRocketBullet'; props.damage = 150; props.w = 12; props.h = 12;
                     props.explodeRadius = 50;
@@ -1602,13 +1577,14 @@ function updateEnemyAI() {
                 } else {
                     props.damage = 100; props.w = 6; props.h = 6;
                 }
+                restoreMirrorProjectileSize(enemy, props);
                 b = props;
             } else if (tt === 'machinegun') {
                 // Machine gun: rapid fire with low damage (match player projectile)
                 const speed = 7;
                 const life = 80;
                 const ang = enemy.turretAngle + (Math.random() - 0.5) * 0.05;
-                b = { x: enemy.x + enemy.w/2 + Math.cos(ang) * 35, y: enemy.y + enemy.h/2 + Math.sin(ang) * 35, w:7, h:7, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, life:life, owner:'enemy', team: enemy.team, type: 'machinegun', damage: 20 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(ang) * 35, y: enemy.y + enemy.h/2 + Math.sin(ang) * 35, w:7, h:7, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, life:life, owner:'enemy', team: enemy.team, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
             } else if (tt === 'musical') {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
@@ -1717,16 +1693,6 @@ function updateEnemyAI() {
                     type: 'airBullet',
                     damage: 80
                 };
-            } else if (tt === 'mechDiy') {
-                // mechDiy: trigger energy burst only if energy > 50 (conserve below that)
-                const mechDiyThreshold = 50;
-                if ((enemy.mechEnergy || 0) > mechDiyThreshold) {
-                    enemy.mechEnergy -= 20;
-                    enemy.mechBurstShots = 3;
-                    enemy.mechBurstDelay = 0;
-                    enemy.mechBurstCannon = 0;
-                }
-                b = null; // burst shots fired via per-frame mechDiy processing
             } else if (tt === 'mechShield') {
                 // mechShield: fire single dense slow shot only if energy > 50
                 const mechShieldThreshold = 50;
@@ -1783,8 +1749,9 @@ function updateEnemyAI() {
             // Apply Квант overload: -20% damage to bullets fired by debuffed enemies
             if (b && enemy._kvantOverload && b.damage) b.damage = Math.round(b.damage * 0.8);
             if (b) bullets.push(b);
-            // Fire-type enemies should be able to spray flames more often
-            enemy.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'robot') ? 60 : (tt === 'mine') ? 90 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'pyro') ? 40 : (tt === 'air') ? 40 : (tt === 'spartan') ? 40 : (tt === 'mechDiy') ? 75 : (tt === 'mechShield') ? 55 : (tt === 'mechRocket') ? 55 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+            if (tt === 'fire') advanceFlamethrowerBurst(enemy, 9, 10);
+            else if (tt === 'myasnoy') advanceMyasnoyBurst(enemy);
+            else enemy.fireCooldown = getTankShotCooldown(tt);
             // Spartan speed boost when below 50% HP
             if (tt === 'spartan') {
                 const spartanBaseSpd = (typeof tankMaxSpeedByType !== 'undefined' ? (tankMaxSpeedByType['spartan'] || 3.0) : 3.0);
@@ -1793,6 +1760,8 @@ function updateEnemyAI() {
         }
       } catch (err) {
         console.error('Enemy AI Error:', err);
+      } finally {
+        if (!machinegunHeatUpdated && enemy?.tankType === 'machinegun') coolMachinegunHeat(enemy);
       }
     }
 }
@@ -1801,8 +1770,12 @@ function updateAllyAI() {
 
     // AI для союзников — действуют как враги, но цель у них — враги
     for (let ally of allies) {
+      let machinegunHeatUpdated = false;
       try {
         if (!ally || !ally.alive) continue;
+        if (ally.fireCooldown > 0) {
+            ally.fireCooldown = Math.max(0, ally.fireCooldown - getEntityFireCooldownStep(ally));
+        }
                 if (ally.tankType === 'burovoy' && typeof syncBurovoyState === 'function') {
                         syncBurovoyState(ally);
                 }
@@ -1839,7 +1812,7 @@ function updateAllyAI() {
             continue;
         }
         if (ally.ultimateCooldown > 0) ally.ultimateCooldown--;
-        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...illusions.filter(i => i.life > 0)]);
+        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...enemyDrones.filter(d => d && d.alive && d.team !== ally.team), ...illusions.filter(i => i.life > 0)]);
         if (targets.length === 0) {
             if (ally.tankType === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
                 updateBurovoyDrillAttack(ally, false, { damagePerSecond: 30 });
@@ -2126,11 +2099,12 @@ function updateAllyAI() {
             const tt = ally.tankType || 'normal';
             const allyDisarmed = (ally.sandNoShootTimer || 0) > 0;
             if (tt === 'machinegun') {
+                machinegunHeatUpdated = true;
                 ally.heat = ally.heat || 0;
-                const HEAT_MAX = 240; // 4 seconds at 60fps
-                const COOL_RATE = 2;  // 2 seconds to cool down
+                const HEAT_MAX = MACHINEGUN_MAX_HEAT;
+                const COOL_RATE = MACHINEGUN_COOL_RATE;
                 if (ally.overheated) {
-                    ally.heat -= COOL_RATE;
+                    ally.heat = Math.max(0, ally.heat - COOL_RATE);
                     if (ally.heat <= 0) { ally.heat = 0; ally.overheated = false; }
                     if (Math.random() > 0.5) spawnParticle(ally.x + ally.w/2, ally.y + ally.h/2, '#555', 0.5);
                 } else if (allyDisarmed) {
@@ -2147,7 +2121,7 @@ function updateAllyAI() {
             } else { ally.heat = 0; ally.overheated = false; }
             // --------------------------------
 
-        const mgShootProbA = (tt === 'machinegun') ? 0.7 : (tt === 'waterjet') ? 1.0 : (tt === 'myasnoy') ? 0.55 : shootProb;
+        const mgShootProbA = (tt === 'machinegun' || tt === 'waterjet') ? 1.0 : (tt === 'myasnoy') ? 0.55 : shootProb;
         const burovoyTargetCloseA = tt === 'burovoy' && !ally.burovoyBurrowActive && nearest && Math.hypot(
             (nearest.x + (nearest.w || 0) / 2) - (ally.x + ally.w / 2),
             (nearest.y + (nearest.h || 0) / 2) - (ally.y + ally.h / 2)
@@ -2155,11 +2129,8 @@ function updateAllyAI() {
             if (tt === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
                 updateBurovoyDrillAttack(ally, burovoyTargetCloseA && !ally.overheated && !allyDisarmed, { damagePerSecond: 30 });
                 ally.fireCooldown = 0;
-            } else if (ally.fireCooldown > 0) {
-                const fireCooldownStep = (typeof getEntityFireCooldownStep === 'function') ? getEntityFireCooldownStep(ally) : 1;
-                ally.fireCooldown = Math.max(0, ally.fireCooldown - fireCooldownStep);
             }
-            if (tt !== 'burovoy' && ally.fireCooldown <= 0 && Math.random() < mgShootProbA && !ally.overheated && !allyDisarmed) {
+            if (tt !== 'burovoy' && !(tt === 'waterjet' && ally.waterjetActive) && ally.fireCooldown <= 0 && Math.random() < mgShootProbA && !ally.overheated && !allyDisarmed) {
                 // Heat managed per-frame above
 
                 let b = null;
@@ -2267,11 +2238,9 @@ function updateAllyAI() {
                         const speedA = 7;
                         const lifeA = 80;
                         const angA = ally.turretAngle + (Math.random() - 0.5) * 0.05;
-                        b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: 20 };
+                        b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
                     } else if (tt === 'waterjet') {
-                        // Ally waterjet: activate stream for 1.5s
-                        ally.waterjetActive = true;
-                        ally.waterjetTimer = 90;
+                        startWaterjetBurst(ally);
                     } else if (tt === 'buckshot') {
                         // Ally buckshot: 5 pellets in a spread pattern
                         const speed = 6;
@@ -2283,10 +2252,10 @@ function updateAllyAI() {
                         
                         for (let i = 0; i < 5; i++) {
                             const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
-                            b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: 125 };
+                            b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: BUCKSHOT_PELLET_DAMAGE };
                             if (b) bullets.push(b);
                         }
-                        ally.fireCooldown = 40;
+                        ally.fireCooldown = getTankShotCooldown(tt);
                         b = null; // prevent double push
                     } else if (tt === 'medical') {
                         // Ally medical: fires healing pulses
@@ -2358,7 +2327,6 @@ function updateAllyAI() {
                                 veinTwist: 0.8 + Math.random() * 0.9
                             });
                         }
-                        ally.fireCooldown = 12;
                         b = null;
                     } else if (tt === 'air') {
                         // Ally air: knockback wind gust
@@ -2375,10 +2343,15 @@ function updateAllyAI() {
                         };
                 }
                 if (b) bullets.push(b);
-                ally.fireCooldown = (tt === 'fire') ? 10 : (tt === 'buratino') ? 180 : (tt === 'musical') ? 45 : (tt === 'illuminat') ? 240 : (tt === 'machinegun') ? 5 : (tt === 'waterjet') ? 80 : (tt === 'buckshot') ? 40 : (tt === 'electric') ? 80 : (tt === 'burovoy') ? 70 : (tt === 'medical') ? 60 : (tt === 'roman') ? 60 : (tt === 'kvant') ? 65 : (tt === 'egyptian') ? 45 : (tt === 'spartan') ? 40 : (tt === 'myasnoy') ? 40 : (tt === 'air') ? 40 : (tt === 'plasma') ? 300 : (tt === 'ice' || tt === 'normal') ? 30 : FIRE_COOLDOWN;
+                if (tt === 'fire') advanceFlamethrowerBurst(ally, 9, 10);
+                else if (tt === 'myasnoy') advanceMyasnoyBurst(ally);
+                else ally.fireCooldown = getTankShotCooldown(tt);
             }
         }
       } catch (err) { console.error('Ally AI Error:', err); }
+      finally {
+          if (!machinegunHeatUpdated && ally?.tankType === 'machinegun') coolMachinegunHeat(ally);
+      }
     }
 
     // Generic Helper for beam update (Player, Ally, Enemy)
@@ -2491,7 +2464,8 @@ function updateAllyAI() {
                     // Damage scaled by beam intensity, boosted by upgrade if player
                     const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
                     const dmg = 3 * unit.beamIntensity * _beamUpgMult;
-                    const dealt = (typeof dealDamageToEntity === 'function') ? dealDamageToEntity(e, dmg) : 0;
+                    const isDrone = playerDrones.includes(e) || enemyDrones.includes(e);
+                    const dealt = isDrone ? damageCombatDrone(e, dmg) : dealDamageToEntity(e, dmg);
                     if (dealt <= 0) continue;
                     e.hitFlashTime = Date.now();
                     // Apply strong disorientation/inversion + confusion so AI reacts
@@ -2502,6 +2476,7 @@ function updateAllyAI() {
                     for (let p = 0; p < 6; p++) spawnParticle(cx + (Math.random()-0.5)*10, cy + (Math.random()-0.5)*10, '#8e44ad');
 
                     if (e.hp <= 0) {
+                        if (isDrone) continue;
                         // Handle death
                         if (e === tank) {
                             if (currentMode === 'war') { 
@@ -2536,19 +2511,19 @@ function updateAllyAI() {
     // Illuminat beam logic (Player)
     if (tank.tankType === 'illuminat' || tankType === 'illuminat') { // handle global and obj property
         // Prepare target list for player (Enemies)
-        updateUnitBeam(tank, enemies);
+        updateUnitBeam(tank, [...enemies, ...enemyDrones]);
     }
 
     // Illuminat beam logic for allies
     for (let i = allies.length - 1; i >= 0; i--) {
         const ally = allies[i];
-        if (ally.tankType === 'illuminat') updateUnitBeam(ally, enemies);
+        if (ally.tankType === 'illuminat') updateUnitBeam(ally, [...enemies, ...enemyDrones]);
     }
 
     // Illuminat beam logic for enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
-        if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies, ...enemies]);
+        if (enemy.tankType === 'illuminat') updateUnitBeam(enemy, [tank, ...allies, ...enemies, ...playerDrones, ...enemyDrones]);
     }
 
     // ── Waterjet stream physics ────────────────────────────────────────
@@ -2556,15 +2531,12 @@ function updateAllyAI() {
         const isPlayer = unit === tank;
         const activeType = isPlayer ? tankType : (unit.tankType || 'normal');
         if (activeType !== 'waterjet') return;
-        // Non-player: manage auto shut-off timer
-        if (!isPlayer) {
-            if (unit.waterjetTimer > 0) unit.waterjetTimer--;
-            else unit.waterjetActive = false;
+        if (!unit.waterjetActive) { unit.waterjetBeamLen = 0; return; }
+        if ((isPlayer && (!keys['Space'] || tank.alive === false)) || unit.waterjetTimer <= 0) {
+            stopWaterjetBurst(unit);
+            return;
         }
-        const isActive = isPlayer ? (keys['Space'] && tank.alive !== false) : (unit.waterjetActive === true);
-        if (!isActive) { unit.waterjetBeamLen = 0; unit.waterjetActive = false; return; }
-
-        unit.waterjetActive = true;
+        unit.waterjetTimer--;
         const maxLen = 260;
         const cx0 = unit.x + unit.w / 2;
         const cy0 = unit.y + unit.h / 2;
@@ -2639,13 +2611,11 @@ function updateAllyAI() {
             unit.waterjetHitTarget = true;
 
             // Damage per frame (1.5/tick), boosted by upgrade if player
-            const dealt = (typeof dealDamageToEntity === 'function') ? dealDamageToEntity(e, 1.5 * _wjMult) : 0;
+            const isDrone = playerDrones.includes(e) || enemyDrones.includes(e);
+            const dealt = isDrone ? damageCombatDrone(e, 1.5 * _wjMult) : dealDamageToEntity(e, 1.5 * _wjMult);
             if (dealt <= 0) continue;
+            if (isDrone && e.hp <= 0) continue;
             e.hitFlashTime = Date.now();
-            // Slow: brief recurring stun simulates medium slowdown
-            e.paralyzed = true;
-            e.paralyzedTime = Math.max(e.paralyzedTime || 0, 6);
-            e.frozenEffect = Math.max(e.frozenEffect || 0, 6);
             // Knockback along beam direction (medium force) — use movement helper so collisions are respected
             const pushDist = 1.3;
             const moved = moveSmallSteps(e, angle, pushDist);
@@ -2694,16 +2664,16 @@ function updateAllyAI() {
         }
     }
     // Waterjet: Player
-    if (tankType === 'waterjet') updateUnitWaterjet(tank, enemies);
+    if (tankType === 'waterjet') updateUnitWaterjet(tank, [...enemies, ...enemyDrones]);
     // Waterjet: Allies
     for (let i = allies.length - 1; i >= 0; i--) {
-        if (allies[i].tankType === 'waterjet') updateUnitWaterjet(allies[i], enemies);
+        if (allies[i].tankType === 'waterjet') updateUnitWaterjet(allies[i], [...enemies, ...enemyDrones]);
     }
     // Waterjet: Enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         if (enemies[i].tankType === 'waterjet') {
             // Include all entities (team check inside filters same-team targets)
-            updateUnitWaterjet(enemies[i], [tank, ...allies, ...enemies.filter((_, j) => j !== i)]);
+            updateUnitWaterjet(enemies[i], [tank, ...allies, ...enemies.filter((_, j) => j !== i), ...playerDrones, ...enemyDrones]);
         }
     }
 

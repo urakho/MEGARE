@@ -37,10 +37,12 @@ test('custom map restart resets mech combat state and preserves placed obstacles
         mechMaxSpeedByType: { mechDiy: 2.4, mechShield: 2.3 } };
     const controlledMath = Object.assign(Object.create(Math), { random: () => 0.999 });
     const context = { window, tankType: 'mechDiy', tank: { w: 38, h: 38, team: 0,
-            mechEnergy: 2, mechBurstShots: 2, mechShieldActive: false },
+            mechEnergy: 2, mechBurstShots: 2, mechShieldActive: false,
+            heat: 240, overheated: true, _kvantOverload: true, _kvantOverloadTimer: 300,
+            kvantUltActive: true, kvantUltTimer: 200, history: [{ x: 900, y: 900 }] },
         canvas: { style: {} }, document: { getElementById: () => null },
         modeModal: { style: {} }, mainMenu: { style: {} },
-        tankMaxHpByType: {}, tankMaxSpeedByType: {}, godMode: false,
+        tankMaxHpByType: {}, tankMaxSpeedByType: {}, godMode: false, battleSessionId: 0,
         setTankHP() {}, setTankSpeed() {}, getTankUpgrade: () => 0,
         sanitizeBattleSpawns() {}, draw() {}, Date, Math: controlledMath, lastResultState: null
     };
@@ -56,6 +58,12 @@ test('custom map restart resets mech combat state and preserves placed obstacles
     assert.equal(window.currentTerrain, 'rain');
     assert.equal(context.tank.mechEnergy, 110);
     assert.equal(context.tank.mechBurstShots, 0);
+    assert.equal(context.tank.heat, 0);
+    assert.equal(context.tank.overheated, false);
+    assert.equal(context.tank._kvantOverload, false);
+    assert.equal(context.tank.kvantUltActive, false);
+    assert.equal(context.tank.history.length, 0);
+    assert.equal(context.battleSessionId, 1);
     assert.equal(context.objects.length, 1);
     assert.equal(context.objects[0].x, box.x);
     assert.equal(context.enemies[0].tankType, 'mechShield');

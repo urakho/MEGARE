@@ -68,6 +68,7 @@ angryBossMusic.volume = 0.5;
 let currentMode = 'menu';
 window.currentMode = currentMode;
 let duelState = null;
+let battleSessionId = 0;
 
 // Battle metrics tracking
 let gameStartTime = null;
@@ -935,6 +936,8 @@ const tank = {
     myasnoyUltActive: false,
     myasnoyUltTimer: 0,
     myasnoyUltCooldown: 0,
+    myasnoyBurstFrames: 0,
+    myasnoyReloading: false,
     myasnoyBodyBot: null,
     myasnoyEyeUltCooldown: 0,
     myasnoyAttackTimer: 0,
@@ -1004,6 +1007,8 @@ function resetTankMatchUltState(unit) {
     unit.myasnoyUltActive = false;
     unit.myasnoyUltTimer = 0;
     unit.myasnoyUltCooldown = 0;
+    unit.myasnoyBurstFrames = 0;
+    unit.myasnoyReloading = false;
     unit.myasnoyBodyBot = null;
     unit.myasnoyEyeUltCooldown = 0;
     unit.myasnoyAttackTimer = 0;
@@ -1014,6 +1019,25 @@ function resetTankMatchUltState(unit) {
     unit.myasnoySeparationStartY = 0;
     unit.myasnoySeparationTargetX = 0;
     unit.myasnoySeparationTargetY = 0;
+}
+
+function resetTankBattleEffects(unit) {
+    unit.heat = 0;
+    unit.overheated = false;
+    unit._kvantOverload = false;
+    unit._kvantOverloadTimer = 0;
+    unit._kvantBaseSpeed = null;
+    unit.kvantUltActive = false;
+    unit.kvantUltTimer = 0;
+    unit.kvantUltCooldown = 0;
+    unit.mechBurstCooldown = 0;
+    unit.history = [];
+    unit.hitFlashTime = 0;
+    unit._vx = 0;
+    unit._vy = 0;
+    unit.baseAngle = 0;
+    unit.trackOffset = 0;
+    unit.kamikazeDashAngle = 0;
 }
 
 // Apply saved tank type properties
@@ -1028,6 +1052,7 @@ window.onkeydown = (e) => {
         return;
     }
     keys[e.code] = true;
+    if (e.code === 'Space' && gameState === 'playing') e.preventDefault();
     // V + Alt для открытия информации о версии
     if ((e.code === 'KeyV' || e.code === 'keyV') && e.altKey) {
         const versionModal = document.getElementById('versionModal');
@@ -1051,7 +1076,10 @@ window.onkeydown = (e) => {
         if (typeof window.goToMenuNoReload === 'function') window.goToMenuNoReload();
     }
 };
-window.onkeyup = (e) => keys[e.code] = false;
+window.onkeyup = (e) => {
+    keys[e.code] = false;
+    if (e.code === 'Space' && gameState === 'playing') e.preventDefault();
+};
 
 // ========================
 // SETTINGS
@@ -1825,6 +1853,7 @@ function startGame(mode) {
         mode = (typeof currentMode === 'string' && currentMode && currentMode !== 'menu' && currentMode !== 'custom') ? currentMode : 'single';
     }
     if (mode === 'leaderhunt') mode = 'bossfight';
+    battleSessionId++;
     window.currentTerrain = GameTerrain.randomType();
     GameTerrain.resetBattle();
 
@@ -1856,7 +1885,7 @@ function startGame(mode) {
         tankType = 'imitator';
     }
     // reset basic state
-    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); tank.team = 0; tank.moveCooldown = 0; tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; allies = []; bullets = []; flames = []; particles = []; objects = []; soundWaves = []; illusions = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; kamikazeGhosts = []; tank.robotDroneCooldown = 0; tank.isAutopilotActive = false; tank.autoPilotTimer = 0; tank.autoPilotCooldown = 0; tank.kamikazeUltActive = false; tank.kamikazeUltCooldown = 0; tank.kamikazeInvincible = false; tank.kamikazeInvincibleTimer = 0; tank.kamikazeDashTimer = 0; tank.egyptianSwarmActive = false; tank.egyptianSwarmTimer = 0; tank.egyptianSwarmCooldown = 0; tank.burovoyUltCooldown = 0; tank.burovoyBurrowActive = false; tank.burovoyBurrowTimer = 0; tank.burovoyBurrowDuration = 180;
+    tank.turretAngle = 0; setTankHP(tankType); setTankSpeed(tankType); resetTankBattleEffects(tank); tank.team = 0; tank.moveCooldown = 0; tank.artilleryMode = false; tank.artilleryTimer = 0; enemies = []; allies = []; bullets = []; flames = []; particles = []; objects = []; soundWaves = []; illusions = []; electricRays = []; novaZones = []; playerDrones = []; enemyDrones = []; medicalZones = []; buratinoBarrages = []; musicalSoundWaves = []; mines = []; kamikazeGhosts = []; tank.robotDroneCooldown = 0; tank.isAutopilotActive = false; tank.autoPilotTimer = 0; tank.autoPilotCooldown = 0; tank.kamikazeUltActive = false; tank.kamikazeUltCooldown = 0; tank.kamikazeInvincible = false; tank.kamikazeInvincibleTimer = 0; tank.kamikazeDashTimer = 0; tank.egyptianSwarmActive = false; tank.egyptianSwarmTimer = 0; tank.egyptianSwarmCooldown = 0; tank.burovoyUltCooldown = 0; tank.burovoyBurrowActive = false; tank.burovoyBurrowTimer = 0; tank.burovoyBurrowDuration = 180;
     bossMeteors = [];
     
     // Apply god mode if enabled
@@ -1883,8 +1912,17 @@ function startGame(mode) {
     tank.mirrorShieldCooldown = 0;
     tank.lastHitType = null;
     tank.lastHitTime = 0;
+    tank.lastHitProjectileSize = null;
     tank.alive = true;
     tank.fireCooldown = 0;
+    tank.flamethrowerShots = 0;
+    tank.myasnoyBurstFrames = 0;
+    tank.myasnoyReloading = false;
+    tank._reloadBarPrevious = 0;
+    tank._reloadBarTotal = 0;
+    tank._reloadBarProgress = 0;
+    tank._reloadBarOpacity = 0;
+    tank._reloadBarTime = undefined;
     tank.respawnTimer = 0;
     tank.respawnCount = 0;
     
@@ -1896,6 +1934,7 @@ function startGame(mode) {
     tank.inversionUsed = 0;
     // Reset waterjet
     tank.waterjetActive = false;
+    tank.waterjetTimer = 0;
     tank.waterjetBeamLen = 0;
     tank.waterjetHitWall = false;
     
@@ -2099,6 +2138,7 @@ function startGame(mode) {
 // ─── Custom Map Mode (Map Editor → Play) ────────────────────────────────────
 // Loads player-created map objects and starts a single-player game with no rewards.
 window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns, allySpawns, playerSpawn, enemyMode, customWinMsg, customLoseMsg) {
+    battleSessionId++;
     window.currentTerrain = GameTerrain.randomType();
     GameTerrain.resetBattle();
     // Store custom messages for result overlay (split by newlines into array)
@@ -2122,6 +2162,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
 
     tank.turretAngle = 0;
     setTankHP(tankType); setTankSpeed(tankType);
+    resetTankBattleEffects(tank);
     tank.artilleryMode = false; tank.artilleryTimer = 0;
     enemies = []; allies = []; bullets = []; flames = []; particles = []; electricRays = []; novaZones = [];
     playerDrones = []; enemyDrones = []; medicalZones = [];
@@ -2136,10 +2177,13 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.confused = 0; tank.sandCurseTimer = 0; tank.sandBlindTimer = 0; tank.sandNoShootTimer = 0; tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0; tank.mirrorShieldCooldown = 0;
     tank.burovoyFireSlowTimer = 0; tank._burovoyFireSlowTick = false;
     tank.burning = false; tank.burnTimer = 0; tank.burnDps = 0;
-    tank.lastHitType = null; tank.lastHitTime = 0; tank.alive = true;
-    tank.fireCooldown = 0; tank.respawnTimer = 0; tank.respawnCount = 0;
+    tank.lastHitType = null; tank.lastHitTime = 0; tank.lastHitProjectileSize = null; tank.alive = true;
+    tank.fireCooldown = 0; tank.flamethrowerShots = 0; tank.respawnTimer = 0; tank.respawnCount = 0;
+    tank.myasnoyBurstFrames = 0; tank.myasnoyReloading = false;
+    tank._reloadBarPrevious = 0; tank._reloadBarTotal = 0;
+    tank._reloadBarProgress = 0; tank._reloadBarOpacity = 0; tank._reloadBarTime = undefined;
     tank.beamActive = false; tank.beamStart = 0; tank.beamCooldown = 0; tank.beamAngle = 0;
-    tank.waterjetActive = false; tank.waterjetBeamLen = 0; tank.waterjetHitWall = false;
+    tank.waterjetActive = false; tank.waterjetTimer = 0; tank.waterjetBeamLen = 0; tank.waterjetHitWall = false;
     tank.megaGasUsed = false; tank.plasmaBlastUsed = 0;
     tank.egyptianSwarmActive = false; tank.egyptianSwarmTimer = 0; tank.egyptianSwarmCooldown = 0;
     tank.burovoyUltCooldown = 0; tank.burovoyBurrowActive = false; tank.burovoyBurrowTimer = 0; tank.burovoyBurrowDuration = 180;
@@ -2639,7 +2683,7 @@ function _renderLimitedShopItems() {
         vgn.addColorStop(0, 'rgba(0,0,0,0)'); vgn.addColorStop(1, 'rgba(60,0,0,0.55)');
         shopCtx.fillStyle = vgn; shopCtx.fillRect(0, 0, w, h);
         // Draw tank centered without clipping the flesh spikes
-        const side = Math.min(w, h) * 0.34;
+        const side = Math.min(w, h) * 0.50;
         drawTankOn(shopCtx, w/2, h/2, side, side, '#c03030', 0, 1, 'myasnoy', null, 0);
     });
 }
@@ -4430,6 +4474,8 @@ function update() {
                 tank.mirrorShieldTimer = 0;
                 tank.beamActive = false;
                 tank.waterjetActive = false;
+                tank.waterjetTimer = 0;
+                tank.flamethrowerShots = 0;
                 tank.history = [];
                 tank.mechEnergy = 0;
                 tank.mechMaxEnergy = 0;
@@ -4818,6 +4864,7 @@ function update() {
                     turretAngle: tank.turretAngle, baseAngle: 0,
                     speed: parseFloat((3.2 + _mySpeedBonus).toFixed(1)), trackOffset: 0, alive: true, team: 0,
                     stuckCount: 0, fireCooldown: 0,
+                    myasnoyBurstShots: 0, myasnoyReloading: false,
                     dodgeAccuracy: 0.85,
                     heat: 0, overheated: false,
                     _vx: 0, _vy: 0,
@@ -4828,6 +4875,8 @@ function update() {
                 allies.push(_myBodyBot);
                 tank.myasnoyBodyBot = _myBodyBot;
                 tank.myasnoyUltActive = true;
+                tank.myasnoyBurstFrames = 0;
+                tank.myasnoyReloading = false;
                 tank.myasnoyUltTimer = 600; // 10 seconds
                 const _myEyeMaxHp = roundMyasnoyFormHp(tank.maxHp * 0.55, 10);
                 tank.hp = _myEyeMaxHp;
@@ -4946,6 +4995,8 @@ function update() {
                 if (!_bodyAlive) {
                     // Return to normal form
                     tank.myasnoyUltActive = false;
+                    tank.myasnoyBurstFrames = 0;
+                    tank.myasnoyReloading = false;
                     const _restoredMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType['myasnoy']) || 280;
                     const _restoredSpeed = ((typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType['myasnoy']) || 3.0) + (typeof getTankSpeedBonus === 'function' ? getTankSpeedBonus('myasnoy') : 0);
                     const _hpRatio = tank.hp / tank.maxHp;
@@ -5209,7 +5260,34 @@ function update() {
                 }
             }
 
-            if (triggered) mines.splice(mi, 1);
+            if (!triggered) {
+                forEachHostileDrone(mine.team, drone => {
+                    if (triggered) return;
+                    const dx = drone.x + drone.w / 2 - mine.x;
+                    const dy = drone.y + drone.h / 2 - mine.y;
+                    if (Math.hypot(dx, dy) >= mine.radius + drone.w / 2) return;
+                    spawnExplosion(mine.x, mine.y, 55);
+                    for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
+                    triggered = true;
+                });
+            }
+
+            if (!triggered) {
+                for (const obj of objects) {
+                    if (obj.type !== 'box' && obj.type !== 'woodenWall') continue;
+                    if (!circleIntersectsRect(mine.x, mine.y, mine.radius, obj)) continue;
+                    spawnExplosion(mine.x, mine.y, 55);
+                    triggered = true;
+                    break;
+                }
+            }
+
+            if (triggered) {
+                const damage = mine.owner === 'player' ? applyPlayerDamage(mine.damage) : mine.damage;
+                damageDronesInRadius(mine.x, mine.y, 55, damage, mine.team);
+                damageTerrainInRadius(mine.x, mine.y, 55, damage);
+                mines.splice(mi, 1);
+            }
         }
 
         // Update combat drones (robot tank ultimate)
@@ -5421,8 +5499,8 @@ function update() {
     // Logic for Machinegun Overheating
     if (tankType === 'machinegun') {
         tank.heat = tank.heat || 0;
-        const HEAT_MAX = 240; // 4 seconds at 60fps
-        const COOL_RATE = 2; // Cools down in 2 seconds (240/2 = 120 ticks)
+        const HEAT_MAX = MACHINEGUN_MAX_HEAT;
+        const COOL_RATE = MACHINEGUN_COOL_RATE;
         const playerDisarmed = (tank.sandNoShootTimer || 0) > 0;
         
         if (tank.overheated) {
@@ -5446,7 +5524,7 @@ function update() {
                 }
              } else {
                  // Not shooting cools down
-                 if (tank.heat > 0) tank.heat -= COOL_RATE;
+                 if (tank.heat > 0) tank.heat = Math.max(0, tank.heat - COOL_RATE);
              }
         }
     } else {
@@ -5480,6 +5558,15 @@ function update() {
                     }
                 }
             }
+            forEachHostileDrone(tank.team, drone => {
+                const dx = drone.x + drone.w / 2 - _meCx;
+                const dy = drone.y + drone.h / 2 - _meCy;
+                if (Math.hypot(dx, dy) > _meRange) return;
+                let angle = Math.atan2(dy, dx) - tank.turretAngle;
+                while (angle > Math.PI) angle -= Math.PI * 2;
+                while (angle < -Math.PI) angle += Math.PI * 2;
+                if (Math.abs(angle) <= _meHalfArc) damageCombatDrone(drone, Math.round(80 * _dMult));
+            });
             // Also destroy destructible objects (boxes, barrels, wooden walls) in range
             for (let _oi = objects.length - 1; _oi >= 0; _oi--) {
                 const _obj = objects[_oi];
@@ -5507,9 +5594,8 @@ function update() {
                 const _mpd = _meRange * (0.4 + Math.random() * 0.6);
                 spawnParticle(_meCx + Math.cos(_mpa)*_mpd, _meCy + Math.sin(_mpa)*_mpd, '#dd1010', 0.9);
             }
-            tank.fireCooldown = 22;
+            tank.fireCooldown = 30;
             tank.myasnoyAttackTimer = 18;
-            keys['Space'] = false;
         }
 
         // mechRocket: fire single rocket on Space (costs 20 energy)
@@ -5530,7 +5616,6 @@ function update() {
                 explodeRadius: 50
             });
             tank.fireCooldown = 50;
-            keys['Space'] = false;
         }
         // mechRocket ultimate (E): 4 rockets in 4 directions, 80 energy, 10s cooldown, unlimited uses
         if (tankType === 'mechRocket' && keys['KeyE']) {
@@ -5568,7 +5653,6 @@ function update() {
             tank.mechBurstDelay = 0;
             tank.mechBurstCannon = 0;
             tank.mechBurstCooldown = 60;
-            keys['Space'] = false;
         }
         // mechShield: fire single dense shot on Space (costs 20 energy)
         if (tankType === 'mechShield' && keys['Space'] && tank.fireCooldown <= 0 && (tank.mechEnergy || 0) >= 20 && !tank.paralyzed) {
@@ -5587,7 +5671,6 @@ function update() {
                 damage: Math.round(120 * _dMult)
             });
             tank.fireCooldown = 45;
-            keys['Space'] = false;
         }
         // Decrease burst cooldown
         if ((tank.mechBurstCooldown || 0) > 0) {
@@ -5647,9 +5730,6 @@ function update() {
                     // Don't round — base damage is low (2), rounding kills level 1 effect
                     _f.damage = (_f.damage != null ? _f.damage : 2) * _dMult;
                 }
-            }
-            if (tankType !== 'fire' && tankType !== 'machinegun' && tankType !== 'waterjet') {
-                keys['Space'] = false;
             }
         }
         }
@@ -6197,6 +6277,7 @@ window.setSelectedTank = function(selectedType) {
     if (selectedType === 'mirror') {
         tank.lastHitType = null;
         tank.lastHitTime = 0;
+        tank.lastHitProjectileSize = null;
         tank.mirrorShieldActive = false;
         tank.mirrorShieldTimer = 0;
     }
