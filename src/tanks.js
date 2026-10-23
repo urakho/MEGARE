@@ -5,137 +5,137 @@
 const tankDescriptions = {
     normal: {
         name: "Стандартный танк",
-        description: "Надёжный базовый танк без лишних трюков. Он не удивляет, зато всегда остаётся понятным, честным и удобным для любого боя. Хорош для старта, для спокойной игры и для тех случаев, когда нужен просто стабильный результат.",
+        description: "Надёжный танк для любого боя: обычные снаряды, понятное управление и никаких сложных способностей. Учись держать дистанцию, обходить укрытия и выбирать момент для выстрела — здесь всё решают твои действия.",
         rarity: "Обычный"
     },
     ice: {
         name: "Ледяной танк",
-        description: "Ледяной танк любит держать бой под контролем. Его снаряды ломают темп противника, а ультимейт выпускает ледяную волну, которая полностью замораживает всех вокруг. Это выбор для терпеливой, умной игры на дистанции, где важны позиция, выдержка и правильный момент атаки.",
+        description: "Ледяные снаряды сковывают врага и дают время сменить позицию. Ульта покрывает холодом область вокруг танка и замораживает противников. Особенно полезен, когда нужно остановить наступление или вырваться из окружения.",
         rarity: "Эпический"
     },
     fire: {
         name: "Огненный танк",
-        description: "Агрессивный танк ближней и средней дистанции. Он прожигает позиции врага, не даёт стоять на месте и отлично чувствует себя в плотных схватках. Чем ближе бой, тем опаснее он становится, и тем труднее его игнорировать.",
+        description: "Огнемёт накрывает близкие цели непрерывной струёй пламени. Подойди так, чтобы врагу было трудно выйти из огня, но заранее приготовь путь назад. После долгой очереди оружию нужно время на перезарядку.",
         rarity: "Редкая"
     },
     toxic: {
         name: "Токсичный танк",
-        description: "Танк контроля, который превращает поле боя в опасную зону. Он заставляет врага ошибаться, отступать и постоянно искать более безопасный путь. Особенно силён там, где можно перекрыть проходы, замедлить темп и загнать цель в ловушку.",
+        description: "Ядовитый снаряд не ранит при попадании: настоящая опасность начинается, когда раскрывается облако. Яд разъедает тех, кто задержался внутри. Перекрывай узкие проходы и заставляй врага выбирать между уроном и отступлением.",
         rarity: "Легендарный"
     },
     plasma: {
         name: "Плазменный танк",
-        description: "Тяжёлый атакующий танк с пробивными выстрелами. Чем дольше он держит линию, тем опаснее становится для тех, кто попался в его прицел. Это танк для тех, кто любит чувствовать мощь каждого выстрела и уверенно давить соперника.",
+        description: "Плазменный снаряд проходит сквозь цели и особенно опасен, когда враги выстроились в одну линию. Его усиленная атака позволяет резко переломить бой. Выбирай чистый угол выстрела, чтобы мощный заряд не ушёл впустую.",
         rarity: "Мифический"
     },
     buratino: {
         name: "Буратино (ТОС)",
-        description: "Огневая поддержка с мощными залпами по площади. Он медленный и тяжёлый, но в куче противников быстро превращает строй врага в хаос. Лучше всего раскрывается тогда, когда врагу некуда разбежаться и он вынужден принимать удар на месте.",
+        description: "Буратино отмечает участок поля и накрывает его плотным ракетным залпом. Его атака требует времени, зато заставляет врагов покинуть укрытие или принять взрывы. Лучше всего работает против группы, которой некуда быстро разъехаться.",
         rarity: "Эпический"
     },
     musical: {
         name: "Музыкальный танк",
-        description: "Хитрый танк, который играет рикошетами и ломает привычный ритм боя. Особенно опасен там, где стены становятся частью атаки. Он хорош для тех, кто любит нестандартные углы, неожиданные выстрелы и игру с пространством.",
+        description: "Звуковые снаряды отскакивают от стен и находят путь туда, куда нельзя выстрелить напрямую. Используй углы и узкие коридоры, чтобы удивлять врага неожиданной траекторией. Ульта наполняет поле сразу несколькими рикошетами.",
         rarity: "Эпический"
     },
     illuminat: {
         name: "Иллюминат",
-        description: "Танк с лучевой атакой и очень неудобной манерой боя. Он сбивает чужой ритм, давит психологически и заставляет ошибаться. Такой стиль особенно неприятен для тех, кто привык играть слишком прямолинейно и без адаптации.",
+        description: "Луч Иллюмината постепенно разгорается и становится всё опаснее. Оставленные на земле знаки ранят наступившего врага, а во время ульты вспыхивают огнём. Держи цель в луче и направляй её прямо к знаку.",
         rarity: "Мифический"
     },
     mirror: {
         name: "Зеркальный",
-        description: "Танк-адаптер, который подстраивается под чужой стиль и отвечает тем же. Чем разнообразнее враг, тем интереснее и опаснее становится бой. Он особенно ценится за умение превращать чужие сильные стороны в свою пользу и сбивать планы соперника.",
+        description: "Зеркальный запоминает тип попавшего в него снаряда и отвечает похожим выстрелом. Чужое оружие становится частью твоей тактики, а щит помогает пережить опасный обмен. Следи, что именно скопировано, прежде чем идти в атаку.",
         rarity: "Легендарный"
     },
     egyptian: {
         name: "Танк-фараон",
-            description: "Танк-фараон насылает проклятия и выпускает рой чёрных насекомых, которые преследуют врага, ослабляют и разъедают его. Его ульта превращает поле боя в опасную зону, а каждый, кто попадёт в рой, становится лёгкой добычей. Идеален для тех, кто любит давить и контролировать поле боя.",
+        description: "Танк-фараон выпускает быстрые стрелы и призывает рой чёрных насекомых. Рой преследует врага, ослабляет его и мешает спокойно удерживать позицию. Направляй цель к тесным проходам, где увернуться труднее всего.",
         rarity: "Легендарный"
     },
     time: {
         name: "Временной",
-        description: "Танк для осторожной и умной игры. Он умеет пережить плохой момент, вернуть контроль над боем и снова навязать свой темп. Это хороший выбор для игроков, которые любят думать на несколько шагов вперёд и не сдаваться после ошибки.",
+        description: "Временной умеет вернуться туда, где находился несколько секунд назад. Это помогает выйти из неудачного захода или неожиданно сменить дистанцию после атаки. Возврат меняет позицию, поэтому заранее подумай, куда приведёт тебя прошлый маршрут.",
         rarity: "Хроматическая"
     },
     machinegun: {
         name: "Пулемётчик",
-        description: "Быстрый танк для постоянного давления. Его сила не в одном выстреле, а в темпе, который он навязывает противнику без пауз. Он отлично подходит для тех, кто любит не отпускать врага из-под огня и держать бой в движении.",
+        description: "Пулемётчик давит врага длинной очередью из частых выстрелов. Чем дольше держишь огонь, тем ближе перегрев и вынужденная пауза. Стреляй на ходу и заранее выбирай укрытие, где можно переждать охлаждение оружия.",
         rarity: "Необычная"
     },
     buckshot: {
         name: "Дробовой танк",
-        description: "Танк ближнего боя, который раскрывается почти в упор. Если подойти правильно, он быстро наказывает за жадность и ошибку в позиции. В руках смелого игрока он превращается в очень опасный инструмент для коротких разменов и резких врывов.",
+        description: "Дробовой выпускает плотный веер дроби. Вблизи весь залп может попасть в одну цель, но на расстоянии его сила быстро рассеивается. Найди момент для сближения и уходи за укрытие, пока оружие перезаряжается.",
         rarity: "Необычная"
     },
     waterjet: {
         name: "Водомётчик",
-        description: "Танк контроля с мощной струёй, которая теснят врагов и ломает их позиции. Он особенно хорош там, где можно зажать соперника в неудобный угол. Хорош для защиты проходов, выталкивания цели и жёсткого навязывания дистанции.",
+        description: "Водомёт выпускает струю, которая наносит урон и отталкивает противника. Ею удобно очищать проходы, сбивать наступление и прижимать врага к стене. После длинной очереди струе нужна перезарядка — не оставайся в этот момент вплотную к цели.",
         rarity: "Редкая"
     },
     imitator: {
         name: "Имитатор",
-        description: "Необычный танк, который копирует чужой стиль и использует его против владельца. Сильнее всего раскрывается в руках игрока, который умеет читать бой на шаг вперёд. Чем внимательнее ты играешь, тем страшнее он становится для соперника и тем легче подстраивать бой под себя.",
+        description: "Имитатор начинает бой с собственным оружием, но его главная сила — временно принимать облик другого танка. Он подхватывает чужой стиль и меняет тактику прямо на ходу. Выбирай форму по ситуации: для наступления, отхода или неожиданного ответа.",
         rarity: "Хроматическая"
     },
     electric: {
         name: "Электрический",
-        description: "Быстрый контрольный танк с молниями и взрывной ультой. Он любит плотные схватки, где можно разом наказывать сразу нескольких врагов. Хорош для давления на группу, резкого перелома боя и наказания за скученность.",
+        description: "Электрический заряд поворачивает к ближайшей цели и может задеть нескольких врагов. Ульта создаёт мощную зону поражения вокруг танка. Подпускай противников достаточно близко, чтобы ударить сразу по всей группе.",
         rarity: "Мифический"
     },
     burovoy: {
         name: "Буровой",
-        description: "Тяжёлый штурмовой танк, который давит врага буром в ближнем бою и любит ломать позицию соперника постоянным напором. Его ульта позволяет уйти под землю, проскользнуть через преграды и внезапно сменить направление атаки, оставляя за собой только трещины на поверхности.",
+        description: "Вращающийся бур вгрызается в броню и мешает стрелять противнику, пока касается его. Ульта позволяет уйти под землю и пройти через преграды. Настигай цель коротким рывком: как только она выйдет из-под бура, блокировка стрельбы исчезнет.",
         rarity: "Мифический"
     },
     robot: {
         name: "Танк-робот",
-        description: "Тяжёлый танк с пробивным оружием и боевыми дронами. Он создаёт постоянное давление, не даёт спокойно занять позицию и быстро добирает ослабленных врагов. Это надёжная машина для длинной и плотной игры, где важны контроль и напор.",
+        description: "Танк-робот бьёт быстрым пробивным снарядом и выпускает боевых дронов. Они создают перекрёстный огонь и заставляют врага следить за угрозой со всех сторон. Выбирай позицию так, чтобы техника могла поддержать атаку.",
         rarity: "Легендарный"
     },
     medical: {
         name: "Медицинский танк",
-        description: "Командный танк поддержки, который лечит союзников и мешает врагам. Он особенно ценен там, где нужно долго держать линию и не терять темп команды. В удачной связке он делает команду заметно живучее и увереннее в бою.",
+        description: "Медицинский импульс восстанавливает здоровье союзникам и наносит урон врагам. Этот танк особенно полезен в затяжном бою, когда команде важно удержать линию. Держись рядом с товарищами, но оставляй себе пространство для манёвра.",
         rarity: "Эпический"
     },
     mine: {
         name: "Минный танк",
-        description: "Скрытный танк-ловушка, который играет от терпения и мин. Он хорошо чувствует карту и умеет превращать привычные маршруты врага в опасные. Такой стиль особенно раздражает тех, кто привык идти напролом и не смотреть под колёса.",
+        description: "Минный танк превращает маршрут противника в цепочку ловушек. Мины помогают защитить фланг или заставить врага ехать туда, где его уже ждут. Оставляй между ловушками место: ставить их друг на друга нельзя.",
         rarity: "Редкая"
     },
     roman: {
         name: "Римский танк",
-        description: "Танк с защитным стилем и сильным ответом на давление. Он выглядит спокойно, но в правильный момент умеет превратить оборону в уверенное наступление. Это выбор для игроков, которые любят собранность, контроль и надёжную опору в бою.",
+        description: "Римский танк метает вращающийся клинок, который может отскочить от стены. Щит даёт время пережить ответный огонь и выбрать новый угол атаки. Он раскрывается там, где можно чередовать защиту и точные контрудары.",
         rarity: "Хроматическая"
     },
     pyro: {
         name: "Зажигательный",
-        description: "Танк постепенного урона, который поджигает цели и выигрывает за счёт давления. Его сила раскрывается в длинных разменах, где враг не успевает перевести дыхание. Он хорош против тех, кто любит затягивать бой и надеется пережить огонь.",
+        description: "Зажигательный снаряд наносит урон при попадании и оставляет на цели огонь. Даже отступив за укрытие, противник продолжает расплачиваться за ошибку. Не спеши сближаться: повторные попадания поддерживают давление на расстоянии.",
         rarity: "Необычная"
     },
     air: {
         name: "Воздушный",
-        description: "Танк контроля дистанции. Его снаряды отталкивают врага назад, не давая ему приблизиться. Он хорош разрывает позицию врага, загоняет его в неудобный угол и наказывает за жадность. Идеален для тех, кто любит диктовать дистанцию и не пускать врага ближе.",
+        description: "Воздушный танк отталкивает врагов своими снарядами и не даёт им легко сократить дистанцию. Используй выстрел, чтобы сорвать вражеский заход или освободить проход. Особенно полезен, когда рядом есть стена или опасная зона.",
         rarity: "Редкая"
     },
     spartan: {
         name: "Спартанский танк",
-        description: "Прямолинейный и опасный танк, который становится злее в тяжёлой ситуации. Он любит близкий бой, давление и смелые решения без лишней осторожности. Чем жёстче обмен ударами, тем лучше он раскрывается и тем сложнее его остановить.",
+        description: "Спартанец метает копьё, которое может пройти сквозь нескольких врагов. Получив тяжёлые повреждения, танк ускоряется и получает шанс сменить ход боя. Используй прибавку скорости для точного захода или своевременного отхода.",
         rarity: "Редкая"
     },
     kamikaze: {
         name: "Камикадзе",
-        description: "Рискованный танк для агрессивной игры. Его сила в резком врыве, хаосе и умении сломать спокойный бой за один момент. Он подходит тем, кто любит заходить ва-банк, ломать чужую оборону и навязывать свой ритм силой.",
+        description: "Камикадзе резко разгоняется в выбранном направлении и на время рывка становится неуязвимым. Так можно прорвать строй или уйти из смертельной ловушки. Перед запуском прицелься: во время разгона сменить направление непросто.",
         rarity: "Лимитированная"
     },
     myasnoy: {
         name: "Мясной",
-        description: "Начальная форма мясного поливает врага живыми сосудами широким веером и готовит момент для разделения. Это странный, агрессивный танк, который раскрывается лучше всего тогда, когда ты умеешь вовремя перейти из давления на дистанции в игру двумя формами.",
+        description: "Мясной поливает врагов веером живых сосудов и может разделиться посреди боя. Отделённый корпус продолжает стрелять сам, а подвижный глаз атакует лучом. Заходи с разных сторон, чтобы врагу было трудно ответить обеим формам.",
         rarity: "Лимитированная"
     },
     kvant: {
         name: "Квант",
-        description: "Хроматический танк с нестабильным квантовым оружием. Он давит врага необычной траекторией выстрелов, ломает привычную дистанцию и заставляет постоянно подстраиваться под хаотичное поле боя. Его ульта перегружает противников, ослабляет их и превращает удачный заход в мощный перелом боя.",
+        description: "Квантовый снаряд меняет форму в полёте и заставляет врага постоянно следить за траекторией. Ульта перегружает противников и ослабляет их ответный урон. Лови момент перегрузки, чтобы провести решающую атаку.",
         rarity: "Хроматическая"
     }
 };
@@ -495,19 +495,20 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.restore();
         // Sweeping eye beam — scans across the attack arc while the timer counts down
         if (heatState && (heatState.myasnoyAttackTimer || 0) > 0) {
-            const _atMax  = 18;
+            const _atMax  = MYASNOY_EYE_ATTACK_DURATION;
             const _atA    = heatState.myasnoyAttackTimer / _atMax; // 1→0 as attack fades
-            const _atRange = Math.min(W, H) * 2.2;
-            const _halfArc = Math.PI * 0.65;
+            const _atRange = W * MYASNOY_EYE_ATTACK_RANGE_MULT;
+            const _halfArc = MYASNOY_EYE_ATTACK_HALF_ARC;
+            const _attackAngle = heatState.myasnoyAttackAngle ?? turretAngle;
             // Sweep progress: beam starts at left edge and sweeps right
-            const _sweep  = 1 - _atA; // 0→1
-            const _beamAng = turretAngle - _halfArc + _sweep * _halfArc * 2;
+            const _sweep  = Math.min(1, (_atMax + 1 - heatState.myasnoyAttackTimer) / _atMax);
+            const _beamAng = _attackAngle - _halfArc + _sweep * _halfArc * 2;
             ctx.save();
             // Already-burned area (behind the beam)
-            ctx.globalAlpha = 0.28;
+            ctx.globalAlpha = 0.48;
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.arc(0, 0, _atRange, turretAngle - _halfArc, _beamAng);
+            ctx.arc(0, 0, _atRange, _attackAngle - _halfArc, _beamAng);
             ctx.closePath();
             const _burnG = ctx.createRadialGradient(0, 0, 0, 0, 0, _atRange);
             _burnG.addColorStop(0, 'rgba(255,80,0,0.9)');
@@ -537,10 +538,10 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillStyle = _flG;
             ctx.beginPath(); ctx.arc(_bx, _by, _atRange * 0.18, 0, Math.PI*2); ctx.fill();
             // Arc boundary line
-            ctx.globalAlpha = _atA * 0.7;
+            ctx.globalAlpha = Math.max(0.35, _atA * 0.7);
             ctx.strokeStyle = 'rgba(255,60,0,0.8)'; ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, _atRange, turretAngle - _halfArc, turretAngle + _halfArc);
+            ctx.arc(0, 0, _atRange, _attackAngle - _halfArc, _beamAng);
             ctx.stroke();
             ctx.restore();
         }
@@ -971,7 +972,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.fillRect(-bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
             ctx.fillRect(bodyW/2 - 2, -bodyH/4, 4, bodyH/2);
         } else if (type === 'imitator') {
-            // imitator Tank — original style with elegant animated sheen and pulsing core
+            // Keep the dark prismatic hull, side strips and diamond while adding depth.
             const t = Date.now() * 0.002;
 
             // Base dark body
@@ -981,6 +982,11 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             grad.addColorStop(1, '#0d0d1f');
             ctx.fillStyle = grad;
             ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            ctx.fillStyle = 'rgba(215,195,255,0.08)';
+            ctx.fillRect(-bodyW/2 + 3, -bodyH/2 + 3, bodyW - 6, bodyH - 6);
+            ctx.strokeStyle = 'rgba(215,195,255,0.3)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-bodyW/2 + 2, -bodyH/2 + 2, bodyW - 4, bodyH - 4);
 
             // Left prismatic strip
             const stripW = bodyW * 0.18;
@@ -998,6 +1004,18 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             prismR.addColorStop(1,   'rgba(255,120,0,0.6)');
             ctx.fillStyle = prismR;
             ctx.fillRect(bodyW/2 - stripW - 2, -bodyH/2 + 2, stripW, bodyH - 4);
+            ctx.strokeStyle = 'rgba(220,210,255,0.42)';
+            ctx.lineWidth = 0.8;
+            for (const side of [-1, 1]) {
+                const stripX = side < 0 ? -bodyW/2 + 2 : bodyW/2 - stripW - 2;
+                for (let i = 1; i <= 3; i++) {
+                    const y = -bodyH/2 + i * bodyH/4;
+                    ctx.beginPath();
+                    ctx.moveTo(stripX + 1, y - 1);
+                    ctx.lineTo(stripX + stripW - 1, y + 1);
+                    ctx.stroke();
+                }
+            }
 
             // Animated sheen sweep (smooth radial highlight)
             ctx.save();
@@ -1022,10 +1040,22 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(220,200,255,0.65)';
             ctx.lineWidth = 1;
             const dS = Math.min(bodyW, bodyH) * 0.2;
+            const diamondFill = ctx.createLinearGradient(-dS, -dS, dS, dS);
+            diamondFill.addColorStop(0, '#b68bd7');
+            diamondFill.addColorStop(0.5, '#4a326f');
+            diamondFill.addColorStop(1, '#241b46');
+            ctx.fillStyle = diamondFill;
             ctx.beginPath();
             ctx.moveTo(0, -dS); ctx.lineTo(dS * 0.8, 0);
             ctx.lineTo(0, dS); ctx.lineTo(-dS * 0.8, 0);
             ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(236,225,255,0.65)';
+            ctx.lineWidth = 0.75;
+            ctx.beginPath();
+            ctx.moveTo(0, -dS); ctx.lineTo(0, dS);
+            ctx.moveTo(-dS * 0.8, 0); ctx.lineTo(dS * 0.8, 0);
             ctx.stroke();
 
             // Pulsing core glow inside diamond (slower, smooth fade)
@@ -1040,6 +1070,12 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
             ctx.strokeStyle = 'rgba(180,100,255,0.45)';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            ctx.fillStyle = '#8f779e';
+            for (const x of [-bodyW/2 + 3, bodyW/2 - 3]) {
+                for (const y of [-bodyH/2 + 3, bodyH/2 - 3]) {
+                    ctx.beginPath(); ctx.arc(x, y, 0.9, 0, Math.PI * 2); ctx.fill();
+                }
+            }
         } else if (type === 'boss_dummy') {
             // Reinforced range tank with ochre safety panels.
             const practiceHull = ctx.createLinearGradient(0, -bodyH/2, 0, bodyH/2);
@@ -2094,7 +2130,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.fill();
 
     } else if (type === 'imitator') {
-        // imitator Turret — hexagonal mount with single prismatic barrel
+        // Preserve the hexagonal turret and single prismatic barrel.
         const barrelLen = tSize * 1.55;
         const barrelH   = tSize * 0.27;
         // Barrel body
@@ -2104,6 +2140,14 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         barGrad.addColorStop(1,   '#4a235a');
         ctx.fillStyle = barGrad;
         ctx.fillRect(tSize * 0.3, -barrelH/2, barrelLen, barrelH);
+        ctx.strokeStyle = 'rgba(236,210,255,0.58)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(tSize * 0.38, -barrelH * 0.27);
+        ctx.lineTo(tSize * 0.3 + barrelLen * 0.92, -barrelH * 0.27);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(28,15,52,0.65)';
+        ctx.fillRect(tSize * 0.34, barrelH * 0.22, barrelLen * 0.86, barrelH * 0.12);
         // Prismatic band near muzzle
         const bandGrad = ctx.createLinearGradient(0, -barrelH/2, 0, barrelH/2);
         bandGrad.addColorStop(0,    '#ff0080');
@@ -2112,6 +2156,9 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         bandGrad.addColorStop(1,    '#ff8000');
         ctx.fillStyle = bandGrad;
         ctx.fillRect(tSize * 0.8, -barrelH * 0.75, tSize * 0.18, barrelH * 1.5);
+        ctx.strokeStyle = 'rgba(235,218,255,0.65)';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(tSize * 0.8, -barrelH * 0.75, tSize * 0.18, barrelH * 1.5);
         // Muzzle end cap
         ctx.fillStyle = '#1a1a3e';
         ctx.beginPath();
@@ -2135,6 +2182,15 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.strokeStyle = 'rgba(180,100,255,0.85)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.strokeStyle = 'rgba(220,200,255,0.48)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+            i === 0 ? ctx.moveTo(Math.cos(a) * hexR * 0.77, Math.sin(a) * hexR * 0.77)
+                    : ctx.lineTo(Math.cos(a) * hexR * 0.77, Math.sin(a) * hexR * 0.77);
+        }
+        ctx.closePath(); ctx.stroke();
         // Inner crystal orb
         const orbGrad = ctx.createRadialGradient(-hexR*0.1, -hexR*0.15, 0, 0, 0, hexR * 0.38);
         orbGrad.addColorStop(0,   'rgba(255,210,255,0.95)');
@@ -4608,42 +4664,76 @@ function drawPoisonCloud(ctx, cloud) {
 function drawPlasmaBolt(ctx, bullet, charged) {
     const radius = Math.max(4, bullet.w * 0.5);
     const scale = charged ? 1.35 : 1;
-    const pulse = 0.92 + Math.sin(Date.now() * 0.018 + bullet.x * 0.12) * 0.08;
+    const phase = Date.now() * 0.006 + bullet.x * 0.035 + bullet.y * 0.017;
+    const pulse = 0.88 + Math.sin(phase * 2) * 0.13;
+    const tailWave = Math.sin(phase * 2.4) * radius * 0.28 * scale;
     ctx.save();
     ctx.translate(bullet.x, bullet.y);
     ctx.rotate(Math.atan2(bullet.vy || 0, bullet.vx || 0));
 
     const tail = ctx.createLinearGradient(-radius * 3.5, 0, radius * 0.3, 0);
-    tail.addColorStop(0, 'rgba(90,62,206,0)');
-    tail.addColorStop(0.5, 'rgba(114,76,225,0.3)');
-    tail.addColorStop(1, 'rgba(206,135,255,0.8)');
+    tail.addColorStop(0, charged ? 'rgba(100,9,20,0)' : 'rgba(90,62,206,0)');
+    tail.addColorStop(0.5, charged ? 'rgba(195,22,35,0.5)' : 'rgba(114,76,225,0.3)');
+    tail.addColorStop(1, charged ? 'rgba(255,80,55,0.95)' : 'rgba(206,135,255,0.8)');
     ctx.fillStyle = tail;
     ctx.beginPath();
-    ctx.moveTo(-radius * 3.5 * scale, 0);
-    ctx.quadraticCurveTo(-radius * 0.6, -radius * 0.7 * scale, radius * 0.4, -radius * 0.42 * scale);
+    ctx.moveTo(-radius * 3.5 * scale, tailWave * 0.35);
+    ctx.quadraticCurveTo(-radius * 1.2, -radius * 0.7 * scale + tailWave, radius * 0.4, -radius * 0.42 * scale);
     ctx.lineTo(radius * 0.4, radius * 0.42 * scale);
-    ctx.quadraticCurveTo(-radius * 0.6, radius * 0.7 * scale, -radius * 3.5 * scale, 0);
+    ctx.quadraticCurveTo(-radius * 1.2, radius * 0.7 * scale + tailWave, -radius * 3.5 * scale, tailWave * 0.35);
     ctx.fill();
 
     const glowRadius = radius * 1.75 * scale * pulse;
     const glow = ctx.createRadialGradient(0, 0, radius * 0.15, 0, 0, glowRadius);
-    glow.addColorStop(0, 'rgba(249,251,255,0.98)');
-    glow.addColorStop(0.26, 'rgba(180,194,255,0.92)');
-    glow.addColorStop(0.53, 'rgba(151,91,240,0.7)');
-    glow.addColorStop(1, 'rgba(102,55,195,0)');
+    glow.addColorStop(0, charged ? 'rgba(255,245,210,1)' : 'rgba(249,251,255,0.98)');
+    glow.addColorStop(0.26, charged ? 'rgba(255,101,75,0.96)' : 'rgba(180,194,255,0.92)');
+    glow.addColorStop(0.53, charged ? 'rgba(220,21,39,0.78)' : 'rgba(151,91,240,0.7)');
+    glow.addColorStop(1, charged ? 'rgba(125,4,23,0)' : 'rgba(102,55,195,0)');
     ctx.fillStyle = glow;
     ctx.beginPath(); ctx.arc(0, 0, glowRadius, 0, Math.PI * 2); ctx.fill();
 
-    ctx.strokeStyle = charged ? 'rgba(202,227,255,0.8)' : 'rgba(207,176,255,0.7)';
+    if (charged) {
+        ctx.strokeStyle = 'rgba(255,72,62,0.78)';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 8; i++) {
+            const angle = i * Math.PI / 4 + phase * 0.55;
+            const inner = radius * 0.75 * scale;
+            const outer = radius * (1.4 + (i % 2) * 0.25) * scale * (1 + Math.sin(phase * 2 + i) * 0.1);
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+            ctx.lineTo(Math.cos(angle + 0.12) * outer, Math.sin(angle + 0.12) * outer);
+            ctx.stroke();
+        }
+    }
+    ctx.strokeStyle = charged ? 'rgba(255,168,115,0.95)' : 'rgba(207,176,255,0.7)';
     ctx.lineWidth = charged ? 1.4 : 1;
     for (const side of [-1, 1]) {
         ctx.beginPath();
         ctx.moveTo(-radius * 1.2, side * radius * 0.32);
-        ctx.quadraticCurveTo(0, side * radius * 1.32 * scale, radius * 0.78, side * radius * 0.38);
+        ctx.quadraticCurveTo(0, side * radius * 1.32 * scale + Math.sin(phase * 2 + side) * radius * 0.25, radius * 0.78, side * radius * 0.38);
         ctx.stroke();
     }
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.ellipse(radius * 0.12, 0, radius * 0.54 * scale, radius * 0.38 * scale, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = charged ? 'rgba(255,205,145,0.82)' : 'rgba(210,207,255,0.78)';
+    ctx.lineWidth = charged ? 1.6 : 1.2;
+    for (let i = 0; i < 2; i++) {
+        const ringRadius = radius * scale * (0.86 + Math.sin(phase * 2 + i * Math.PI) * 0.12);
+        const start = phase * (charged ? -0.9 : 1.1) + i * Math.PI;
+        ctx.beginPath();
+        ctx.arc(0, 0, ringRadius, start, start + Math.PI * 0.7);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = charged ? 'rgba(255,221,166,0.9)' : 'rgba(225,210,255,0.85)';
+    for (let i = 0, count = charged ? 5 : 3; i < count; i++) {
+        const angle = phase * (charged ? -1.2 : 1.3) + i * Math.PI * 2 / count;
+        const orbit = radius * scale * (1.18 + Math.sin(phase * 2 + i) * 0.1);
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * orbit, Math.sin(angle) * orbit, charged ? 1.2 : 0.9, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.fillStyle = charged ? '#fff1c9' : '#ffffff';
+    ctx.beginPath(); ctx.ellipse(radius * 0.12, 0, radius * 0.54 * scale * pulse, radius * 0.38 * scale * pulse, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
@@ -4668,6 +4758,7 @@ function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
 }
 
 function drawReloadBar(ctx, unit, type, color) {
+    if (type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket') return;
     // The machinegun reloads only after its full firing burst overheats.
     const remaining = type === 'machinegun'
         ? (unit.overheated ? Math.max(0, unit.heat || 0) : 0)
@@ -4691,8 +4782,7 @@ function drawReloadBar(ctx, unit, type, color) {
     unit._reloadBarProgress = (unit._reloadBarProgress || 0)
         + (targetProgress - (unit._reloadBarProgress || 0)) * (1 - Math.exp(-elapsed / 45));
     if (unit._reloadBarOpacity < 0.015) return;
-    const isMech = type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket';
-    const barY = unit.y - (isMech ? 23 : 17);
+    const barY = unit.y - 17;
     const fillWidth = unit.w * unit._reloadBarProgress;
     ctx.save();
     ctx.globalAlpha *= unit._reloadBarOpacity;
@@ -4755,7 +4845,9 @@ function renderGameFrame() {
 
     // 1. Фон (сетка)
     GameTerrain.drawGround(ctx, viewLeft, viewTop, viewRight - viewLeft, viewBottom - viewTop);
-    if (currentMode !== 'training' || gameState !== 'playing') drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom);
+    if ((currentMode !== 'training' || gameState !== 'playing') && GameTerrain.current() !== 'lava') {
+        drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom);
+    }
 
     objects.forEach(obj => {
         const rad = obj.radius || 0;
@@ -5331,6 +5423,8 @@ function renderGameFrame() {
             ctx.lineWidth = 2.5;
             ctx.strokeRect(_rx, _ry, _rw, _rh);
             ctx.shadowBlur = 0;
+        } else if (obj.type === 'box') {
+            GameTerrain.drawBox(ctx, obj);
         } else {
             const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
             ctx.fillStyle = '#cd853f'; // Peru
@@ -5876,6 +5970,20 @@ function renderGameFrame() {
             ctx.beginPath();
             ctx.arc(b.x - pr * 0.28, b.y - pr * 0.28, pr * 0.3, 0, Math.PI * 2);
             ctx.fill();
+            // A tiny faceted diamond links the shot to the tank's hull emblem.
+            const spin = Date.now() * 0.004;
+            const facet = pr * 0.55;
+            ctx.fillStyle = 'rgba(34,18,80,0.78)';
+            ctx.strokeStyle = 'rgba(232,207,255,0.9)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            for (let i = 0; i < 4; i++) {
+                const a = spin + i * Math.PI / 2;
+                const x = b.x + Math.cos(a) * facet;
+                const y = b.y + Math.sin(a) * facet;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.closePath(); ctx.fill(); ctx.stroke();
 
         } else if (b.type === 'kvantMain' || b.type === 'kvantSide' || b.type === 'kvantSmall') {
             // Квант bullets — kvantMain is the primary morphing orb, kvantSmall are fragments
@@ -7428,7 +7536,7 @@ function renderGameFrame() {
         // Calculate movement animation for mech tanks
         const moveAnim = GameTerrain.getMotion(tank);
         const _playerBurovoyDrill = getBurovoyDrillRenderState(tank);
-        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, spartanRage: tank.hp < tank.maxHp * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
+        drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, spartanRage: tank.hp < tank.maxHp * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyAttackAngle: tank.myasnoyAttackAngle, myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
             ? ((tank.myasnoySeparationAnim || 0) / Math.max(1, tank.myasnoySeparationAnimMax || 18))
             : 0 }, moveAnim);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
@@ -8232,7 +8340,7 @@ function showTankDetail(tankType) {
             description: unitDesc.description,
             hpMultiplier: 1,
             speedBase: ((typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType.myasnoy) || 3.0),
-            damageBase: 1.5,
+            damageBase: 2,
             damageNote: '/сосуд',
             fractionalDamage: true,
             sideScale: 0.86,
@@ -8240,10 +8348,10 @@ function showTankDetail(tankType) {
         },
         body: {
             label: 'Форма бота',
-            description: 'Форма бота превращает корпус в самостоятельную огневую точку. Тело удерживает линию, поливает врага сосудами и заставляет противника делить внимание между двумя угрозами сразу.',
-            hpMultiplier: 0.7,
+            description: 'Отделённый корпус сам обстреливает врагов веером живых сосудов. Он держит линию и отвлекает противника, пока глаз ищет удобный угол для атаки. Не оставляй корпус без поддержки под плотным огнём.',
+            hpMultiplier: 300 / 320,
             speedBase: 3.2,
-            damageBase: 1.5,
+            damageBase: 2,
             damageNote: '/сосуд',
             fractionalDamage: true,
             sideScale: 0.86,
@@ -8251,10 +8359,10 @@ function showTankDetail(tankType) {
         },
         eye: {
             label: 'Глаз',
-            description: 'Глаз — быстрая охотничья форма мясного. Он испепеляет сектор лазером вблизи, а ультой проводит гипнотический луч и ломает поведение врагов, заставляя их тянуться за игроком.',
-            hpMultiplier: 0.55,
+            description: 'Глаз проводит лучом по видимой области и может резко наказать врага за неосторожное сближение. Он подвижнее корпуса, а его ульта гипнотизирует противников. Пользуйся скоростью и не задерживайся под ответным огнём.',
+            hpMultiplier: 180 / 320,
             speedBase: 3.6,
-            damageBase: 80,
+            damageBase: 100,
             damageNote: '/удар',
             fractionalDamage: false,
             sideScale: 0.80,
@@ -8520,9 +8628,9 @@ function showTankDetail(tankType) {
             return '█'.repeat(filled) + '░'.repeat(max - filled);
         };
         const tankDamageByType = {
-            normal: 100, ice: 100, fire: 2, buratino: 300, toxic: 50,
-            plasma: 350, musical: 200, waterjet: 1.5, illuminat: 3,
-            mirror: 100, egyptian: 100, time: 100, machinegun: MACHINEGUN_BULLET_DAMAGE, buckshot: BUCKSHOT_PELLET_DAMAGE, imitator: 200, electric: 150, burovoy: 30, robot: 75, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 1.5, ai: 80
+            normal: 100, ice: 100, fire: 0.75, buratino: 300, toxic: 44 / 60,
+            plasma: 350, musical: 200, waterjet: 1.5, illuminat: 75 / 60,
+            mirror: 100, egyptian: 100, time: 100, machinegun: MACHINEGUN_BULLET_DAMAGE, buckshot: BUCKSHOT_PELLET_DAMAGE, imitator: 100, electric: 150, burovoy: 40, robot: 65, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 2, ai: 80
         };
         const dmgRaw = myasnoyForm ? myasnoyForm.damageBase : (tankDamageByType[tankType] || window.mechDamageByType?.[tankType] || 100);
         // Use multiplier table if present, compute raw (float) boosted damage
@@ -8531,10 +8639,10 @@ function showTankDetail(tankType) {
         const dmgBoostedRaw = dmgRaw * dmgMultAtLvl; // float value (not rounded) used for relative calculations
         const dmgMaxPossible = dmgRaw * dmgMultMax;
 
-        // Prepare displayed values: for continuous/tick weapons (waterjet, illuminat) show per-second values in the modal
-        let displayDmgBoosted = tankType === 'fire' ? dmgBoostedRaw.toFixed(1) : Math.round(dmgBoostedRaw);
+        // Show continuous damage per second and flame damage per particle.
+        let displayDmgBoosted = tankType === 'fire' ? dmgBoostedRaw.toFixed(2) : Math.round(dmgBoostedRaw);
         let displayDmgMaxPossible = dmgMaxPossible;
-        let displayDmgNote  = myasnoyForm ? myasnoyForm.damageNote : ({ buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3', fire: '/ч', burovoy: '/сек', myasnoy: '/сосуд' }[tankType] || '');
+        let displayDmgNote  = myasnoyForm ? myasnoyForm.damageNote : ({ buckshot: ' ×5', waterjet: '/тик', illuminat: '/тик', machinegun: '/пул.', mechDiy: '×3', fire: '/част.', burovoy: '/сек', myasnoy: '/сосуд' }[tankType] || '');
         // Квант: show main bullet + all 3 morph variants
         let displayDmgExtra = '';
         if (tankType === 'kvant') {
@@ -8542,15 +8650,15 @@ function showTankDetail(tankType) {
             displayDmgBoosted = `${_kvantMainDmg}`;
         }
 
-        if (tankType === 'waterjet' || tankType === 'illuminat') {
+        if (tankType === 'waterjet' || tankType === 'illuminat' || tankType === 'toxic') {
             // convert tick-based damage to per-second for display (60 ticks = 1s)
             displayDmgBoosted = Math.round(dmgBoostedRaw * 60);
             displayDmgMaxPossible = dmgMaxPossible * 60;
             displayDmgNote = '/сек';
         } else if (tankType === 'myasnoy') {
             if (myasnoyForm && myasnoyForm.fractionalDamage) {
-                displayDmgBoosted = dmgBoostedRaw.toFixed(1);
-                displayDmgMaxPossible = dmgMaxPossible.toFixed(1);
+                displayDmgBoosted = parseFloat(dmgBoostedRaw.toFixed(1));
+                displayDmgMaxPossible = parseFloat(dmgMaxPossible.toFixed(1));
             } else {
                 displayDmgBoosted = Math.round(dmgBoostedRaw);
                 displayDmgMaxPossible = Math.round(dmgMaxPossible);

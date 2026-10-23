@@ -2,14 +2,15 @@
 (function () {
     'use strict';
 
-    const TYPE_LIST = ['forest', 'snow', 'desert', 'swamp', 'night', 'rain'];
+    const TYPE_LIST = ['forest', 'snow', 'desert', 'swamp', 'night', 'rain', 'lava'];
+    const RANDOM_TYPES = ['forest', 'snow', 'desert', 'swamp', /* 'night', */ 'rain'];
     const TYPES = new Set(TYPE_LIST);
     const BLOCKERS = new Set(['wall', 'woodenWall', 'box', 'barrel']);
     const NIGHT_VISION_RADIUS = 400;
 
     function normalize(type) { return TYPES.has(type) ? type : 'forest'; }
     function current() { return normalize(window.currentTerrain); }
-    function randomType() { return TYPE_LIST[Math.floor(Math.random() * TYPE_LIST.length)]; }
+    function randomType() { return RANDOM_TYPES[Math.floor(Math.random() * RANDOM_TYPES.length)]; }
     function speedFactor(type = current()) {
         return type === 'swamp' ? 0.9 : type === 'rain' ? 0.95 : 1;
     }
@@ -20,17 +21,18 @@
     function label(type = current()) {
         return { forest: 'Лесная', snow: 'Снежная', desert: 'Пустынная',
             swamp: 'Болотная · скорость −10%', night: 'Ночная',
-            rain: 'Дождевая · скорость −5% · перезарядка +5%' }[normalize(type)];
+            rain: 'Дождевая · скорость −5% · перезарядка +5%', lava: 'Лавовая арена' }[normalize(type)];
     }
 
     const groundColors = {
         forest: '#445522', snow: '#b5c5c8', desert: '#a88b58',
-        swamp: '#394b3a', night: '#445522', rain: '#38482e'
+        swamp: '#394b3a', night: '#445522', rain: '#38482e', lava: '#211715'
     };
-    function groundColor(type) { return groundColors[normalize(type)]; }
+    function groundColor(type = current()) { return groundColors[normalize(type)]; }
     const groundTiles = new Map();
     const groundPatterns = new WeakMap();
     const wallTextures = new WeakMap();
+    const boxTextures = new WeakMap();
     const swampWater = [];
     function seeded(seed) {
         return () => {
@@ -132,7 +134,59 @@
             }
         }
     }
+    function makeLavaGround() {
+        const size = 768;
+        const tile = surface(size, size), c = tile.getContext('2d');
+        const rand = seeded(71831);
+        c.fillStyle = '#211715'; c.fillRect(0, 0, size, size);
+        for (let i = 0; i < 90; i++) {
+            const x = rand() * size, y = rand() * size;
+            const rx = 24 + rand() * 75, ry = 14 + rand() * 52;
+            const color = i % 3 === 0 ? 'rgba(72,36,29,0.28)' : 'rgba(6,8,10,0.31)';
+            const shapeSeed = Math.floor(rand() * 4294967296);
+            for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+                patch(c, x + ox, y + oy, rx, ry, seeded(shapeSeed), color);
+            }
+        }
+        // Three stroke layers make shallow magma seams glow beneath cooled basalt.
+        c.lineJoin = 'round'; c.lineCap = 'round';
+        for (let i = 0; i < 48; i++) {
+            const x = rand() * size, y = rand() * size;
+            const angle = rand() * Math.PI * 2;
+            const length = 28 + rand() * 115;
+            const points = [[x, y]];
+            for (let part = 1; part <= 5; part++) {
+                const distance = length * part / 5;
+                points.push([x + Math.cos(angle) * distance + (rand() - 0.5) * 18,
+                    y + Math.sin(angle) * distance + (rand() - 0.5) * 18]);
+            }
+            for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+                for (const [color, width] of [
+                    ['rgba(105,27,13,0.28)', 8],
+                    ['rgba(192,56,19,0.45)', 3.2],
+                    ['rgba(255,139,46,0.48)', 0.9]
+                ]) {
+                    c.strokeStyle = color; c.lineWidth = width;
+                    c.beginPath();
+                    for (let point = 0; point < points.length; point++) {
+                        const [px, py] = points[point];
+                        if (point === 0) c.moveTo(px + ox, py + oy);
+                        else c.lineTo(px + ox, py + oy);
+                    }
+                    c.stroke();
+                }
+            }
+        }
+        for (let i = 0; i < 3200; i++) {
+            const x = rand() * size, y = rand() * size;
+            c.fillStyle = i % 11 === 0 ? 'rgba(232,104,39,0.23)' :
+                i % 3 === 0 ? 'rgba(151,119,105,0.12)' : 'rgba(6,7,9,0.28)';
+            c.fillRect(x, y, 0.5 + rand() * 1.4, 0.5 + rand() * 1.4);
+        }
+        return tile;
+    }
     function makeGround(type) {
+        if (type === 'lava') return makeLavaGround();
         const size = 768;
         const tile = surface(size, size), c = tile.getContext('2d');
         const rand = seeded(5123 + TYPE_LIST.indexOf(type) * 913);
@@ -260,11 +314,46 @@
         }
         c.lineTo(0, y(profile[0][1])); c.closePath();
     }
-    function makeWall(type, width, height, seed) {
+    function makeWall(type, width, height, seed, kind = 'wall') {
         const tile = surface(width, height), c = tile.getContext('2d');
         const rand = seeded(seed);
         const w = width, h = height;
-        if (type === 'snow') {
+        if (type === 'lava' && kind === 'woodenWall') {
+            const soot = c.createLinearGradient(0, 0, 0, h);
+            soot.addColorStop(0, 'rgba(25,20,20,0.37)');
+            soot.addColorStop(1, 'rgba(17,13,14,0.63)');
+            c.fillStyle = soot; c.fillRect(0, 0, w, h);
+            for (let i = 0; i < 7; i++) {
+                const x = rand() * w;
+                c.strokeStyle = i % 2 ? 'rgba(10,9,10,0.46)' : 'rgba(124,74,54,0.27)';
+                c.lineWidth = 0.7 + rand();
+                c.beginPath(); c.moveTo(x, 0);
+                c.quadraticCurveTo(x + (rand() - 0.5) * 5, h * 0.5, x + (rand() - 0.5) * 7, h);
+                c.stroke();
+            }
+            c.fillStyle = 'rgba(211,94,51,0.16)'; c.fillRect(1, h - 3, w - 2, 2);
+        } else if (type === 'lava') {
+            const stone = c.createLinearGradient(0, 0, w, h);
+            stone.addColorStop(0, '#49332f'); stone.addColorStop(0.45, '#251b1b'); stone.addColorStop(1, '#100f12');
+            c.fillStyle = stone; c.fillRect(0, 0, w, h);
+            c.fillStyle = 'rgba(177,113,80,0.22)'; c.fillRect(1, 1, w - 2, 2);
+            c.strokeStyle = 'rgba(6,7,9,0.72)'; c.lineWidth = 2;
+            c.strokeRect(1, 1, w - 2, h - 2);
+            for (let i = 0; i < 5; i++) {
+                const x = rand() * w, y = rand() * h;
+                patch(c, x, y, 2 + rand() * w * 0.13, 1 + rand() * h * 0.08,
+                    rand, i % 2 ? 'rgba(7,8,10,0.48)' : 'rgba(98,57,47,0.23)');
+            }
+            for (let i = 0; i < 2; i++) {
+                const x = rand() * w, y = rand() * h;
+                const x2 = Math.max(2, Math.min(w - 2, x + (rand() - 0.5) * w * 0.6));
+                const y2 = Math.max(2, Math.min(h - 2, y + (rand() - 0.5) * h * 0.6));
+                c.strokeStyle = 'rgba(91,24,12,0.65)'; c.lineWidth = 4;
+                c.beginPath(); c.moveTo(x, y); c.lineTo(x2, y2); c.stroke();
+                c.strokeStyle = 'rgba(241,96,31,0.64)'; c.lineWidth = 1.2;
+                c.beginPath(); c.moveTo(x, y); c.lineTo(x2, y2); c.stroke();
+            }
+        } else if (type === 'snow') {
             const frost = c.createLinearGradient(0, 0, w, h);
             frost.addColorStop(0, 'rgba(188,216,226,0.28)'); frost.addColorStop(1, 'rgba(128,167,187,0.04)');
             c.fillStyle = frost; c.fillRect(0, 0, w, h);
@@ -347,7 +436,9 @@
             }
         }
         for (let i = 0; i < w * h * 0.1; i++) {
-            c.fillStyle = i % 3 ? 'rgba(238,224,189,0.12)' : 'rgba(9,13,11,0.14)';
+            c.fillStyle = type === 'lava'
+                ? (i % 11 === 0 ? 'rgba(230,98,43,0.21)' : 'rgba(8,8,10,0.24)')
+                : (i % 3 ? 'rgba(238,224,189,0.12)' : 'rgba(9,13,11,0.14)');
             c.fillRect(rand() * w, rand() * h, 0.7, 0.7);
         }
         return tile;
@@ -363,10 +454,159 @@
         const w = Math.max(1, Math.min(256, Math.ceil(obj.w))), h = Math.max(1, Math.min(256, Math.ceil(obj.h)));
         let coating = wallTextures.get(obj);
         if (!coating || coating.type !== type || coating.w !== w || coating.h !== h) {
-            coating = { type, w, h, image: makeWall(type, w, h, seed) };
+            coating = { type, w, h, image: makeWall(type, w, h, seed, obj.type) };
             wallTextures.set(obj, coating);
         }
         ctx.drawImage(coating.image, obj.x, obj.y, obj.w, obj.h);
+    }
+
+    const boxPalettes = {
+        // Oak, northern spruce, mesquite and baldcypress heartwood.
+        forest: { face: '#9b7043', light: '#c29a62', dark: '#533922', grain: '#715135', trim: '#473d33', accent: '#617b42' },
+        snow: { face: '#d3c39f', light: '#eee1c1', dark: '#867e6d', grain: '#aea388', trim: '#667077', accent: '#e6f0ec' },
+        desert: { face: '#a36642', light: '#c78e5a', dark: '#613a2e', grain: '#794630', trim: '#65504a', accent: '#dfc287' },
+        swamp: { face: '#87664d', light: '#b18d69', dark: '#44362e', grain: '#684c3b', trim: '#3d493e', accent: '#6f8953' },
+        lava: { face: '#614033', light: '#966854', dark: '#261c1b', grain: '#3c2a26', trim: '#2c2929', accent: '#c35a30' }
+    };
+    function makeBox(type, w, h, seed) {
+        const tile = surface(w, h), c = tile.getContext('2d');
+        const rand = seeded(seed);
+        const woodType = type === 'rain' || type === 'night' ? 'forest' : type;
+        const p = boxPalettes[woodType] || boxPalettes.forest;
+        const edge = Math.max(2, Math.min(w, h) * 0.075);
+        const innerX = edge, innerY = edge, innerW = w - edge * 2, innerH = h - edge * 2;
+        const base = c.createLinearGradient(0, 0, w, h);
+        base.addColorStop(0, p.light); base.addColorStop(0.48, p.face); base.addColorStop(1, p.dark);
+        c.fillStyle = p.dark; c.fillRect(0, 0, w, h);
+        c.fillStyle = base; c.fillRect(edge * 0.5, edge * 0.5, w - edge, h - edge);
+
+        // The exposed plank faces and seams stay legible at map scale.
+        const horizontal = woodType === 'desert' || (woodType === 'forest' && seed % 3 === 0);
+        const plankCount = 3;
+        for (let i = 0; i < plankCount; i++) {
+            const step = (horizontal ? innerH : innerW) / plankCount;
+            const px = horizontal ? innerX : innerX + i * step;
+            const py = horizontal ? innerY + i * step : innerY;
+            const pw = horizontal ? innerW : step;
+            const ph = horizontal ? step : innerH;
+            c.fillStyle = i % 2 ? p.face : p.light;
+            c.globalAlpha = 0.22 + rand() * 0.12;
+            c.fillRect(px + 1, py + 1, Math.max(0, pw - 2), Math.max(0, ph - 2));
+            c.globalAlpha = 1;
+            c.strokeStyle = p.dark; c.lineWidth = Math.max(0.8, edge * 0.32);
+            c.beginPath();
+            if (horizontal) { c.moveTo(px, py + ph); c.lineTo(px + pw, py + ph); }
+            else { c.moveTo(px + pw, py); c.lineTo(px + pw, py + ph); }
+            c.stroke();
+            for (let grain = 0; grain < (woodType === 'snow' ? 5 : 3); grain++) {
+                c.strokeStyle = p.grain; c.globalAlpha = 0.3 + rand() * 0.24;
+                c.lineWidth = 0.7; c.beginPath();
+                if (horizontal) {
+                    const gy = py + step * (0.16 + grain * (woodType === 'snow' ? 0.14 : 0.2));
+                    c.moveTo(px + edge + rand() * innerW * 0.18, gy);
+                    c.quadraticCurveTo(w * 0.5, gy + (rand() - 0.5) * (woodType === 'desert' ? 5 : 2), px + pw - edge - rand() * innerW * 0.15, gy);
+                } else {
+                    const gx = px + step * (0.16 + grain * (woodType === 'snow' ? 0.14 : 0.2));
+                    c.moveTo(gx, py + edge + rand() * innerH * 0.18);
+                    c.quadraticCurveTo(gx + (rand() - 0.5) * (woodType === 'snow' ? 1 : 4), h * 0.5, gx, py + ph - edge - rand() * innerH * 0.15);
+                }
+                c.stroke(); c.globalAlpha = 1;
+            }
+        }
+
+        if (woodType === 'desert' || woodType === 'swamp') {
+            // Mesquite has darker, wavy knots; cypress has softer irregular rings.
+            for (let i = 0; i < 2; i++) {
+                const x = edge * 2 + rand() * (w - edge * 4);
+                const y = edge * 2 + rand() * (h - edge * 4);
+                c.strokeStyle = p.grain; c.globalAlpha = woodType === 'desert' ? 0.62 : 0.38;
+                c.lineWidth = 0.8;
+                c.beginPath(); c.ellipse(x, y, 2.2 + rand() * 2, 1 + rand(), rand() * 0.4, 0, Math.PI * 2); c.stroke();
+            }
+            c.globalAlpha = 1;
+        } else if (woodType === 'forest') {
+            // Short pale oak rays break up the broad annual-ring lines.
+            c.fillStyle = p.light; c.globalAlpha = 0.34;
+            for (let i = 0; i < 7; i++) c.fillRect(edge + rand() * innerW, edge + rand() * innerH, 1.5, 0.6);
+            c.globalAlpha = 1;
+        }
+
+        // The familiar X brace stays visible over every wood and weather variant.
+        c.strokeStyle = p.dark; c.lineWidth = edge * 1.75;
+        c.beginPath();
+        c.moveTo(edge * 1.6, h - edge * 1.6); c.lineTo(w - edge * 1.6, edge * 1.6);
+        c.moveTo(edge * 1.6, edge * 1.6); c.lineTo(w - edge * 1.6, h - edge * 1.6);
+        c.stroke();
+        c.strokeStyle = p.light; c.globalAlpha = 0.7; c.lineWidth = edge * 0.7;
+        c.beginPath();
+        c.moveTo(edge * 1.8, h - edge * 1.8); c.lineTo(w - edge * 1.8, edge * 1.8);
+        c.moveTo(edge * 1.8, edge * 1.8); c.lineTo(w - edge * 1.8, h - edge * 1.8);
+        c.stroke(); c.globalAlpha = 1;
+        c.strokeStyle = p.trim; c.lineWidth = edge * 1.1;
+        c.strokeRect(edge * 0.55, edge * 0.55, w - edge * 1.1, h - edge * 1.1);
+        c.strokeStyle = p.light; c.globalAlpha = 0.48; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(edge, h - edge); c.lineTo(edge, edge); c.lineTo(w - edge, edge); c.stroke(); c.globalAlpha = 1;
+        for (const x of [edge * 1.3, w - edge * 1.3]) for (const y of [edge * 1.3, h - edge * 1.3]) {
+            c.fillStyle = p.trim; c.fillRect(x - edge * 0.65, y - edge * 0.65, edge * 1.3, edge * 1.3);
+            c.fillStyle = p.light; c.fillRect(x - 0.6, y - 0.6, 1.2, 1.2);
+        }
+
+        c.save(); c.beginPath(); c.rect(edge, edge, innerW, innerH); c.clip();
+        if (woodType === 'snow') {
+            c.fillStyle = 'rgba(224,241,240,0.78)';
+            c.beginPath(); c.moveTo(edge, edge); c.lineTo(w - edge, edge);
+            for (let x = w - edge; x >= edge; x -= 4) c.lineTo(x, edge + 1 + rand() * edge * 1.4);
+            c.closePath(); c.fill();
+            for (let i = 0; i < 5; i++) {
+                c.fillStyle = 'rgba(220,240,242,0.38)';
+                c.fillRect(edge + rand() * innerW, edge + rand() * innerH, 1 + rand() * 2, 1);
+            }
+        } else if (woodType === 'desert') {
+            c.fillStyle = 'rgba(236,205,143,0.65)';
+            for (let i = 0; i < 12; i++) c.fillRect(edge + rand() * innerW, edge + rand() * innerH, 1 + rand() * 2, 0.7);
+            c.fillStyle = 'rgba(229,194,126,0.44)'; c.fillRect(edge, h - edge * 2.2, innerW, edge * 1.2);
+        } else if (woodType === 'swamp' || woodType === 'forest') {
+            const heavy = woodType === 'swamp';
+            for (let i = 0; i < (heavy ? 10 : 4); i++) {
+                const x = edge + rand() * innerW, y = edge + rand() * innerH;
+                c.fillStyle = p.accent; c.globalAlpha = heavy ? 0.55 : 0.38;
+                c.beginPath(); c.ellipse(x, y, 1.5 + rand() * 2.5, 0.8 + rand() * 1.6, rand(), 0, Math.PI * 2); c.fill();
+            }
+            c.globalAlpha = 1;
+            if (heavy) { c.fillStyle = 'rgba(25,51,45,0.22)'; c.fillRect(edge, h * 0.64, innerW, h * 0.36 - edge); }
+        }
+        if (type === 'lava') {
+            c.fillStyle = 'rgba(13,13,16,0.38)'; c.fillRect(edge, edge, innerW, innerH);
+            for (let i = 0; i < 10; i++) {
+                c.fillStyle = i % 3 === 0 ? 'rgba(241,105,39,0.4)' : 'rgba(9,9,11,0.48)';
+                c.fillRect(edge + rand() * innerW, edge + rand() * innerH, 0.8 + rand() * 2, 0.7 + rand());
+            }
+        }
+        if (type === 'rain') {
+            c.fillStyle = 'rgba(28,39,37,0.32)'; c.fillRect(edge, edge, innerW, innerH);
+            c.fillStyle = 'rgba(191,214,207,0.19)'; c.fillRect(edge, edge, innerW, edge * 0.8);
+            for (let i = 0; i < 7; i++) {
+                const x = edge + rand() * innerW, y = edge + rand() * innerH;
+                c.strokeStyle = 'rgba(192,212,211,0.38)'; c.lineWidth = 0.8;
+                c.beginPath(); c.moveTo(x, y); c.lineTo(x - 0.6, y + 1.5 + rand() * 2); c.stroke();
+            }
+        }
+        c.restore();
+        return tile;
+    }
+    function drawBox(ctx, obj, type = current()) {
+        if (obj.type !== 'box') return;
+        const w = Math.max(1, Math.min(256, Math.ceil(obj.w)));
+        const h = Math.max(1, Math.min(256, Math.ceil(obj.h)));
+        let texture = boxTextures.get(obj);
+        if (!texture || texture.type !== type || texture.w !== w || texture.h !== h) {
+            // The seed is captured once so a pushed box keeps the same grain and wear.
+            const seed = texture ? texture.seed :
+                (Math.imul(Math.floor(obj.x), 73856093) ^ Math.imul(Math.floor(obj.y), 19349663)) >>> 0;
+            texture = { type, w, h, seed, image: makeBox(type, w, h, seed) };
+            boxTextures.set(obj, texture);
+        }
+        ctx.drawImage(texture.image, obj.x, obj.y, obj.w, obj.h);
     }
 
     // Ray / axis-aligned rectangle intersection, limited to visibility radius.
@@ -513,6 +753,9 @@
     const dustSprites = new Map();
     const IDLE_MOTION = { phase: 0, strength: 0, angle: 0 };
     function getMotion(unit) { return motionHistory.get(unit) || IDLE_MOTION; }
+    function forEachIlluminatMark(callback) {
+        for (const mark of illuminatMarks) callback(mark);
+    }
     function activateIlluminatSuper(unit) {
         if (!unit) return;
         unit.illuminatVisualStart = window.frameCount || 0;
@@ -546,7 +789,8 @@
         desert: { track: '#80663d', dust: '#ead0a1', life: 70 },
         swamp: { track: '#20382b', dust: '#92946c', life: 60, wet: true },
         night: { track: '#283522', dust: '#a7a77e', life: 65 },
-        rain: { track: '#263c33', dust: '#bad1da', life: 45, wet: true }
+        rain: { track: '#263c33', dust: '#bad1da', life: 45, wet: true },
+        lava: { track: '#0d1012', dust: '#a57564', life: 65 }
     };
     function resetBattle() {
         motionHistory = new WeakMap(); trackMarks.length = 0; driveParticles.length = 0; illuminatMarks.length = 0; sightIndex = null;
@@ -595,7 +839,16 @@
                 } else if (unitType === 'illuminat') {
                     state.idleFrames++;
                     if (state.idleFrames >= 180 && !state.idleMarkPlaced) {
-                        illuminatMarks.push({ x, y, size: Math.max(unit.w, unit.h) * 1.45, angle: (unit.turretAngle || 0) + Math.PI / 2, owner: unit });
+                        let owned = 0;
+                        for (let index = illuminatMarks.length - 1; index >= 0; index--) {
+                            if (illuminatMarks[index].owner !== unit) continue;
+                            if (++owned >= 2) {
+                                illuminatMarks.splice(index, 1);
+                                break;
+                            }
+                        }
+                        illuminatMarks.push({ x, y, size: Math.max(unit.w, unit.h) * 1.45,
+                            angle: (unit.turretAngle || 0) + Math.PI / 2, owner: unit, team: unit.team });
                         state.idleMarkPlaced = true;
                     }
                 } else {
@@ -752,7 +1005,13 @@
         for (const mark of illuminatMarks) {
             if (mark.x + mark.size < left || mark.x - mark.size > right || mark.y + mark.size < top || mark.y - mark.size > bottom) continue;
             ctx.save(); ctx.translate(mark.x, mark.y); ctx.rotate(mark.angle);
-            ctx.drawImage(illuminatStampImage(), -mark.size / 2, -mark.size / 2, mark.size, mark.size); ctx.restore();
+            ctx.drawImage(illuminatStampImage(), -mark.size / 2, -mark.size / 2, mark.size, mark.size);
+            const glow = 0.15 + Math.sin((window.frameCount || 0) * 0.07 + mark.x) * 0.05;
+            ctx.fillStyle = `rgba(226,69,30,${glow})`;
+            ctx.beginPath(); ctx.arc(0, -mark.size * 0.13, mark.size * 0.075, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,161,75,0.35)';
+            ctx.beginPath(); ctx.arc(0, -mark.size * 0.13, mark.size * 0.023, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
             const strength = illuminatSuperStrength(mark.owner);
             if (strength > 0) {
                 const phase = (Math.floor((window.frameCount || 0) / 2) + Math.abs(Math.floor(mark.x + mark.y))) % 16;
@@ -849,7 +1108,7 @@
                 const radius = p.radius + 1 + age * (p.type === 'desert' ? 6 : 4);
                 ctx.drawImage(dustSprites.get(p.type), p.x - radius * 1.3, p.y - p.z - radius, radius * 2.6, radius * 2);
             } else {
-                ctx.fillStyle = p.type === 'snow' ? '#f1f8fa' : p.type === 'desert' ? '#dcc18c' : p.type === 'swamp' ? '#727b52' : '#9a9e74';
+                ctx.fillStyle = p.type === 'snow' ? '#f1f8fa' : p.type === 'desert' ? '#dcc18c' : p.type === 'swamp' ? '#727b52' : p.type === 'lava' ? '#a57564' : '#9a9e74';
                 ctx.save(); ctx.translate(p.x, p.y - p.z); ctx.rotate(p.rotation + age); ctx.scale(0.6, 0.6);
                 ctx.beginPath(); ctx.moveTo(-1.4, -0.8); ctx.lineTo(0.6, -1.3); ctx.lineTo(1.5, 0.7); ctx.lineTo(-0.6, 1.1); ctx.closePath(); ctx.fill(); ctx.restore();
             }
@@ -909,6 +1168,27 @@
                 const x = wrap(i * 167 + frame * (3.4 + i % 4 * 0.7), width + 140) - 70;
                 const y = wrap(i * 97 + frame * 0.38 - camY * 0.08, height + 30);
                 ctx.moveTo(x, y); ctx.lineTo(x + 8 + i % 5 * 3, y - 2);
+            }
+            ctx.stroke();
+        } else if (type === 'lava') {
+            ctx.fillStyle = 'rgba(27,5,4,0.08)';
+            ctx.fillRect(0, 0, width, height);
+            const glow = ctx.createLinearGradient(0, height * 0.45, 0, height);
+            glow.addColorStop(0, 'rgba(103,26,9,0)');
+            glow.addColorStop(1, 'rgba(110,29,10,0.11)');
+            ctx.fillStyle = glow; ctx.fillRect(0, height * 0.45, width, height * 0.55);
+            for (let i = 0; i < 42; i++) {
+                const x = wrap(i * 181.3 + frame * (i % 4 ? 0.12 : 0.32) - camX * 0.08, width + 60) - 30;
+                const y = wrap(i * 131.7 - frame * (0.35 + i % 3 * 0.16) - camY * 0.08, height + 80) - 40;
+                ctx.fillStyle = i % 7 === 0 ? 'rgba(255,131,52,0.55)' : 'rgba(171,139,129,0.22)';
+                ctx.fillRect(x, y, i % 7 === 0 ? 1.8 : 1.2, i % 7 === 0 ? 2.6 : 1.2);
+            }
+            ctx.strokeStyle = 'rgba(87,65,64,0.08)'; ctx.lineWidth = 9;
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const x = wrap(i * 317 + frame * 0.22, width + 260) - 130;
+                const y = wrap(i * 217 - frame * 0.12, height + 160) - 80;
+                ctx.moveTo(x, y); ctx.bezierCurveTo(x + 30, y - 13, x + 62, y + 8, x + 100, y - 11);
             }
             ctx.stroke();
         } else if (type === 'rain') {
@@ -982,8 +1262,8 @@
     }
 
     window.GameTerrain = { normalize, current, randomType, label, speedFactor, reloadFactor, movementSpeed, canSee, NIGHT_VISION_RADIUS,
-        groundColor, drawGround, drawWallCover, visibilityPolygon, drawAtmosphere,
-        resetBattle, updateMovement, drawMovement, movementStats, getMotion, activateIlluminatSuper,
+        groundColor, drawGround, drawWallCover, drawBox, visibilityPolygon, drawAtmosphere,
+        resetBattle, updateMovement, drawMovement, movementStats, getMotion, forEachIlluminatMark, activateIlluminatSuper,
         isIlluminatSuperActive, illuminatSuperStrength };
     window.currentTerrain = normalize(window.currentTerrain);
 })();

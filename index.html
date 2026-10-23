@@ -533,9 +533,9 @@
         <p id="tankDetailRarity" style="margin:0 0 4px 0; font-size:20px; color:#f1c40f;">Редкость</p>
         <div id="tankDetailTrio" style="margin:0 0 10px 0; display:none;"></div>
         <div id="tankDetailTabs" style="display:none; margin:0 0 12px 0; gap:8px; flex-wrap:wrap;"></div>
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:16px;">
+        <div class="tank-detail-main" style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; gap:16px;">
             <canvas id="tankDetailCanvas" width="200" height="200" style="flex-shrink:0; border:2px solid #444; border-radius:8px;"></canvas>
-            <div style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
+            <div class="tank-detail-info" style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
                 <div id="tankDetailDescription" style="text-align:left; font-size:14px; line-height:1.5; color:#ddd; white-space:pre-line;">
                     Описание танка
                 </div>
@@ -543,8 +543,7 @@
                 </div>
             </div>
         </div>
-        <div id="tankDetailUpgrades" style="border-top:1px solid #444; padding-top:10px; margin-bottom:14px;"></div>
-        <div style="display:flex; gap:14px; justify-content:center; align-items:stretch;">
+        <div class="tank-detail-actions" style="display:flex; gap:14px; justify-content:center; align-items:stretch;">
             <div id="tankDetailRank" style="flex:1; max-width:200px; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:6px 10px; background:linear-gradient(135deg,#2c3e50,#1a242f); border:1px solid #f1c40f; border-radius:6px; color:#fff;"></div>
             <button id="tankDetailTry" class="btn btn-mode">⚔️ Испытать</button>
             <button id="tankDetailSelect" class="btn btn-primary">Выбрать</button>

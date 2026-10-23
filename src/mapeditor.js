@@ -232,6 +232,8 @@
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText('💥', bcx, by + bh / 2);
                 ctx.textBaseline = 'alphabetic';
+            } else if (obj.type === 'box') {
+                GameTerrain.drawBox(ctx, obj, 'forest');
             } else {
                 const def = OBJ_TYPES[obj.type];
                 ctx.fillStyle = def.color;

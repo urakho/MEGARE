@@ -52,7 +52,7 @@ function getEntityFireCooldownStep(entity) {
 }
 
 const TANK_SHOT_COOLDOWNS = Object.freeze({
-    normal: 30, ice: 30, fire: 90, waterjet: 0, buratino: 60,
+    normal: 30, ice: 30, fire: 135, waterjet: 0, buratino: 60,
     toxic: 35, plasma: 300, musical: 80, illuminat: 240,
     mirror: 90, machinegun: 5, buckshot: 80, time: 60,
     imitator: 60, electric: 80, robot: 60, medical: 60,
@@ -79,7 +79,7 @@ function advanceFlamethrowerBurst(unit, shotsPerBurst, shotInterval) {
     unit.flamethrowerShots = (unit.flamethrowerShots || 0) + 1;
     if (unit.flamethrowerShots >= shotsPerBurst) {
         unit.flamethrowerShots = 0;
-        unit.fireCooldown = 90;
+        unit.fireCooldown = 135;
     } else {
         unit.fireCooldown = shotInterval;
     }
@@ -328,6 +328,14 @@ function applyBurovoyDrillDamage(source, damage, options = {}) {
         const dealt = isDrone ? damageCombatDrone(target, damage) : dealDamageToEntity(target, damage);
         if (dealt <= 0) return;
         refreshBurovoyFireSlow(target);
+        if (!isDrone) {
+            if (!target.burovoyDrillParalysis) {
+                target.burovoyOtherParalysisTime = target.paralyzed ? Math.max(0, target.paralyzedTime || 0) : 0;
+            }
+            target.burovoyDrillParalysis = true;
+            target.paralyzed = true;
+            target.paralyzedTime = Math.max(target.paralyzedTime || 0, 12);
+        }
         source.burovoyDrillHit = true;
         hits++;
         if (typeof spawnParticle === 'function' && window.effectsEnabled !== false) {
@@ -370,6 +378,29 @@ function applyBurovoyDrillDamage(source, damage, options = {}) {
     return hits;
 }
 
+function syncBurovoyDrillParalysis(target) {
+    if (!target || !target.burovoyDrillParalysis) return;
+    const otherParalysisTime = Math.max(
+        0,
+        (target.burovoyOtherParalysisTime || 0) - 1,
+        (target.paralyzedTime || 0) > 12 ? target.paralyzedTime : 0
+    );
+    target.burovoyOtherParalysisTime = otherParalysisTime;
+    const sources = [tank, ...allies, ...enemies];
+    for (const source of sources) {
+        if (!source || source.alive === false || !source.burovoyDrillActive || source.team === target.team) continue;
+        const shape = getBurovoyDrillHitShape(source);
+        if (drillIntersectsRect(shape.startX, shape.startY, shape.endX, shape.endY, shape.drillWidth, target) ||
+            circleIntersectsRect(shape.endX, shape.endY, shape.tipRadius, target)) return;
+    }
+    target.burovoyDrillParalysis = false;
+    target.burovoyFireSlowTimer = 0;
+    target._burovoyFireSlowTick = false;
+    target.paralyzedTime = otherParalysisTime;
+    target.paralyzed = otherParalysisTime > 0;
+    target.burovoyOtherParalysisTime = 0;
+}
+
 function updateBurovoyDrillAttack(source, wantsAttack, options = {}) {
     if (!source || source.alive === false) return 0;
 
@@ -387,9 +418,9 @@ function updateBurovoyDrillAttack(source, wantsAttack, options = {}) {
     source.burovoyDrillIsUlt = false;
 
     const damageMult = (typeof tank !== 'undefined' && source === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
-    const damagePerSecond = options.damagePerSecond || 30;
+    const damagePerSecond = options.damagePerSecond || 40;
     source.burovoyDrillDamageCarry = (source.burovoyDrillDamageCarry || 0) + (damagePerSecond / 60) * damageMult;
-    const damageTick = Math.floor(source.burovoyDrillDamageCarry);
+    const damageTick = Math.floor(source.burovoyDrillDamageCarry + 1e-9);
     if (damageTick <= 0) {
         source.burovoyDrillHit = false;
         return 0;
@@ -469,6 +500,7 @@ function damageDronesInRadius(x, y, radius, maxDamage, team, minimumDamage = 1) 
 }
 
 function hitCombatDroneWithBullet(bullet, drone) {
+    if (bullet.type === 'toxic' || bullet.type === 'megabomb') return false;
     if (bullet.type === 'rocket' || bullet.type === 'smallRocket') {
         explodeRocket(bullet);
         return true;
@@ -483,15 +515,15 @@ function hitCombatDroneWithBullet(bullet, drone) {
         applyDamage(bullet.x, bullet.y, bullet.explosionRadius, damage, bullet.team);
         return true;
     }
-    const piercing = ['toxic', 'megabomb', 'plasma', 'plasmaBlast', 'railgun', 'spartanSpear', 'electricBall'].includes(bullet.type);
+    const piercing = ['plasma', 'plasmaBlast', 'railgun', 'spartanSpear', 'electricBall'].includes(bullet.type);
     if (piercing) {
         const hitDrones = bullet.hitDrones || (bullet.hitDrones = []);
         if (hitDrones.includes(drone)) return false;
         hitDrones.push(drone);
     }
     const fallbackDamage = {
-        toxic: 50, megabomb: 50, plasma: 350, plasmaBlast: 600,
-        railgun: 75, spartanSpear: 80, electricBall: 150, droneBullet: 25
+        plasma: 350, plasmaBlast: 600,
+        railgun: 65, spartanSpear: 80, electricBall: 150, droneBullet: 25
     }[bullet.type] || 100;
     const damage = bullet.owner === 'player'
         ? applyPlayerDamage(bullet.damage ?? fallbackDamage)
@@ -879,6 +911,50 @@ function createElectricChain(startX, startY, angle, baseDamage = 2, ownerTeam = 
     }
 }
 
+function updateIlluminatMarkDamage() {
+    if (typeof GameTerrain === 'undefined' || typeof GameTerrain.forEachIlluminatMark !== 'function') return;
+    const damagePerTick = 10 / 60;
+    GameTerrain.forEachIlluminatMark(mark => {
+        const team = mark.team ?? mark.owner?.team;
+        if (team === undefined) return;
+        const radius = mark.size * 0.4;
+        const touches = target => {
+            if (!target || target.alive === false || target.team === team) return false;
+            const nearestX = Math.max(target.x, Math.min(mark.x, target.x + target.w));
+            const nearestY = Math.max(target.y, Math.min(mark.y, target.y + target.h));
+            return Math.hypot(mark.x - nearestX, mark.y - nearestY) <= radius;
+        };
+        if (gameState !== 'playing') return;
+        if (touches(tank)) {
+            const shieldFactor = tank.romanShieldActive ? 0.5 :
+                (tankType === 'mechShield' && tank.mechShieldActive ? 0.4 : 1);
+            const dealt = dealDamageToEntity(tank, damagePerTick * shieldFactor);
+            if (dealt > 0 && (window.frameCount || 0) % 10 === 0) tank.hitFlashTime = Date.now();
+            if (dealt > 0 && tank.hp <= 0) {
+                spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65);
+                if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
+                else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+            }
+        }
+        if (gameState !== 'playing') return;
+        for (const group of [allies, enemies]) {
+            for (let index = group.length - 1; index >= 0; index--) {
+                const target = group[index];
+                if (!touches(target)) continue;
+                const dealt = dealDamageToEntity(target, damagePerTick);
+                if (dealt > 0 && (window.frameCount || 0) % 10 === 0) target.hitFlashTime = Date.now();
+                if (dealt <= 0 || target.hp > 0) continue;
+                spawnExplosion(target.x + target.w / 2, target.y + target.h / 2, 65);
+                if (currentMode === 'war') { target.alive = false; target.respawnTimer = 600; }
+                else group.splice(index, 1);
+            }
+        }
+        forEachHostileDrone(team, drone => {
+            if (touches(drone)) damageCombatDrone(drone, damagePerTick);
+        });
+    });
+}
+
 // Update and apply damage from active nova zones
 function updateNovaZones() {
     if (typeof novaZones === 'undefined' || !novaZones.length) return;
@@ -896,6 +972,36 @@ function updateNovaZones() {
                     damageCombatDrone(drone, zone.damage);
                 }
             });
+            if (tank && tank.alive !== false && tank.team !== zone.ownerTeam &&
+                Math.hypot(tank.x + tank.w / 2 - zone.centerX, tank.y + tank.h / 2 - zone.centerY) <= zone.radius) {
+                const dealt = dealDamageToEntity(tank, applyIncomingPlayerDamage(zone.damage));
+                if (dealt > 0) {
+                    tank.hitFlashTime = Date.now();
+                    if (tank.hp <= 0 && gameState === 'playing') {
+                        spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65);
+                        if (currentMode === 'war') {
+                            tank.alive = false;
+                            tank.respawnTimer = 600;
+                        } else {
+                            gameState = 'lose';
+                            loseModeTrophies();
+                            syncResultOverlay('lose');
+                        }
+                    }
+                }
+            }
+            for (let i = allies.length - 1; i >= 0; i--) {
+                const ally = allies[i];
+                if (!ally || ally.alive === false || ally.team === zone.ownerTeam) continue;
+                if (Math.hypot(ally.x + ally.w / 2 - zone.centerX, ally.y + ally.h / 2 - zone.centerY) > zone.radius) continue;
+                dealDamageToEntity(ally, zone.damage);
+                ally.hitFlashTime = Date.now();
+                if (ally.hp <= 0) {
+                    spawnExplosion(ally.x + ally.w / 2, ally.y + ally.h / 2, 65);
+                    if (currentMode === 'war') { ally.alive = false; ally.respawnTimer = 600; }
+                    else allies.splice(i, 1);
+                }
+            }
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 if (!e || !e.alive || e.team === zone.ownerTeam) continue;
@@ -1082,10 +1188,8 @@ function createElectricNova(centerX, centerY, radius = 200, damage = 200, ownerT
         });
     }
     
-    // Loop backwards so we can remove dead enemies safely
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i];
-        if (!e || !e.alive || e.team === ownerTeam) continue;
+    for (const e of [tank, ...allies, ...enemies]) {
+        if (!e || e.alive === false || e.team === ownerTeam) continue;
         const ex = e.x + e.w / 2;
         const ey = e.y + e.h / 2;
         const d = Math.hypot(ex - centerX, ey - centerY);
@@ -1530,6 +1634,11 @@ function restoreMirrorProjectileSize(unit, projectile) {
     }
 }
 
+function canPlaceMineAt(x, y, radius) {
+    return typeof mines !== 'undefined' && !mines.some(mine =>
+        Math.hypot(mine.x - x, mine.y - y) < (mine.radius || 18) + radius);
+}
+
 function shoot() {
     if (tankType === 'fire') {
         // Flamethrower: emit a short cone of flame projectiles
@@ -1550,7 +1659,7 @@ function shoot() {
                 vx: Math.cos(ang) * speed + tvx,
                 vy: Math.sin(ang) * speed + tvy,
                 life: 20 + Math.floor(Math.random() * 8),
-                damage: 2,
+                damage: 0.75,
                 team: 0
             });
         }
@@ -1634,8 +1743,7 @@ function shoot() {
             team: 0,
             type: 'toxic',
             explodeTimer: 45, // explode after 45 ticks (~0.75 seconds)
-            spawned: 5, // spawn protection for 5 ticks
-            damage: 50
+            spawned: 5 // spawn protection for 5 ticks
         });
         tank.fireCooldown = 35; // moderate cooldown
     } else if (tankType === 'plasma') {
@@ -1722,7 +1830,7 @@ function shoot() {
         if (pType === 'purple' || pType === 'plasma') {
             props.damage = 350; props.w = 10; props.h = 10; props.piercing = true;
         } else if (pType === 'fire') {
-            props.damage = 2; props.w = 5; props.h = 5; // flame
+            props.damage = 0.75; props.w = 5; props.h = 5; // flame
         } else if (pType === 'toxic') {
             props = { ...props, type:'toxic', explodeTimer: 45, spawned: 5 }; // mini toxic bomb
         } else if (pType === 'musical') {
@@ -1745,7 +1853,7 @@ function shoot() {
         } else if (pType === 'buckshot') {
             props.type = 'buckshot'; props.damage = BUCKSHOT_PELLET_DAMAGE; props.w = 6; props.h = 6;
         } else if (pType === 'railgun') {
-            props.type = 'railgun'; props.damage = 75; props.w = 6; props.h = 6; props.piercing = true;
+            props.type = 'railgun'; props.damage = 65; props.w = 6; props.h = 6; props.piercing = true;
         } else if (pType === 'machinegun') {
             props.type = 'machinegun'; props.damage = MACHINEGUN_BULLET_DAMAGE; props.w = 7; props.h = 7;
         } else {
@@ -1807,7 +1915,7 @@ function shoot() {
         bullets.push({
             x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
             y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
-            w: 9, h: 9,
+            w: 14, h: 14,
             vx: Math.cos(tank.turretAngle) * speed,
             vy: Math.sin(tank.turretAngle) * speed,
             life: life,
@@ -1818,7 +1926,7 @@ function shoot() {
         });
         tank.fireCooldown = 60; // 1 second cooldown
     } else if (tankType === 'imitator') {
-        // imitator base form: single powerful shot, damage 2
+        // Imitator base form: single 100-damage shot
         const speed = 5;
         const life = 100;
         bullets.push({
@@ -1831,13 +1939,13 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'imitator',
-            damage: 200
+            damage: 100
         });
         tank.fireCooldown = 60; // 1 second cooldown
     } else if (tankType === 'electric') {
-        // Electric ball: homing projectile that tracks enemies for several seconds
+        // Electric ball: homing projectile that tracks enemies for three seconds
         const speed = 4;
-        const life = 300; // 5 seconds
+        const life = 180; // 3 seconds
         bullets.push({
             x: tank.x + tank.w/2 + Math.cos(tank.turretAngle) * 25,
             y: tank.y + tank.h/2 + Math.sin(tank.turretAngle) * 25,
@@ -1869,7 +1977,7 @@ function shoot() {
             owner: 'player',
             team: 0,
             type: 'railgun',
-            damage: 75,
+            damage: 65,
             piercing: true
         });
         tank.fireCooldown = 60;
@@ -1893,16 +2001,17 @@ function shoot() {
         tank.fireCooldown = 60; // 1 shot per second
     } else if (tankType === 'mine') {
         // Place a landmine at the tank's current centre position
-        if (typeof mines !== 'undefined') {
+        const mineX = tank.x + tank.w / 2, mineY = tank.y + tank.h / 2;
+        if (typeof mines !== 'undefined' && canPlaceMineAt(mineX, mineY, 18)) {
             mines.push({
-                x: tank.x + tank.w / 2,
-                y: tank.y + tank.h / 2,
+                x: mineX,
+                y: mineY,
                 radius: 18,
                 team: 0,
                 damage: 150
             });
+            tank.fireCooldown = 90; // 1.5s between mine placements
         }
-        tank.fireCooldown = 90; // 1.5s between mine placements
     } else if (tankType === 'burovoy') {
         return;
     } else if (tankType === 'spartan') {
@@ -2054,7 +2163,7 @@ function shoot() {
     } else if (tankType === 'myasnoy') {
         // Continuous bio-spray emits a light stream without burning wood.
         // Base damage is scaled later in main.js so it is not applied twice.
-        const _myDmg = 1.5;
+        const _myDmg = 2;
         const _mySpread = 0.70;
         const _myCount = 2;
         for (let _mi = 0; _mi < _myCount; _mi++) {
@@ -2482,6 +2591,14 @@ function updatePhysics() {
         }
         // normalize bullet rect (bullets stored by center)
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
+        if (b.type === 'toxic' || b.type === 'megabomb') {
+            const cover = terrainIndex ? queryTerrainCollisionIndex(terrainIndex, bRect) : objects;
+            if (cover.some(obj => obj.type === 'woodenWall' && checkRectCollision(bRect, obj))) {
+                explodeGas(b, b.type === 'megabomb');
+                bullets.splice(i, 1);
+                continue;
+            }
+        }
         if (b.type === 'rocket' || b.type === 'smallRocket') {
             const collided = objects.some(obj => isBlockingTerrainObject(obj) && checkRectCollision(bRect, obj));
             if (collided) {
@@ -2714,7 +2831,7 @@ function updatePhysics() {
             }
         }
         if (!hit) {
-            // Check collision with tank (player team = 0) - toxic/megabomb only damage, don't stop
+            // Check collision with tank (player team = 0); poison projectiles pass through.
             if (tank.hp > 0 && b.team !== tank.team && checkRectCollision(bRect, tank)) {
                 // Medical pulse: only damage, no healing to allies
                 if (b.type === 'medicalPulse') {
@@ -2810,13 +2927,7 @@ function updatePhysics() {
                     explodeMechRocket(b, tank); // tank is direct hit
                     bullets.splice(i, 1);
                 } else if (b.type === 'toxic' || b.type === 'megabomb') {
-                    // Toxic bombs only damage once per target, don't stop or explode on contact
-                    if (!b.hitEntities) b.hitEntities = [];
-                    if (!b.hitEntities.includes('player')) {
-                        dealDamageToEntity(tank, Math.round((b.damage || 50) * _shieldMult));
-                        b.hitEntities.push('player');
-                    }
-                    // continue flying, don't remove bullet
+                    // Poison projectiles pass through; only their clouds deal damage.
                 } else if (b.type === 'plasma') {
                     // Plasma bolt pierces — hit player only once
                     if (!b.hitEntities) b.hitEntities = [];
@@ -2852,7 +2963,7 @@ function updatePhysics() {
                     // Railgun pierces player too — hit once then continue flying
                     if (!b.hitEntities) b.hitEntities = [];
                     if (!b.hitEntities.includes('player')) {
-                        dealDamageToEntity(tank, Math.round((b.damage || 75) * _shieldMult));
+                        dealDamageToEntity(tank, Math.round((b.damage || 65) * _shieldMult));
                         b.hitEntities.push('player');
                         for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
                     }
@@ -2884,7 +2995,7 @@ function updatePhysics() {
                      }
                      bullets.splice(i, 1);
                 }
-                tank.hitFlashTime = Date.now();
+                if (b.type !== 'toxic' && b.type !== 'megabomb') tank.hitFlashTime = Date.now();
                 if (tank.hp <= 0) {
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
                     if (currentMode === 'war') {
@@ -2904,7 +3015,7 @@ function updatePhysics() {
                 }
                 continue;
             }
-            // Check collision with allies - toxic/megabomb only damage, don't stop
+            // Check collision with allies; poison projectiles pass through.
             for (let j = allies.length - 1; j >= 0; j--) {
                 const a = allies[j];
                 if (!a || !a.alive) continue;
@@ -2971,9 +3082,7 @@ function updatePhysics() {
                         explodeMechRocket(b, a); // ally is direct hit
                         bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
-                        // Toxic bombs only damage, don't stop or explode on contact
-                        a.hp = (a.hp || 300) - 50;
-                        // continue flying, don't remove bullet
+                        // Poison projectiles pass through; only their clouds deal damage.
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through allies — hit each only once
                         if (!b.hitEntities) b.hitEntities = [];
@@ -3012,7 +3121,7 @@ function updatePhysics() {
                     break;
                 }
             }
-            // Check collision with enemies - toxic/megabomb only damage, don't stop
+            // Check collision with enemies; poison projectiles pass through.
             let reflected = false;
             for (let j = enemies.length - 1; j >= 0; j--) {
                 const e = enemies[j];
@@ -3069,15 +3178,7 @@ function updatePhysics() {
                         explodeMechRocket(b, e); // enemy is direct hit — guarantees full damage
                         bullets.splice(i, 1);
                     } else if (b.type === 'toxic' || b.type === 'megabomb') {
-                        // Toxic bombs only damage once per target, don't stop or explode on contact
-                        if (!b.hitEntities) b.hitEntities = [];
-                        if (!b.hitEntities.includes(j)) {
-                            let dmgToxic = b.damage || 50;
-                            if (b.owner === 'player') dmgToxic = applyPlayerDamage(dmgToxic);
-                            dealDamageToEntity(e, dmgToxic);
-                            b.hitEntities.push(j);
-                        }
-                        // continue flying, don't remove bullet
+                        // Poison projectiles pass through; only their clouds deal damage.
                     } else if (b.type === 'plasma') {
                         // Plasma bolt pierces through enemies — hit each only once
                         if (!b.hitEntities) b.hitEntities = [];
@@ -3125,7 +3226,7 @@ function updatePhysics() {
                         // Railgun: pierce through all enemies, hit each only once
                         if (!b.hitEntities) b.hitEntities = [];
                         if (!b.hitEntities.includes(j)) {
-                            let dmgRailgun = b.damage || 75;
+                            let dmgRailgun = b.damage || 65;
                             if (b.owner === 'player') dmgRailgun = applyPlayerDamage(dmgRailgun);
                             dealDamageToEntity(e, dmgRailgun);
                             b.hitEntities.push(j);
@@ -3179,7 +3280,7 @@ function updatePhysics() {
                         }
                         bullets.splice(i, 1);
                     }
-                    e.hitFlashTime = Date.now();
+                    if (b.type !== 'toxic' && b.type !== 'megabomb') e.hitFlashTime = Date.now();
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
                             e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
@@ -3640,9 +3741,10 @@ function updatePhysics() {
         }
     }
 
-    tickSandstormDebuff(tank);
-    for (const ally of allies) tickSandstormDebuff(ally);
-    for (const enemy of enemies) tickSandstormDebuff(enemy);
+    for (const unit of [tank, ...allies, ...enemies]) {
+        syncBurovoyDrillParalysis(unit);
+        tickSandstormDebuff(unit);
+    }
     
     // Check artillery mode
     if (tank.artilleryTimer > 0) {
@@ -3744,8 +3846,8 @@ function updatePhysics() {
         if (ent.isBoss) { ent.poisonTimer = 0; return; } // Boss is immune to poison
         if (ent.tankType === 'toxic') { ent.poisonTimer = 0; return; } // Toxic tank is immune to poison
         if (ent.poisonTimer > 0) {
-            // Fixed 40 HP/sec poison damage regardless of max HP
-            const dmgPerTick = 40 / 60;
+            // Fixed 44 HP/sec poison damage regardless of max HP.
+            const dmgPerTick = 44 / 60;
 
               // Mirror Tank Logic: Poison counts as hit type 'toxic' (for any mirror tank)
               if (ent.tankType === 'mirror') {
@@ -4020,13 +4122,13 @@ function canPushBoxInRow(part, box, entity, dx, dy, contact) {
         const overlap = Math.min(partY + part.h, box.y + box.h) - Math.max(partY, box.y);
         if (overlap <= 1e-7) return false;
         if (dx > 0 ? box.x < part.x + part.w - 1e-7 : box.x + box.w > part.x + 1e-7) return false;
-        return part === entity || overlap + 1e-7 >= Math.min(part.h, box.h) / 12;
+        return part === entity || overlap + 1e-7 >= Math.min(part.h, box.h) / 10;
     }
     const partX = part.x + dx * contact;
     const overlap = Math.min(partX + part.w, box.x + box.w) - Math.max(partX, box.x);
     if (overlap <= 1e-7) return false;
     if (dy > 0 ? box.y < part.y + part.h - 1e-7 : box.y + box.h > part.y + 1e-7) return false;
-    return part === entity || overlap + 1e-7 >= Math.min(part.w, box.w) / 12;
+    return part === entity || overlap + 1e-7 >= Math.min(part.w, box.w) / 10;
 }
 
 function pushBoxChain(entity, dx, dy, botMovement = false) {

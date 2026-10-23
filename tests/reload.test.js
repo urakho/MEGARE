@@ -34,7 +34,7 @@ test('bot shot cooldowns use the player values for every standard weapon', () =>
     const context = { FIRE_COOLDOWN: 20, GameTerrain: { reloadFactor: () => 1 } };
     vm.runInNewContext(section(physics, 'function getEntityTankType(', 'function advanceFlamethrowerBurst('), context);
     const expected = {
-        normal: 30, ice: 30, buratino: 60, toxic: 35, plasma: 300,
+        normal: 30, ice: 30, fire: 135, buratino: 60, toxic: 35, plasma: 300,
         musical: 80, illuminat: 240, mirror: 90, machinegun: 5,
         buckshot: 80, time: 60, imitator: 60, electric: 80,
         robot: 60, medical: 60, mine: 90, spartan: 40,
@@ -61,6 +61,39 @@ test('buckshot fires five 75-damage pellets and reloads twice as long', () => {
     assert.equal(context.bullets.length, 5);
     assert.ok(context.bullets.every(bullet => bullet.type === 'buckshot' && bullet.damage === 75));
     assert.equal(context.tank.fireCooldown, 80);
+});
+
+test('time projectile is full size and imitator starts at 100 damage', () => {
+    const physics = read('physics.js');
+    const context = {
+        tank: { x: 0, y: 0, w: 38, h: 38, turretAngle: 0, fireCooldown: 0 },
+        tankType: 'time', bullets: [], FIRE_COOLDOWN: 20,
+        GameTerrain: { reloadFactor: () => 1 }
+    };
+    vm.runInNewContext(section(physics, 'function getEntityTankType(', 'function advanceFlamethrowerBurst('), context);
+    vm.runInNewContext(section(physics, 'function shoot() {', 'function updateSpecialProjectiles()'), context);
+    context.shoot();
+    assert.equal(context.bullets[0].w, 14);
+    assert.equal(context.bullets[0].h, 14);
+    context.tankType = 'imitator';
+    context.tank.fireCooldown = 0;
+    context.shoot();
+    assert.equal(context.bullets[1].damage, 100);
+});
+
+test('myasnoy base form fires two 2-damage vessels per shot', () => {
+    const physics = read('physics.js');
+    const context = {
+        tank: { x: 0, y: 0, w: 38, h: 38, turretAngle: 0, fireCooldown: 0 },
+        tankType: 'myasnoy', bullets: [], FIRE_COOLDOWN: 20,
+        GameTerrain: { reloadFactor: () => 1 },
+        advanceMyasnoySpray: () => {}
+    };
+    vm.runInNewContext(section(physics, 'function getEntityTankType(', 'function advanceFlamethrowerBurst('), context);
+    vm.runInNewContext(section(physics, 'function shoot() {', 'function updateSpecialProjectiles()'), context);
+    context.shoot();
+    assert.equal(context.bullets.length, 2);
+    assert.ok(context.bullets.every(bullet => bullet.type === 'myasnoyBio' && bullet.damage === 2));
 });
 
 test('myasnoy body bot keeps its three-second salvo cycle', () => {
@@ -115,7 +148,7 @@ test('flamethrower and waterjet stop to reload after a finite burst', () => {
         assert.equal(flame.fireCooldown, 10);
     }
     context.advanceFlamethrowerBurst(flame, 9, 10);
-    assert.equal(flame.fireCooldown, 90);
+    assert.equal(flame.fireCooldown, 135);
     assert.equal(flame.flamethrowerShots, 0);
 
     const water = { fireCooldown: 0 };
@@ -135,7 +168,8 @@ test('flamethrower and waterjet stop to reload after a finite burst', () => {
     context.tankType = 'fire';
     vm.runInNewContext(section(physics, 'function shoot() {', 'function updateSpecialProjectiles()'), context);
     for (let shot = 0; shot < 90; shot++) context.shoot();
-    assert.equal(context.tank.fireCooldown, 90);
+    assert.equal(context.tank.fireCooldown, 135);
+    assert.ok(context.flames.every(flame => flame.damage === 0.75));
     context.tank.fireCooldown = 0;
     context.tankType = 'waterjet';
     context.shoot();
@@ -151,6 +185,28 @@ test('flamethrower and waterjet stop to reload after a finite burst', () => {
     assert.equal(context.tank.fireCooldown, 0);
     assert.equal(context.tank.myasnoyBurstFrames, 1);
     assert.equal(context.bullets.length, 2);
+});
+
+test('mines require clear space and do not consume a shot when placement is blocked', () => {
+    const physics = read('physics.js');
+    const context = { tank: { x: 0, y: 0, w: 38, h: 38, fireCooldown: 0 },
+        tankType: 'mine', mines: [] };
+    vm.runInNewContext(section(physics, 'function canPlaceMineAt(', 'function updateSpecialProjectiles()'), context);
+    context.shoot();
+    assert.equal(context.mines.length, 1);
+    assert.equal(context.tank.fireCooldown, 90);
+    context.tank.fireCooldown = 0;
+    context.shoot();
+    assert.equal(context.mines.length, 1);
+    assert.equal(context.tank.fireCooldown, 0);
+    context.tank.x = 36;
+    context.shoot();
+    assert.equal(context.mines.length, 2, 'touching mine edges do not overlap');
+    context.tank.x = 72;
+    context.mines.push({ x: 91, y: 19, radius: 18, team: 1 });
+    context.tank.fireCooldown = 0;
+    context.shoot();
+    assert.equal(context.mines.length, 3, 'enemy mines also block placement');
 });
 
 test('waterjet damages and pushes a target without disabling its weapons', () => {
@@ -183,6 +239,13 @@ test('waterjet damages and pushes a target without disabling its weapons', () =>
     context.updateUnitWaterjet(tank, [target]);
     assert.equal(tank.waterjetActive, false);
     assert.equal(tank.fireCooldown, 90);
+    tank.waterjetActive = true;
+    tank.waterjetTimer = 90;
+    tank.paralyzed = true;
+    const hpBeforeParalysis = target.hp;
+    context.updateUnitWaterjet(tank, [target]);
+    assert.equal(tank.waterjetActive, false);
+    assert.equal(target.hp, hpBeforeParalysis);
 });
 
 test('reload bar fills as cooldown elapses and clears between shots', () => {
@@ -212,14 +275,6 @@ test('reload bar fills as cooldown elapses and clears between shots', () => {
     const visibleOpacity = unit._reloadBarOpacity;
     context.drawReloadBar(ctx, unit, 'normal', '#fff');
     assert.ok(unit._reloadBarOpacity < visibleOpacity && unit._reloadBarOpacity > 0);
-    unit.fireCooldown = 30;
-    clock += 50;
-    rectangles.length = 0;
-    context.drawReloadBar(ctx, unit, 'mechDiy', '#fff');
-    assert.equal(unit._reloadBarProgress, 0);
-    assert.ok(rectangles.some(rect => rect[1] === 27), 'mech reload bar sits above its energy bar');
-    assert.equal(rectangles.length, 2, 'simple bar uses only background and fill');
-
     const myasnoy = { x: 10, y: 50, w: 38, fireCooldown: 12, myasnoyReloading: false };
     rectangles.length = 0;
     context.drawReloadBar(ctx, myasnoy, 'myasnoy', '#fff');
@@ -233,6 +288,24 @@ test('reload bar fills as cooldown elapses and clears between shots', () => {
     rectangles.length = 0;
     context.drawReloadBar(ctx, myasnoy, 'myasnoy', '#fff');
     assert.equal(rectangles.length, 2, 'the bar stays visible until the reload finishes');
+});
+
+test('reload bars stay hidden for all three mechs', () => {
+    const tanks = read('tanks.js');
+    const context = { performance: { now: () => 100 } };
+    vm.runInNewContext(section(tanks, 'function drawReloadBar(', 'function renderGameFrame()'), context);
+    const rectangles = [];
+    const ctx = {
+        globalAlpha: 1,
+        save() {}, restore() {},
+        fillRect(...args) { rectangles.push(args); }
+    };
+    for (const type of ['mechDiy', 'mechShield', 'mechRocket']) {
+        const unit = { x: 10, y: 50, w: 38, fireCooldown: 60, mechBurstCooldown: 60 };
+        context.drawReloadBar(ctx, unit, type, '#fff');
+        assert.equal(rectangles.length, 0, type);
+        assert.equal(unit._reloadBarOpacity, undefined, type);
+    }
 });
 
 test('machinegun reload bar appears only after the firing burst overheats', () => {

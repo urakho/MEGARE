@@ -2613,3 +2613,63 @@ canvas.tank-display {
     #pauseMenu .pause-actions { gap: 9px; padding: 14px 0; }
     #pauseMenu .pause-action { min-height: 45px; font-size: 14px; }
 }
+
+/* Keep the tank's description, stats and actions visible together. */
+#tankDetailModal .modal-box {
+    width: min(46rem, 96vw);
+    max-width: 96vw;
+    max-height: calc(100dvh - 1rem);
+    padding: 1.1rem 1.25rem;
+    overflow-y: auto;
+}
+#tankDetailModal .modal-title { margin-bottom: 0.4rem; }
+#tankDetailModal #tankDetailRarity { font-size: 1rem !important; }
+#tankDetailModal .tank-detail-main,
+#tankDetailModal .tank-detail-actions { width: 100%; }
+#tankDetailModal .tank-detail-main { margin-bottom: 0.7rem !important; }
+#tankDetailModal .tank-detail-info { gap: 0.5rem !important; }
+#tankDetailModal #tankDetailDescription { line-height: 1.35 !important; }
+#tankDetailModal #tankDetailStats { line-height: 1.35 !important; }
+#tankDetailModal #tankDetailStats > div { gap: 0.4rem !important; }
+#tankDetailModal .tank-detail-actions .btn { margin: 0; }
+
+@media (max-width: 600px) {
+    #tankDetailModal .modal-box {
+        width: 98vw;
+        max-width: 98vw;
+        max-height: calc(100dvh - 0.5rem);
+        margin: auto;
+        padding: 0.65rem;
+        overflow-y: auto;
+    }
+    #tankDetailModal .tank-detail-main {
+        display: grid !important;
+        grid-template-columns: 7.5rem minmax(0, 1fr);
+        gap: 0.5rem !important;
+    }
+    #tankDetailModal #tankDetailCanvas {
+        width: 7.5rem !important;
+        height: 7.5rem !important;
+        grid-column: 1;
+        grid-row: 1;
+    }
+    #tankDetailModal .tank-detail-info { display: contents !important; }
+    #tankDetailModal #tankDetailDescription {
+        grid-column: 2;
+        grid-row: 1;
+        font-size: 0.75rem !important;
+    }
+    #tankDetailModal #tankDetailStats {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        padding: 0.4rem 0.5rem !important;
+    }
+    #tankDetailModal #tankDetailStats > div > div > div:first-child { width: 3.5rem !important; }
+    #tankDetailModal #tankDetailStats > div > div > div:nth-child(2) { width: 2.75rem !important; }
+    #tankDetailModal .tank-detail-actions { gap: 0.4rem !important; }
+    #tankDetailModal .tank-detail-actions .btn {
+        min-height: 2.5rem;
+        padding: 0.4rem 0.25rem;
+        font-size: 0.8rem;
+    }
+}

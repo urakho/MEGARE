@@ -74,7 +74,7 @@ test('boxes beside the push direction do not move and a wall stops the chain', (
     close(game.tank.x, 10);
 });
 
-test('boxes with less than one twelfth of a side in common block the row', () => {
+test('boxes with less than one tenth of a side in common block the row', () => {
     const boxes = [box(20, 20), box(40, 1), box(40, 39), box(20, 40)];
     const game = setup(boxes);
     game.tank.y = 20;
@@ -97,12 +97,12 @@ test('a box with insufficient side overlap stays still even after the gap closes
     assert.equal(game.checkRectCollision(boxes[0], boxes[1]), false);
 });
 
-test('exactly one twelfth of a shared side transfers the push in every direction', () => {
+test('exactly one tenth of a shared side transfers the push in every direction', () => {
     const cases = [
-        { tankX: 0, tankY: 24, firstX: 24, firstY: 24, nextX: 48, nextY: 46, dx: 10, dy: 0 },
-        { tankX: 72, tankY: 24, firstX: 48, firstY: 24, nextX: 24, nextY: 46, dx: -10, dy: 0 },
-        { tankX: 24, tankY: 0, firstX: 24, firstY: 24, nextX: 46, nextY: 48, dx: 0, dy: 10 },
-        { tankX: 24, tankY: 72, firstX: 24, firstY: 48, nextX: 46, nextY: 24, dx: 0, dy: -10 }
+        { tankX: 0, tankY: 24, firstX: 24, firstY: 24, nextX: 48, nextY: 45.6, dx: 10, dy: 0 },
+        { tankX: 72, tankY: 24, firstX: 48, firstY: 24, nextX: 24, nextY: 45.6, dx: -10, dy: 0 },
+        { tankX: 24, tankY: 0, firstX: 24, firstY: 24, nextX: 45.6, nextY: 48, dx: 0, dy: 10 },
+        { tankX: 24, tankY: 72, firstX: 24, firstY: 48, nextX: 45.6, nextY: 24, dx: 0, dy: -10 }
     ];
     for (const sample of cases) {
         const first = { type: 'box', x: sample.firstX, y: sample.firstY, w: 24, h: 24 };

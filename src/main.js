@@ -758,7 +758,7 @@ const tankMaxHpByType = {
     'spartan': 320,
     'kamikaze': 300,
     'air': 200,
-    'myasnoy': 280,
+    'myasnoy': 320,
     'boss_hell': 7500
 };
 
@@ -941,6 +941,8 @@ const tank = {
     myasnoyBodyBot: null,
     myasnoyEyeUltCooldown: 0,
     myasnoyAttackTimer: 0,
+    myasnoyAttackAngle: 0,
+    myasnoyAttackHitTargets: null,
     myasnoyHypnoBeamTimer: 0,
 };
 
@@ -951,6 +953,73 @@ const BUROVOY_ULT_COOLDOWN = 720;
 function roundMyasnoyFormHp(value, minValue = 10) {
     const rounded = Math.round((value || 0) / 10) * 10;
     return Math.max(minValue, rounded);
+}
+
+const MYASNOY_EYE_ATTACK_DURATION = 18;
+const MYASNOY_EYE_ATTACK_HALF_ARC = Math.PI * 0.65;
+const MYASNOY_EYE_ATTACK_RANGE_MULT = 2.2;
+
+function updateMyasnoyEyeAttackSweep(unit) {
+    const timer = unit.myasnoyAttackTimer || 0;
+    if (timer <= 0) {
+        unit.myasnoyAttackHitTargets = null;
+        return;
+    }
+
+    const centerX = unit.x + unit.w / 2;
+    const centerY = unit.y + unit.h / 2;
+    const range = unit.w * MYASNOY_EYE_ATTACK_RANGE_MULT;
+    const facing = unit.myasnoyAttackAngle ?? unit.turretAngle;
+    const progress = Math.min(1, (MYASNOY_EYE_ATTACK_DURATION + 1 - timer) / MYASNOY_EYE_ATTACK_DURATION);
+    const sweptAngle = -MYASNOY_EYE_ATTACK_HALF_ARC + progress * MYASNOY_EYE_ATTACK_HALF_ARC * 2;
+    const hitTargets = unit.myasnoyAttackHitTargets || (unit.myasnoyAttackHitTargets = new Set());
+    const damage = Math.round(100 * getPlayerDmgMult());
+    const withinSweep = (target) => {
+        const dx = target.x + (target.w || 0) / 2 - centerX;
+        const dy = target.y + (target.h || 0) / 2 - centerY;
+        if (Math.hypot(dx, dy) > range) return false;
+        const relativeAngle = Math.atan2(dy, dx) - facing;
+        const angle = Math.atan2(Math.sin(relativeAngle), Math.cos(relativeAngle));
+        return angle >= -MYASNOY_EYE_ATTACK_HALF_ARC && angle <= sweptAngle;
+    };
+
+    for (let index = enemies.length - 1; index >= 0; index--) {
+        const enemy = enemies[index];
+        if (!enemy || !enemy.alive || hitTargets.has(enemy) || !withinSweep(enemy)) continue;
+        hitTargets.add(enemy);
+        enemy.hp -= damage;
+        enemy.hitFlashTime = Date.now();
+        for (let particle = 0; particle < 6; particle++) {
+            spawnParticle(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, '#cc0000', 0.9);
+        }
+        if (enemy.hp <= 0) {
+            if (typeof spawnExplosion === 'function') spawnExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 40);
+            enemies.splice(index, 1);
+            if (typeof gainTrophies === 'function') gainTrophies(1);
+        }
+    }
+    forEachHostileDrone(unit.team, drone => {
+        if (hitTargets.has(drone) || !withinSweep(drone)) return;
+        hitTargets.add(drone);
+        damageCombatDrone(drone, damage);
+    });
+    for (let index = objects.length - 1; index >= 0; index--) {
+        const object = objects[index];
+        if (!object || (object.type !== 'woodenWall' && object.type !== 'box' && object.type !== 'barrel') ||
+            hitTargets.has(object) || !withinSweep(object)) continue;
+        if (object.type === 'woodenWall') {
+            hitTargets.add(object);
+            if (typeof damageWoodenWall === 'function') damageWoodenWall(object, damage, { hitColor: '#cc2200', hitParticles: 4 });
+        } else if (object.type === 'box') {
+            hitTargets.add(object);
+            for (let particle = 0; particle < 5; particle++) spawnParticle(object.x + object.w / 2, object.y + object.h / 2, '#cc8800', 0.9);
+            objects.splice(index, 1);
+            if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
+        } else if (object.type === 'barrel') {
+            hitTargets.add(object);
+            if (typeof explodeBarrel === 'function') explodeBarrel(object);
+        }
+    }
 }
 
 function resetTankMatchUltState(unit) {
@@ -1012,6 +1081,8 @@ function resetTankMatchUltState(unit) {
     unit.myasnoyBodyBot = null;
     unit.myasnoyEyeUltCooldown = 0;
     unit.myasnoyAttackTimer = 0;
+    unit.myasnoyAttackAngle = 0;
+    unit.myasnoyAttackHitTargets = null;
     unit.myasnoyHypnoBeamTimer = 0;
     unit.myasnoySeparationAnim = 0;
     unit.myasnoySeparationAnimMax = 0;
@@ -1854,7 +1925,7 @@ function startGame(mode) {
     }
     if (mode === 'leaderhunt') mode = 'bossfight';
     battleSessionId++;
-    window.currentTerrain = GameTerrain.randomType();
+    window.currentTerrain = mode === 'bossfight' ? 'lava' : GameTerrain.randomType();
     GameTerrain.resetBattle();
 
     if (commandInput) commandInput.blur();
@@ -1907,6 +1978,8 @@ function startGame(mode) {
     tank.sandNoShootTimer = 0;
     tank.burovoyFireSlowTimer = 0;
     tank._burovoyFireSlowTick = false;
+    tank.burovoyDrillParalysis = false;
+    tank.burovoyOtherParalysisTime = 0;
     tank.mirrorShieldActive = false;
     tank.mirrorShieldTimer = 0;
     tank.mirrorShieldCooldown = 0;
@@ -1998,6 +2071,8 @@ function startGame(mode) {
     tank.myasnoyBodyBot = null;
     tank.myasnoyEyeUltCooldown = 0;
     tank.myasnoyAttackTimer = 0;
+    tank.myasnoyAttackAngle = 0;
+    tank.myasnoyAttackHitTargets = null;
     tank.myasnoyHypnoBeamTimer = 0;
     tank.myasnoySeparationAnim = 0;
     tank.myasnoySeparationAnimMax = 0;
@@ -2175,7 +2250,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
 
     tank.paralyzed = false; tank.paralyzedTime = 0; tank.frozenEffect = 0; tank.iceSlowed = false; tank.iceSlowedTime = 0;
     tank.confused = 0; tank.sandCurseTimer = 0; tank.sandBlindTimer = 0; tank.sandNoShootTimer = 0; tank.mirrorShieldActive = false; tank.mirrorShieldTimer = 0; tank.mirrorShieldCooldown = 0;
-    tank.burovoyFireSlowTimer = 0; tank._burovoyFireSlowTick = false;
+    tank.burovoyFireSlowTimer = 0; tank._burovoyFireSlowTick = false; tank.burovoyDrillParalysis = false; tank.burovoyOtherParalysisTime = 0;
     tank.burning = false; tank.burnTimer = 0; tank.burnDps = 0;
     tank.lastHitType = null; tank.lastHitTime = 0; tank.lastHitProjectileSize = null; tank.alive = true;
     tank.fireCooldown = 0; tank.flamethrowerShots = 0; tank.respawnTimer = 0; tank.respawnCount = 0;
@@ -2205,7 +2280,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     tank.isUltimateActive = false; tank.ultimateTimer = 0; tank.ultimateCooldown = 0; tank.iceUltimate = false;
     tank.romanShieldActive = false; tank.romanShieldTimer = 0; tank.romanShieldCooldown = 0;
     tank.myasnoyUltActive = false; tank.myasnoyUltTimer = 0; tank.myasnoyUltCooldown = 0;
-    tank.myasnoyBodyBot = null; tank.myasnoyEyeUltCooldown = 0; tank.myasnoyAttackTimer = 0; tank.myasnoyHypnoBeamTimer = 0;
+    tank.myasnoyBodyBot = null; tank.myasnoyEyeUltCooldown = 0; tank.myasnoyAttackTimer = 0; tank.myasnoyAttackAngle = 0; tank.myasnoyAttackHitTargets = null; tank.myasnoyHypnoBeamTimer = 0;
     tank.myasnoySeparationAnim = 0; tank.myasnoySeparationAnimMax = 0;
     tank.myasnoySeparationStartX = 0; tank.myasnoySeparationStartY = 0;
     tank.myasnoySeparationTargetX = 0; tank.myasnoySeparationTargetY = 0;
@@ -4085,7 +4160,8 @@ function update() {
             tank.paralyzedTime = (tank.paralyzedTime || 0) - 1;
             if (tank.paralyzedTime <= 0) tank.paralyzed = false;
             if (tank.frozenEffect) tank.frozenEffect--;
-        } else {
+        }
+        if (tank.paralyzed) keys['KeyE'] = false;
         
         // handle ice slow state for player tank (50% slowdown)
         if (tank.iceSlowed) {
@@ -4851,8 +4927,8 @@ function update() {
                 const _originX = tank.x;
                 const _originY = tank.y;
                 const _mySpeedBonus = typeof getTankSpeedBonus === 'function' ? getTankSpeedBonus('myasnoy') : 0;
-                const _myBodyMaxHp = roundMyasnoyFormHp(tank.maxHp * 0.7, 10);
-                const _myBodyHp = Math.min(_myBodyMaxHp, roundMyasnoyFormHp(tank.hp * 0.7, 1));
+                const _myBodyMaxHp = roundMyasnoyFormHp(tank.maxHp * (300 / 320), 10);
+                const _myBodyHp = Math.min(_myBodyMaxHp, roundMyasnoyFormHp(tank.hp * (300 / 320), 1));
                 const _myBodySpot = findFreeSpot(_originX, _originY, tank.w, tank.h, 140, 10, tank, 20) || { x: _originX, y: _originY };
                 // Activate separation: spawn body as ally bot, player becomes eye
                 const _myBodyBot = {
@@ -4878,7 +4954,7 @@ function update() {
                 tank.myasnoyBurstFrames = 0;
                 tank.myasnoyReloading = false;
                 tank.myasnoyUltTimer = 600; // 10 seconds
-                const _myEyeMaxHp = roundMyasnoyFormHp(tank.maxHp * 0.55, 10);
+                const _myEyeMaxHp = roundMyasnoyFormHp(tank.maxHp * (180 / 320), 10);
                 tank.hp = _myEyeMaxHp;
                 tank.maxHp = _myEyeMaxHp;
                 tank.speed = parseFloat((3.6 + _mySpeedBonus).toFixed(1));
@@ -4997,7 +5073,7 @@ function update() {
                     tank.myasnoyUltActive = false;
                     tank.myasnoyBurstFrames = 0;
                     tank.myasnoyReloading = false;
-                    const _restoredMaxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType['myasnoy']) || 280;
+                    const _restoredMaxHp = tankMaxHpByType.myasnoy + getTankUpgrade('myasnoy', 'hp') * 50;
                     const _restoredSpeed = ((typeof tankMaxSpeedByType !== 'undefined' && tankMaxSpeedByType['myasnoy']) || 3.0) + (typeof getTankSpeedBonus === 'function' ? getTankSpeedBonus('myasnoy') : 0);
                     const _hpRatio = tank.hp / tank.maxHp;
                     tank.maxHp = _restoredMaxHp;
@@ -5006,6 +5082,8 @@ function update() {
                     tank.myasnoyUltCooldown = 720;
                     tank.myasnoyBodyBot = null;
                     tank.myasnoyHypnoBeamTimer = 0;
+                    tank.myasnoyAttackTimer = 0;
+                    tank.myasnoyAttackHitTargets = null;
                     tank.myasnoySeparationAnim = 0;
                     tank.myasnoySeparationAnimMax = 0;
                     // Return visual
@@ -5077,6 +5155,9 @@ function update() {
             }
         }
         if (tank.ultimateCooldown > 0) tank.ultimateCooldown--;
+
+        // Persistent Illuminat signs hurt hostile units standing on them.
+        updateIlluminatMarkDamage();
 
         // Update active nova zones (continuous damage)
         if (typeof updateNovaZones === 'function') {
@@ -5501,7 +5582,7 @@ function update() {
         tank.heat = tank.heat || 0;
         const HEAT_MAX = MACHINEGUN_MAX_HEAT;
         const COOL_RATE = MACHINEGUN_COOL_RATE;
-        const playerDisarmed = (tank.sandNoShootTimer || 0) > 0;
+        const playerDisarmed = tank.paralyzed || (tank.sandNoShootTimer || 0) > 0;
         
         if (tank.overheated) {
             // Overheated: Cool down, cannot shoot
@@ -5532,71 +5613,14 @@ function update() {
         tank.overheated = false;
     }
 
-        // Myasnoy eye form: melee limb strike (Space)
+        // Myasnoy eye form: damage follows the visible sweeping beam.
         if (tankType === 'myasnoy' && tank.myasnoyUltActive && keys['Space'] && tank.fireCooldown <= 0 && !tank.paralyzed) {
-            const _meCx = tank.x + tank.w/2, _meCy = tank.y + tank.h/2;
-            const _meRange = tank.w * 2.2;
-            const _meHalfArc = Math.PI * 0.65; // ~130° arc
-            const _dMult = getPlayerDmgMult();
-            for (let _mei = enemies.length - 1; _mei >= 0; _mei--) {
-                const _me = enemies[_mei];
-                if (!_me || !_me.alive) continue;
-                const _meDx = (_me.x + _me.w/2) - _meCx, _meDy = (_me.y + _me.h/2) - _meCy;
-                if (Math.hypot(_meDx, _meDy) > _meRange) continue;
-                let _mAngD = Math.atan2(_meDy, _meDx) - tank.turretAngle;
-                while (_mAngD > Math.PI) _mAngD -= Math.PI * 2;
-                while (_mAngD < -Math.PI) _mAngD += Math.PI * 2;
-                if (Math.abs(_mAngD) <= _meHalfArc) {
-                    const _mDmg = Math.round(80 * _dMult);
-                    _me.hp -= _mDmg;
-                    _me.hitFlashTime = Date.now();
-                    for (let _mp = 0; _mp < 6; _mp++) spawnParticle(_me.x + _me.w/2, _me.y + _me.h/2, '#cc0000', 0.9);
-                    if (_me.hp <= 0) {
-                        if (typeof spawnExplosion === 'function') spawnExplosion(_me.x + _me.w/2, _me.y + _me.h/2, 40);
-                        enemies.splice(_mei, 1);
-                        if (typeof gainTrophies === 'function') gainTrophies(1);
-                    }
-                }
-            }
-            forEachHostileDrone(tank.team, drone => {
-                const dx = drone.x + drone.w / 2 - _meCx;
-                const dy = drone.y + drone.h / 2 - _meCy;
-                if (Math.hypot(dx, dy) > _meRange) return;
-                let angle = Math.atan2(dy, dx) - tank.turretAngle;
-                while (angle > Math.PI) angle -= Math.PI * 2;
-                while (angle < -Math.PI) angle += Math.PI * 2;
-                if (Math.abs(angle) <= _meHalfArc) damageCombatDrone(drone, Math.round(80 * _dMult));
-            });
-            // Also destroy destructible objects (boxes, barrels, wooden walls) in range
-            for (let _oi = objects.length - 1; _oi >= 0; _oi--) {
-                const _obj = objects[_oi];
-                if (!_obj) continue;
-                const _oDx = (_obj.x + (_obj.w||0)/2) - _meCx;
-                const _oDy = (_obj.y + (_obj.h||0)/2) - _meCy;
-                if (Math.hypot(_oDx, _oDy) > _meRange) continue;
-                let _oAngD = Math.atan2(_oDy, _oDx) - tank.turretAngle;
-                while (_oAngD > Math.PI) _oAngD -= Math.PI * 2;
-                while (_oAngD < -Math.PI) _oAngD += Math.PI * 2;
-                if (Math.abs(_oAngD) > _meHalfArc) continue;
-                if (_obj.type === 'woodenWall') {
-                    if (typeof damageWoodenWall === 'function') damageWoodenWall(_obj, Math.round(80 * _dMult), { hitColor: '#cc2200', hitParticles: 4 });
-                } else if (_obj.type === 'box') {
-                    for (let _mp = 0; _mp < 5; _mp++) spawnParticle(_obj.x + _obj.w/2, _obj.y + _obj.h/2, '#cc8800', 0.9);
-                    objects.splice(_oi, 1);
-                    if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
-                } else if (_obj.type === 'barrel') {
-                    if (typeof explodeBarrel === 'function') explodeBarrel(_obj);
-                }
-            }
-            // Visual: red slash particles in attack cone
-            for (let _mp = 0; _mp < 12; _mp++) {
-                const _mpa = tank.turretAngle + (Math.random() - 0.5) * 1.4;
-                const _mpd = _meRange * (0.4 + Math.random() * 0.6);
-                spawnParticle(_meCx + Math.cos(_mpa)*_mpd, _meCy + Math.sin(_mpa)*_mpd, '#dd1010', 0.9);
-            }
             tank.fireCooldown = 30;
-            tank.myasnoyAttackTimer = 18;
+            tank.myasnoyAttackTimer = MYASNOY_EYE_ATTACK_DURATION;
+            tank.myasnoyAttackAngle = tank.turretAngle;
+            tank.myasnoyAttackHitTargets = new Set();
         }
+        if (tankType === 'myasnoy' && tank.myasnoyUltActive) updateMyasnoyEyeAttackSweep(tank);
 
         // mechRocket: fire single rocket on Space (costs 20 energy)
         if (tankType === 'mechRocket' && keys['Space'] && tank.fireCooldown <= 0 && (tank.mechEnergy || 0) >= 20 && !tank.paralyzed) {
@@ -5647,7 +5671,7 @@ function update() {
             keys['KeyE'] = false;
         }
         // mechDiy: activate burst on Space press (costs 20 energy, queues 3 shots)
-        if (tankType === 'mechDiy' && keys['Space'] && !(tank.mechBurstShots || 0) && (tank.mechEnergy || 0) >= 20 && !tank.isAutopilotActive && !tank.isUltimateActive && !(tank.mechBurstCooldown || 0)) {
+        if (tankType === 'mechDiy' && keys['Space'] && !tank.paralyzed && !(tank.mechBurstShots || 0) && (tank.mechEnergy || 0) >= 20 && !tank.isAutopilotActive && !tank.isUltimateActive && !(tank.mechBurstCooldown || 0)) {
             tank.mechEnergy -= 20;
             tank.mechBurstShots = 3;
             tank.mechBurstDelay = 0;
@@ -5677,7 +5701,7 @@ function update() {
             tank.mechBurstCooldown--;
         }
         // mechDiy: fire queued burst shots (one per trigger, 25 frames apart for visible delay)
-        if (tankType === 'mechDiy' && (tank.mechBurstShots || 0) > 0) {
+        if (tankType === 'mechDiy' && !tank.paralyzed && (tank.mechBurstShots || 0) > 0) {
             if ((tank.mechBurstDelay || 0) <= 0) {
                 const _bc = (tank.mechBurstCannon || 0) % 2;
                 const _pX = Math.cos(tank.turretAngle + Math.PI / 2);
@@ -5706,11 +5730,11 @@ function update() {
 
         if (tankType === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
             const wantsBurovoyAttack = keys['Space'] && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && !tank.paralyzed && (tank.sandNoShootTimer || 0) <= 0 && !tank.burovoyBurrowActive;
-            updateBurovoyDrillAttack(tank, wantsBurovoyAttack, { damagePerSecond: 30 });
+            updateBurovoyDrillAttack(tank, wantsBurovoyAttack, { damagePerSecond: 40 });
         }
 
         // Стрельба (только если перезарядка закончилась, нет перегрева и не активен автопилот/ульт)
-        if (keys['Space'] && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && (tank.sandNoShootTimer || 0) <= 0 && tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'burovoy' && !(tankType === 'myasnoy' && tank.myasnoyUltActive)) {
+        if (keys['Space'] && !tank.paralyzed && tank.fireCooldown <= 0 && !tank.overheated && !tank.isAutopilotActive && !tank.isUltimateActive && (tank.sandNoShootTimer || 0) <= 0 && tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket' && tankType !== 'burovoy' && !(tankType === 'myasnoy' && tank.myasnoyUltActive)) {
             const _prevBLen = bullets.length, _prevFLen = flames.length;
             shoot();
             // Apply player damage upgrade multiplier to newly created bullets/flames (except plasma which needs special handling)
@@ -5720,18 +5744,17 @@ function update() {
                     const _b = bullets[_i];
                     // Apply multiplier to all bullet types including plasma
                     if (_b.type === 'myasnoyBio') {
-                        _b.damage = (_b.damage != null ? _b.damage : 1.5) * _dMult;
+                        _b.damage = (_b.damage != null ? _b.damage : 2) * _dMult;
                     } else {
                         _b.damage = Math.round((_b.damage != null ? _b.damage : 100) * _dMult);
                     }
                 }
                 for (let _i = _prevFLen; _i < flames.length; _i++) {
                     const _f = flames[_i];
-                    // Don't round — base damage is low (2), rounding kills level 1 effect
-                    _f.damage = (_f.damage != null ? _f.damage : 2) * _dMult;
+                    // Keep fractional flame damage when upgrades are applied.
+                    _f.damage = (_f.damage != null ? _f.damage : 0.75) * _dMult;
                 }
             }
-        }
         }
     }
 // --- APPEND_POINT_UPDATE_AI ---

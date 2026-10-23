@@ -24,14 +24,61 @@ test('terrain penalties apply only to swamp and rain', () => {
     assert.equal(t.normalize('unknown'), 'forest');
 });
 
-test('random terrain can select each of the six map types', () => {
+test('random terrain selects the five active map types and skips night', () => {
     const selected = [];
-    for (let i = 0; i < 6; i++) {
-        const context = { window: {}, Math: Object.assign(Object.create(Math), { random: () => (i + 0.5) / 6 }) };
+    for (let i = 0; i < 5; i++) {
+        const context = { window: {}, Math: Object.assign(Object.create(Math), { random: () => (i + 0.5) / 5 }) };
         vm.runInNewContext(source, context);
         selected.push(context.window.GameTerrain.randomType());
     }
-    assert.deepEqual(selected, ['forest', 'snow', 'desert', 'swamp', 'night', 'rain']);
+    assert.deepEqual(selected, ['forest', 'snow', 'desert', 'swamp', 'rain']);
+});
+
+test('lava is a dedicated boss terrain without speed or reload penalties', () => {
+    const t = terrain('lava');
+    assert.equal(t.current(), 'lava');
+    assert.equal(t.normalize('lava'), 'lava');
+    assert.equal(t.speedFactor(), 1);
+    assert.equal(t.reloadFactor(), 1);
+    assert.equal(t.groundColor(), '#211715');
+    assert.equal(t.label(), 'Лавовая арена');
+});
+
+test('boss fight selects lava while ordinary battles keep random biomes', () => {
+    const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+    const start = main.indexOf("    window.currentTerrain = mode === 'bossfight'");
+    const end = main.indexOf('    GameTerrain.resetBattle();', start);
+    assert.ok(start >= 0 && end > start);
+    const context = { window: {}, GameTerrain: { randomType: () => 'snow' } };
+    vm.runInNewContext(`function choose(mode) { ${main.slice(start, end)} return window.currentTerrain; }`, context);
+    assert.equal(context.choose('bossfight'), 'lava');
+    assert.equal(context.choose('single'), 'snow');
+});
+
+test('lava ground, volcanic walls, and charred boxes render through cached canvas textures', () => {
+    let surfaces = 0;
+    const drawing = new Proxy({}, { get: (_target, name) => {
+        if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => ({ addColorStop() {} });
+        return () => {};
+    }, set: () => true });
+    const context = { window: { currentTerrain: 'lava' }, document: {
+        createElement: () => { surfaces++; return { getContext: () => drawing }; }
+    } };
+    vm.runInNewContext(source, context);
+    const t = context.window.GameTerrain;
+    const images = [];
+    const output = { createPattern: image => image, fillRect() {}, drawImage: image => images.push(image) };
+    t.drawGround(output, 0, 0, 400, 300);
+    const wall = { type: 'wall', x: 50, y: 50, w: 50, h: 50, theme: 'hell' };
+    const box = { type: 'box', x: 100, y: 100, w: 40, h: 40 };
+    t.drawWallCover(output, wall);
+    t.drawBox(output, box);
+    assert.equal(images.length, 2);
+    assert.equal(surfaces, 3);
+    t.drawGround(output, 0, 0, 400, 300);
+    t.drawWallCover(output, wall);
+    t.drawBox(output, box);
+    assert.equal(surfaces, 3, 'the boss terrain does not rebuild its textures every frame');
 });
 
 test('night detection has the same range and obstacle rules from both sides', () => {
@@ -189,6 +236,26 @@ test('hovering tanks leave no driving traces and illuminat leaves a lasting sign
     assert.equal(drawn, 0, 'starting a battle clears the previous map');
 });
 
+test('each Illuminat keeps only the two newest signs', () => {
+    const t = terrain();
+    const unit = { x: 0, y: 0, w: 38, h: 38, alive: true, team: 0 };
+    t.updateMovement(unit, [], [], 'illuminat');
+    const stop = () => { for (let tick = 0; tick < 180; tick++) t.updateMovement(unit, [], [], 'illuminat'); };
+    stop();
+    unit.x += 55; t.updateMovement(unit, [], [], 'illuminat'); stop();
+    unit.x += 55; t.updateMovement(unit, [], [], 'illuminat'); stop();
+    const marks = [];
+    t.forEachIlluminatMark(mark => marks.push(mark));
+    assert.equal(marks.length, 2);
+    assert.equal(marks[0].x, 74);
+    assert.equal(marks[1].x, 129);
+    assert.ok(marks.every(mark => mark.team === 0 && mark.owner === unit));
+    t.resetBattle();
+    const cleared = [];
+    t.forEachIlluminatMark(mark => cleared.push(mark));
+    assert.equal(cleared.length, 0);
+});
+
 test('Illuminat super ignites only its own marks for two simulated seconds', () => {
     const drawing = new Proxy({}, { get: (_target, name) => {
         if (name === 'createRadialGradient' || name === 'createLinearGradient') return () => ({ addColorStop() {} });
@@ -259,6 +326,41 @@ test('wall coatings are cached per wall without cycling through shared variants'
     for (const wall of walls) context.window.GameTerrain.drawWallCover(output, wall, 'snow');
     assert.equal(created, walls.length, 'revisiting more than 128 walls must reuse their coatings');
     for (let i = 0; i < walls.length; i++) assert.equal(images[i], images[i + walls.length]);
+});
+
+test('box textures differ by biome and remain stable when pushed', () => {
+    let created = 0;
+    const gradientColors = [];
+    const fills = [];
+    const drawing = new Proxy({}, { get: (target, name) => {
+        if (name === 'createLinearGradient') return () => ({ addColorStop: (_stop, color) => gradientColors.push(color) });
+        if (name === 'fillRect') return () => fills.push(target.fillStyle);
+        return () => {};
+    }, set: (target, name, value) => { target[name] = value; return true; } });
+    const context = { window: {}, document: { createElement: () => {
+        created++;
+        return { getContext: () => drawing };
+    } } };
+    vm.runInNewContext(source, context);
+    const images = [];
+    const output = { drawImage: image => images.push(image) };
+    const game = context.window.GameTerrain;
+    const box = { type: 'box', x: 100, y: 150, w: 50, h: 50 };
+    const baseColors = [];
+    for (const type of ['forest', 'snow', 'desert', 'swamp', 'rain']) {
+        const before = gradientColors.length;
+        game.drawBox(output, box, type);
+        baseColors.push(gradientColors[before]);
+    }
+    assert.equal(created, 5);
+    assert.equal(new Set(baseColors.slice(0, 4)).size, 4, 'forest, snow, desert and swamp use distinct wood');
+    assert.equal(baseColors[4], baseColors[0], 'rain uses the same oak wood as forest');
+    assert.ok(fills.includes('rgba(28,39,37,0.32)'), 'rain adds a wet darkening layer');
+    assert.equal(new Set(images).size, 5, 'each biome creates its own texture');
+    box.x += 20;
+    game.drawBox(output, box, 'rain');
+    assert.equal(created, 5, 'pushing does not regenerate the texture');
+    assert.equal(images[5], images[4]);
 });
 
 test('night sight stops at walls, boxes and barrels and reaches its radius in the open', () => {
