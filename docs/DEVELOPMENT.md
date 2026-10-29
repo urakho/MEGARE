@@ -97,4 +97,15 @@ Preserve the existing resource-change guard, navigation budget/indexing, cached 
 
 Start from `AGENTS.md`, then read only the documents relevant to the task. For every user request, assess and update affected documentation within the same task, including README files when present, relevant files in `docs/`, and other repository documentation, following the [documentation maintenance rules](../AGENTS.md#documentation-maintenance). Keep stable working rules in `AGENTS.md`; do not copy the documents into agent instructions or depend on prior conversations.
 
-Reusable workflows belong in [.agents/skills/](../.agents/skills/) only after a repeated need is demonstrated. Concrete approved task plans may live in [plans/](../plans/). Both directories initially contain only `.gitkeep`; neither is a required framework or a task backlog.
+Reusable workflows belong in [.agents/skills/](../.agents/skills/) after a repeated need is demonstrated. Four skills cover recurring development work:
+
+| Skill | Use |
+| --- | --- |
+| [game-visuals](../.agents/skills/game-visuals/SKILL.md) | Vehicle/projectile art, animation, materials, effects, containers, and visual UI consistency |
+| [tank-mechanics](../.agents/skills/tank-mechanics/SKILL.md) | Balance, weapons, statuses, energy, AI combat, summons, and obstacle interactions |
+| [bugfix-regression](../.agents/skills/bugfix-regression/SKILL.md) | Reproduction, root-cause correction, and focused regression checks |
+| [performance-profiling](../.agents/skills/performance-profiling/SKILL.md) | Comparable measurements, optimization, and lifecycle verification |
+
+Start with the defect or performance skill when that is the user's primary concern; consult subsystem references as needed. Each entry point links detailed scenarios without requiring the original development chat. Current source and tests remain authoritative for implementation and balance; historical examples are not new benchmark results or universal design requirements.
+
+Concrete approved task plans may live in [plans/](../plans/), which currently contains a tracking placeholder. The skills and plans directories are not a separate build framework or automatic task backlog.

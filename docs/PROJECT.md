@@ -59,7 +59,7 @@ The application loads classic scripts directly from [index.html](../index.html);
 | [png/](../png/), [svg/](../svg/) | Raster artwork and vector assets, including currency icons |
 | [AGENTS.md](../AGENTS.md) | Shared Codex and Copilot working rules and knowledge entry point |
 | [docs/](./) | Current project knowledge and confirmed direction |
-| [.agents/skills/](../.agents/skills/), [plans/](../plans/) | Future reusable workflows and concrete implementation plans |
+| [.agents/skills/](../.agents/skills/), [plans/](../plans/) | Reusable development skills and space for concrete implementation plans |
 
 ## Status and direction
 

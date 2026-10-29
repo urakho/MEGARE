@@ -27,7 +27,7 @@ Read the relevant documents before substantial changes:
 | Reusable project skills, when available | [.agents/skills/](.agents/skills/) |
 | Active concrete implementation plans, when available | [plans/](plans/) |
 
-The skills and plans directories initially contain only tracking placeholders. Do not treat their existence as evidence of an active skill or approved plan.
+Reusable development workflows are available in `.agents/skills/`; choose the relevant skill below. The `plans/` directory is reserved for concrete plans; a tracking placeholder is not an approved plan.
 
 ## Development rules
 
@@ -56,6 +56,15 @@ Keep rules here, detailed project facts in the linked documents, and concrete ta
 ## Skills and knowledge across conversations
 
 Reusable project skills belong in `.agents/skills/`. Recommend a skill only when practical experience reveals a genuinely useful, repeatable workflow. Do not automatically create skills, placeholder `SKILL.md` files, registries, or loaders for individual tasks.
+
+| Request | Skill |
+| --- | --- |
+| Improve artwork, animation, materials, effects, containers, or visual UI consistency | [game-visuals](.agents/skills/game-visuals/SKILL.md) |
+| Change weapons, balance, abilities, control effects, AI combat, or obstacle interactions | [tank-mechanics](.agents/skills/tank-mechanics/SKILL.md) |
+| Diagnose and fix broken behavior or a regression | [bugfix-regression](.agents/skills/bugfix-regression/SKILL.md) |
+| Diagnose lag or optimize measured rendering, AI, physics, storage, or animation work | [performance-profiling](.agents/skills/performance-profiling/SKILL.md) |
+
+For defects, start with `bugfix-regression`; for lag, start with `performance-profiling`. Read relevant subsystem guidance as needed. Each skill links detailed references; load only the sections relevant to the task. Historical examples explain failure modes, while current source/tests and the user's request determine the required behavior.
 
 Repository files are the persistent source of project knowledge. Previous conversation history must not be required to understand the project. Preserve important verified knowledge in the appropriate repository document so a new conversation can continue using the repository alone. Do not rely on automatic memory as the only source of important information.
 
