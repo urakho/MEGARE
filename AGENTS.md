@@ -47,7 +47,9 @@ These rules apply to both Codex and GitHub Copilot:
 
 ## Documentation maintenance
 
-Update the relevant document when changing architecture, important public interfaces or subsystem boundaries, game mechanics, development or build workflows, supported platforms or technologies, or important architectural decisions. Trivial changes do not require documentation updates.
+For every user request, assess whether the work affects documented information. When it does, update all relevant documentation as part of the same task before considering the request complete. This includes README files when present, the relevant files in `docs/`, and any other affected repository documentation. Keep descriptions, instructions, examples, and links accurate and up to date with the resulting implementation and confirmed decisions.
+
+Documentation updates are required when changing architecture, important public interfaces or subsystem boundaries, game mechanics, development or build workflows, supported platforms or technologies, or important architectural decisions. Edit only the documents and sections that need changes; a trivial change requires no documentation edit if existing documentation remains accurate. Do not create a README or another document solely to record that a task was completed.
 
 Keep rules here, detailed project facts in the linked documents, and concrete task plans in `plans/` when needed. Avoid redundant documents and copying source code or full documentation into this file. Keep current implementation separate from the goals in the roadmap.
 

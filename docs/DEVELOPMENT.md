@@ -64,6 +64,6 @@ The documentation task ran the Node suite but did not perform a complete browser
 
 ## Documentation and cross-chat continuity
 
-Start from `AGENTS.md`, then read only the documents relevant to the task. Update architecture, gameplay, development instructions or confirmed goals when the corresponding behavior changes. Keep stable working rules in `AGENTS.md`; do not copy the documents into agent instructions or depend on prior conversations.
+Start from `AGENTS.md`, then read only the documents relevant to the task. For every user request, assess and update affected documentation within the same task, including README files when present, relevant files in `docs/`, and other repository documentation, following the [documentation maintenance rules](../AGENTS.md#documentation-maintenance). Keep stable working rules in `AGENTS.md`; do not copy the documents into agent instructions or depend on prior conversations.
 
 Reusable workflows belong in [.agents/skills/](../.agents/skills/) only after a repeated need is demonstrated. Concrete approved task plans may live in [plans/](../plans/). Both directories initially contain only `.gitkeep`; neither is a required framework or a task backlog.
