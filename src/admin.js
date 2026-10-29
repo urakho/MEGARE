@@ -96,6 +96,46 @@ if (ADMIN_ENABLED !== 'on') {
             return;
         }
 
+        if (/^\/tank(?:\s|$)/i.test(command)) {
+            const args = command.split(/\s+/);
+            const types = [...Object.keys(window.tankDescriptions || {}), ...Object.keys(window.mechDescriptions || {})];
+            const name = (args[1] || '').toLowerCase();
+            const aliases = { meat: 'myasnoy', drill: 'burovoy', shotgun: 'buckshot',
+                flamethrower: 'fire', poison: 'toxic', incendiary: 'pyro', miner: 'mine',
+                watercannon: 'waterjet', illuminati: 'illuminat', quantum: 'kvant',
+                assaultmech: 'mechDiy', shieldmech: 'mechShield', rocketmech: 'mechRocket' };
+            if (name === 'list' && args.length === 2) {
+                const help = document.getElementById('helpContent');
+                const modal = document.getElementById('helpModal');
+                const list = 'Названия для команды /tank:\n\n' + types.join(', ') +
+                    '\n\nАнглийские названия:\n' + Object.entries(aliases).map(([alias, id]) => `${alias} — ${id}`).join('\n');
+                if (help && modal) { help.textContent = list; modal.style.display = 'flex'; }
+                console.log(list);
+                return;
+            }
+            const lookup = (Object.prototype.hasOwnProperty.call(aliases, name) ? aliases[name] : name).toLowerCase();
+            const type = args.length === 2 ? types.find(id => id.toLowerCase() === lookup) : null;
+            if (!type) {
+                if (typeof showNotification === 'function') showNotification('Неизвестный танк. Список: /tank list', '#e74c3c');
+                console.log('Usage: /tank <name>, or /tank list');
+                return;
+            }
+            if (unlockedTanks.includes(type)) {
+                if (typeof showNotification === 'function') showNotification('Этот персонаж уже открыт: ' + type, '#f1c40f');
+                return;
+            }
+            unlockedTanks.push(type);
+            saveProgress();
+            if (typeof characterModal !== 'undefined' && characterModal && characterModal.style.display === 'flex') {
+                const entry = document.getElementById(type + 'TankEntry');
+                if (entry) entry.style.display = '';
+                if (typeof drawCharacterPreviews === 'function') drawCharacterPreviews();
+            }
+            if (typeof showNotification === 'function') showNotification('Персонаж открыт: ' + type, '#2ecc71');
+            console.log('Tank unlocked:', type);
+            return;
+        }
+
         // God mode
         if (lc.startsWith('/god')) {
             const parts2 = command.split(/\s+/);
@@ -225,6 +265,8 @@ if (ADMIN_ENABLED !== 'on') {
                 '  /scrap [+/-/=] N   Запчасти',
                 '  /trophy [+/-/=] N  Трофеи',
                 '  /trophy = N t      Трофеи всем танкам',
+                '  /tank <name>       Открыть персонажа',
+                '  /tank list         Названия персонажей',
                 '  ── Отрицательные ──',
                 '  /uncoin N   /ungem N   /unpart N',
                 '  ── Сброс ──',

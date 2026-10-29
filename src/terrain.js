@@ -32,6 +32,10 @@
     const groundTiles = new Map();
     const groundPatterns = new WeakMap();
     const wallTextures = new WeakMap();
+    const woodenWallTextures = new WeakMap();
+    const woodenWallBurnArt = new WeakMap();
+    let woodSmokeImage = null;
+    let woodScorchImage = null;
     const boxTextures = new WeakMap();
     const swampWater = [];
     function seeded(seed) {
@@ -447,6 +451,7 @@
     function drawWallCover(ctx, obj, type = current()) {
         if (obj.type !== 'wall' && obj.type !== 'woodenWall') return;
         if (type === 'night' || (type === 'forest' && obj.theme === 'hell')) return;
+        if (type === 'snow' && obj.type === 'woodenWall' && obj.woodSnowMelted) return;
         let seed = (Math.imul(Math.floor(obj.x), 73856093) ^ Math.imul(Math.floor(obj.y), 19349663)) >>> 0;
         seed = Math.imul(seed ^ (seed >>> 16), 0x45d9f3b) >>> 0;
         seed = (seed ^ (seed >>> 16)) >>> 0;
@@ -468,6 +473,363 @@
         swamp: { face: '#87664d', light: '#b18d69', dark: '#44362e', grain: '#684c3b', trim: '#3d493e', accent: '#6f8953' },
         lava: { face: '#614033', light: '#966854', dark: '#261c1b', grain: '#3c2a26', trim: '#2c2929', accent: '#c35a30' }
     };
+
+    const barrelTextures = new WeakMap();
+
+    function makeBarrel(type, w, h, seed) {
+        const tile = surface(w, h), c = tile.getContext('2d');
+        const rand = seeded(seed);
+        const p = boxPalettes[type === 'rain' || type === 'night' ? 'forest' : type] || boxPalettes.forest;
+        const rim = h * 0.15;
+        // A bowed body and individual staves make the silhouette read as a barrel.
+        c.beginPath(); c.moveTo(w * 0.09, rim); c.quadraticCurveTo(0, h * 0.48, w * 0.09, h * 0.87);
+        c.quadraticCurveTo(w * 0.5, h * 1.02, w * 0.91, h * 0.87);
+        c.quadraticCurveTo(w, h * 0.48, w * 0.91, rim); c.closePath();
+        c.fillStyle = p.dark; c.fill(); c.save(); c.clip();
+        const wood = c.createLinearGradient(0, 0, w, 0);
+        wood.addColorStop(0, p.dark); wood.addColorStop(0.25, p.face); wood.addColorStop(0.53, p.light);
+        wood.addColorStop(0.76, p.face); wood.addColorStop(1, p.dark);
+        c.fillStyle = wood; c.fillRect(0, 0, w, h);
+        for (let i = 1; i < 7; i++) {
+            const x = w * i / 7;
+            c.strokeStyle = 'rgba(30,20,14,0.5)'; c.lineWidth = Math.max(0.6, w * 0.018);
+            c.beginPath(); c.moveTo(w * 0.5 + (x - w * 0.5) * 0.83, rim);
+            c.quadraticCurveTo(x, h * 0.5, w * 0.5 + (x - w * 0.5) * 0.83, h * 0.9); c.stroke();
+            c.strokeStyle = 'rgba(255,225,180,0.15)'; c.lineWidth = 0.7;
+            c.beginPath(); c.moveTo(x + w * 0.025, h * 0.23); c.quadraticCurveTo(x + w * 0.04, h * 0.5, x + w * 0.02, h * 0.78); c.stroke();
+        }
+        for (let i = 0; i < 12; i++) {
+            const x = w * (0.12 + rand() * 0.76), y = h * (0.2 + rand() * 0.6);
+            c.strokeStyle = i % 2 ? 'rgba(255,229,188,0.14)' : 'rgba(31,20,13,0.24)'; c.lineWidth = 0.7;
+            c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 1, y + h * 0.08, x, y + h * (0.1 + rand() * 0.13)); c.stroke();
+        }
+        if (type === 'rain' || type === 'swamp' || type === 'lava') {
+            c.fillStyle = type === 'rain' ? 'rgba(26,45,49,0.24)' : type === 'swamp' ? 'rgba(36,53,35,0.27)' : 'rgba(20,12,10,0.26)';
+            c.fillRect(0, 0, w, h);
+        }
+        for (const y of [h * 0.32, h * 0.69]) {
+            const band = c.createLinearGradient(0, y, 0, y + h * 0.1);
+            band.addColorStop(0, '#202529'); band.addColorStop(0.45, '#737875'); band.addColorStop(1, '#24282a');
+            c.fillStyle = band; c.fillRect(0, y, w, Math.max(3, h * 0.09));
+            for (const x of [0.22, 0.5, 0.78]) {
+                c.fillStyle = '#b3b3a6'; c.beginPath(); c.arc(w * x, y + h * 0.045, Math.max(0.7, w * 0.018), 0, Math.PI * 2); c.fill();
+            }
+        }
+        c.restore();
+        c.beginPath(); c.ellipse(w / 2, rim, w * 0.41, h * 0.12, 0, 0, Math.PI * 2);
+        c.fillStyle = p.dark; c.fill(); c.strokeStyle = '#292723'; c.lineWidth = Math.max(1, w * 0.035); c.stroke();
+        c.save(); c.clip(); c.fillStyle = p.face; c.fillRect(w * 0.1, rim - h * 0.09, w * 0.8, h * 0.18);
+        c.strokeStyle = 'rgba(35,22,15,0.48)'; c.lineWidth = 0.7;
+        for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(w * 0.1, rim + i * h * 0.045); c.lineTo(w * 0.9, rim + i * h * 0.045); c.stroke(); }
+        if (type === 'snow') { c.fillStyle = 'rgba(230,241,240,0.7)'; c.fillRect(w * 0.08, rim - h * 0.12, w * 0.84, h * 0.055); }
+        if (type === 'desert') { c.fillStyle = 'rgba(222,190,126,0.48)'; c.fillRect(w * 0.08, rim - h * 0.12, w * 0.84, h * 0.04); }
+        if (type === 'rain') { c.fillStyle = 'rgba(177,210,218,0.24)'; c.fillRect(w * 0.18, rim - h * 0.07, w * 0.5, h * 0.025); }
+        c.restore();
+        // A small dark plug hints at the barrel's volatile contents without obscuring the wood.
+        c.fillStyle = '#342c24'; c.beginPath(); c.ellipse(w * 0.61, rim, w * 0.045, h * 0.023, 0, 0, Math.PI * 2); c.fill();
+        // The wick is part of the cached barrel texture while unlit.
+        c.lineCap = 'round';
+        c.beginPath(); c.moveTo(w * 0.61, rim); c.quadraticCurveTo(w * 0.66, h * 0.07, w * 0.72, h * 0.02);
+        c.strokeStyle = '#302920'; c.lineWidth = Math.max(1.5, w * 0.048); c.stroke();
+        c.strokeStyle = '#c6af7b'; c.lineWidth = Math.max(0.7, w * 0.021); c.stroke();
+        return tile;
+    }
+
+    function drawBarrel(ctx, obj, type = current()) {
+        const w = Math.max(1, Math.min(256, Math.ceil(obj.w))), h = Math.max(1, Math.min(256, Math.ceil(obj.h)));
+        let texture = barrelTextures.get(obj);
+        if (!texture || texture.type !== type || texture.w !== w || texture.h !== h) {
+            const seed = (Math.imul(Math.floor(obj.x), 73856093) ^ Math.imul(Math.floor(obj.y), 19349663)) >>> 0;
+            texture = { type, w, h, image: makeBarrel(type, w, h, seed) };
+            barrelTextures.set(obj, texture);
+        }
+        ctx.drawImage(texture.image, obj.x, obj.y, obj.w, obj.h);
+        if (obj.barrelFuseTicks > 0) {
+            const duration = obj.barrelFuseDuration || 15;
+            const remaining = Math.max(0, Math.min(1, obj.barrelFuseTicks / duration));
+            const elapsed = duration - obj.barrelFuseTicks;
+            const x0 = obj.x + obj.w * 0.61, y0 = obj.y + obj.h * 0.15;
+            const x1 = obj.x + obj.w * 0.66, y1 = obj.y + obj.h * 0.07;
+            const x2 = obj.x + obj.w * 0.72, y2 = obj.y + obj.h * 0.02;
+            const inverse = 1 - remaining;
+            const x = inverse * inverse * x0 + 2 * inverse * remaining * x1 + remaining * remaining * x2;
+            const y = inverse * inverse * y0 + 2 * inverse * remaining * y1 + remaining * remaining * y2;
+            const sway = Math.sin(elapsed * 0.55) * 1.1;
+            const height = Math.max(5, obj.h * 0.16) * (0.93 + Math.sin(elapsed * 0.63) * 0.07);
+            ctx.save(); ctx.lineCap = 'round';
+            // Darken the consumed part of the wick as the ember moves towards the plug.
+            ctx.strokeStyle = '#3c3026'; ctx.lineWidth = Math.max(1.6, obj.w * 0.052);
+            ctx.beginPath(); ctx.moveTo(x, y);
+            ctx.quadraticCurveTo(x1 + (x2 - x1) * remaining, y1 + (y2 - y1) * remaining, x2, y2); ctx.stroke();
+            ctx.fillStyle = 'rgba(92,82,70,0.35)';
+            ctx.beginPath(); ctx.ellipse(x + sway, y - height * 1.45, 2.3, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#b74720';
+            ctx.beginPath(); ctx.moveTo(x - 2.8, y + 1); ctx.quadraticCurveTo(x - 3.5, y - height * 0.4, x + sway, y - height);
+            ctx.quadraticCurveTo(x + 3.8, y - height * 0.42, x + 2.5, y + 1); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#f18b31';
+            ctx.beginPath(); ctx.moveTo(x - 1.9, y); ctx.quadraticCurveTo(x - 2, y - height * 0.35, x + sway * 0.6, y - height * 0.76);
+            ctx.quadraticCurveTo(x + 2.6, y - height * 0.32, x + 1.8, y); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#ffe2a0';
+            ctx.beginPath(); ctx.moveTo(x - 1, y); ctx.quadraticCurveTo(x - 1.1, y - height * 0.25, x + sway * 0.2, y - height * 0.48);
+            ctx.quadraticCurveTo(x + 1.2, y - height * 0.2, x + 1, y); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#f4ba68';
+            ctx.beginPath(); ctx.arc(x + 3 + sway, y - height * 0.75, 0.7, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    function makeWoodenWall(type, w, h, seed) {
+        const tile = surface(w, h), c = tile.getContext('2d');
+        const rand = seeded(seed);
+        const woodType = type === 'rain' || type === 'night' ? 'forest' : type;
+        const p = boxPalettes[woodType] || boxPalettes.forest;
+        const horizontal = w >= h;
+        const length = horizontal ? w : h;
+        const breadth = horizontal ? h : w;
+        c.save();
+        if (!horizontal) { c.translate(w, 0); c.rotate(Math.PI / 2); }
+
+        c.fillStyle = p.dark;
+        c.fillRect(0, 0, length, breadth);
+        const boards = Math.max(2, Math.min(10, Math.round(breadth / 16)));
+        const boardHeight = breadth / boards;
+        for (let board = 0; board < boards; board++) {
+            const top = board * boardHeight;
+            c.fillStyle = p.face;
+            c.fillRect(1, top + 0.6, Math.max(0, length - 2), Math.max(0, boardHeight - 1));
+            const plank = c.createLinearGradient(0, top, 0, top + boardHeight);
+            plank.addColorStop(0, p.light);
+            plank.addColorStop(1, p.dark);
+            c.fillStyle = plank;
+            c.globalAlpha = board % 2 ? 0.15 : 0.23;
+            c.fillRect(1, top + 0.6, Math.max(0, length - 2), Math.max(0, boardHeight - 1));
+            c.globalAlpha = 1;
+            c.strokeStyle = 'rgba(24, 17, 12, 0.42)';
+            c.lineWidth = 0.8;
+            c.beginPath(); c.moveTo(0, top + boardHeight); c.lineTo(length, top + boardHeight); c.stroke();
+
+            if (length > 80 && boardHeight > 5) {
+                const joint = length * (board % 2 ? 0.63 : 0.34) + (rand() - 0.5) * length * 0.08;
+                c.strokeStyle = 'rgba(24, 17, 12, 0.36)';
+                c.beginPath(); c.moveTo(joint, top + 1); c.lineTo(joint, top + boardHeight - 1); c.stroke();
+            }
+
+            const grainCount = Math.max(2, Math.min(5, Math.floor(boardHeight / 3)));
+            for (let grain = 0; grain < grainCount; grain++) {
+                const gy = top + 2 + rand() * Math.max(1, boardHeight - 4);
+                const start = 2 + rand() * length * 0.17;
+                const end = length * (0.72 + rand() * 0.24);
+                c.strokeStyle = grain % 2 ? 'rgba(251, 226, 189, 0.14)' : p.grain;
+                c.globalAlpha = grain % 2 ? 1 : 0.44;
+                c.lineWidth = 0.6 + rand() * 0.35;
+                c.beginPath(); c.moveTo(start, gy);
+                c.quadraticCurveTo(length * (0.35 + rand() * 0.3), gy + (rand() - 0.5) * 3, end, gy + (rand() - 0.5) * 2);
+                c.stroke();
+            }
+            c.globalAlpha = 1;
+            if (length >= 35 && boardHeight >= 8 && rand() > 0.4) {
+                const kx = length * (0.2 + rand() * 0.6), ky = top + boardHeight * (0.35 + rand() * 0.3);
+                c.strokeStyle = p.grain; c.globalAlpha = 0.55; c.lineWidth = 0.8;
+                c.beginPath(); c.ellipse(kx, ky, 2.5 + rand() * 2, 1.2, 0, 0, Math.PI * 2); c.stroke();
+                c.fillStyle = p.dark; c.fillRect(kx - 0.6, ky - 0.4, 1.2, 0.8);
+                c.globalAlpha = 1;
+            }
+            if (length >= 25 && boardHeight >= 6) {
+                for (const fraction of [0.08, 0.92]) {
+                    const nailX = length * fraction, nailY = top + boardHeight * 0.5;
+                    c.fillStyle = p.trim;
+                    c.beginPath(); c.arc(nailX, nailY, 0.9, 0, Math.PI * 2); c.fill();
+                    c.fillStyle = 'rgba(231, 226, 208, 0.3)';
+                    c.fillRect(nailX - 0.3, nailY - 0.5, 0.5, 0.5);
+                }
+            }
+        }
+        c.strokeStyle = 'rgba(18, 16, 12, 0.62)'; c.lineWidth = 1;
+        c.strokeRect(0.5, 0.5, Math.max(0, length - 1), Math.max(0, breadth - 1));
+        c.restore();
+        return tile;
+    }
+
+    function drawWoodenWall(ctx, obj, type = current()) {
+        if (obj.type !== 'woodenWall') return;
+        const w = Math.max(1, Math.min(256, Math.ceil(obj.w)));
+        const h = Math.max(1, Math.min(256, Math.ceil(obj.h)));
+        let texture = woodenWallTextures.get(obj);
+        if (!texture || texture.type !== type || texture.w !== w || texture.h !== h) {
+            const seed = (Math.imul(Math.floor(obj.x), 73856093) ^ Math.imul(Math.floor(obj.y), 19349663)) >>> 0;
+            texture = { type, w, h, image: makeWoodenWall(type, w, h, seed) };
+            woodenWallTextures.set(obj, texture);
+        }
+        ctx.drawImage(texture.image, obj.x, obj.y, obj.w, obj.h);
+    }
+
+    const woodRotTextures = new WeakMap();
+    function drawWoodenWallRot(ctx, obj) {
+        const amount = Math.min(1, obj.woodRotAmount || 0);
+        if (amount <= 0) return;
+        const stage = Math.max(1, Math.ceil(amount * 16));
+        const sites = obj.woodRotSites || [{ x: 0.5, y: 0.5 }];
+        const key = stage + ':' + sites.length + ':' + obj.w + ':' + obj.h;
+        let texture = woodRotTextures.get(obj);
+        if (!texture || texture.key !== key) {
+            const w = Math.max(1, Math.min(256, Math.ceil(obj.w))), h = Math.max(1, Math.min(256, Math.ceil(obj.h)));
+            const image = surface(w, h), c = image.getContext('2d');
+            const rand = seeded((Math.imul(obj.x | 0, 73856093) ^ Math.imul(obj.y | 0, 19349663)) >>> 0);
+            const spread = 0.18 + stage / 16 * 0.95;
+            const distanceAt = (x, y) => Math.min(...sites.map(site => Math.hypot((x / w - site.x) * w, (y / h - site.y) * h))) / Math.max(w, h);
+            for (const site of sites) {
+                const radius = Math.max(w, h) * spread;
+                const stain = c.createRadialGradient(site.x * w, site.y * h, 0, site.x * w, site.y * h, radius);
+                stain.addColorStop(0, 'rgba(30,33,21,0.87)'); stain.addColorStop(0.48, 'rgba(52,53,31,0.7)');
+                stain.addColorStop(0.82, 'rgba(79,76,43,0.4)'); stain.addColorStop(1, 'rgba(79,76,43,0)');
+                c.fillStyle = stain; c.fillRect(0, 0, w, h);
+            }
+            const horizontal = w >= h;
+            for (let i = 0; i < Math.min(260, w * h / 12); i++) {
+                const x = rand() * w, y = rand() * h, length = 1.3 + rand() * 4;
+                const distance = distanceAt(x, y);
+                if (distance > spread * (0.55 + rand() * 0.45)) continue;
+                c.fillStyle = i % 4 ? 'rgba(22,27,19,0.65)' : 'rgba(110,118,73,0.52)';
+                patch(c, x, y, horizontal ? length : 0.8, horizontal ? 0.8 : length, rand, c.fillStyle);
+                if (i % 5 === 0) {
+                    c.strokeStyle = 'rgba(125,129,83,0.3)'; c.lineWidth = 0.6;
+                    c.beginPath(); c.moveTo(x, y);
+                    c.quadraticCurveTo(x + (horizontal ? 3 : 1), y + (horizontal ? 1 : 3), x + (horizontal ? 7 : 0), y + (horizontal ? 0 : 7)); c.stroke();
+                }
+            }
+            texture = { key, image }; woodRotTextures.set(obj, texture);
+        }
+        ctx.save();
+        ctx.globalAlpha *= Math.min(1, amount * 6);
+        ctx.drawImage(texture.image, obj.x, obj.y, obj.w, obj.h);
+        ctx.restore();
+    }
+
+    function drawWoodenWallBurn(ctx, obj, frame = window.frameCount || 0, outline = null) {
+        const charAmount = obj.woodCharAmount || 0;
+        if (!obj.burning && charAmount <= 0) return;
+        let art = woodenWallBurnArt.get(obj);
+        if (!art || art.w !== obj.w || art.h !== obj.h) {
+            const horizontal = obj.w >= obj.h;
+            const length = Math.max(obj.w, obj.h), breadth = Math.min(obj.w, obj.h);
+            const rand = seeded((Math.imul(Math.floor(obj.x), 73856093) ^ Math.imul(Math.floor(obj.y), 19349663)) >>> 0);
+            const count = Math.max(4, Math.min(14, Math.ceil(length / 16)));
+            art = { w: obj.w, h: obj.h, spots: [] };
+            for (let i = 0; i < count; i++) {
+                const along = 0.08 + i / (count - 1) * 0.84, across = 0.2 + rand() * 0.6;
+                const x = (horizontal ? along : across) * obj.w;
+                const y = (horizontal ? across : along) * obj.h;
+                const rx = (horizontal ? Math.min(22, length * 0.15) : breadth * 0.35) * (0.75 + rand() * 0.5);
+                const ry = (horizontal ? breadth * 0.35 : Math.min(22, length * 0.15)) * (0.75 + rand() * 0.5);
+                art.spots.push({ x, y, rx, ry, phase: rand() * Math.PI * 2, size: 0.7 + rand() * 0.6 });
+            }
+            woodenWallBurnArt.set(obj, art);
+        }
+        const origin = obj.woodBurnOrigin || { x: 0.5, y: 0.5 };
+        const spread = obj.woodBurnSpread || 0.12;
+        const length = Math.max(obj.w, obj.h);
+        const exposed = spot => Math.hypot(spot.x - origin.x * obj.w, spot.y - origin.y * obj.h) / length <= spread + 0.1;
+        const onSolidWood = spot => {
+            if (!outline) return true;
+            let inside = false;
+            for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+                const a = outline[i], b = outline[j];
+                if ((a.y > spot.y) !== (b.y > spot.y) && spot.x < (b.x - a.x) * (spot.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+            }
+            return inside;
+        };
+        ctx.save();
+        ctx.translate(obj.x, obj.y);
+        ctx.save();
+        ctx.beginPath();
+        if (outline) {
+            outline.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+            ctx.closePath();
+        } else ctx.rect(0, 0, obj.w, obj.h);
+        ctx.clip();
+        if (!woodScorchImage) {
+            woodScorchImage = surface(64, 64);
+            const scorch = woodScorchImage.getContext('2d');
+            const soot = scorch.createRadialGradient(32, 32, 2, 32, 32, 32);
+            soot.addColorStop(0, 'rgba(17,14,12,0.9)');
+            soot.addColorStop(0.4, 'rgba(28,20,15,0.75)');
+            soot.addColorStop(0.75, 'rgba(47,29,18,0.35)');
+            soot.addColorStop(1, 'rgba(47,29,18,0)');
+            scorch.fillStyle = soot; scorch.fillRect(0, 0, 64, 64);
+        }
+        // Deep soot and split grain remain visible after the flames go out.
+        ctx.fillStyle = '#211916';
+        ctx.globalAlpha = Math.min(0.58, charAmount * 0.72);
+        ctx.fillRect(0, 0, obj.w, obj.h);
+        ctx.globalAlpha = Math.min(0.75, charAmount * 1.1);
+        ctx.strokeStyle = '#171411'; ctx.lineWidth = 1;
+        const horizontal = obj.w >= obj.h;
+        for (const spot of art.spots) {
+            if (!exposed(spot)) continue;
+            ctx.beginPath();
+            if (horizontal) {
+                ctx.moveTo(spot.x - spot.rx, spot.y); ctx.lineTo(spot.x, spot.y + spot.ry * 0.12); ctx.lineTo(spot.x + spot.rx, spot.y - spot.ry * 0.08);
+            } else {
+                ctx.moveTo(spot.x, spot.y - spot.ry); ctx.lineTo(spot.x + spot.rx * 0.12, spot.y); ctx.lineTo(spot.x - spot.rx * 0.08, spot.y + spot.ry);
+            }
+            ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = Math.min(0.65, charAmount * 0.8);
+        for (const spot of art.spots) {
+            if (!exposed(spot)) continue;
+            ctx.drawImage(woodScorchImage, spot.x - spot.rx * 1.1, spot.y - spot.ry * 1.25, spot.rx * 2.2, spot.ry * 2.5);
+        }
+        ctx.restore();
+        if (!obj.burning || window.effectsEnabled === false) { ctx.restore(); return; }
+        const age = obj.woodBurnAge || 0;
+        const strength = Math.min(1, age / 18) * Math.min(1, (obj.burnTimer || 0) / 42);
+        if (strength <= 0) { ctx.restore(); return; }
+        const time = frame / 60;
+        if (!woodSmokeImage) {
+            woodSmokeImage = surface(48, 48);
+            const smoke = woodSmokeImage.getContext('2d');
+            const haze = smoke.createRadialGradient(24, 24, 2, 24, 24, 23);
+            haze.addColorStop(0, 'rgba(64,61,56,0.3)');
+            haze.addColorStop(0.5, 'rgba(76,73,68,0.19)');
+            haze.addColorStop(1, 'rgba(90,87,80,0)');
+            smoke.fillStyle = haze; smoke.fillRect(0, 0, 48, 48);
+        }
+        for (let i = 0; i < art.spots.length; i++) {
+            const spot = art.spots[i];
+            if (!exposed(spot) || !onSolidWood(spot) || i % 2 !== 0) continue;
+            const flicker = 0.85 + Math.sin(time * 7 + spot.phase) * 0.1 + Math.sin(time * 12 + spot.phase * 2) * 0.05;
+            const height = Math.min(32, Math.max(12, Math.min(obj.w, obj.h) * 0.7)) * spot.size * flicker * (0.5 + strength * 0.5);
+            const width = height * 0.46;
+            const sway = Math.sin(time * 4.3 + spot.phase) * height * 0.16;
+            const x = spot.x, y = spot.y;
+            if (i % 4 === 0) {
+                const rise = (time * 0.55 + spot.phase) % 1;
+                const size = 16 + rise * 24;
+                ctx.globalAlpha = strength * Math.sin(rise * Math.PI) * 0.85;
+                ctx.drawImage(woodSmokeImage, x + Math.sin(spot.phase + time) * rise * 9 - size / 2,
+                    y - height * 0.7 - rise * 35 - size / 2, size, size);
+            }
+            // Nested tapered tongues share fixed roots and move smoothly, without particle bursts.
+            for (const [scale, color, opacity] of [[1, '#c54b16', 0.7], [0.72, '#f68b27', 0.9], [0.4, '#ffe1a0', 0.9]]) {
+                const h = height * scale, w = width * scale;
+                ctx.globalAlpha = strength * opacity;
+                ctx.fillStyle = color;
+                ctx.beginPath(); ctx.moveTo(x - w / 2, y);
+                ctx.bezierCurveTo(x - w * 0.75, y - h * 0.25, x - w * 0.45, y - h * 0.4, x - w * 0.28, y - h * 0.68);
+                ctx.quadraticCurveTo(x - w * 0.25, y - h * 0.4, x + w * 0.02, y - h * 0.49);
+                ctx.quadraticCurveTo(x + sway * 0.5, y - h * 0.75, x + sway, y - h);
+                ctx.bezierCurveTo(x + sway + w * 0.15, y - h * 0.55, x + w * 0.75, y - h * 0.28, x + w / 2, y);
+                ctx.quadraticCurveTo(x, y + w * 0.25, x - w / 2, y); ctx.fill();
+            }
+            const sparkRise = (time * 0.8 + spot.phase * 0.3) % 1;
+            ctx.globalAlpha = strength * (1 - sparkRise) * 0.65;
+            ctx.fillStyle = '#f3b46a';
+            ctx.fillRect(x + Math.sin(time * 2 + spot.phase) * sparkRise * 6, y - height - sparkRise * 15, 0.8, 1.4);
+        }
+        ctx.restore();
+    }
+
     function makeBox(type, w, h, seed) {
         const tile = surface(w, h), c = tile.getContext('2d');
         const rand = seeded(seed);
@@ -871,7 +1233,32 @@
             const spread = mech ? width * 0.3 : unit.h * (unitType === 'machinegun' ? 0.55 : 0.5);
             const rearOffset = mech ? -width * 0.3 : -unit.w * (unitType === 'fire' ? 0.6 : unitType === 'buratino' ? 0.55 : 0.5);
             const rearX = x + cos * rearOffset, rearY = y + sin * rearOffset;
-            if (!hovering && ((mech && landing) || (!mech && state.distance >= 7))) {
+            const organic = unitType === 'myasnoy' && !hovering;
+            const fiery = unitType === 'kamikaze' && (unit.kamikazeUltActive || unit._kamikazeTrailThisTick);
+            if (organic && landing) {
+                const halfW = (unit.w - 4) / 2, halfH = (unit.h - 8) / 2;
+                const size = Math.min(halfW, halfH), reach = size * 0.68;
+                const group = state.phase >= Math.PI ? 0 : 1;
+                for (let i = group; i < 10; i += 2) {
+                    const angle = i * Math.PI / 5 + Math.PI / 10;
+                    const nx = Math.cos(angle), ny = Math.sin(angle);
+                    const edge = Math.min(halfW / Math.max(0.01, Math.abs(nx)), halfH / Math.max(0.01, Math.abs(ny)));
+                    const stride = Math.sin(state.phase + (i % 2) * Math.PI) * state.strength;
+                    const tipX = nx * (edge * 0.88 + reach) + stride * size * 0.25 - state.turnVelocity * size * 1.2;
+                    const tipY = ny * (edge * 0.88 + reach) + Math.sin(Date.now() * 0.0008 + i * 1.7) * size * 0.025
+                        + Math.abs(stride) * ny * size * 0.08;
+                    const markX = x + cos * tipX - sin * tipY, markY = y + sin * tipX + cos * tipY;
+                    const water = type === 'swamp' && isSwampWater(markX, markY);
+                    const life = water ? 24 : material.life;
+                    if (trackMarks.length >= 1600) trackMarks.splice(0, 100);
+                    trackMarks.push({ x: markX, y: markY, water,
+                        cos, sin, footAngle: state.angle + angle, organicFoot: !water, width: Math.max(4, size * 0.4), type,
+                        life, maxLife: life });
+                }
+                state.distance = 0;
+                state.lastMark = null;
+            }
+            if (!hovering && !organic && ((mech && landing) || (!mech && state.distance >= 7))) {
                 if (trackMarks.length >= 1600) trackMarks.splice(0, 100);
                 let from = state.lastMark;
                 if (!from || Math.hypot(rearX - from.x, rearY - from.y) > 34 || from.cos * cos + from.sin * sin < 0.1) {
@@ -880,9 +1267,11 @@
                 const foot = state.phase >= Math.PI ? 1 : -1;
                 const markX = mech ? rearX - sin * spread * foot : rearX;
                 const markY = mech ? rearY + cos * spread * foot : rearY;
-                const water = type === 'swamp' && unitType !== 'ice' && unitType !== 'egyptian' && isSwampWater(markX, markY);
+                const water = !fiery && type === 'swamp' && unitType !== 'ice' && unitType !== 'egyptian' && isSwampWater(markX, markY);
                 const life = Math.ceil((water ? 24 : material.life) * (mech ? 1.25 : 1));
-                trackMarks.push({ x: markX, y: markY, cos, sin, spread, water, mech, unitType,
+                state.markIndex = (state.markIndex || 0) + 1;
+                trackMarks.push({ x: markX, y: markY, cos, sin, spread, water, mech, unitType, fiery,
+                    flameTip: state.markIndex % 2 === 0,
                     fromX: from.x, fromY: from.y, fromCos: from.cos, fromSin: from.sin,
                     width: Math.max(3, width * (mech ? 0.19 : 0.12)), type, life, maxLife: life });
                 state.lastMark = { x: rearX, y: rearY, cos, sin };
@@ -1024,6 +1413,47 @@
         for (const mark of trackMarks) {
             if (mark.x < left || mark.x > right || mark.y < top || mark.y > bottom) continue;
             const fade = mark.life / mark.maxLife;
+            if (mark.organicFoot) {
+                ctx.save(); ctx.translate(mark.x, mark.y); ctx.rotate(mark.footAngle);
+                ctx.globalAlpha = fade * 0.38;
+                ctx.fillStyle = materials[mark.type].track;
+                ctx.beginPath(); ctx.ellipse(0, 0, mark.width * 0.7, mark.width * 0.48, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = fade * 0.28;
+                ctx.fillStyle = mark.type === 'snow' ? '#a75c5a' : '#602822';
+                ctx.beginPath(); ctx.ellipse(-mark.width * 0.1, 0, mark.width * 0.42, mark.width * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore(); continue;
+            }
+            if (mark.fiery) {
+                const heat = Math.min(1, fade * 1.6);
+                for (const side of [-1, 1]) {
+                    const x0 = mark.fromX - mark.fromSin * mark.spread * side, y0 = mark.fromY + mark.fromCos * mark.spread * side;
+                    const x1 = mark.x - mark.sin * mark.spread * side, y1 = mark.y + mark.cos * mark.spread * side;
+                    ctx.lineCap = 'butt';
+                    ctx.globalAlpha = fade * 0.5; ctx.strokeStyle = '#54220f'; ctx.lineWidth = mark.width * 1.35;
+                    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+                    ctx.globalAlpha = heat * 0.65; ctx.strokeStyle = '#e65016'; ctx.lineWidth = mark.width * 0.85;
+                    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+                    ctx.globalAlpha = heat * 0.75; ctx.strokeStyle = '#ffc45a'; ctx.lineWidth = Math.max(1, mark.width * 0.26);
+                    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+                    if (mark.flameTip) {
+                        const outwardX = -mark.sin * side, outwardY = mark.cos * side;
+                        const flutter = 0.85 + 0.2 * Math.sin((window.frameCount || 0) * 0.18 + mark.x * 0.12 + mark.y * 0.07);
+                        const tipX = x1 + outwardX * mark.width * 1.5 * flutter - mark.cos * mark.width * 0.5;
+                        const tipY = y1 + outwardY * mark.width * 1.5 * flutter - mark.sin * mark.width * 0.5;
+                        ctx.globalAlpha = heat * 0.55; ctx.fillStyle = '#ed5b16';
+                        ctx.beginPath(); ctx.moveTo(x1 - mark.cos * mark.width * 0.7, y1 - mark.sin * mark.width * 0.7);
+                        ctx.lineTo(tipX, tipY);
+                        ctx.lineTo(x1 + mark.cos * mark.width * 0.45, y1 + mark.sin * mark.width * 0.45);
+                        ctx.closePath(); ctx.fill();
+                        ctx.globalAlpha = heat * 0.5; ctx.fillStyle = '#ffc156';
+                        ctx.beginPath(); ctx.moveTo(x1 - mark.cos * mark.width * 0.3, y1 - mark.sin * mark.width * 0.3);
+                        ctx.lineTo(x1 + outwardX * mark.width * 0.7, y1 + outwardY * mark.width * 0.7);
+                        ctx.lineTo(x1 + mark.cos * mark.width * 0.25, y1 + mark.sin * mark.width * 0.25);
+                        ctx.closePath(); ctx.fill();
+                    }
+                }
+                ctx.lineCap = 'butt'; continue;
+            }
             if (mark.water) {
                 const age = 1 - mark.life / mark.maxLife;
                 ctx.globalAlpha = (1 - age) * 0.28; ctx.strokeStyle = '#94ab98'; ctx.lineWidth = 0.8;
@@ -1262,7 +1692,7 @@
     }
 
     window.GameTerrain = { normalize, current, randomType, label, speedFactor, reloadFactor, movementSpeed, canSee, NIGHT_VISION_RADIUS,
-        groundColor, drawGround, drawWallCover, drawBox, visibilityPolygon, drawAtmosphere,
+        groundColor, drawGround, drawWallCover, drawWoodenWall, drawWoodenWallBurn, drawWoodenWallRot, drawBox, drawBarrel, visibilityPolygon, drawAtmosphere,
         resetBattle, updateMovement, drawMovement, movementStats, getMotion, forEachIlluminatMark, activateIlluminatSuper,
         isIlluminatSuperActive, illuminatSuperStrength };
     window.currentTerrain = normalize(window.currentTerrain);

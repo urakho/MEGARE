@@ -462,8 +462,8 @@ function drawDebugLines() {
 }
 
 
-function moveParalyzedUnit(unit, candidates) {
-    if (tryDodgeIncoming(unit)) return;
+function moveParalyzedUnit(unit, candidates, speedFactor = 1) {
+    if (speedFactor === 1 && tryDodgeIncoming(unit)) return;
     const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && target.team !== unit.team));
     let nearest = null;
     let nearestDistance = Infinity;
@@ -477,7 +477,7 @@ function moveParalyzedUnit(unit, candidates) {
     }
     if (!nearest) return;
     const angle = Math.atan2(centerY - (nearest.y + (nearest.h || 0) / 2), centerX - (nearest.x + (nearest.w || 0) / 2));
-    const speed = GameTerrain.movementSpeed(unit.speed || 2.5);
+    const speed = GameTerrain.movementSpeed(unit.speed || 2.5) * speedFactor;
     for (const offset of [0, -Math.PI / 4, Math.PI / 4, -Math.PI / 2, Math.PI / 2]) {
         if (moveSmallSteps(unit, angle + offset, speed)) {
             unit.baseAngle = angle + offset;
@@ -486,8 +486,49 @@ function moveParalyzedUnit(unit, candidates) {
     }
 }
 
+function tickBotKamikaze(unit) {
+    unit.kamikazeUltCooldown = Math.max(0, (unit.kamikazeUltCooldown || 0) - 1);
+    unit.kamikazeRecoveryTimer = Math.max(0, (unit.kamikazeRecoveryTimer || 0) - 1);
+    unit._kamikazeTrailThisTick = !!unit.kamikazeUltActive;
+    if (unit.paralyzed && unit.kamikazeUltActive) finishKamikazeDash(unit, false);
+}
+
+function handleBotKamikazeMovement(unit, candidates) {
+    if ((unit.kamikazeUltActive || (unit.kamikazeRecoveryTimer || 0) > 0) && unit.iceSlowed) {
+        unit.iceSlowedTime--;
+        if (unit.iceSlowedTime <= 0) unit.iceSlowed = false;
+    }
+    if (unit.kamikazeUltActive) {
+        const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && target.team !== unit.team));
+        let nearest = null, distance = Infinity;
+        const x = unit.x + unit.w / 2, y = unit.y + unit.h / 2;
+        for (const target of targets) {
+            const d = Math.hypot(target.x + target.w / 2 - x, target.y + target.h / 2 - y);
+            if (d < distance) { nearest = target; distance = d; }
+        }
+        const angle = nearest ? Math.atan2(nearest.y + nearest.h / 2 - y, nearest.x + nearest.w / 2 - x) : unit.kamikazeDashAngle;
+        updateKamikazeDash(unit, angle);
+        return true;
+    }
+    if ((unit.kamikazeRecoveryTimer || 0) > 0) {
+        moveParalyzedUnit(unit, candidates, unit.iceSlowed ? 0.325 : 0.65);
+        return true;
+    }
+    return false;
+}
+
+function tryBotKamikazeDash(unit, target) {
+    if (unit.tankType !== 'kamikaze' || (unit.kamikazeUltCooldown || 0) > 0) return false;
+    const dx = target.x + target.w / 2 - unit.x - unit.w / 2;
+    const dy = target.y + target.h / 2 - unit.y - unit.h / 2;
+    const distance = Math.hypot(dx, dy);
+    const difference = Math.atan2(Math.sin(Math.atan2(dy, dx) - unit.turretAngle), Math.cos(Math.atan2(dy, dx) - unit.turretAngle));
+    return distance > 65 && distance < 400 && Math.abs(difference) < 0.35 && Math.random() < 0.025 && startKamikazeDash(unit);
+}
+
 function createBotBasicProjectile(unit, owner) {
     const type = unit.tankType || 'normal';
+    if (type === 'kamikaze') return createKamikazeProjectile(unit, owner);
     const angle = unit.turretAngle || 0;
     const centerX = unit.x + unit.w / 2;
     const centerY = unit.y + unit.h / 2;
@@ -495,7 +536,6 @@ function createBotBasicProjectile(unit, owner) {
     let projectileType = type, damage = 100;
     if (type === 'ice') { width = height = 8; }
     else if (type === 'egyptian') { offset = 24; speed = 7.2; life = 110; width = 10; height = 4; projectileType = 'egyptArrow'; }
-    else if (type === 'kamikaze') { speed = 6; width = height = 10; projectileType = 'kamikazeBullet'; }
     else if (type === 'pyro') { offset = 22; speed = 5.5; life = 90; projectileType = 'pyroBullet'; damage = 70; }
     else if (type === 'mechShield') { offset = 26; speed = 5.5; life = 110; width = height = 14; damage = 120; }
     else if (type === 'mechRocket') { offset = 26; speed = 5.5; life = 110; width = height = 12; projectileType = 'mechRocketBullet'; damage = 150; }
@@ -553,8 +593,11 @@ function updateEnemyAI() {
       let machinegunHeatUpdated = false;
       try {
         if (!enemy || !enemy.alive) continue;
+        if (enemy.tankType === 'buratino' && enemy.barrageCooldown > 0) enemy.barrageCooldown--;
         // Training dummies: skip all AI, just stand still
         if (enemy.isDummy) continue;
+        updateMechPower(enemy);
+        if (enemy.tankType === 'kamikaze') tickBotKamikaze(enemy);
         if (enemy.fireCooldown > 0) {
             enemy.fireCooldown = Math.max(0, enemy.fireCooldown - getEntityFireCooldownStep(enemy));
         }
@@ -562,20 +605,21 @@ function updateEnemyAI() {
             syncBurovoyState(enemy);
         }
         if (enemy.paralyzed) {
+            const frozenByIce = (enemy.frozenEffect || 0) > 0;
             enemy.paralyzedTime--;
             if (enemy.paralyzedTime <= 0) enemy.paralyzed = false;
             if (enemy.frozenEffect) enemy.frozenEffect--;
             if (enemy.paralyzed) {
                 if (enemy.tankType === 'burovoy') updateBurovoyDrillAttack(enemy, false);
-                moveParalyzedUnit(enemy, [tank, ...allies, ...enemies, ...playerDrones, ...enemyDrones]);
+                if (!frozenByIce && !(enemy.mechPowerStunTime > 0)) moveParalyzedUnit(enemy, [tank, ...allies, ...enemies, ...playerDrones, ...enemyDrones]);
                 continue;
             }
         }
         // Ice slow: 50% speed by skipping every other AI tick
+        if (enemy.tankType === 'kamikaze' && handleBotKamikazeMovement(enemy, [tank, ...allies, ...enemies])) continue;
         if (enemy.iceSlowed) {
             enemy.iceSlowedTime--;
             if (enemy.iceSlowedTime <= 0) enemy.iceSlowed = false;
-            if (enemy.frozenEffect) enemy.frozenEffect--;
             enemy._iceSkipFlip = !enemy._iceSkipFlip;
             if (enemy._iceSkipFlip) continue;
         }
@@ -692,7 +736,7 @@ function updateEnemyAI() {
         
         // Выбор цели: ближайшая цель среди всех танков, исключая тех, кто в той же команде
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
-        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...playerDrones.filter(d => d && d.alive), ...enemyDrones.filter(d => d && d.alive)];
+        const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...playerDrones.filter(d => d && d.alive && d.romanSummon !== 'banner'), ...enemyDrones.filter(d => d && d.alive && d.romanSummon !== 'banner')];
         if ((enemy.lastSeenPlayerTimer || 0) > 0) enemy.lastSeenPlayerTimer--;
         const visibleTargets = filterTargetsByVision(enemy, potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team)));
         const playerVisibleToEnemy = visibleTargets.includes(tank);
@@ -794,6 +838,7 @@ function updateEnemyAI() {
                 enemy._blockingBoxTimer = 0;
             }
         }
+        if (tryBotKamikazeDash(enemy, nearest)) continue;
         // Mirror shield — tick and cooldown always run (outside try/catch)
         if (enemy.mirrorShieldActive === undefined) enemy.mirrorShieldActive = false;
         if (enemy.mirrorShieldTimer === undefined) enemy.mirrorShieldTimer = 0;
@@ -809,15 +854,9 @@ function updateEnemyAI() {
         try {
             const distToNearest = Math.hypot((nearest.x + (nearest.w||0)/2) - (enemy.x + enemy.w/2), (nearest.y + (nearest.h||0)/2) - (enemy.y + enemy.h/2));
 
-            // Toxic: use mega gas once if close enough
-            if (enemy.tankType === 'toxic' && !enemy.megaGasUsed && distToNearest < 300 && Math.random() < 0.03) {
-                const ang = enemy.turretAngle;
-                const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 20;
-                const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 20;
-                const speed = 8;
-                bullets.push({ x: sx, y: sy, w: 8, h: 8, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 500, owner: 'enemy', team: enemy.team, type: 'megabomb', explodeTimer: 60, spawned: 5 });
-                enemy.megaGasUsed = true;
-                enemy.fireCooldown = 60;
+            // Toxic uses the same wave as the player, once per battle.
+            if (enemy.tankType === 'toxic' && !enemy.megaGasUsed && distToNearest < 330 && Math.random() < 0.03) {
+                activateToxicWave(enemy, 'enemy');
             }
 
             // Plasma: fire powerful plasma blast (limited uses)
@@ -918,12 +957,9 @@ function updateEnemyAI() {
                 enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, 30);
             }
 
-            // Roman: activate shield defensive ability when close to targets
-            if (enemy.tankType === 'roman' && (!enemy.romanShieldCooldown || enemy.romanShieldCooldown <= 0) && !enemy.romanShieldActive && distToNearest < 350 && Math.random() < 0.025) {
-                enemy.romanShieldActive = true;
-                enemy.romanShieldTimer = 240; // 4 seconds
-                enemy.romanShieldCooldown = 600; // 10 seconds
-                enemy.fireCooldown = 60;
+            // Roman reinforcements use the same placement and cooldown as the player.
+            if (enemy.tankType === 'roman' && distToNearest < 380 && Math.random() < 0.025) {
+                castRomanBanner(enemy, 'enemy');
             }
 
             // Medical: spawn healing zones when nearby allies need healing
@@ -970,55 +1006,12 @@ function updateEnemyAI() {
                 }
             }
 
-            // Buratino: mass barrage when nearby enemies
-            if (enemy.tankType === 'buratino') {
-                if (enemy.barrageCooldown > 0) enemy.barrageCooldown--;
-                if ((!enemy.barrageCooldown || enemy.barrageCooldown <= 0) && distToNearest < 400 && Math.random() < 0.02) {
-                    const distU = 400;
-                    const targetXU = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * distU;
-                    const targetYU = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * distU;
-                    const tcU = { x: targetXU, y: targetYU, radius: 160, color: enemy.color, timer: 180, type: 'targetCircle', team: enemy.team };
-                    tcU.planned = [];
-                    for (let j = 0; j < 8; j++) {
-                        const ang = (j / 8) * Math.PI * 2;
-                        tcU.planned.push({ x: tcU.x + Math.cos(ang) * tcU.radius * 0.35, y: tcU.y + Math.sin(ang) * tcU.radius * 0.35, exploded: false });
-                    }
-                    for (let j = 0; j < 24; j++) {
-                        const ang = (j / 24) * Math.PI * 2;
-                        tcU.planned.push({ x: tcU.x + Math.cos(ang) * tcU.radius * 0.75, y: tcU.y + Math.sin(ang) * tcU.radius * 0.75, exploded: false });
-                    }
-                    objects.push(tcU);
-                    enemy.artilleryMode = true;
-                    enemy.artilleryTimer = 180;
-                    enemy.barrageCooldown = 720;
-                    const ultRowsE = 5, ultColsE = 9;
-                    const tSizeUE = Math.min(enemy.w, enemy.h) * 0.35 * 1.5;
-                    const insetUE = 6;
-                    const usableWUE = tSizeUE - insetUE * 2;
-                    const usableHUE = tSizeUE - insetUE * 2;
-                    const fanSpreadUE = 1.5;
-                    for (let r = 0; r < ultRowsE; r++) {
-                        const ry = -tSizeUE/2 + insetUE + r * (usableHUE / (ultRowsE - 1 || 1));
-                        for (let c = 0; c < ultColsE; c++) {
-                            const cx2 = -tSizeUE/2 + insetUE + c * (usableWUE / (ultColsE - 1 || 1));
-                            const lx = cx2, ly = ry;
-                            const sx = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * lx - Math.sin(enemy.turretAngle) * ly;
-                            const sy = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * lx + Math.cos(enemy.turretAngle) * ly;
-                            const colNorm = ultColsE <= 1 ? 0.5 : c / (ultColsE - 1);
-                            const rowNorm = ultRowsE <= 1 ? 0.5 : r / (ultRowsE - 1);
-                            const angOffset = (colNorm - 0.5) * fanSpreadUE + (rowNorm - 0.5) * 0.06;
-                            const planned = tcU.planned;
-                            const idx = (r * ultColsE + c) % planned.length;
-                            const targetPos = planned[idx];
-                            const dx = targetPos.x - sx;
-                            const dy = targetPos.y - sy;
-                            const delay = Math.floor((r * ultColsE + c) * 1 + Math.random() * 2);
-                            const travel = Math.max(16, 180 - delay - 2);
-                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: dx/travel, vy: dy/travel, life: travel + 6, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: enemy.team });
-                        }
-                    }
-                    enemy.fireCooldown = 60;
-                }
+            // Buratino fires the same three-wave ultimate as the player.
+            if (enemy.tankType === 'buratino' && (!enemy.barrageCooldown || enemy.barrageCooldown <= 0)
+                && distToNearest < 420 && Math.random() < 0.02) {
+                createBuratinoBarrage(enemy, true);
+                enemy.barrageCooldown = 900;
+                enemy.fireCooldown = Math.max(enemy.fireCooldown || 0, getTankShotCooldown('buratino'));
             }
 
             // Musical: sound ricochet when surrounded
@@ -1138,19 +1131,8 @@ function updateEnemyAI() {
             }
         }
 
-        // mechDiy: energy regen and per-frame burst processing
+        // mechDiy: per-frame burst processing; power updates before paralysis handling.
         if (enemy.tankType === 'mechDiy') {
-            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 110;
-            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 110;
-            
-            // Trigger 1-second paralysis when energy hits 5 or below
-            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
-                enemy.paralyzed = true;
-                enemy.paralyzedTime = 60;
-            }
-            
-            // Energy restoration
-            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
             
             // Mech burst attack AI (when paralysis not active)
             if (!enemy.paralyzed) {
@@ -1197,13 +1179,9 @@ function updateEnemyAI() {
             }
         }
 
-        // mechShield: energy regen and shield state tracking
+        // mechShield: shield state tracking.
         if (enemy.tankType === 'mechShield') {
-            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 130;
-            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 130;
 
-            // Energy restoration
-            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
 
             // Shield active when energy >= 100
             const _prevShield = enemy.mechShieldActive;
@@ -1219,22 +1197,6 @@ function updateEnemyAI() {
                 if (enemy.mechShieldDamagePercent < 0) enemy.mechShieldDamagePercent = 0;
             }
 
-            // Paralysis at low energy
-            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
-                enemy.paralyzed = true;
-                enemy.paralyzedTime = 60;
-            }
-        }
-
-        // mechRocket: energy regen for bot
-        if (enemy.tankType === 'mechRocket') {
-            if (enemy.mechEnergy === undefined) enemy.mechEnergy = 150;
-            if (enemy.mechMaxEnergy === undefined) enemy.mechMaxEnergy = 150;
-            enemy.mechEnergy = Math.min(enemy.mechMaxEnergy, enemy.mechEnergy + 0.05);
-            if (enemy.mechEnergy <= 5 && !enemy.paralyzed) {
-                enemy.paralyzed = true;
-                enemy.paralyzedTime = 60;
-            }
         }
 
         // Mirror: proactive shield activation (outside try/catch so errors are visible)
@@ -1535,59 +1497,7 @@ function updateEnemyAI() {
                     flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: enemy.team, owner: 'enemy' });
                 }
             } else if (tt === 'buratino') {
-                // Enemy buratino: enter artillery mode, spawn target circle and visual rockets (like player)
-                const distE = 300;
-                const targetXE = enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * distE;
-                const targetYE = enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * distE;
-                const targetCircleE = { x: targetXE, y: targetYE, radius: 100, color: enemy.color, timer: 180, type: 'targetCircle', team: enemy.team };
-                targetCircleE.planned = [];
-                for (let j = 0; j < 4; j++) {
-                    const ang = (j / 4) * Math.PI * 2;
-                    const distP = targetCircleE.radius * 0.3;
-                    targetCircleE.planned.push({ x: targetCircleE.x + Math.cos(ang) * distP, y: targetCircleE.y + Math.sin(ang) * distP, exploded: false });
-                }
-                for (let j = 0; j < 9; j++) {
-                    const ang = (j / 9) * Math.PI * 2;
-                    const distP = targetCircleE.radius * 0.7;
-                    targetCircleE.planned.push({ x: targetCircleE.x + Math.cos(ang) * distP, y: targetCircleE.y + Math.sin(ang) * distP, exploded: false });
-                }
-                objects.push(targetCircleE);
-                enemy.artilleryMode = true;
-                enemy.artilleryTimer = 180;
-                enemy.fireCooldown = 60;
-                const rowsE = 3;
-                const colsE = Math.max(5, Math.floor((Math.min(enemy.w, enemy.h) * 1.5) / 10));
-                const tSizeE = Math.min(enemy.w, enemy.h) * 0.35 * 1.5;
-                const insetE = 6;
-                const usableWE = tSizeE - insetE * 2;
-                const usableHE = tSizeE - insetE * 2;
-                const fanSpreadE = 0.9;
-                for (let r = 0; r < rowsE; r++) {
-                    const ry = -tSizeE/2 + insetE + r * (usableHE / (rowsE - 1 || 1));
-                    for (let c = 0; c < colsE; c++) {
-                        const cx = -tSizeE/2 + insetE + c * (usableWE / (colsE - 1 || 1));
-                        const baseAng = enemy.turretAngle;
-                        const lx = cx;
-                        const ly = ry;
-                        const sx = enemy.x + enemy.w/2 + Math.cos(baseAng) * lx - Math.sin(baseAng) * ly;
-                        const sy = enemy.y + enemy.h/2 + Math.sin(baseAng) * lx + Math.cos(baseAng) * ly;
-                        const colNorm = colsE <= 1 ? 0.5 : c / (colsE - 1);
-                        const rowNorm = rowsE <= 1 ? 0.5 : r / (rowsE - 1);
-                        const angOffset = (colNorm - 0.5) * fanSpreadE + (rowNorm - 0.5) * 0.06;
-                        const angRocket = baseAng + angOffset + (Math.random() - 0.5) * 0.03;
-                        const planned = targetCircleE.planned || [];
-                        const idx = planned.length ? ((r * colsE + c) % planned.length) : 0;
-                        const targetPos = planned.length ? planned[idx] : { x: targetXE + Math.cos(angRocket) * (targetCircleE.radius * 0.5), y: targetYE + Math.sin(angRocket) * (targetCircleE.radius * 0.5) };
-                        const dx = targetPos.x - sx;
-                        const dy = targetPos.y - sy;
-                        const delay = Math.floor((r * colsE + c) * 1 + Math.random() * 2);
-                        const travel = 180;
-                        const vx = dx / travel;
-                        const vy = dy / travel;
-                        const life = travel + 6;
-                        objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: enemy.team });
-                    }
-                }
+                createBuratinoBarrage(enemy);
             } else if (tt === 'illuminat') {
                 if (!enemy.beamActive && (!enemy.beamCooldown || enemy.beamCooldown <= 0)) {
                     enemy.beamActive = true;
@@ -1792,7 +1702,7 @@ function updateEnemyAI() {
                     b = null;
                 }
             } else if (tt === 'spartan') {
-                // Spartan: piercing spear
+                // Spartan: thrown spear
                 b = {
                     x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 26,
                     y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 26,
@@ -1835,34 +1745,34 @@ function updateAllyAI() {
       let machinegunHeatUpdated = false;
       try {
         if (!ally || !ally.alive) continue;
+        updateMechPower(ally);
+        if (ally.tankType === 'buratino' && ally.barrageCooldown > 0) ally.barrageCooldown--;
+        if (ally.tankType === 'kamikaze') tickBotKamikaze(ally);
         if (ally.fireCooldown > 0) {
             ally.fireCooldown = Math.max(0, ally.fireCooldown - getEntityFireCooldownStep(ally));
         }
         if (ally.tankType === 'mechDiy' || ally.tankType === 'mechShield' || ally.tankType === 'mechRocket') {
-            const baseEnergy = ally.tankType === 'mechShield' ? 130 : ally.tankType === 'mechRocket' ? 150 : 110;
-            if (ally.mechMaxEnergy === undefined) ally.mechMaxEnergy = baseEnergy;
-            if (ally.mechEnergy === undefined) ally.mechEnergy = ally.mechMaxEnergy;
-            ally.mechEnergy = Math.min(ally.mechMaxEnergy, ally.mechEnergy + 0.05);
             if ((ally.mechBurstCooldown || 0) > 0) ally.mechBurstCooldown--;
         }
                 if (ally.tankType === 'burovoy' && typeof syncBurovoyState === 'function') {
                         syncBurovoyState(ally);
                 }
         if (ally.paralyzed) {
+            const frozenByIce = (ally.frozenEffect || 0) > 0;
             ally.paralyzedTime--;
             if (ally.paralyzedTime <= 0) ally.paralyzed = false;
             if (ally.frozenEffect) ally.frozenEffect--;
             if (ally.paralyzed) {
                 if (ally.tankType === 'burovoy') updateBurovoyDrillAttack(ally, false);
-                moveParalyzedUnit(ally, [...enemies, ...enemyDrones]);
+                if (!frozenByIce && !(ally.mechPowerStunTime > 0)) moveParalyzedUnit(ally, [...enemies, ...enemyDrones]);
                 continue;
             }
         }
         // Ice slow: 50% speed by skipping every other AI tick
+        if (ally.tankType === 'kamikaze' && handleBotKamikazeMovement(ally, enemies)) continue;
         if (ally.iceSlowed) {
             ally.iceSlowedTime--;
             if (ally.iceSlowedTime <= 0) ally.iceSlowed = false;
-            if (ally.frozenEffect) ally.frozenEffect--;
             ally._iceSkipFlip = !ally._iceSkipFlip;
             if (ally._iceSkipFlip) continue;
         }
@@ -1890,7 +1800,7 @@ function updateAllyAI() {
             continue;
         }
         if (ally.ultimateCooldown > 0) ally.ultimateCooldown--;
-        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...enemyDrones.filter(d => d && d.alive && d.team !== ally.team), ...illusions.filter(i => i.life > 0)]);
+        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...enemyDrones.filter(d => d && d.alive && d.romanSummon !== 'banner' && d.team !== ally.team), ...illusions.filter(i => i.life > 0)]);
         if (targets.length === 0) {
             if (ally.tankType === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
                 updateBurovoyDrillAttack(ally, false, { damagePerSecond: 40 });
@@ -1941,6 +1851,17 @@ function updateAllyAI() {
             ally.confused--;
         }
 
+        if (tryBotKamikazeDash(ally, nearest)) continue;
+        if (ally.tankType === 'toxic' && !ally.megaGasUsed && nd < 330 && Math.random() < 0.03) {
+            activateToxicWave(ally, 'ally');
+        }
+        if (ally.tankType === 'buratino' && (!ally.barrageCooldown || ally.barrageCooldown <= 0)
+            && nd < 420 && Math.random() < 0.02) {
+            createBuratinoBarrage(ally, true);
+            ally.barrageCooldown = 900;
+            ally.fireCooldown = Math.max(ally.fireCooldown || 0, getTankShotCooldown('buratino'));
+        }
+
         // Lazy-init mirror shield for allies
         if (ally.mirrorShieldActive === undefined) ally.mirrorShieldActive = false;
         if (ally.mirrorShieldTimer === undefined) ally.mirrorShieldTimer = 0;
@@ -1969,32 +1890,8 @@ function updateAllyAI() {
             }
         }
 
-        // Lazy-init Roman shield for allies
-        if (ally.romanShieldActive === undefined) ally.romanShieldActive = false;
-        if (ally.romanShieldTimer === undefined) ally.romanShieldTimer = 0;
-        if (ally.romanShieldCooldown === undefined) ally.romanShieldCooldown = 0;
-        // Tick Roman shield for ally
-        if (ally.romanShieldActive) {
-            ally.romanShieldTimer--;
-            if (ally.romanShieldTimer <= 0) ally.romanShieldActive = false;
-        }
-        if (ally.romanShieldCooldown > 0) ally.romanShieldCooldown--;
-        // Activate Roman shield for ally when close to targets
-        if (ally.tankType === 'roman' && !ally.romanShieldActive && ally.romanShieldCooldown <= 0) {
-            const ax = ally.x + ally.w / 2, ay = ally.y + ally.h / 2;
-            let threat = false;
-            for (const b of bullets) {
-                if (b.team === ally.team) continue;
-                if (Math.hypot(b.x - ax, b.y - ay) < 350) {
-                    const dot = b.vx * (ax - b.x) + b.vy * (ay - b.y);
-                    if (dot > 0) { threat = true; break; }
-                }
-            }
-            if (threat && Math.random() < 0.3) {
-                ally.romanShieldActive = true;
-                ally.romanShieldTimer = 240; // 4 seconds
-                ally.romanShieldCooldown = 600; // 10 seconds
-            }
+        if (ally.tankType === 'roman' && nd < 380 && Math.random() < 0.025) {
+            castRomanBanner(ally, 'ally');
         }
 
         if (ally.tankType === 'ice' && !ally.isUltimateActive && (!ally.ultimateCooldown || ally.ultimateCooldown <= 0) && nd < 220 && Math.random() < 0.03) {
@@ -2275,59 +2172,7 @@ function updateAllyAI() {
                         flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: ally.team, owner: 'ally' });
                     }
                 } else if (tt === 'buratino') {
-                    // Ally buratino: enter artillery mode, spawn target circle and visual rockets (like player and enemy)
-                    const distA = 300;
-                    const targetXA = ally.x + ally.w/2 + Math.cos(ally.turretAngle) * distA;
-                    const targetYA = ally.y + ally.h/2 + Math.sin(ally.turretAngle) * distA;
-                    const targetCircleA = { x: targetXA, y: targetYA, radius: 100, color: ally.color, timer: 180, type: 'targetCircle', team: ally.team };
-                    targetCircleA.planned = [];
-                    for (let j = 0; j < 4; j++) {
-                        const ang = (j / 4) * Math.PI * 2;
-                        const distP = targetCircleA.radius * 0.3;
-                        targetCircleA.planned.push({ x: targetCircleA.x + Math.cos(ang) * distP, y: targetCircleA.y + Math.sin(ang) * distP, exploded: false });
-                    }
-                    for (let j = 0; j < 9; j++) {
-                        const ang = (j / 9) * Math.PI * 2;
-                        const distP = targetCircleA.radius * 0.7;
-                        targetCircleA.planned.push({ x: targetCircleA.x + Math.cos(ang) * distP, y: targetCircleA.y + Math.sin(ang) * distP, exploded: false });
-                    }
-                    objects.push(targetCircleA);
-                    ally.artilleryMode = true;
-                    ally.artilleryTimer = 180;
-                    ally.fireCooldown = 60;
-                    const rowsA = 3;
-                    const colsA = Math.max(5, Math.floor((Math.min(ally.w, ally.h) * 1.5) / 10));
-                    const tSizeA = Math.min(ally.w, ally.h) * 0.35 * 1.5;
-                    const insetA = 6;
-                    const usableWA = tSizeA - insetA * 2;
-                    const usableHA = tSizeA - insetA * 2;
-                    const fanSpreadA = 0.9;
-                    for (let r = 0; r < rowsA; r++) {
-                        const ry = -tSizeA/2 + insetA + r * (usableHA / (rowsA - 1 || 1));
-                        for (let c = 0; c < colsA; c++) {
-                            const cx = -tSizeA/2 + insetA + c * (usableWA / (colsA - 1 || 1));
-                            const baseAng = ally.turretAngle;
-                            const lx = cx;
-                            const ly = ry;
-                            const sx = ally.x + ally.w/2 + Math.cos(baseAng) * lx - Math.sin(baseAng) * ly;
-                            const sy = ally.y + ally.h/2 + Math.sin(baseAng) * lx + Math.cos(baseAng) * ly;
-                            const colNorm = colsA <= 1 ? 0.5 : c / (colsA - 1);
-                            const rowNorm = rowsA <= 1 ? 0.5 : r / (rowsA - 1);
-                            const angOffset = (colNorm - 0.5) * fanSpreadA + (rowNorm - 0.5) * 0.06;
-                            const angRocket = baseAng + angOffset + (Math.random() - 0.5) * 0.03;
-                            const planned = targetCircleA.planned || [];
-                            const idx = planned.length ? ((r * colsA + c) % planned.length) : 0;
-                            const targetPos = planned.length ? planned[idx] : { x: targetXA + Math.cos(angRocket) * (targetCircleA.radius * 0.5), y: targetYA + Math.sin(angRocket) * (targetCircleA.radius * 0.5) };
-                            const dx = targetPos.x - sx;
-                            const dy = targetPos.y - sy;
-                            const delay = Math.floor((r * colsA + c) * 1 + Math.random() * 2);
-                            const travel = 180;
-                            const vx = dx / travel;
-                            const vy = dy / travel;
-                            const life = travel + 6;
-                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: ally.team });
-                        }
-                    }
+                    createBuratinoBarrage(ally);
                 } else if (tt === 'musical') {
                         // Ally musical: sound wave projectile that ricochets
                         const speed = 6;
@@ -2417,7 +2262,7 @@ function updateAllyAI() {
                         ally.fireCooldown = 65;
                         b = null;
                     } else if (tt === 'spartan') {
-                        // Ally spartan: piercing spear
+                        // Ally Spartan: thrown spear
                         b = {
                             x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 26,
                             y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 26,
@@ -2557,7 +2402,8 @@ function updateAllyAI() {
                     const wholeDamage = Math.floor(closestObj.beamDamageCarry + 1e-9);
                     if (wholeDamage > 0) {
                         closestObj.beamDamageCarry -= wholeDamage;
-                        damageWoodenWall(closestObj, wholeDamage, { hitColor: '#8e44ad', hitParticles: 2, destroyColor: '#6c3483' });
+                        damageWoodenWall(closestObj, wholeDamage, { hitColor: '#8e44ad', hitParticles: 2, destroyColor: '#6c3483',
+                            hitX: beamX + Math.cos(unit.turretAngle) * closestDist, hitY: beamY + Math.sin(unit.turretAngle) * closestDist });
                     }
                 }
             }
@@ -2587,7 +2433,7 @@ function updateAllyAI() {
             for (let j = checkList.length - 1; j >= 0; j--) {
                 const e = checkList[j];
                 // Skip invalid, dead, or same team
-                if (!e || (e.alive === false && e !== tank) || (e.team !== undefined && e.team === unit.team)) continue;
+                if (!e || e.romanSummon === 'banner' || (e.alive === false && e !== tank) || (e.team !== undefined && e.team === unit.team)) continue;
 
                 // Mirror Shield Protection from Beams (works for any tank)
                 if (e.mirrorShieldActive) continue;
@@ -2716,7 +2562,8 @@ function updateAllyAI() {
                 }
             }
         } else if (hitObstacle && hitObstacle.type === 'woodenWall' && typeof damageWoodenWall === 'function') {
-            damageWoodenWall(hitObstacle, 1.5 * _wjMult, { hitColor: '#4db8ff', hitParticles: 2, destroyColor: '#2e86c1' });
+            damageWoodenWall(hitObstacle, 1.5 * _wjMult, { hitColor: '#4db8ff', hitParticles: 2, destroyColor: '#2e86c1',
+                hitX: startX + Math.cos(angle) * beamLen, hitY: startY + Math.sin(angle) * beamLen });
         }
         unit.waterjetBeamLen = beamLen;
         // Track whether beam stopped at a wall (not a box/barrel) for visual splash
@@ -2737,7 +2584,7 @@ function updateAllyAI() {
 
         for (let j = targets.length - 1; j >= 0; j--) {
             const e = targets[j];
-            if (!e || (e.alive === false && e !== tank)) continue;
+            if (!e || e.romanSummon === 'banner' || (e.alive === false && e !== tank)) continue;
             if (e.team === unit.team) continue;
             if (e.mirrorShieldActive) continue;
             // Roman shield blocks waterjet beam damage

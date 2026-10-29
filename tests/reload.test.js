@@ -34,7 +34,7 @@ test('bot shot cooldowns use the player values for every standard weapon', () =>
     const context = { FIRE_COOLDOWN: 20, GameTerrain: { reloadFactor: () => 1 } };
     vm.runInNewContext(section(physics, 'function getEntityTankType(', 'function advanceFlamethrowerBurst('), context);
     const expected = {
-        normal: 30, ice: 30, fire: 135, buratino: 60, toxic: 35, plasma: 300,
+        normal: 30, ice: 30, fire: 135, buratino: 96, toxic: 35, plasma: 300,
         musical: 80, illuminat: 240, mirror: 90, machinegun: 5,
         buckshot: 80, time: 60, imitator: 60, electric: 80,
         robot: 60, medical: 60, mine: 90, spartan: 40,
@@ -306,6 +306,32 @@ test('reload bars stay hidden for all three mechs', () => {
         assert.equal(rectangles.length, 0, type);
         assert.equal(unit._reloadBarOpacity, undefined, type);
     }
+});
+
+test('Illuminat reload bar tracks beam recovery rather than active beam time', () => {
+    const tanks = read('tanks.js');
+    let clock = 0;
+    const context = { performance: { now: () => clock } };
+    vm.runInNewContext(section(tanks, 'function drawReloadBar(', 'function renderGameFrame()'), context);
+    const ctx = { globalAlpha: 1, save() {}, restore() {}, fillRect() {} };
+    const unit = { x: 10, y: 50, w: 38, beamActive: true, beamCooldown: 0, fireCooldown: 240 };
+    context.drawReloadBar(ctx, unit, 'illuminat', '#fff');
+    assert.equal(unit._reloadBarTotal, 0);
+    unit.beamActive = false;
+    unit.beamCooldown = 180;
+    unit.fireCooldown = 0;
+    clock += 50;
+    context.drawReloadBar(ctx, unit, 'illuminat', '#fff');
+    assert.equal(unit._reloadBarTotal, 180);
+    assert.equal(unit._reloadBarProgress, 0);
+    unit.beamCooldown = 90;
+    clock += 50;
+    context.drawReloadBar(ctx, unit, 'illuminat', '#fff');
+    assert.ok(unit._reloadBarProgress > 0);
+    unit.beamCooldown = 0;
+    clock += 50;
+    context.drawReloadBar(ctx, unit, 'illuminat', '#fff');
+    assert.equal(unit._reloadBarTotal, 0);
 });
 
 test('machinegun reload bar appears only after the firing burst overheats', () => {

@@ -9,6 +9,14 @@
 function generateMap() {
     objects = [];
     const step = 50;
+    const occupied = new Set();
+    const addObstacle = obj => {
+        const key = `${obj.x}:${obj.y}`;
+        if (occupied.has(key) || obj.x + obj.w > worldWidth || obj.y + obj.h > worldHeight) return false;
+        occupied.add(key);
+        objects.push(obj);
+        return true;
+    };
     
     for (let x = step; x < worldWidth - step; x += step) {
         for (let y = step; y < worldHeight - step; y += step) {
@@ -23,7 +31,7 @@ function generateMap() {
                         if (y + (i + 1) * blockSize > worldHeight) break;
                         // 30% chance this wall segment is wooden
                         const isWooden = Math.random() < 0.3;
-                       objects.push({
+                       addObstacle({
                            x: x, y: y + i * blockSize, w: blockSize, h: blockSize, 
                            type: isWooden ? 'woodenWall' : 'wall',
                            color: isWooden ? '#8B5E3C' : '#2b2b2b',
@@ -36,7 +44,7 @@ function generateMap() {
                     for (let i = 0; i < blockCount; i++) {
                         if (x + (i + 1) * blockSize > worldWidth) break;
                         const isWooden = Math.random() < 0.3;
-                       objects.push({
+                       addObstacle({
                            x: x + i * blockSize, y: y, w: blockSize, h: blockSize, 
                            type: isWooden ? 'woodenWall' : 'wall',
                            color: isWooden ? '#8B5E3C' : '#2b2b2b',
@@ -53,14 +61,7 @@ function generateMap() {
         for (let y = step; y < worldHeight - step; y += step) {
             if (Math.random() > 0.92) {
                 const newBox = { x: x, y: y, w: 50, h: 50, type: 'box', color: '#7a4a21' };
-                let canPlace = true;
-                for (let obj of objects) {
-                    if (obj.type === 'wall' && checkRectCollision(newBox, obj)) {
-                        canPlace = false;
-                        break;
-                    }
-                }
-                if (canPlace) objects.push(newBox);
+                addObstacle(newBox);
             }
         }
     }
@@ -100,8 +101,22 @@ function generateBossFightMap() {
     objects = [];
     const W = 1800, H = 1400, B = 50;
     const wall = (x, y, w, h) => objects.push({ x, y, w, h, type: 'wall', color: '#3d1a1a', theme: 'hell' });
-    const box  = (x, y) => objects.push({ x, y, w: 40, h: 40, type: 'box', color: '#5b2416' });
-    const brl  = (x, y) => objects.push({ x, y, w: 30, h: 30, type: 'barrel', color: '#6d3320' });
+    const placeCover = obj => {
+        const free = candidate => candidate.x >= 0 && candidate.y >= 0 && candidate.x + candidate.w <= W && candidate.y + candidate.h <= H &&
+            !objects.some(other => ['wall', 'woodenWall', 'box', 'barrel'].includes(other.type) &&
+                candidate.x < other.x + other.w && candidate.x + candidate.w > other.x && candidate.y < other.y + other.h && candidate.y + candidate.h > other.y);
+        // Keep the intended cover count, moving a blocked prop to the closest free position.
+        for (let radius = 0; radius <= 100; radius += 10) {
+            for (let dx = -radius; dx <= radius; dx += 10) for (let dy = -radius; dy <= radius; dy += 10) {
+                if (radius && Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+                const candidate = { ...obj, x: obj.x + dx, y: obj.y + dy };
+                if (free(candidate)) { objects.push(candidate); return; }
+            }
+        }
+    };
+    const box = (x, y) => placeCover({ x, y, w: 40, h: 40, type: 'box', color: '#5b2416' });
+    const barrelSize = B;
+    const brl = (x, y) => placeCover({ x: x - barrelSize / 2, y: y - barrelSize / 2, w: barrelSize, h: barrelSize, type: 'barrel', color: '#6d3320' });
     const lava = (x, y, w, h) => objects.push({ x, y, w, h, type: 'hellLava', color: '#ff5a1f' });
     const rift = (x, y, w, h) => objects.push({ x, y, w, h, type: 'hellRift', color: '#ff7a2e' });
 
@@ -121,8 +136,8 @@ function generateBossFightMap() {
 
     wall(200, 150, 250, B);    wall(200, 200, B, 250);
     wall(1350, 150, 250, B);   wall(1550, 200, B, 250);
-    wall(200, 1000, B, 250);   wall(200, 1200, 250, B);
-    wall(1550, 1000, B, 250);  wall(1350, 1200, 250, B);
+    wall(200, 1000, B, 250);   wall(250, 1200, 200, B);
+    wall(1550, 1000, B, 250);  wall(1350, 1200, 200, B);
 
     wall(650, 200, B, 200);    wall(1100, 200, B, 200);
     wall(650, 1000, B, 200);   wall(1100, 1000, B, 200);
@@ -145,7 +160,7 @@ function generateBossFightMap() {
         [560,430],[1240,430],[560,970],[1240,970],
         [400,530],[1400,530],[400,870],[1400,870],
         [900,200],[900,1200],
-    ].forEach(([x, y]) => brl(x - 15, y - 15));
+    ].forEach(([x, y]) => brl(x, y));
 
     navNeedsRebuild = true;
 }
@@ -186,7 +201,8 @@ function generateTrainingMap() {
         objects.push({ x, y, w: 42, h: 42, type: 'box', color: '#7a5b3b' });
     }
     for (const [x, y] of [[1120, 280], [1580, 580], [1150, 750], [2130, 760]]) {
-        objects.push({ x, y, w: 34, h: 34, type: 'barrel', color: '#7a4a21' });
+        const size = bw;
+        objects.push({ x: x + (34 - size) / 2, y: y + (34 - size) / 2, w: size, h: size, type: 'barrel', color: '#7a4a21' });
     }
     navNeedsRebuild = true;
 }
@@ -257,9 +273,11 @@ function spawnTeamMode() {
     for (let b = 0; b < barrelCount; b++) {
         const rx = 80 + Math.random() * (worldWidth - 160);
         const ry = 80 + Math.random() * (worldHeight - 160);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 300, 16);
+        const size = 50;
+        const p = findFreeSpot(rx - size / 2, ry - size / 2, size, size, 300, 16);
+        if (!p) continue;
         if (Math.hypot(p.x - tank.x, p.y - tank.y) < 120) continue;
-        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: 'barrel', color: '#b33' });
+        objects.push({ x: p.x, y: p.y, w: size, h: size, type: 'barrel', color: '#b33' });
     }
 
     navNeedsRebuild = true;
@@ -296,9 +314,11 @@ function spawnDuelMode() {
     for (let b = 0; b < barrelCount; b++) {
         const rx = 200 + Math.random() * (worldWidth - 400);
         const ry = 200 + Math.random() * (worldHeight - 400);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 400, 16);
+        const type = Math.random() > 0.7 ? 'barrel' : 'box';
+        const size = type === 'barrel' ? 50 : 40;
+        const p = findFreeSpot(rx - size / 2, ry - size / 2, size, size, 400, 16);
         if (!p) continue;
-        objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.7 ? 'barrel' : 'box', color: '#7a4a21' });
+        objects.push({ x: p.x, y: p.y, w: size, h: size, type, color: '#7a4a21' });
     }
 
     navNeedsRebuild = true;
@@ -348,8 +368,10 @@ function spawnTrialMode() {
     for (let b = 0; b < 15; b++) {
         const rx = 180 + Math.random() * (worldWidth - 360);
         const ry = 180 + Math.random() * (worldHeight - 360);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 800, 32);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.85 ? 'barrel' : 'box', color: '#7a4a21' });
+        const type = Math.random() > 0.85 ? 'barrel' : 'box';
+        const size = type === 'barrel' ? 50 : 40;
+        const p = findFreeSpot(rx - size / 2, ry - size / 2, size, size, 800, 32);
+        if (p) objects.push({ x: p.x, y: p.y, w: size, h: size, type, color: '#7a4a21' });
     }
 
     navNeedsRebuild = true;
@@ -397,8 +419,10 @@ function spawnOneVsAllMode() {
     for (let b = 0; b < coverCount; b++) {
         const rx = 200 + Math.random() * (worldWidth - 400);
         const ry = 200 + Math.random() * (worldHeight - 400);
-        const p = findFreeSpot(rx - 20, ry - 20, 40, 40, 600, 20);
-        if (p) objects.push({ x: p.x, y: p.y, w: 40, h: 40, type: Math.random() > 0.7 ? 'barrel' : 'box', color: '#7a4a21' });
+        const type = Math.random() > 0.7 ? 'barrel' : 'box';
+        const size = type === 'barrel' ? 50 : 40;
+        const p = findFreeSpot(rx - size / 2, ry - size / 2, size, size, 600, 20);
+        if (p) objects.push({ x: p.x, y: p.y, w: size, h: size, type, color: '#7a4a21' });
     }
     
     navNeedsRebuild = true;

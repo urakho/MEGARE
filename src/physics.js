@@ -31,6 +31,34 @@ function isEgyptianTank(entity) {
     return getEntityTankType(entity) === 'egyptian';
 }
 
+function updateMechPower(unit) {
+    const type = getEntityTankType(unit);
+    if (type !== 'mechDiy' && type !== 'mechShield' && type !== 'mechRocket') {
+        unit.mechPowerStunTime = 0;
+        unit.mechLowEnergyLatched = false;
+        return;
+    }
+    const baseEnergy = type === 'mechShield' ? 130 : type === 'mechRocket' ? 150 : 110;
+    if (unit.mechMaxEnergy === undefined) unit.mechMaxEnergy = baseEnergy;
+    if (unit.mechEnergy === undefined) unit.mechEnergy = unit.mechMaxEnergy;
+    const beforeRegen = Math.max(0, unit.mechEnergy);
+    unit.mechEnergy = Math.min(unit.mechMaxEnergy, beforeRegen + 0.05);
+    // Latch each depletion so a low battery cannot repeatedly restart the stun.
+    if (beforeRegen <= 5 && !unit.mechLowEnergyLatched) {
+        unit.mechLowEnergyLatched = true;
+        unit.mechPowerStunTime = 60;
+    } else {
+        unit.mechPowerStunTime = Math.max(0, (unit.mechPowerStunTime || 0) - 1);
+    }
+    if (unit.mechEnergy > 5) unit.mechLowEnergyLatched = false;
+    if (unit.mechPowerStunTime > 0) {
+        unit.paralyzed = true;
+        if (type === 'mechShield') { unit.mechShieldActive = false; unit.mechShieldFadeTimer = 0; }
+        // The ordinary paralysis timer ticks after this helper; preserve independent effects.
+        unit.paralyzedTime = Math.max(unit.paralyzedTime || 0, unit.mechPowerStunTime + 1);
+    }
+}
+
 function isBurovoyTank(entity) {
     return getEntityTankType(entity) === 'burovoy';
 }
@@ -52,7 +80,7 @@ function getEntityFireCooldownStep(entity) {
 }
 
 const TANK_SHOT_COOLDOWNS = Object.freeze({
-    normal: 30, ice: 30, fire: 135, waterjet: 0, buratino: 60,
+    normal: 30, ice: 30, fire: 135, waterjet: 0, buratino: 96,
     toxic: 35, plasma: 300, musical: 80, illuminat: 240,
     mirror: 90, machinegun: 5, buckshot: 80, time: 60,
     imitator: 60, electric: 80, robot: 60, medical: 60,
@@ -357,7 +385,7 @@ function applyBurovoyDrillDamage(source, damage, options = {}) {
             const obj = objects[index];
             if (!obj) continue;
             if (!drillIntersectsRect(shape.startX, shape.startY, shape.endX, shape.endY, shape.drillWidth, obj) && !circleIntersectsRect(shape.endX, shape.endY, shape.tipRadius, obj)) continue;
-            if (obj.type === 'woodenWall' && damageWoodenWall(obj, damage, { hitColor: '#b87a35', hitParticles: 2 })) {
+            if (obj.type === 'woodenWall' && damageWoodenWall(obj, damage, { hitColor: '#b87a35', hitParticles: 2, hitX: shape.startX, hitY: shape.startY })) {
                 source.burovoyDrillHit = true;
             } else if (obj.type === 'box') {
                 objects.splice(index, 1);
@@ -458,6 +486,8 @@ function isPlayerDamageProtected() {
 }
 
 function dealDamageToEntity(entity, damage) {
+    if (entity && entity.romanSummon === 'banner') return 0;
+    if (entity.kamikazeUltActive && entity.kamikazeInvincible) return 0;
     if (isBurovoyBurrowActive(entity) || (typeof tank !== 'undefined' && entity === tank && isPlayerDamageProtected())) return 0;
     const finalDamage = applyTargetDamageModifiers(entity, damage);
     entity.hp = (entity.hp || 0) - finalDamage;
@@ -470,20 +500,21 @@ function forEachHostileDrone(team, callback) {
     for (const group of [friendlyDrones, hostileDrones]) {
         for (let index = group.length - 1; index >= 0; index--) {
             const drone = group[index];
-            if (drone && drone.alive !== false && drone.team !== team) callback(drone);
+            if (drone && drone.romanSummon !== 'banner' && drone.alive !== false && drone.team !== team) callback(drone);
         }
     }
 }
 
 function damageCombatDrone(drone, damage) {
     const dealt = dealDamageToEntity(drone, damage);
+    if (drone.hp <= 0 && drone.romanSummon) { retireRomanUnit(drone); return dealt; }
     if (drone.hp <= 0) {
         for (const group of [playerDrones, enemyDrones]) {
             const index = group.indexOf(drone);
             if (index !== -1) group.splice(index, 1);
         }
         drone.alive = false;
-        spawnExplosion(drone.x + drone.w / 2, drone.y + drone.h / 2, 50);
+        spawnExplosion(drone.x + drone.w / 2, drone.y + drone.h / 2, 36, 'impact');
     }
     return dealt;
 }
@@ -500,6 +531,7 @@ function damageDronesInRadius(x, y, radius, maxDamage, team, minimumDamage = 1) 
 }
 
 function hitCombatDroneWithBullet(bullet, drone) {
+    if (drone.romanSummon === 'banner') return false;
     if (bullet.type === 'toxic' || bullet.type === 'megabomb') return false;
     if (bullet.type === 'rocket' || bullet.type === 'smallRocket') {
         explodeRocket(bullet);
@@ -510,7 +542,7 @@ function hitCombatDroneWithBullet(bullet, drone) {
         return true;
     }
     if (bullet.hasExplosion) {
-        spawnExplosion(bullet.x, bullet.y, bullet.explosionRadius);
+        spawnExplosion(bullet.x, bullet.y, bullet.explosionRadius, 'blast');
         const damage = bullet.owner === 'player' ? applyPlayerDamage(bullet.damage || 100) : (bullet.damage || 100);
         applyDamage(bullet.x, bullet.y, bullet.explosionRadius, damage, bullet.team);
         return true;
@@ -528,8 +560,14 @@ function hitCombatDroneWithBullet(bullet, drone) {
     const damage = bullet.owner === 'player'
         ? applyPlayerDamage(bullet.damage ?? fallbackDamage)
         : (bullet.damage ?? fallbackDamage);
-    damageCombatDrone(drone, damage);
-    if (bullet.type === 'ice') {
+    const facing = Math.atan2(-bullet.vy, -bullet.vx) - (drone.turretAngle || 0);
+    const blocked = drone.romanSummon === 'legionary' && drone.bracing && Math.cos(facing) > 0.55;
+    if (blocked) drone.shieldHit = 9;
+    damageCombatDrone(drone, blocked ? damage * 0.65 : damage);
+    if (bullet.type === 'pyroBullet' && drone.romanSummon === 'legionary') { drone.burnTimer = 300; drone.burnDps = 10; }
+    if (bullet.type === 'ice' && drone.romanSummon === 'legionary') {
+        drone.iceSlowed = true; drone.iceSlowedTime = 240;
+    } else if (bullet.type === 'ice') {
         drone.paralyzed = true;
         drone.paralyzedTime = 180;
     }
@@ -679,6 +717,7 @@ function getNearestPharaohSwarmTarget(swarm) {
 
 function applyPharaohSwarmDamage(entity, damage) {
     if (!entity || entity.alive === false) return;
+    if (entity.kamikazeUltActive && entity.kamikazeInvincible) return;
     if (isBurovoyBurrowActive(entity) || (typeof tank !== 'undefined' && entity === tank && isPlayerDamageProtected())) return;
     if (playerDrones.includes(entity) || enemyDrones.includes(entity)) {
         damageCombatDrone(entity, damage);
@@ -1080,6 +1119,12 @@ function isEntityTouchingIceField(entity, field) {
     return false;
 }
 
+function freezeWithIce(entity, duration) {
+    entity.paralyzed = true;
+    entity.paralyzedTime = Math.max(entity.paralyzedTime || 0, duration);
+    entity.frozenEffect = Math.max(entity.frozenEffect || 0, duration);
+}
+
 function applyIceFieldFreeze(entity, field) {
     if (!isIceFieldTarget(entity, field ? field.team : undefined)) return;
     const fieldId = field.fieldId;
@@ -1096,9 +1141,7 @@ function applyIceFieldFreeze(entity, field) {
 
     touchState[fieldId] = true;
     const freezeTime = field.contactFreezeTime || 240;
-    entity.paralyzed = true;
-    entity.paralyzedTime = Math.max(entity.paralyzedTime || 0, freezeTime);
-    entity.frozenEffect = Math.max(entity.frozenEffect || 0, freezeTime);
+    freezeWithIce(entity, freezeTime);
 
     if (window.effectsEnabled !== false && typeof spawnParticle === 'function' && particles.length < 230) {
         const centerX = entity.x + (entity.w || 0) / 2;
@@ -1119,6 +1162,7 @@ function clearIceFieldTouchState(fieldId) {
     if (typeof tank !== 'undefined') clearFor(tank);
     if (typeof allies !== 'undefined') for (const ally of allies) clearFor(ally);
     if (typeof enemies !== 'undefined') for (const enemy of enemies) clearFor(enemy);
+    if (typeof playerDrones !== 'undefined' && typeof enemyDrones !== 'undefined') for (const unit of [...playerDrones, ...enemyDrones]) if (unit.romanSummon) clearFor(unit);
 }
 
 // Ice Wave Ultimate: creates frozen ground that freezes targets on contact
@@ -1149,7 +1193,7 @@ function createIceNova(centerX, centerY, radius = 220, ownerTeam = 0) {
                 });
             }
         }
-        objects.push({
+        const field = {
             type: 'iceField',
             fieldId: fieldId,
             x: centerX,
@@ -1162,7 +1206,22 @@ function createIceNova(centerX, centerY, radius = 220, ownerTeam = 0) {
             thawOutTicks: 56,
             contactFreezeTime: 240,
             cells: cells
-        });
+        };
+        objects.push(field);
+
+        // Freeze units already inside the wave before AI can move them away.
+        const freezeNearby = (entity) => {
+            if (!isIceFieldTarget(entity, ownerTeam)) return;
+            const nearestX = Math.max(entity.x, Math.min(centerX, entity.x + entity.w));
+            const nearestY = Math.max(entity.y, Math.min(centerY, entity.y + entity.h));
+            if (Math.hypot(nearestX - centerX, nearestY - centerY) <= radius) {
+                freezeWithIce(entity, field.contactFreezeTime);
+            }
+        };
+        if (typeof tank !== 'undefined') freezeNearby(tank);
+        if (typeof allies !== 'undefined') for (const ally of allies) freezeNearby(ally);
+        if (typeof enemies !== 'undefined') for (const enemy of enemies) freezeNearby(enemy);
+        for (const unit of [...playerDrones, ...enemyDrones]) if (unit.romanSummon === 'legionary') freezeNearby(unit);
     }
     // Expanding ring particles
     for (let p = 0; p < 60; p++) {
@@ -1276,56 +1335,60 @@ function lineIntersectsLine(x1, y1, x2, y2, x3, y3, x4, y4) {
 // Проверяет, чист ли путь вдоль направления `angle` на расстояние `dist`.
 // Делает несколько сэмплов по пути, чтобы заметить узкие препятствия.
 
+const BARREL_FUSE_TICKS = 15;
+
 function explodeBarrel(obj) {
-    // visual explosion — radius matches damage radius R=120
-    const cx = obj.x + obj.w/2, cy = obj.y + obj.h/2;
-    spawnExplosion(cx, cy, 120);
-    // shockwave expands to exactly the damage boundary
-    objects.push({ type: 'shockwave', x: cx, y: cy, radius: 10, speed: 10, life: 12, maxLife: 12 });
-    // explosion damage radius
-    const R = 120;
-    function applyDamageToTank(t) {
-        if (!t) return;
-        const tx = t.x + (t.w||0)/2, ty = t.y + (t.h||0)/2;
-        const dist = Math.hypot(tx - (obj.x + obj.w/2), ty - (obj.y + obj.h/2));
-        if (dist <= R) {
-            const damage = Math.max(50, Math.round((1 - dist / R) * 300));
-            dealDamageToEntity(t, damage);
-            if (t === tank && t.hp <= 0) {
-                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
-                gameState = 'lose'; 
-                loseModeTrophies();
-                syncResultOverlay('lose');
-            }
-        }
-    }
-    // apply to player
-    applyDamageToTank(tank);
-    // allies
-    for (let i = allies.length - 1; i >= 0; i--) {
-        const a = allies[i]; applyDamageToTank(a);
-        if (a.hp <= 0) {
-            allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65);
-        }
-    }
-    // enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i]; applyDamageToTank(e);
-        if (e.hp <= 0) {
-            enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
-        }
-    }
-    damageDronesInRadius(cx, cy, R, 300, undefined, 50);
-    // remove barrel object
-    const idx = objects.indexOf(obj);
-    if (idx >= 0) objects.splice(idx, 1);
+    if (!obj || obj.type !== 'barrel' || obj._barrelDetonated || !objects.includes(obj)) return 0;
+    obj._barrelDetonated = true;
+    objects.splice(objects.indexOf(obj), 1);
     navNeedsRebuild = true;
+    const cx = obj.x + obj.w / 2, cy = obj.y + obj.h / 2;
+    const radius = 120;
+    spawnExplosion(cx, cy, 140, 'barrel');
+    // Each newly reached barrel keeps its first fuse, even if several blasts overlap.
+    for (const other of objects) {
+        if (other.type !== 'barrel' || other._barrelDetonated || (other.barrelFuseTicks || 0) > 0) continue;
+        const x = Math.max(other.x, Math.min(cx, other.x + other.w));
+        const y = Math.max(other.y, Math.min(cy, other.y + other.h));
+        if (Math.hypot(x - cx, y - cy) <= radius) {
+            other.barrelFuseTicks = BARREL_FUSE_TICKS;
+            other.barrelFuseDuration = BARREL_FUSE_TICKS;
+            if (typeof window.frameCount === 'number') other.barrelFuseFrame = window.frameCount;
+        }
+    }
+    const hurt = (unit, group = null) => {
+        if (!unit || unit.alive === false || unit.hp <= 0) return;
+        const distance = Math.hypot(unit.x + (unit.w || 0) / 2 - cx, unit.y + (unit.h || 0) / 2 - cy);
+        if (distance > radius) return;
+        dealDamageToEntity(unit, Math.max(50, Math.round((1 - distance / radius) * 300)));
+        if (unit.hp > 0) return;
+        unit.alive = false;
+        spawnExplosion(unit.x + unit.w / 2, unit.y + unit.h / 2, unit === tank ? 70 : 65);
+        if (currentMode === 'war') unit.respawnTimer = 600;
+        else if (unit === tank) { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+        else if (group) { const i = group.indexOf(unit); if (i >= 0) group.splice(i, 1); }
+    };
+    hurt(tank);
+    for (const ally of [...allies]) hurt(ally, allies);
+    for (const enemy of [...enemies]) hurt(enemy, enemies);
+    damageDronesInRadius(cx, cy, radius, 300, undefined, 50);
+    return 1;
 }
 
-// Взрыв ракеты: эффекты и урон всем танкам в радиусе
+function updateBarrelFuses() {
+    // Snapshot pending fuses so newly ignited neighbors begin counting on the next tick.
+    const pending = objects.filter(obj => obj.type === 'barrel' && obj.barrelFuseTicks > 0);
+    for (const barrel of pending) {
+        if (barrel._barrelDetonated || (typeof window.frameCount === 'number' && barrel.barrelFuseFrame === window.frameCount)) continue;
+        barrel.barrelFuseTicks--;
+        if (barrel.barrelFuseTicks <= 0) explodeBarrel(barrel);
+    }
+}
+
+// Rocket splash shares cover damage and barrel detonation with other explosions.
 function explodeRocket(bullet) {
     // visual explosion — radius matches damage radius R=80
-    spawnExplosion(bullet.x, bullet.y, 80);
+    spawnExplosion(bullet.x, bullet.y, 80, 'blast');
     // explosion damage radius
     const R = 80;
     function applyDamageToTank(t) {
@@ -1373,7 +1436,7 @@ function explodeRocket(bullet) {
 function explodeMechRocket(bullet, directHit = null) {
     const R = bullet.explodeRadius || 50;
     const dmgMax = bullet.damage || 150;
-    spawnExplosion(bullet.x, bullet.y, R);
+    spawnExplosion(bullet.x, bullet.y, R * 1.2, 'blast');
     function applyDmg(t) {
         if (!t) return;
         if (t.mirrorShieldActive) return;
@@ -1406,78 +1469,643 @@ function explodeMechRocket(bullet, directHit = null) {
         if (e.hp <= 0) { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 55); }
     }
     damageDronesInRadius(bullet.x, bullet.y, R, dmgMax, bullet.team, Math.round(dmgMax * 0.4));
-    damageTerrainInRadius(bullet.x, bullet.y, R, dmgMax);
+    damageTerrainInRadius(bullet.x, bullet.y, R, dmgMax, { impactVisualMultiplier: 2.5 });
+}
+
+// Roman reinforcements share combat targeting with drones, but move and render as ground units.
+const ROMAN_LEGION_COOLDOWN = 1200;
+const ROMAN_LEGION_DELAY = 180;
+const ROMAN_LEGION_LIFETIME = 900;
+
+function romanCombatUnits() {
+    return [tank, ...allies, ...enemies, ...playerDrones, ...enemyDrones].filter(unit => unit && unit.alive !== false);
+}
+
+function romanPlacementContext() {
+    return { units: romanCombatUnits(), terrain: objects.length >= 60 ? buildTerrainCollisionIndex(objects) : null };
+}
+
+function canPlaceRomanUnit(unit, x, y, context) {
+    if (x < 4 || y < 4 || x + unit.w > worldWidth - 4 || y + unit.h > worldHeight - 4) return false;
+    const rect = { x, y, w: unit.w, h: unit.h };
+    const terrain = context.terrain ? queryTerrainCollisionIndex(context.terrain, rect) : objects;
+    for (const obj of terrain) if (isBlockingTerrainObject(obj) && checkRectCollision(rect, obj)) return false;
+    for (const other of context.units) {
+        if (other !== unit && other.alive !== false && checkRectCollision(rect, other)) return false;
+    }
+    return true;
+}
+
+function romanClearLine(x, y, tx, ty, destructible = false, terrain = null) {
+    const nearby = terrain ? queryTerrainCollisionIndex(terrain, { x: Math.min(x, tx), y: Math.min(y, ty), w: Math.max(1, Math.abs(tx - x)), h: Math.max(1, Math.abs(ty - y)) }) : objects;
+    for (const obj of nearby) {
+        if (!isBlockingTerrainObject(obj)) continue;
+        if (destructible && obj.type !== 'wall') continue;
+        if (lineIntersectsRect(x, y, tx, ty, obj.x, obj.y, obj.w, obj.h)) return false;
+    }
+    return true;
+}
+
+function findRomanPosition(unit, x, y, originX, originY, context, radius = 48) {
+    for (let ring = 0; ring <= radius; ring += 16) {
+        const steps = ring ? 12 : 1;
+        for (let i = 0; i < steps; i++) {
+            const angle = i / steps * Math.PI * 2;
+            const nx = x + Math.cos(angle) * ring, ny = y + Math.sin(angle) * ring;
+            if (canPlaceRomanUnit(unit, nx, ny, context) && romanClearLine(originX, originY, nx + unit.w / 2, ny + unit.h / 2, false, context.terrain)) return { x: nx, y: ny };
+        }
+    }
+    return null;
+}
+
+function castRomanBanner(unit, owner = 'player') {
+    if (!unit || getEntityTankType(unit) !== 'roman' || unit.alive === false || unit.hp <= 0 || unit.paralyzed
+        || unit.isUltimateActive || unit.isAutopilotActive || (unit.romanLegionCooldown || 0) > 0) return false;
+    if (unit.romanBanner && unit.romanBanner.alive) return false;
+    const angle = unit.turretAngle || 0;
+    const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
+    const banner = { romanSummon: 'banner', x: 0, y: 0, w: 26, h: 32, hp: 100, maxHp: 100, alive: true,
+        owner, commander: unit, team: unit.team ?? (owner === 'enemy' ? 1 : 0), turretAngle: angle,
+        life: ROMAN_LEGION_DELAY + ROMAN_LEGION_LIFETIME, maxLife: ROMAN_LEGION_DELAY + ROMAN_LEGION_LIFETIME,
+        age: 0, pending: ROMAN_LEGION_DELAY, summonedCount: 0, totalSoldiers: 3, spawnWait: 60 };
+    const context = romanPlacementContext();
+    const spot = findRomanPosition(banner, cx + Math.cos(angle) * 64 - banner.w / 2,
+        cy + Math.sin(angle) * 64 - banner.h / 2, cx, cy, context);
+    if (!spot) return false;
+    banner.x = spot.x; banner.y = spot.y;
+    (owner === 'enemy' ? enemyDrones : playerDrones).push(banner);
+    unit.romanBanner = banner;
+    unit.romanLegionCooldown = ROMAN_LEGION_COOLDOWN;
+    unit.romanShieldActive = false;
+    return true;
+}
+
+function retireRomanUnit(unit, expired = false) {
+    if (unit._romanRetired) return;
+    unit._romanRetired = true;
+    unit.alive = false;
+    for (const group of [playerDrones, enemyDrones]) {
+        const index = group.indexOf(unit);
+        if (index !== -1) group.splice(index, 1);
+    }
+    if (window.effectsEnabled !== false) objects.push({ type: 'romanRemnant', x: unit.x, y: unit.y, w: unit.w, h: unit.h,
+        unit: { ...unit, target: null, anchor: null, commander: null }, expired, life: 26, maxLife: 26 });
+}
+
+function spawnRomanLegionaries(banner, context) {
+    const cx = banner.x + banner.w / 2, cy = banner.y + banner.h / 2;
+    const group = banner.owner === 'enemy' ? enemyDrones : playerDrones;
+    while (banner.summonedCount < (banner.totalSoldiers || 3)) {
+        const slot = banner.summonedCount;
+        const angle = banner.turretAngle + Math.PI / 2 + slot * Math.PI * 2 / (banner.totalSoldiers || 3);
+        const unit = { romanSummon: 'legionary', x: 0, y: 0, w: 24, h: 30, hp: 120, maxHp: 120, alive: true,
+            team: banner.team, owner: banner.owner, anchor: banner, commander: banner.commander, slot, turretAngle: banner.turretAngle,
+            life: ROMAN_LEGION_LIFETIME, maxLife: ROMAN_LEGION_LIFETIME, fireCooldown: 20 + slot * 12,
+            walkPhase: slot * Math.PI * 0.6, age: 0, scanTimer: 0 };
+        let spot = findRomanPosition(unit, cx + Math.cos(angle) * 52 - unit.w / 2,
+            cy + Math.sin(angle) * 52 - unit.h / 2, cx, cy, context);
+        if (!spot) break;
+        // Keep the rank when a mounted soldier needs to retry a larger spawn position.
+        const ranks = banner.centurionSlots || (banner.centurionSlots = []);
+        if (slot < 3 && ranks[slot] === undefined) ranks[slot] = Math.random() < 0.1;
+        if (ranks[slot] && banner.centurionSlot === undefined) {
+            banner.centurionSlot = slot;
+            banner.totalSoldiers = 5;
+        }
+        unit.isCenturion = banner.centurionSlot === slot;
+        if (unit.isCenturion) {
+            unit.hp = unit.maxHp = 360;
+            unit.w = 40; unit.h = 32;
+            unit.life = unit.maxLife = ROMAN_LEGION_LIFETIME * 2;
+            spot = findRomanPosition(unit, cx + Math.cos(angle) * 62 - unit.w / 2,
+                cy + Math.sin(angle) * 62 - unit.h / 2, cx, cy, context);
+            if (!spot) break;
+        }
+        unit.x = spot.x; unit.y = spot.y;
+        group.push(unit); context.units.push(unit); banner.summonedCount++;
+    }
+}
+
+function romanGuardCenter(unit) {
+    const commander = unit.commander;
+    return commander && commander.alive !== false && commander.hp > 0 ? commander : unit.anchor;
+}
+
+function romanTargetIsValid(unit, target) {
+    if (!target || target.romanSummon === 'banner' || target.alive === false || target.hp <= 0 || target.team === unit.team || isBurovoyBurrowActive(target)) return false;
+    const guard = romanGuardCenter(unit);
+    const ax = guard.x + guard.w / 2, ay = guard.y + guard.h / 2;
+    if (Math.hypot(target.x + target.w / 2 - ax, target.y + target.h / 2 - ay) > 260) return false;
+    return typeof GameTerrain === 'undefined' || GameTerrain.canSee(unit, target, objects);
+}
+
+function moveRomanLegionary(unit, angle, speed, context) {
+    const x = unit.x, y = unit.y;
+    const side = unit.slot === 2 ? -1 : 1;
+    for (const offset of [0, 0.55 * side, 1.1 * side, 1.65 * side, -0.55 * side, -1.1 * side, -1.65 * side]) {
+        const nx = x + Math.cos(angle + offset) * speed, ny = y + Math.sin(angle + offset) * speed;
+        if (!canPlaceRomanUnit(unit, nx, ny, context)) continue;
+        unit.x = nx; unit.y = ny;
+        unit.walkPhase += Math.hypot(nx - x, ny - y) * 0.18;
+        return true;
+    }
+    return false;
+}
+
+function romanMeleeStrike(unit, target, context) {
+    if (!romanTargetIsValid(unit, target)) return false;
+    const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
+    const tx = target.x + target.w / 2, ty = target.y + target.h / 2;
+    const mountedSpear = unit.isCenturion && unit.attackType === 'cavalrySpear';
+    const reach = Math.max(unit.w, unit.h) / 2 + Math.max(target.w, target.h) / 2 + (unit.isCenturion ? (mountedSpear ? 28 : 26) : 15);
+    if (Math.hypot(tx - cx, ty - cy) > reach || !romanClearLine(cx, cy, tx, ty, false, context.terrain)) return false;
+    if (unit.isCenturion) {
+        const direction = mountedSpear ? unit.cavalryHeading : unit.turretAngle;
+        const offset = Math.atan2(ty - cy, tx - cx) - direction;
+        if (Math.cos(offset) < (mountedSpear ? 0.8 : 0.25)) return false;
+    }
+    const isDrone = playerDrones.includes(target) || enemyDrones.includes(target);
+    const baseDamage = unit.isCenturion ? (mountedSpear ? 60 : 42) : 28;
+    const damage = unit.owner === 'player' ? applyPlayerDamage(baseDamage) : baseDamage;
+    const dealt = isDrone ? damageCombatDrone(target, damage) : dealDamageToEntity(target, damage);
+    if (dealt <= 0) return false;
+    target.hitFlashTime = Date.now();
+    if (window.effectsEnabled !== false && particles.length < 180) {
+        for (let i = 0; i < 3; i++) spawnParticle(tx + (Math.random() - 0.5) * 8, ty + (Math.random() - 0.5) * 8, '#d4b679', 0.6);
+    }
+    if (!isDrone && target.hp <= 0 && target.alive !== false) {
+        target.alive = false;
+        spawnExplosion(tx, ty, target === tank ? 70 : 55);
+        if (currentMode === 'war') target.respawnTimer = 600;
+        else if (target === tank) { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
+        else for (const group of [allies, enemies]) {
+            const index = group.indexOf(target); if (index >= 0) group.splice(index, 1);
+        }
+    }
+    return true;
+}
+
+function updateRomanLegionary(unit, context) {
+    if (unit.fireCooldown > 0) unit.fireCooldown--;
+    if (unit.shieldHit > 0) unit.shieldHit--;
+    if (unit.attackAnim > 0) unit.attackAnim--;
+    if (unit.iceSlowedTime > 0) { unit.iceSlowedTime--; unit.iceSlowed = unit.iceSlowedTime > 0; }
+    if (typeof syncBurovoyState === 'function') syncBurovoyState(unit);
+    if (unit.paralyzedTime > 0) { unit.paralyzedTime--; unit.paralyzed = unit.paralyzedTime > 0; }
+    if (unit.burnTimer > 0) {
+        unit.burnTimer--; damageCombatDrone(unit, (unit.burnDps || 10) / 60);
+        if (!unit.alive) return;
+    }
+    if (unit.frozenEffect > 0) {
+        unit.frozenEffect--;
+        if (unit.frozenEffect > 0) { unit.bracing = false; unit.walking = false; unit.meleeWindup = 0; unit.meleeTarget = null; return; }
+    }
+    if (unit.paralyzed) { unit.meleeWindup = 0; unit.meleeTarget = null; }
+    else if (unit.meleeWindup > 0 && --unit.meleeWindup === 0) {
+        romanMeleeStrike(unit, unit.meleeTarget, context);
+        unit.meleeTarget = null;
+    }
+    const guard = romanGuardCenter(unit);
+    const guardX = guard.x + guard.w / 2, guardY = guard.y + guard.h / 2;
+    const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
+    const guardDistance = Math.hypot(cx - guardX, cy - guardY);
+    // Return to the commander before pursuing another target outside the escort perimeter.
+    unit.returningToGuard = guardDistance > (unit.returningToGuard ? 105 : 190);
+    if (unit.returningToGuard) { unit.target = null; unit.meleeWindup = 0; unit.meleeTarget = null; }
+    unit.scanTimer--;
+    if (!unit.returningToGuard && (unit.scanTimer <= 0 || !romanTargetIsValid(unit, unit.target))) {
+        unit.scanTimer = 12 + unit.slot;
+        unit.target = null;
+        let distance = Infinity;
+        for (const target of context.units) {
+            if (!romanTargetIsValid(unit, target)) continue;
+            const d = Math.hypot(target.x + target.w / 2 - (unit.x + unit.w / 2), target.y + target.h / 2 - (unit.y + unit.h / 2));
+            if (d < distance) { distance = d; unit.target = target; }
+        }
+    }
+    const target = unit.target;
+    unit.bracing = false;
+    const formationSize = unit.anchor.totalSoldiers || 3;
+    const formationAngle = unit.anchor.turretAngle + Math.PI / 2 + unit.slot * Math.PI * 2 / formationSize;
+    const guardRadius = formationSize > 3 ? (unit.isCenturion ? 92 : 80) : 68;
+    let gx = guardX + Math.cos(formationAngle) * guardRadius;
+    let gy = guardY + Math.sin(formationAngle) * guardRadius;
+    if (target) {
+        const tx = target.x + target.w / 2, ty = target.y + target.h / 2;
+        const angle = Math.atan2(ty - cy, tx - cx), dist = Math.hypot(tx - cx, ty - cy);
+        const mountedAdvance = unit.isCenturion && unit.attackType === 'cavalrySpear' && unit.meleeWindup > 0;
+        let turn = (mountedAdvance ? unit.cavalryHeading : angle) - unit.turretAngle;
+        while (turn > Math.PI) turn -= Math.PI * 2;
+        while (turn < -Math.PI) turn += Math.PI * 2;
+        unit.turretAngle += Math.max(-0.13, Math.min(0.13, turn));
+        const desired = unit.isCenturion ? 46 : (unit.slot === 1 ? 105 : 32);
+        const flank = unit.isCenturion ? 22 : (unit.slot % 3 - 1) * 20;
+        if (Math.hypot(tx - guardX, ty - guardY) < (unit.isCenturion ? 210 : 170)) {
+            gx = tx - Math.cos(angle) * desired - Math.sin(angle) * flank;
+            gy = ty - Math.sin(angle) * desired + Math.cos(angle) * flank;
+        }
+        const inSight = romanClearLine(cx, cy, tx, ty, true, context.terrain);
+        unit.bracing = dist < 165 && inSight && !unit.paralyzed;
+        const reach = Math.max(unit.w, unit.h) / 2 + Math.max(target.w, target.h) / 2 + (unit.isCenturion ? 26 : 15);
+        if (!unit.paralyzed && unit.fireCooldown <= 0 && Math.abs(turn) < 0.3 && inSight) {
+            if (unit.isCenturion) {
+                // A mounted spear pass needs room to approach; the spatha covers close combat.
+                if (dist <= 140 && romanClearLine(cx, cy, tx, ty, false, context.terrain)) {
+                    const sword = dist <= reach;
+                    unit.attackType = sword ? 'cavalrySword' : 'cavalrySpear';
+                    unit.attackAnim = sword ? 22 : 30; unit.meleeWindup = sword ? 10 : 16;
+                    unit.meleeTarget = target; unit.cavalryHeading = angle;
+                    unit.fireCooldown = sword ? 54 : 85;
+                }
+            } else if (dist <= reach && romanClearLine(cx, cy, tx, ty, false, context.terrain)) {
+                unit.attackType = 'melee'; unit.attackAnim = 18; unit.meleeWindup = 8;
+                unit.meleeTarget = target; unit.fireCooldown = 48;
+            } else if (dist <= 230) {
+                bullets.push({ x: cx + Math.cos(angle) * 18, y: cy + Math.sin(angle) * 18,
+                    vx: Math.cos(angle) * 5.5, vy: Math.sin(angle) * 5.5, w: 8, h: 3,
+                    type: 'romanPilum', damage: 24, team: unit.team, owner: unit.owner, life: 50 });
+                unit.attackType = 'throw'; unit.fireCooldown = 60; unit.attackAnim = 14;
+            }
+        }
+    }
+    const distance = Math.hypot(gx - cx, gy - cy);
+    const escortSpeed = Math.max(2.1, (guard.speed || 3.2) * (guardDistance > 110 ? 1.18 : 0.9));
+    const mountedAdvance = unit.isCenturion && unit.attackType === 'cavalrySpear' && unit.meleeWindup > 0 && !unit.paralyzed;
+    const speed = escortSpeed * (unit.isCenturion ? 1.25 : 1) * (mountedAdvance ? 1.45 : 1) * (typeof GameTerrain === 'undefined' ? 1 : GameTerrain.speedFactor()) * (unit.iceSlowed ? 0.5 : 1);
+    const spearGap = target ? Math.hypot(target.x + target.w / 2 - cx, target.y + target.h / 2 - cy) : Infinity;
+    const spearStop = target ? Math.max(unit.w, unit.h) / 2 + Math.max(target.w, target.h) / 2 + 20 : 0;
+    unit.walking = mountedAdvance
+        ? spearGap > spearStop && moveRomanLegionary(unit, unit.cavalryHeading, Math.min(speed, spearGap - spearStop), context)
+        : !(unit.meleeWindup > 0) && distance > (target ? (!unit.isCenturion && unit.slot === 1 ? 15 : 4) : 8) && moveRomanLegionary(unit, Math.atan2(gy - cy, gx - cx), Math.min(speed, distance), context);
+    if (!target) {
+        const facing = unit.walking ? Math.atan2(gy - cy, gx - cx) : formationAngle;
+        const turn = Math.atan2(Math.sin(facing - unit.turretAngle), Math.cos(facing - unit.turretAngle));
+        unit.turretAngle += Math.max(-0.13, Math.min(0.13, turn));
+    }
+}
+
+function updateRomanLegion() {
+    for (const source of [tank, ...allies, ...enemies]) if (source && source.romanLegionCooldown > 0) source.romanLegionCooldown--;
+    const summons = [...playerDrones, ...enemyDrones].filter(unit => unit.romanSummon && unit.alive);
+    if (!summons.length) return;
+    const context = romanPlacementContext();
+    for (const unit of summons) {
+        if (!unit.alive) continue;
+        if (unit.hp <= 0) { retireRomanUnit(unit); continue; }
+        unit.age++; unit.life--;
+        if (unit.life <= 0) { retireRomanUnit(unit, true); continue; }
+        if (unit.romanSummon === 'banner') {
+            if (unit.pending > 0) unit.pending--;
+            if (unit.pending <= 0 && unit.summonedCount < (unit.totalSoldiers || 3) && unit.spawnWait > 0) {
+                if (unit.spawnWait % 15 === 0) spawnRomanLegionaries(unit, context);
+                unit.spawnWait--;
+            }
+        } else updateRomanLegionary(unit, context);
+    }
+}
+
+
+
+function activateToxicWave(unit, owner = 'player') {
+    if (!unit || getEntityTankType(unit) !== 'toxic' || unit.alive === false || unit.hp <= 0 || unit.megaGasUsed
+        || unit.paralyzed || (unit.frozenEffect || 0) > 0 || unit.isUltimateActive || unit.isAutopilotActive) return false;
+    const heading = unit.turretAngle || 0;
+    const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
+    const team = unit.team ?? (owner === 'enemy' ? 1 : 0);
+    for (let i = -2; i <= 2; i++) {
+        const angle = heading + i * 0.275;
+        const flightTicks = 38 - Math.abs(i) * 4;
+        bullets.push({ x: cx + Math.cos(angle) * 24, y: cy + Math.sin(angle) * 24,
+            w: 10, h: 10, vx: Math.cos(angle) * 5.6, vy: Math.sin(angle) * 5.6,
+            life: flightTicks, maxLife: flightTicks, owner, team, type: 'toxic', toxicWave: true,
+            spawned: 0, explodeTimer: flightTicks });
+    }
+    unit.megaGasUsed = true;
+    return true;
+}
+
+function updatePoisonCloud(cloud) {
+    cloud.life--;
+    if (cloud.toxicWave) {
+        const age = cloud.maxLife - cloud.life;
+        const growth = Math.min(1, age / 22);
+        const dispersal = Math.min(1, cloud.life / 90);
+        cloud.radius = (28 + (cloud.maxRadius - 28) * growth) * Math.max(0, dispersal);
+    }
+    return cloud.life > 0;
 }
 
 // Spawn gas cloud at (x,y). If mega=true, larger radius and longer duration.
 function explodeGas(bullet, mega = false) {
-    // small visual explosion
-    objects.push({ type: 'explosion', x: bullet.x, y: bullet.y, radius: mega ? 80 : 40, life: 30, color: '#66FF66' });
-    // gas cloud
-    const durationTicks = (mega ? 10 : 5) * 60; // seconds -> ticks
-    const radius = mega ? 180 : 90;
-    objects.push({ type: 'gas', x: bullet.x, y: bullet.y, radius: radius, life: durationTicks, maxLife: durationTicks, color: 'rgba(100,220,100,0.25)', owner: bullet.owner, ownerTeam: bullet.team, isMega: mega });
+    // Wave nodes unfold directly into mist instead of flashing five explosions at once.
+    if (!bullet.toxicWave) objects.push({ type: 'explosion', x: bullet.x, y: bullet.y, radius: mega ? 80 : 40, life: 30, color: '#66FF66' });
+    const durationTicks = bullet.toxicWave ? 420 : (mega ? 10 : 5) * 60;
+    const radius = bullet.toxicWave ? 28 : mega ? 180 : 90;
+    objects.push({ type: 'gas', x: bullet.x, y: bullet.y, radius, life: durationTicks, maxLife: durationTicks,
+        maxRadius: bullet.toxicWave ? 105 : radius, toxicWave: !!bullet.toxicWave,
+        color: 'rgba(100,220,100,0.25)', owner: bullet.owner, ownerTeam: bullet.team, isMega: mega });
     // Damage destructible cover when the gas cloud forms.
-    for (let i = objects.length - 1; i >= 0; i--) {
-        const obj = objects[i];
+    for (const obj of [...objects]) {
+        if (!objects.includes(obj)) continue;
         if (obj.type === 'box' || obj.type === 'barrel' || obj.type === 'woodenWall') {
             const nearestX = Math.max(obj.x, Math.min(bullet.x, obj.x + obj.w));
             const nearestY = Math.max(obj.y, Math.min(bullet.y, obj.y + obj.h));
             const dist = Math.hypot(nearestX - bullet.x, nearestY - bullet.y);
             if (dist <= radius) {
-                if (obj.type === 'woodenWall') damageWoodenWall(obj, mega ? 100 : 50, { hitColor: '#70a35a' });
-                else { objects.splice(i, 1); navNeedsRebuild = true; }
+                if (obj.type === 'woodenWall') poisonWoodenWall(obj, nearestX, nearestY);
+                else if (obj.type === 'barrel') { if (!(obj.barrelFuseTicks > 0)) explodeBarrel(obj); }
+                else { objects.splice(objects.indexOf(obj), 1); navNeedsRebuild = true; }
             }
         }
     }
 }
 
-function damageWoodenWall(obj, damage, options = {}) {
+function igniteWoodenWall(obj, duration = 300, damagePerSecond = 20, hitX = null, hitY = null) {
+    if (!obj || obj.type !== 'woodenWall' || obj.hp <= 0) return;
+    const rain = typeof GameTerrain !== 'undefined' && typeof GameTerrain.current === 'function' && GameTerrain.current() === 'rain';
+    const burnDuration = Math.max(1, Math.round(duration * (rain ? 0.8 : 1)));
+    if (!obj.burning) obj.woodBurnAge = 0;
+    if (!obj.woodBurnOrigin) {
+        obj.woodBurnOrigin = {
+            x: Math.max(0, Math.min(1, ((hitX ?? obj.x + obj.w / 2) - obj.x) / obj.w)),
+            y: Math.max(0, Math.min(1, ((hitY ?? obj.y + obj.h / 2) - obj.y) / obj.h))
+        };
+    }
+    obj.woodSnowMelted = true;
+    obj.burning = true;
+    obj.burnTimer = Math.max(obj.burnTimer || 0, burnDuration);
+    obj.burnDps = damagePerSecond;
+    obj.woodCharAmount = Math.max(obj.woodCharAmount || 0, 0.04);
+}
+
+function updateWoodenWallBurn(obj) {
+    if (!obj || obj.type !== 'woodenWall' || !obj.burning) return;
+    if ((obj.burnTimer || 0) <= 0) { obj.burning = false; obj.burnTimer = 0; return; }
+    obj.burnTimer--;
+    obj.woodBurnAge = (obj.woodBurnAge || 0) + 1;
+    obj.woodCharAmount = Math.min(0.9, (obj.woodCharAmount || 0) + 1 / 450);
+    obj.woodBurnSpread = Math.max(obj.woodBurnSpread || 0, Math.min(1, 0.12 + obj.woodBurnAge / 120));
+    obj.hp = (obj.hp ?? 300) - (obj.burnDps || 20) / 60;
+    if (obj.burnTimer <= 0) { obj.burning = false; obj.burnTimer = 0; }
+}
+
+function spawnTerrainDebris(obj, options = {}) {
+    if (window.effectsEnabled === false) return;
+    const wood = obj.type === 'woodenWall';
+    const effect = options.materialEffect || 'wood';
+    const destroyed = !!options.destroyed;
+    const power = wood ? (destroyed ? Math.min(1.65, Math.sqrt(Math.max(1, options.impactVisualMultiplier || 1)))
+        : Math.min(1.6, Math.sqrt(Math.max(0.005, (options.impactDamage ?? 100) / 100)))) : 1;
+    const count = destroyed ? Math.min(16, 8 + Math.ceil(Math.max(obj.w, obj.h) / 20)) : wood ? Math.max(1, Math.min(6, Math.round(power * 4))) : 3;
+    const hitX = Math.max(obj.x, Math.min(obj.x + obj.w, options.hitX ?? obj.x + obj.w / 2));
+    const hitY = Math.max(obj.y, Math.min(obj.y + obj.h, options.hitY ?? obj.y + obj.h / 2));
+    const direction = Math.atan2(options.vy || 0, options.vx || 0);
+    const directed = !!(options.vx || options.vy);
+    const fragments = [];
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const reach = ((destroyed ? 15 : 5) + Math.random() * (destroyed ? 30 : 12)) * power;
+        const boardChunk = wood && effect === 'wood' && destroyed && i < 3;
+        const size = boardChunk ? Math.min(34, Math.max(obj.w, obj.h) * 0.3) * (0.8 + Math.random() * 0.3) * power
+            : wood ? (3 + Math.random() * Math.min(18, Math.max(obj.w, obj.h) * 0.22)) * power : 4 + Math.random() * 9;
+        fragments.push({
+            x: (destroyed ? obj.x + Math.random() * obj.w : hitX) - (obj.x + obj.w / 2),
+            y: (destroyed ? obj.y + Math.random() * obj.h : hitY) - (obj.y + obj.h / 2),
+            dx: Math.cos(angle) * reach + (directed ? Math.cos(direction) * 14 * power : 0),
+            dy: Math.sin(angle) * reach + (directed ? Math.sin(direction) * 14 * power : 0),
+            lift: (4 + Math.random() * (destroyed ? 17 : 7)) * power, angle: Math.random() * Math.PI * 2,
+            spin: (Math.random() - 0.5) * 5, size,
+            thickness: boardChunk ? Math.max(4, Math.min(9, Math.min(obj.w, obj.h) * 0.18)) * (0.75 + Math.random() * 0.35)
+                : wood ? (1.5 + Math.random() * 2) * Math.min(1.3, power) : size * 0.65
+        });
+    }
+    const duration = effect === 'ice' ? (destroyed ? 64 : 40) : destroyed ? 44 : 20;
+    objects.push({ type: 'terrainDebris', x: obj.x + obj.w / 2, y: obj.y + obj.h / 2,
+        radius: Math.hypot(obj.w, obj.h) / 2 + 60, life: duration, maxLife: duration,
+        material: wood ? effect : 'stone', charred: !!obj.burning || (obj.woodCharAmount || 0) > 0.3,
+        biome: typeof GameTerrain !== 'undefined' && typeof GameTerrain.current === 'function' ? GameTerrain.current() : 'forest',
+        dustX: (destroyed ? obj.x + obj.w / 2 : hitX) - (obj.x + obj.w / 2),
+        dustY: (destroyed ? obj.y + obj.h / 2 : hitY) - (obj.y + obj.h / 2),
+        dustSize: destroyed ? Math.min(90, Math.max(obj.w, obj.h) * 0.7) * power : 18 * power, fragments });
+}
+
+function destroyWoodenWall(obj, options = {}) {
     if (!obj || obj.type !== 'woodenWall') return false;
-
-    const finalDamage = Math.max(1, Math.round(damage || 0));
-    obj.hp = (obj.hp ?? 300) - finalDamage;
-
-    const hitColor = options.hitColor || '#a0652a';
-    const hitParticles = options.hitParticles || 3;
-    for (let index = 0; index < hitParticles; index++) {
-        spawnParticle(obj.x + obj.w / 2, obj.y + obj.h / 2, hitColor);
-    }
-
-    if (options.ignite) {
-        obj.burning = true;
-        obj.burnTimer = obj.burnTimer ? Math.max(obj.burnTimer, options.burnTimer || 300) : (options.burnTimer || 300);
-        obj.burnDps = options.burnDps || 20;
-    }
-
-    if (obj.hp <= 0) {
-        const objectIndex = objects.indexOf(obj);
-        if (objectIndex !== -1) objects.splice(objectIndex, 1);
-        navNeedsRebuild = true;
-        const destroyParticles = options.destroyParticles || 8;
-        for (let index = 0; index < destroyParticles; index++) {
-            spawnParticle(obj.x + obj.w / 2, obj.y + obj.h / 2, options.destroyColor || '#8B5E3C');
-        }
-    }
-
+    const index = objects.indexOf(obj);
+    if (index === -1) return false;
+    const sourceHp = options.sourceHp ?? Math.max(1, obj.hp || 1);
+    obj.hp = 0;
+    obj.embeddedProjectiles = [];
+    objects.splice(index, 1);
+    navNeedsRebuild = true;
+    if (options.materialEffect === 'rot') {
+        if (window.effectsEnabled !== false) objects.push({ type: 'woodDecay', x: obj.x, y: obj.y, w: obj.w, h: obj.h,
+            wall: obj, sourceHp, life: 64, maxLife: 64 });
+    } else if (options.materialEffect !== 'ice') spawnTerrainDebris(obj, { ...options, destroyed: true });
     return true;
 }
 
-function damageTerrainInRadius(x, y, radius, damage) {
-    for (let index = objects.length - 1; index >= 0; index--) {
-        const obj = objects[index];
-        if (obj.type !== 'woodenWall' && obj.type !== 'box') continue;
+function historicalProjectileTip(bullet) {
+    if (bullet.type === 'spartanSpear') return 22;
+    if (bullet.type === 'egyptArrow' || bullet.type === 'romanPilum') return Math.max(9, (bullet.w || 10) * 1.55) * 0.93;
+    return (bullet.w || 14) * 0.95;
+}
+
+function projectileSurfaceEntry(target, bullet) {
+    const angle = Math.atan2(bullet.vy || 0, bullet.vx || 0);
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const cx = target.x + target.w / 2, cy = target.y + target.h / 2;
+    // Find the first surface along the incoming ray, including chipped wooden outlines.
+    let points = [{ x: 0, y: 0 }, { x: target.w, y: 0 }, { x: target.w, y: target.h }, { x: 0, y: target.h }];
+    if (target.type === 'woodenWall' && typeof getWallBreakShape === 'function') {
+        const shape = getWallBreakShape(target, true);
+        if (shape) points = shape.points;
+    }
+    let nearest = Infinity, entry = null;
+    const back = Math.hypot(target.w, target.h) + 100;
+    const ox = bullet.x - dx * back - target.x, oy = bullet.y - dy * back - target.y;
+    for (let i = 0; i < points.length; i++) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        const ex = b.x - a.x, ey = b.y - a.y;
+        const cross = dx * ey - dy * ex;
+        if (Math.abs(cross) < 1e-8) continue;
+        const ax = a.x - ox, ay = a.y - oy;
+        const distance = (ax * ey - ay * ex) / cross;
+        const along = (ax * dy - ay * dx) / cross;
+        if (distance >= 0 && along >= 0 && along <= 1 && distance < nearest) {
+            nearest = distance;
+            entry = { x: target.x + ox + dx * distance - cx, y: target.y + oy + dy * distance - cy };
+        }
+    }
+    if (!entry) {
+        // Glancing AABB hits still attach to the facing edge rather than floating above it.
+        const x = Math.max(target.x, Math.min(target.x + target.w, bullet.x));
+        const y = Math.max(target.y, Math.min(target.y + target.h, bullet.y));
+        entry = Math.abs(dx) >= Math.abs(dy)
+            ? { x: (dx > 0 ? target.x : target.x + target.w) - cx, y: y - cy }
+            : { x: x - cx, y: (dy > 0 ? target.y : target.y + target.h) - cy };
+    }
+    return { ...entry, angle };
+}
+
+function addEmbeddedProjectile(target, bullet) {
+    if (!['romanBlade', 'spartanSpear', 'egyptArrow', 'romanPilum'].includes(bullet.type)) return false;
+    const hitTargets = bullet.embeddedTargets || (bullet.embeddedTargets = new WeakSet());
+    if (hitTargets.has(target)) return false;
+    hitTargets.add(target);
+    const entry = projectileSurfaceEntry(target, bullet);
+    const permanent = target.type === 'woodenWall';
+    const marks = (target.embeddedProjectiles || []).filter(mark => mark.permanent || mark.life > 0);
+    marks.push({ ...entry, type: bullet.type, w: bullet.w, h: bullet.h,
+        tip: historicalProjectileTip(bullet), permanent, bodyAngle: target.type === 'woodenWall' ? 0 : (typeof GameTerrain !== 'undefined' && GameTerrain.getMotion ? GameTerrain.getMotion(target).angle || 0 : 0), life: 60, maxLife: 60, age: 0 });
+    target.embeddedProjectiles = permanent ? marks : marks.slice(-8);
+    return true;
+}
+
+function updateEmbeddedProjectiles(target) {
+    if (!target || !target.embeddedProjectiles) return;
+    for (const mark of target.embeddedProjectiles) { if (!mark.permanent) mark.life--; mark.age = Math.min(60, mark.age + 1); }
+    target.embeddedProjectiles = target.embeddedProjectiles.filter(mark => mark.permanent || mark.life > 0);
+}
+
+function poisonWoodenWall(wall, hitX, hitY) {
+    if (!wall || wall.hp <= 0) return;
+    wall.woodPoisonTimer = 180;
+    const sites = wall.woodRotSites || (wall.woodRotSites = []);
+    const x = Math.max(0, Math.min(1, (hitX - wall.x) / wall.w));
+    const y = Math.max(0, Math.min(1, (hitY - wall.y) / wall.h));
+    if (sites.length < 4 && !sites.some(site => Math.hypot(site.x - x, site.y - y) < 0.2)) sites.push({ x, y });
+}
+
+function poisonWoodInGas(gas, index = null) {
+    const nearby = index ? queryTerrainCollisionIndex(index, { x: gas.x - gas.radius, y: gas.y - gas.radius, w: gas.radius * 2, h: gas.radius * 2 }) : objects;
+    for (const wall of nearby) {
+        if (wall.type !== 'woodenWall') continue;
+        const x = Math.max(wall.x, Math.min(gas.x, wall.x + wall.w));
+        const y = Math.max(wall.y, Math.min(gas.y, wall.y + wall.h));
+        if (Math.hypot(x - gas.x, y - gas.y) <= gas.radius) poisonWoodenWall(wall, x, y);
+    }
+}
+
+function updateWoodenWallRot(wall) {
+    if (!wall || wall.type !== 'woodenWall' || !(wall.woodPoisonTimer > 0) || wall.hp <= 0) return;
+    wall.woodPoisonTimer--;
+    wall.woodRotAge = (wall.woodRotAge || 0) + 1;
+    damageWoodenWall(wall, 44 / 60, { exactDamage: true, materialEffect: 'rot', continuous: true });
+}
+
+function createWoodIceImpact(wall, options, mark) {
+    if (window.effectsEnabled === false) return;
+    const impacts = objects.filter(obj => obj.type === 'woodIceImpact' && obj.wall === wall);
+    if (impacts.length >= 4) {
+        const oldest = impacts[0];
+        revealWoodIceImpact(oldest);
+        objects.splice(objects.indexOf(oldest), 1);
+    }
+    const impact = { type: 'woodIceImpact', wall, mark, sourceHp: options.sourceHp ?? 1, strength: options.strength, addStrength: !!options.addStrength, destroyedWall: wall.hp <= 0, x: wall.x, y: wall.y, w: wall.w, h: wall.h,
+        hitX: Math.max(0, Math.min(wall.w, (options.hitX ?? wall.x + wall.w / 2) - wall.x)),
+        hitY: Math.max(0, Math.min(wall.h, (options.hitY ?? wall.y + wall.h / 2) - wall.y)),
+        vx: options.vx || 0, vy: options.vy || 0, damage: Math.max(0, Math.min(1, 1 - wall.hp / (wall.maxHp || 300))), age: 0, life: 58, maxLife: 58 };
+    objects.push(impact);
+}
+
+function updateWoodIceImpact(impact) {
+    impact.age++; impact.life--;
+    if (impact.age === 26) revealWoodIceImpact(impact);
+    return impact.life > 0;
+}
+
+function revealWoodIceImpact(impact) {
+    if (!impact.mark || impact.revealed) return;
+    impact.revealed = true;
+    impact.mark.active = true;
+    if (impact.strength != null) impact.mark.impactStrength = Math.min(1, impact.addStrength ? (impact.mark.impactStrength || 0) + impact.strength : Math.max(impact.mark.impactStrength || 0, impact.strength));
+    impact.mark.damage = Math.max(impact.mark.damage || 0, impact.damage || 0);
+    impact.wall.woodDamageVersion = (impact.wall.woodDamageVersion || 0) + 1;
+}
+
+function damageWoodenWall(obj, damage, options = {}) {
+    if (!obj || obj.type !== 'woodenWall') return false;
+    const finalDamage = options.exactDamage ? Math.max(0, damage || 0) : Math.max(1, Math.round(damage || 0));
+    if (finalDamage <= 0) return true;
+    const visualImpact = finalDamage * Math.max(1, options.impactVisualMultiplier || 1);
+    const sourceHp = obj.hp ?? 300;
+    obj.hp = sourceHp - finalDamage;
+    if (options.ignite) igniteWoodenWall(obj, options.burnTimer || 300, options.burnDps || 20, options.hitX, options.hitY);
+    const effect = options.materialEffect || 'wood';
+    if (effect === 'rot') obj.woodRotAmount = Math.min(1, (obj.woodRotAmount || 0) + finalDamage / (obj.maxHp || 300));
+    if (obj.hp <= 0) {
+        if (effect === 'ice') createWoodIceImpact(obj, { ...options, sourceHp }, null);
+        destroyWoodenWall(obj, { ...options, sourceHp });
+        return true;
+    }
+    // Chemical decay erodes the grain; it never creates impact dents or splinters.
+    if (effect === 'rot') return true;
+    const point = {
+        x: Math.max(0, Math.min(1, ((options.hitX ?? obj.x + obj.w / 2) - obj.x) / obj.w)),
+        y: Math.max(0, Math.min(1, ((options.hitY ?? obj.y + obj.h / 2) - obj.y) / obj.h)),
+        damage: Math.max(0, Math.min(1, 1 - obj.hp / (obj.maxHp || 300))), impactStrength: Math.min(1, visualImpact / (obj.maxHp || 300)), effect,
+        active: effect !== 'ice' || window.effectsEnabled === false
+    };
+    const marks = obj.woodHitPoints || (obj.woodHitPoints = []);
+    const previous = marks.find(mark => Math.hypot(mark.x - point.x, mark.y - point.y) < 0.08);
+    if (previous) {
+        if (effect !== 'ice' || window.effectsEnabled === false) {
+            previous.damage = Math.max(previous.damage || 0, point.damage);
+            previous.impactStrength = Math.min(1, (previous.impactStrength ?? previous.damage ?? 0) + point.impactStrength);
+        }
+    } else if (marks.length < 64) marks.push(point);
+    obj.woodDamageVersion = (obj.woodDamageVersion || 0) + 1;
+    if (effect === 'ice') createWoodIceImpact(obj, { ...options, strength: point.impactStrength, addStrength: !!previous }, previous || point);
+    else {
+        const frame = window.frameCount || 0;
+        if (frame - (obj._lastWoodChipFrame ?? -100) >= 6 || visualImpact >= Math.max(25, (obj._lastWoodChipDamage || 0) * 2)) {
+            spawnTerrainDebris(obj, { ...options, impactDamage: visualImpact });
+            obj._lastWoodChipFrame = frame;
+            obj._lastWoodChipDamage = visualImpact;
+        }
+    }
+    return true;
+}
+
+function damageTerrainInRadius(x, y, radius, damage, options = {}) {
+    // A stable snapshot is necessary because a barrel chain can remove many objects at once.
+    const cover = objects.filter(obj => obj.type === 'woodenWall' || obj.type === 'box' || obj.type === 'barrel');
+    for (const obj of cover) {
+        if (!objects.includes(obj)) continue;
         const nearestX = Math.max(obj.x, Math.min(x, obj.x + obj.w));
         const nearestY = Math.max(obj.y, Math.min(y, obj.y + obj.h));
         const distance = Math.hypot(nearestX - x, nearestY - y);
         if (distance > radius) continue;
         if (obj.type === 'woodenWall') {
-            damageWoodenWall(obj, Math.max(1, Math.round((1 - distance / radius) * damage)));
+            damageWoodenWall(obj, Math.max(1, Math.round((1 - distance / radius) * damage)), { ...options, hitX: x, hitY: y });
+        } else if (obj.type === 'barrel') {
+            if (!(obj.barrelFuseTicks > 0)) explodeBarrel(obj);
         } else {
-            objects.splice(index, 1);
-            navNeedsRebuild = true;
+            objects.splice(objects.indexOf(obj), 1); navNeedsRebuild = true;
             for (let particle = 0; particle < 5; particle++) spawnParticle(obj.x + obj.w / 2, obj.y + obj.h / 2);
         }
+    }
+}
+
+function hitWallWithShieldProjectile(obj, bullet) {
+    const impact = { hitX: bullet.x, hitY: bullet.y, vx: bullet.vx, vy: bullet.vy };
+    if (obj.type === 'woodenWall') {
+        destroyWoodenWall(obj, impact);
+        return;
+    }
+    obj.wallDamageCount = Math.min(6, (obj.wallDamageCount || 0) + 1);
+    (obj.wallHitPoints || (obj.wallHitPoints = [])).push({
+        x: Math.max(0, Math.min(1, (bullet.x - obj.x) / obj.w)),
+        y: Math.max(0, Math.min(1, (bullet.y - obj.y) / obj.h))
+    });
+    if (obj.wallDamageCount >= 6) {
+        const index = objects.indexOf(obj);
+        if (index !== -1) objects.splice(index, 1);
+        navNeedsRebuild = true;
+        spawnTerrainDebris(obj, { ...impact, destroyed: true });
+    } else {
+        spawnTerrainDebris(obj, impact);
     }
 }
 
@@ -1525,24 +2153,145 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     }
     damageDronesInRadius(x, y, R, coef, attackerTeam);
     // Уничтожение ящиков, бочек и урон деревянным стенам в зоне взрыва
-    for (let i = objects.length - 1; i >= 0; i--) {
-        const obj = objects[i];
-        if (obj.type === 'woodenWall') {
-            const nearestX = Math.max(obj.x, Math.min(x, obj.x + obj.w));
-            const nearestY = Math.max(obj.y, Math.min(y, obj.y + obj.h));
-            const dist = Math.hypot(nearestX - x, nearestY - y);
-            if (dist <= R) {
-                const damage = Math.max(1, Math.round((1 - dist / R) * coef));
-                damageWoodenWall(obj, damage, { hitParticles: 4, destroyParticles: 10 });
+    damageTerrainInRadius(x, y, R, coef);
+}
+
+function createKamikazeProjectile(unit, owner) {
+    const angle = unit.turretAngle || 0;
+    return {
+        x: unit.x + unit.w / 2 + Math.cos(angle) * 25,
+        y: unit.y + unit.h / 2 + Math.sin(angle) * 25,
+        w: 10, h: 10, vx: Math.cos(angle) * 6, vy: Math.sin(angle) * 6,
+        life: 65, owner, team: unit.team, type: 'kamikazeBullet', damage: 100
+    };
+}
+
+function explodeKamikazeProjectile(bullet, directTarget = null) {
+    if (bullet.detonated) return;
+    bullet.detonated = true;
+    const x = directTarget ? directTarget.x + directTarget.w / 2 : bullet.x;
+    const y = directTarget ? directTarget.y + directTarget.h / 2 : bullet.y;
+    const baseDamage = bullet.damage ?? 100;
+    const damage = bullet.owner === 'player' ? applyPlayerDamage(baseDamage) : baseDamage;
+    spawnExplosion(x, y, 30, 'impact');
+    applyDamage(x, y, 55, damage, bullet.team);
+}
+
+function resolveKamikazeProjectile(bullet, rect, terrainCandidates) {
+    const cover = terrainCandidates.find(obj => isBlockingTerrainObject(obj) && checkRectCollision(rect, obj) && objects.includes(obj));
+    if (cover) {
+        explodeKamikazeProjectile(bullet);
+        if (cover.type === 'barrel') explodeBarrel(cover);
+        return 'hit';
+    }
+    for (const group of [[tank], allies, enemies, playerDrones, enemyDrones]) {
+        for (const target of group) {
+            if (!target || target.romanSummon === 'banner' || target.alive === false || target.hp <= 0 || target.team === bullet.team || !checkRectCollision(rect, target)) continue;
+            if (getEntityTankType(target) === 'mirror') {
+                if (target.mirrorShieldActive) {
+                    bullet.vx *= -1.5;
+                    bullet.vy *= -1.5;
+                    bullet.team = target.team;
+                    bullet.owner = target === tank ? 'player' : allies.includes(target) ? 'ally' : 'enemy';
+                    bullet.life += 60;
+                    bullet.x += bullet.vx * 2;
+                    bullet.y += bullet.vy * 2;
+                    return 'reflected';
+                }
+                rememberMirrorProjectile(target, bullet);
             }
-        } else if (obj.type === 'box' || obj.type === 'barrel') {
-            const ox = obj.x + obj.w/2, oy = obj.y + obj.h/2;
-            const dist = Math.hypot(ox - x, oy - y);
-            if (dist <= R) {
-                objects.splice(i, 1);
+            if (target.romanShieldActive) {
+                spawnParticle(bullet.x, bullet.y, '#FFD700');
+                return 'hit';
             }
+            explodeKamikazeProjectile(bullet, target);
+            return 'hit';
         }
     }
+    return null;
+}
+
+function startKamikazeDash(unit) {
+    if (!unit || unit.alive === false || unit.paralyzed || unit.kamikazeUltActive ||
+        (unit.kamikazeUltCooldown || 0) > 0 || (unit.kamikazeRecoveryTimer || 0) > 0 || (unit.sandNoShootTimer || 0) > 0) return false;
+    unit.kamikazeUltActive = true;
+    unit.kamikazeDashAngle = unit.turretAngle || 0;
+    unit.kamikazeDashStartAngle = unit.kamikazeDashAngle;
+    unit.kamikazeDashTimer = 90;
+    unit.kamikazeUltCooldown = 600;
+    unit.kamikazeInvincible = true;
+    unit.kamikazeInvincibleTimer = 0;
+    unit._kamikazeTrailThisTick = true;
+    return true;
+}
+
+function finishKamikazeDash(unit, detonate = true) {
+    if (!unit.kamikazeUltActive) return;
+    unit.kamikazeUltActive = false;
+    unit.kamikazeInvincible = false;
+    unit.kamikazeInvincibleTimer = 0;
+    unit.kamikazeDashTimer = 0;
+    unit.kamikazeRecoveryTimer = 45;
+    if (!detonate) return;
+    const angle = unit.kamikazeDashAngle;
+    const x = unit.x + unit.w / 2 + Math.cos(angle) * unit.w * 0.5;
+    const y = unit.y + unit.h / 2 + Math.sin(angle) * unit.h * 0.5;
+    let damage = 260;
+    if (unit === tank) {
+        damage = applyPlayerDamage(damage * (typeof getPlayerDmgMult === 'function' ? getPlayerDmgMult() : 1));
+    }
+    spawnExplosion(x, y, 135, 'blast');
+    applyDamage(x, y, 135, damage, unit.team);
+}
+
+function updateKamikazeDash(unit, steeringAngle = unit.kamikazeDashAngle) {
+    if (!unit.kamikazeUltActive) return;
+    if (unit.paralyzed) {
+        finishKamikazeDash(unit, false);
+        return;
+    }
+    const startAngle = unit.kamikazeDashStartAngle;
+    const requestedOffset = Math.atan2(Math.sin(steeringAngle - startAngle), Math.cos(steeringAngle - startAngle));
+    const targetAngle = startAngle + Math.max(-Math.PI / 9, Math.min(Math.PI / 9, requestedOffset));
+    let difference = targetAngle - unit.kamikazeDashAngle;
+    difference = Math.atan2(Math.sin(difference), Math.cos(difference));
+    unit.kamikazeDashAngle += Math.max(-0.008, Math.min(0.008, difference));
+    unit.baseAngle = unit.kamikazeDashAngle;
+    unit.kamikazeDashTimer--;
+    const speed = 9 * GameTerrain.speedFactor() * (unit.iceSlowed ? 0.5 : 1);
+    const steps = Math.ceil(speed / 3);
+    const vx = Math.cos(unit.kamikazeDashAngle) * speed / steps;
+    const vy = Math.sin(unit.kamikazeDashAngle) * speed / steps;
+    // Small steps prevent tunnelling through narrow targets and map edges.
+    for (let step = 0; step < steps; step++) {
+        const nextX = unit.x + vx, nextY = unit.y + vy;
+        unit.x = Math.max(0, Math.min(worldWidth - unit.w, nextX));
+        unit.y = Math.max(0, Math.min(worldHeight - unit.h, nextY));
+        for (let index = objects.length - 1; index >= 0; index--) {
+            const obj = objects[index];
+            if (!isBlockingTerrainObject(obj) || !checkRectCollision(unit, obj)) continue;
+            if (obj.type === 'woodenWall') {
+                destroyWoodenWall(obj, { vx, vy });
+                continue;
+            }
+            objects.splice(index, 1);
+            navNeedsRebuild = true;
+            if (obj.type === 'wall') spawnTerrainDebris(obj, { destroyed: true, vx, vy });
+            else for (let i = 0; i < 3; i++) spawnParticle(obj.x + obj.w / 2, obj.y + obj.h / 2, '#ae7956');
+        }
+        for (const group of [[tank], allies, enemies, playerDrones, enemyDrones]) {
+            if (group.some(target => target && target !== unit && target.alive !== false && target.hp > 0 &&
+                target.team !== unit.team && !isBurovoyBurrowActive(target) && checkRectCollision(unit, target))) {
+                finishKamikazeDash(unit);
+                return;
+            }
+        }
+        if (unit.x !== nextX || unit.y !== nextY) {
+            finishKamikazeDash(unit);
+            return;
+        }
+    }
+    if (unit.kamikazeDashTimer <= 0) finishKamikazeDash(unit);
 }
 
 // Helper for RNG
@@ -1559,9 +2308,15 @@ function canPlaceAt(entity, nx, ny) {
 // Попытаться сдвинуть entity на расстояние dist в направлении angle малыми шагами.
 // Если на пути ящик — предпринять попытку безопасно его толкнуть (только если у ящика есть куда сдвинуться).
 
-function spawnExplosion(cx, cy, radius) {
+function spawnExplosion(cx, cy, radius, style = 'tank') {
     if (window.effectsEnabled === false) return;
     const r = radius || 80;
+    if (style !== 'tank') {
+        const duration = style === 'barrel' ? 50 : style === 'impact' ? 24 : 36;
+        objects.push({ type: 'explosion', explosionStyle: style, x: cx, y: cy, radius: r,
+            life: duration, maxLife: duration, seed: Math.random() * Math.PI * 2 });
+        return;
+    }
     // Main fire visual
     objects.push({ type: 'explosion', x: cx, y: cy, radius: r, life: 28, maxLife: 28 });
     // Shockwave ring
@@ -1639,7 +2394,81 @@ function canPlaceMineAt(x, y, radius) {
         Math.hypot(mine.x - x, mine.y - y) < (mine.radius || 18) + radius);
 }
 
+function createBuratinoBarrage(unit, ultimate = false) {
+    const angle = unit.turretAngle || 0;
+    const originX = unit.x + unit.w / 2;
+    const originY = unit.y + unit.h / 2;
+    const distance = ultimate ? 300 : 220;
+    const radius = ultimate ? 160 : 100;
+    const warningTicks = 100;
+    const waveInterval = 100;
+    const waveCount = ultimate ? 3 : 1;
+    const isPlayer = typeof tank !== 'undefined' && unit === tank;
+    const multiplier = isPlayer && typeof getPlayerDmgMult === 'function' ? getPlayerDmgMult() : 1;
+    const damage = isPlayer ? applyPlayerDamage(300 * multiplier) : 300;
+    const barrage = {
+        type: 'targetCircle', buratinoBarrage: true, x: originX + Math.cos(angle) * distance,
+        y: originY + Math.sin(angle) * distance, radius, team: unit.team, ultimate,
+        elapsed: 0, warningTicks, waveInterval, waveCount, wavesFired: 0, damage,
+        color: unit.color, impacts: []
+    };
+    objects.push(barrage);
+    for (let wave = 0; wave < waveCount; wave++) {
+        const impacts = [{ x: barrage.x, y: barrage.y }];
+        const phase = Math.random() * Math.PI * 2;
+        for (const ring of [{ count: 4, distance: 0.35 }, { count: 8, distance: 0.72 }]) {
+            for (let i = 0; i < ring.count; i++) {
+                const a = phase + i * Math.PI * 2 / ring.count;
+                impacts.push({ x: barrage.x + Math.cos(a) * radius * ring.distance,
+                    y: barrage.y + Math.sin(a) * radius * ring.distance });
+            }
+        }
+        for (let i = 0; i < impacts.length; i++) {
+            const target = impacts[i];
+            const delay = Math.round(Math.floor(i * 0.7) * (5 / 3));
+            const travel = warningTicks + wave * waveInterval - delay;
+            const lateral = (i - (impacts.length - 1) / 2) * 1.2;
+            const sx = originX - Math.sin(angle) * lateral;
+            const sy = originY + Math.cos(angle) * lateral;
+            objects.push({ type: 'visualRocket', barrageVisual: true, x: sx, y: sy,
+                vx: (target.x - sx) / travel, vy: (target.y - sy) / travel,
+                life: travel, delay, w: 6, h: 3, team: unit.team });
+        }
+        barrage.impacts.push(impacts);
+    }
+    return barrage;
+}
+
+function updateBuratinoBarrage(barrage) {
+    barrage.elapsed++;
+    if (barrage.flashTicks > 0) barrage.flashTicks--;
+    const waveTime = barrage.warningTicks + barrage.wavesFired * barrage.waveInterval;
+    if (barrage.wavesFired < barrage.waveCount && barrage.elapsed >= waveTime) {
+        barrage.flashTicks = 8;
+        const impacts = barrage.impacts[barrage.wavesFired];
+        const blastRadius = barrage.ultimate ? 42 : 30;
+        for (let i = 0; i < impacts.length; i++) {
+            const point = impacts[i];
+            if (i % 3 === 0) {
+                spawnExplosion(point.x, point.y, blastRadius, 'blast');
+            } else if (window.effectsEnabled !== false) {
+                // Secondary impacts reuse the new fireball art without additional particles.
+                objects.push({ type: 'explosion', explosionStyle: 'blast', x: point.x, y: point.y, radius: blastRadius,
+                    life: 28 - (i % 3) * 2, maxLife: 28 });
+            }
+        }
+        applyDamage(barrage.x, barrage.y, barrage.radius, barrage.damage, barrage.team);
+        barrage.wavesFired++;
+    }
+    const endTime = barrage.warningTicks + (barrage.waveCount - 1) * barrage.waveInterval + 15;
+    if (barrage.wavesFired === barrage.waveCount && barrage.elapsed >= endTime) {
+        const index = objects.indexOf(barrage);
+        if (index !== -1) objects.splice(index, 1);
+    }
+}
+
 function shoot() {
+    if (tankType === 'kamikaze' && (tank.kamikazeUltActive || (tank.kamikazeRecoveryTimer || 0) > 0)) return;
     if (tankType === 'fire') {
         // Flamethrower: emit a short cone of flame projectiles
         const flameCount = 7;
@@ -1665,65 +2494,8 @@ function shoot() {
         }
         advanceFlamethrowerBurst(tank, 90, 0);
     } else if (tankType === 'buratino') {
-        // Target in turret direction
-        const dist = 300;
-        const targetX = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * dist;
-        const targetY = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * dist;
-        const targetCircle = { x: targetX, y: targetY, radius: 100, color: tank.color, timer: 180, type: 'targetCircle', team: tank.team };
-        // precompute planned explosion positions (inner 4 + outer 9) so rockets can target them
-        targetCircle.planned = [];
-        for (let j = 0; j < 4; j++) {
-            const ang = (j / 4) * Math.PI * 2;
-            const distP = targetCircle.radius * 0.3;
-            targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * distP, y: targetCircle.y + Math.sin(ang) * distP, exploded: false });
-        }
-        for (let j = 0; j < 9; j++) {
-            const ang = (j / 9) * Math.PI * 2;
-            const distP = targetCircle.radius * 0.7;
-            targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * distP, y: targetCircle.y + Math.sin(ang) * distP, exploded: false });
-        }
-        objects.push(targetCircle);
-        tank.artilleryMode = true;
-        tank.artilleryTimer = 180; // 3 seconds
-        tank.fireCooldown = 60; // 1 second cooldown (60 ticks)
-        // Visual rockets: spawn from tube positions but smaller and in a fan
-        const rows = 3;
-        const cols = Math.max(5, Math.floor((Math.min(tank.w, tank.h) * 1.5) / 10));
-        const tSize = Math.min(tank.w, tank.h) * 0.35 * 1.5;
-        const inset = 6;
-        const usableW = tSize - inset * 2;
-        const usableH = tSize - inset * 2;
-        const fanSpread = 0.9; // radians total spread for the fan
-        for (let r = 0; r < rows; r++) {
-            const ry = -tSize/2 + inset + r * (usableH / (rows - 1 || 1));
-            for (let c = 0; c < cols; c++) {
-                const cx = -tSize/2 + inset + c * (usableW / (cols - 1 || 1));
-                const baseAng = tank.turretAngle;
-                // local tube position -> world
-                const lx = cx;
-                const ly = ry;
-                const sx = tank.x + tank.w/2 + Math.cos(baseAng) * lx - Math.sin(baseAng) * ly;
-                const sy = tank.y + tank.h/2 + Math.sin(baseAng) * lx + Math.cos(baseAng) * ly;
-                // compute per-rocket fan angle offset across columns + small row offset
-                const colNorm = cols <= 1 ? 0.5 : c / (cols - 1);
-                const rowNorm = rows <= 1 ? 0.5 : r / (rows - 1);
-                const angOffset = (colNorm - 0.5) * fanSpread + (rowNorm - 0.5) * 0.06;
-                const angRocket = baseAng + angOffset + (Math.random() - 0.5) * 0.03;
-                // assign rocket to one of the planned explosion positions (round-robin)
-                const planned = targetCircle.planned || [];
-                const idx = planned.length ? ((r * cols + c) % planned.length) : 0;
-                const targetPos = planned.length ? planned[idx] : { x: targetX + Math.cos(angRocket) * (targetCircle.radius * 0.5), y: targetY + Math.sin(angRocket) * (targetCircle.radius * 0.5) };
-                const dx = targetPos.x - sx;
-                const dy = targetPos.y - sy;
-                const delay = Math.floor((r * cols + c) * 1 + Math.random() * 2);
-                const travel = Math.max(16, tank.artilleryTimer - delay - 2);
-                const vx = dx / travel;
-                const vy = dy / travel;
-                const life = travel + 6;
-                // smaller rockets targeted to planned explosion position
-                objects.push({ type: 'visualRocket', x: sx, y: sy, vx: vx, vy: vy, life: life, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: 0 });
-            }
-        }
+        createBuratinoBarrage(tank);
+        tank.fireCooldown = getTankShotCooldown('buratino');
     } else if (tankType === 'toxic') {
         // Toxic tank: fires projectiles straight along turret angle, they fall with gravity and explode into gas
         const speed = 7;
@@ -2015,7 +2787,7 @@ function shoot() {
     } else if (tankType === 'burovoy') {
         return;
     } else if (tankType === 'spartan') {
-        // Spartan spear: pierces through all enemies, 80 damage
+        // Spartan spear lodges in the first solid target.
         const ang = tank.turretAngle;
         const speed = 8;
         bullets.push({
@@ -2033,21 +2805,8 @@ function shoot() {
         });
         tank.fireCooldown = 40;
     } else if (tankType === 'kamikaze') {
-        // Kamikaze: white bullet with red dot (Japanese flag)
-        const ang = tank.turretAngle;
-        bullets.push({
-            x: tank.x + tank.w/2 + Math.cos(ang) * 25,
-            y: tank.y + tank.h/2 + Math.sin(ang) * 25,
-            w: 10, h: 10,
-            vx: Math.cos(ang) * 6,
-            vy: Math.sin(ang) * 6,
-            life: 100,
-            owner: 'player',
-            team: 0,
-            type: 'kamikazeBullet',
-            damage: 100
-        });
-        tank.fireCooldown = 30; // 2 shots per second
+        bullets.push(createKamikazeProjectile(tank, 'player'));
+        tank.fireCooldown = getTankShotCooldown('kamikaze');
     } else if (tankType === 'roman') {
         // Throwing blade: 125 dmg, spins visually, ricochets 1 time
         bullets.push({
@@ -2243,7 +3002,7 @@ function updateSpecialProjectiles() {
             // Explode on collision, timeout, or out of bounds
             if (hitWall || proj.life <= 0 || proj.x < 0 || proj.x > worldWidth || proj.y < 0 || proj.y > worldHeight) {
                 // Explosion effect
-                spawnExplosion(proj.x, proj.y, proj.explosionRadius);
+                spawnExplosion(proj.x, proj.y, proj.explosionRadius, 'blast');
                 if (typeof applyDamage === 'function') {
                     let explosionDamage = proj.damage;
                     if (typeof godMode !== 'undefined' && godMode) explosionDamage = explosionDamage * 1000;
@@ -2300,7 +3059,7 @@ function updateSpecialProjectiles() {
                     }
                     proj.bounces++;
                     if (obj.type === 'woodenWall' && typeof damageWoodenWall === 'function') {
-                        damageWoodenWall(obj, proj.damage || 200, { hitColor: '#00ffff', hitParticles: 4, destroyColor: '#00c2c2' });
+                        damageWoodenWall(obj, proj.damage || 200, { hitColor: '#00ffff', hitParticles: 4, destroyColor: '#00c2c2', hitX: proj.x, hitY: proj.y, vx: proj.vx, vy: proj.vy });
                     } else if (obj.type === 'box') {
                         const index = objects.indexOf(obj);
                         if (index !== -1) objects.splice(index, 1);
@@ -2337,7 +3096,7 @@ function updateSpecialProjectiles() {
                 const dx = proj.x - (enemy.x + enemy.w/2);
                 const dy = proj.y - (enemy.y + enemy.h/2);
                 if (dx*dx + dy*dy < (proj.radius + enemy.w/2)*(proj.radius + enemy.w/2)) {
-                    if (!isBurovoyBurrowActive(enemy)) enemy.hp -= proj.damage;
+                    dealDamageToEntity(enemy, proj.damage);
                     spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
                     if (enemy.hp <= 0) {
                         spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65);
@@ -2373,6 +3132,11 @@ function updateSpecialProjectiles() {
 }
 
 function updatePhysics() {
+    updateBarrelFuses();
+    updateEmbeddedProjectiles(tank);
+    for (const unit of allies) updateEmbeddedProjectiles(unit);
+    for (const unit of enemies) updateEmbeddedProjectiles(unit);
+    for (const obj of objects) if (obj.type === 'woodenWall') updateEmbeddedProjectiles(obj);
 
     // Only rescue substantial overlaps; contact rounding must not teleport the player.
     (function rescueStuckTank() {
@@ -2422,7 +3186,7 @@ function updatePhysics() {
     })();
 
     // The index is local to this physics tick; removed objects are checked below.
-    const terrainIndex = objects.length >= 60 && bullets.length >= 10 && objects.length * bullets.length >= 2500
+    const terrainIndex = objects.length >= 60 && ((bullets.length >= 10 && objects.length * bullets.length >= 2500) || objects.filter(obj => obj.type === 'gas').length >= 8)
         ? buildTerrainCollisionIndex(objects) : null;
 
     // Обновление пуль
@@ -2576,12 +3340,13 @@ function updatePhysics() {
         }
         
         if (b.life <= 0) {
-            if (b.type === 'rocket' || b.type === 'smallRocket') explodeRocket(b);
+            if (b.type === 'kamikazeBullet') explodeKamikazeProjectile(b);
+            else if (b.type === 'rocket' || b.type === 'smallRocket') explodeRocket(b);
             else if (b.type === 'mechRocketBullet') explodeMechRocket(b);
             else if (b.type === 'toxic' || b.type === 'megabomb') explodeGas(b, b.type === 'megabomb');
             else if (b.hasExplosion) {
                 // Buratino enhanced shot: large explosion
-                spawnExplosion(b.x, b.y, b.explosionRadius);
+                spawnExplosion(b.x, b.y, b.explosionRadius, 'blast');
                 let explosionDamage = b.damage || 100;
                 if (b.owner === 'player') explosionDamage = applyPlayerDamage(explosionDamage);
                 applyDamage(b.x, b.y, b.explosionRadius, explosionDamage, b.team);
@@ -2591,18 +3356,25 @@ function updatePhysics() {
         }
         // normalize bullet rect (bullets stored by center)
         const bRect = { x: b.x - (b.w||0)/2, y: b.y - (b.h||0)/2, w: b.w || 4, h: b.h || 4 };
+        if (b.type === 'kamikazeBullet') {
+            const candidates = terrainIndex ? queryTerrainCollisionIndex(terrainIndex, bRect) : objects;
+            const result = resolveKamikazeProjectile(b, bRect, candidates);
+            if (result === 'hit') bullets.splice(i, 1);
+            continue;
+        }
         if (b.type === 'toxic' || b.type === 'megabomb') {
             const cover = terrainIndex ? queryTerrainCollisionIndex(terrainIndex, bRect) : objects;
-            if (cover.some(obj => obj.type === 'woodenWall' && checkRectCollision(bRect, obj))) {
+            if (cover.some(obj => (b.toxicWave ? isBlockingTerrainObject(obj) : obj.type === 'woodenWall') && checkRectCollision(bRect, obj))) {
                 explodeGas(b, b.type === 'megabomb');
                 bullets.splice(i, 1);
                 continue;
             }
         }
         if (b.type === 'rocket' || b.type === 'smallRocket') {
-            const collided = objects.some(obj => isBlockingTerrainObject(obj) && checkRectCollision(bRect, obj));
+            const collided = objects.find(obj => isBlockingTerrainObject(obj) && checkRectCollision(bRect, obj));
             if (collided) {
                 explodeRocket(b);
+                if (collided.type === 'barrel') explodeBarrel(collided);
                 bullets.splice(i, 1);
                 continue;
             }
@@ -2615,6 +3387,12 @@ function updatePhysics() {
                 if (!isBlockingTerrainObject(obj)) continue; // only solid objects stop bullets
                 if (checkRectCollision(bRect, obj)) {
                     if (terrainIndex && !objects.includes(obj)) continue;
+                    if (b.type === 'mechShield' && (obj.type === 'wall' || obj.type === 'woodenWall')) {
+                        hitWallWithShieldProjectile(obj, b);
+                        bullets.splice(i, 1);
+                        hit = true;
+                        break;
+                    }
                     // Toxic/mega bombs pass through walls but explode on other objects
                     if ((b.type === 'toxic' || b.type === 'megabomb') && obj.type === 'wall') {
                         // pass through walls, don't explode
@@ -2623,6 +3401,7 @@ function updatePhysics() {
                     // mechRocket bullet explodes on contact with walls/objects
                     if (b.type === 'mechRocketBullet' && (obj.type === 'wall' || obj.type === 'woodenWall' || obj.type === 'box' || obj.type === 'barrel')) {
                         explodeMechRocket(b);
+                        if (obj.type === 'barrel') explodeBarrel(obj);
                         bullets.splice(i, 1);
                         hit = true;
                         break;
@@ -2634,21 +3413,9 @@ function updatePhysics() {
                     bullets.splice(i, 1);
                     hit = true;
                     if (obj.type === 'woodenWall') {
-                        // Damage wooden wall by bullet's damage value
-                        const dmg = b.damage || 100;
-                        obj.hp = (obj.hp ?? 300) - dmg;
-                        for (let k = 0; k < 3; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#a0652a');
-                        // Pyro bullets ignite wooden walls
-                        if (b.type === 'pyroBullet') {
-                            obj.burning = true;
-                            obj.burnTimer = obj.burnTimer ? Math.max(obj.burnTimer, 300) : 300;
-                            obj.burnDps = 20;
-                        }
-                        if (obj.hp <= 0) {
-                            objects.splice(objects.indexOf(obj), 1);
-                            navNeedsRebuild = true;
-                            for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#8B5E3C');
-                        }
+                        damageWoodenWall(obj, b.damage || 100, { exactDamage: true, hitX: b.x, hitY: b.y, vx: b.vx, vy: b.vy,
+                            ignite: b.type === 'pyroBullet', materialEffect: b.type === 'ice' ? 'ice' : 'wood' });
+                        if (obj.hp > 0) addEmbeddedProjectile(obj, b);
                     } else if (obj.type === 'box') {
                         objects.splice(objects.indexOf(obj), 1);
                         for (let j = 0; j < 5; j++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
@@ -2686,7 +3453,7 @@ function updatePhysics() {
                     if (b.bounces > b.maxBounces) {
                         // Ultimate ball explosion effect
                         if (b.isUltimateBall && b.explosionRadius) {
-                            spawnExplosion(b.x, b.y, b.explosionRadius);
+                            spawnExplosion(b.x, b.y, b.explosionRadius, 'blast');
                             // Damage all enemies in explosion radius
                             for (let enemy of enemies) {
                                 const dx = enemy.x + enemy.w/2 - b.x;
@@ -2707,7 +3474,7 @@ function updatePhysics() {
                     }
 
                     if (obj.type === 'woodenWall') {
-                        damageWoodenWall(obj, b.damage || 200, { hitColor: b.color || '#00ffff', hitParticles: 4 });
+                        damageWoodenWall(obj, b.damage || 200, { hitColor: b.color || '#00ffff', hitParticles: 4, hitX: b.x, hitY: b.y, vx: b.vx, vy: b.vy });
                     }
                     
                     if (obj.type === 'box') {
@@ -2727,7 +3494,14 @@ function updatePhysics() {
             if (b.spinAngle !== undefined) b.spinAngle += 0.35;
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
+                if (!isBlockingTerrainObject(obj)) continue;
                 if (checkRectCollision(bRect, obj)) {
+                    if (obj.type === 'woodenWall') {
+                        damageWoodenWall(obj, b.damage || 125, { hitX: b.x, hitY: b.y, vx: b.vx, vy: b.vy });
+                        if (obj.hp > 0) addEmbeddedProjectile(obj, b);
+                        bullets.splice(i, 1); hit = true;
+                        break;
+                    }
                     const bCenterX = b.x, bCenterY = b.y;
                     const oCenterX = obj.x + obj.w/2, oCenterY = obj.y + obj.h/2;
                     const overlapX = (b.w + obj.w)/2 - Math.abs(bCenterX - oCenterX);
@@ -2748,9 +3522,6 @@ function updatePhysics() {
                         for (let k = 0; k < 5; k++) spawnParticle(b.x, b.y, '#FFD700');
                     }
 
-                    if (obj.type === 'woodenWall') {
-                        damageWoodenWall(obj, b.damage || 200, { hitColor: '#FFD700', hitParticles: 4, destroyColor: '#b8871d' });
-                    }
                     if (obj.type === 'box') {
                         objects.splice(j, 1);
                         for (let k = 0; k < 5; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
@@ -2767,9 +3538,12 @@ function updatePhysics() {
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
                 if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall')) {
-                    objects.splice(j, 1);
-                    navNeedsRebuild = true;
-                    for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
+                    if (obj.type === 'woodenWall') destroyWoodenWall(obj, { vx: b.vx, vy: b.vy });
+                    else {
+                        objects.splice(j, 1);
+                        navNeedsRebuild = true;
+                        spawnTerrainDebris(obj, { destroyed: true, vx: b.vx, vy: b.vy });
+                    }
                     mHit = true;
                 }
                 if (checkRectCollision(bRect, obj) && obj.type !== 'wall' && obj.type !== 'woodenWall') {
@@ -2796,35 +3570,12 @@ function updatePhysics() {
             for (let j = objects.length - 1; j >= 0; j--) {
                 const obj = objects[j];
                 if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall' || obj.type === 'box')) {
-                    // Destroy wall permanently
-                    objects.splice(j, 1);
-                    navNeedsRebuild = true;
-                    for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
-                    // Continue flying, don't remove bullet
-                }
-            }
-        }
-        // Special handling for mechShield: one-shots wooden walls, 6 hits to destroy stone walls
-        if (b.type === 'mechShield') {
-            for (let j = objects.length - 1; j >= 0; j--) {
-                const obj = objects[j];
-                if (checkRectCollision(bRect, obj) && (obj.type === 'wall' || obj.type === 'woodenWall')) {
-                    if (obj.type === 'woodenWall') {
-                        // One-shot wooden wall (without touching damage value)
-                        for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#a0652a');
+                    if (obj.type === 'woodenWall') destroyWoodenWall(obj, { vx: b.vx, vy: b.vy });
+                    else {
                         objects.splice(j, 1);
                         navNeedsRebuild = true;
-                    } else {
-                        // Count hits on stone wall
-                        obj.wallDamageCount = (obj.wallDamageCount || 0) + 1;
-                        // Add orange particle for each hit
-                        for (let k = 0; k < 3; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF6F00');
-                        // Destroy wall after 6 hits
-                        if (obj.wallDamageCount >= 6) {
-                            objects.splice(j, 1);
-                            navNeedsRebuild = true;
-                            for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#FF4500');
-                        }
+                        if (obj.type === 'wall') spawnTerrainDebris(obj, { destroyed: true, vx: b.vx, vy: b.vy });
+                        else for (let k = 0; k < 10; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
                     }
                     // Continue flying, don't remove bullet
                 }
@@ -2900,7 +3651,7 @@ function updatePhysics() {
                         }
                     } else if (b.type === 'rocket' || b.type === 'smallRocket') {
                         // Block rocket: small visual pop, no splash
-                        spawnExplosion(b.x, b.y, 22);
+                        spawnExplosion(b.x, b.y, 22, 'impact');
                         for (let k = 0; k < 8; k++) spawnParticle(b.x, b.y, '#FFD700');
                         bullets.splice(i, 1);
                     } else {
@@ -2968,20 +3719,11 @@ function updatePhysics() {
                         for (let k = 0; k < 5; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#00e5ff', 0.6);
                     }
                     // Don't remove
-                } else if (b.type === 'spartanSpear') {
-                    // Spartan spear pierces player too — hit once then continue flying
-                    if (!b.hitEntities) b.hitEntities = [];
-                    if (!b.hitEntities.includes('player')) {
-                        dealDamageToEntity(tank, Math.round((b.damage || 80) * _shieldMult));
-                        b.hitEntities.push('player');
-                        for (let k = 0; k < 4; k++) spawnParticle(tank.x+tank.w/2+(Math.random()-0.5)*tank.w, tank.y+tank.h/2+(Math.random()-0.5)*tank.h, '#b87333', 0.7);
-                    }
-                    // Don't remove — keeps flying through
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      dmg = Math.round(dmg * _shieldMult);
                      dealDamageToEntity(tank, dmg);
-                     if (b.type === 'ice' && tankType !== 'ice') { tank.iceSlowed = true; tank.iceSlowedTime = 240; tank.frozenEffect = 240; }
+                     if (b.type === 'ice' && tankType !== 'ice') { tank.iceSlowed = true; tank.iceSlowedTime = 240; }
                      if (b.type === 'pyroBullet') { tank.burning = true; tank.burnTimer = 300; tank.burnDps = 10; }
                      // Air bullet: apply smooth wind knockback to player
                      if (b.type === 'airBullet') {
@@ -2995,6 +3737,7 @@ function updatePhysics() {
                      }
                      bullets.splice(i, 1);
                 }
+                addEmbeddedProjectile(tank, b);
                 if (b.type !== 'toxic' && b.type !== 'megabomb') tank.hitFlashTime = Date.now();
                 if (tank.hp <= 0) {
                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
@@ -3024,7 +3767,7 @@ function updatePhysics() {
                     if (checkRectCollision(bRect, a)) {
                         if (b.team !== a.team) {
                             // Damage enemy only
-                            a.hp = (a.hp || 300) - (b.damage || 75);
+                            dealDamageToEntity(a, b.damage || 75);
                         } else {
                             // Same team - bullet passes through without healing
                             continue;
@@ -3061,7 +3804,7 @@ function updatePhysics() {
                         if (!b.hitChain) b.hitChain = [];
                         const aid = -2 - j;
                         if (!b.hitChain.includes(aid)) {
-                            a.hp = (a.hp || 300) - (b.damage || 150);
+                            dealDamageToEntity(a, b.damage || 150);
                             b.hitChain.push(aid);
                             for (let k = 0; k < 6; k++) spawnParticle(a.x + a.w/2 + (Math.random()-0.5)*a.w, a.y + a.h/2 + (Math.random()-0.5)*a.h, '#00d4ff', 0.7);
                         }
@@ -3088,7 +3831,7 @@ function updatePhysics() {
                         if (!b.hitEntities) b.hitEntities = [];
                         const _allyKey = 'ally_' + j;
                         if (!b.hitEntities.includes(_allyKey)) {
-                            a.hp = (a.hp || 300) - (b.damage || 350);
+                            dealDamageToEntity(a, b.damage || 350);
                             b.hitEntities.push(_allyKey);
                         }
                         // continue flying, don't remove bullet
@@ -3097,19 +3840,20 @@ function updatePhysics() {
                         if (!b.hitEntities) b.hitEntities = [];
                         const _allyKeyPB = 'ally_' + j;
                         if (!b.hitEntities.includes(_allyKeyPB)) {
-                            a.hp = (a.hp || 300) - (b.damage || 600);
+                            dealDamageToEntity(a, b.damage || 600);
                             b.hitEntities.push(_allyKeyPB);
                         }
                         // continue flying, don't remove bullet
                     } else if (b.type === 'machinegun') {
                         // Machinegun: rapid fire with consistent damage
-                        a.hp = (a.hp || 300) - b.damage;
+                        dealDamageToEntity(a, b.damage);
                         bullets.splice(i, 1);
                     } else {
-                        a.hp = (a.hp || 300) - (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
-                        if (b.type === 'ice' && a.tankType !== 'ice') { a.iceSlowed = true; a.iceSlowedTime = 240; a.frozenEffect = 240; }
+                        dealDamageToEntity(a, b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
+                        if (b.type === 'ice' && a.tankType !== 'ice') { a.iceSlowed = true; a.iceSlowedTime = 240; }
                         bullets.splice(i, 1);
                     }
+                    addEmbeddedProjectile(a, b);
                     if (a.hp <= 0) {
                         if (currentMode === 'war') {
                             a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
@@ -3233,24 +3977,13 @@ function updatePhysics() {
                             for (let k = 0; k < 5; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#00e5ff', 0.6);
                         }
                         // Don't remove — keeps flying
-                    } else if (b.type === 'spartanSpear') {
-                        // Spartan spear: pierce through all enemies, hit each only once
-                        if (!b.hitEntities) b.hitEntities = [];
-                        if (!b.hitEntities.includes(j)) {
-                            let dmgSpear = b.damage || 80;
-                            if (b.owner === 'player') dmgSpear = applyPlayerDamage(dmgSpear);
-                            dealDamageToEntity(e, dmgSpear);
-                            b.hitEntities.push(j);
-                            for (let k = 0; k < 4; k++) spawnParticle(e.x+e.w/2+(Math.random()-0.5)*e.w, e.y+e.h/2+(Math.random()-0.5)*e.h, '#b87333', 0.7);
-                        }
-                        // Don't remove — keeps flying through
                     } else if (b.type === 'droneBullet') {
                         // Drone bullet: damage and remove
                         dealDamageToEntity(e, b.damage || 25);
                         bullets.splice(i, 1);
                     } else if (b.hasExplosion) {
                         // Buratino enhanced shot: large explosion on impact
-                        spawnExplosion(b.x, b.y, b.explosionRadius);
+                        spawnExplosion(b.x, b.y, b.explosionRadius, 'blast');
                         let explosionDamage = b.damage || 100;
                         if (b.owner === 'player') explosionDamage = applyPlayerDamage(explosionDamage);
                         applyDamage(b.x, b.y, b.explosionRadius, explosionDamage, b.team);
@@ -3260,7 +3993,7 @@ function updatePhysics() {
                         if (b.owner === 'player') dmgDefault = applyPlayerDamage(dmgDefault);
                         if (b.type === 'myasnoyBio' && b.owner === 'player' && e.isBoss) dmgDefault /= 3;
                         dealDamageToEntity(e, dmgDefault);
-                        if (b.type === 'ice' && e.tankType !== 'ice') { e.iceSlowed = true; e.iceSlowedTime = 240; e.frozenEffect = 240; }
+                        if (b.type === 'ice' && e.tankType !== 'ice') { e.iceSlowed = true; e.iceSlowedTime = 240; }
                         if (b.type === 'musical') { e.confused = 120; } // 2 seconds confusion
                         // Pyro bullet: apply burn DoT (10 HP/sec for 5 sec)
                         if (b.type === 'pyroBullet') { 
@@ -3280,6 +4013,7 @@ function updatePhysics() {
                         }
                         bullets.splice(i, 1);
                     }
+                    addEmbeddedProjectile(e, b);
                     if (b.type !== 'toxic' && b.type !== 'megabomb') e.hitFlashTime = Date.now();
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
@@ -3297,7 +4031,7 @@ function updatePhysics() {
                     if (!bullets.includes(b)) break;
                     for (let j = group.length - 1; j >= 0; j--) {
                         const drone = group[j];
-                        if (!drone || drone.alive === false || drone.team === b.team || !checkRectCollision(bRect, drone)) continue;
+                        if (!drone || drone.romanSummon === 'banner' || drone.alive === false || drone.team === b.team || !checkRectCollision(bRect, drone)) continue;
                         if (hitCombatDroneWithBullet(b, drone)) bullets.splice(i, 1);
                         break;
                     }
@@ -3490,13 +4224,9 @@ function updatePhysics() {
                 if (obj.type === 'woodenWall') {
                     // Flames deal 2x damage to wooden walls and set them on fire
                     obj.hp = (obj.hp ?? 300) - (f.damage || 22) * 2;
-                    obj.burning = true;
-                    obj.burnTimer = obj.burnTimer ? Math.max(obj.burnTimer, 300) : 300;
-                    obj.burnDps = 20; // 2x normal burn (10 * 2)
+                    igniteWoodenWall(obj, 300, 20, f.x, f.y);
                     if (obj.hp <= 0) {
-                        objects.splice(objects.indexOf(obj), 1);
-                        navNeedsRebuild = true;
-                        for (let k = 0; k < 8; k++) spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2, '#ff6600');
+                        destroyWoodenWall(obj, { hitX: f.x, hitY: f.y, vx: f.vx, vy: f.vy });
                     }
                 } else if (obj.type === 'box') {
                     objects.splice(objects.indexOf(obj), 1);
@@ -3601,10 +4331,16 @@ function updatePhysics() {
         }
     }
     
+    // Advance each barrage once before explosions can change the objects array.
+    for (const barrage of objects.filter(obj => obj.type === 'targetCircle' && obj.buratinoBarrage)) {
+        updateBuratinoBarrage(barrage);
+    }
+
     // Обновление target circles
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         if (obj.type === 'targetCircle') {
+            if (obj.buratinoBarrage) continue;
             obj.timer--;
             if (obj.timer <= 0) {
                 // use global applyDamage(x,y) helper for area damage
@@ -3612,7 +4348,7 @@ function updatePhysics() {
                 if (obj.planned && obj.planned.length) {
                     for (let p of obj.planned) {
                         if (!p.exploded) {
-                            spawnExplosion(p.x, p.y, 30);
+                            spawnExplosion(p.x, p.y, 30, 'blast');
                             applyDamage(p.x, p.y, 30, 300, obj.team);
                         }
                     }
@@ -3623,7 +4359,7 @@ function updatePhysics() {
                         const dist = obj.radius * 0.3;
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
-                        spawnExplosion(ex, ey, 30);
+                        spawnExplosion(ex, ey, 30, 'blast');
                         applyDamage(ex, ey, 30, 300, obj.team);
                     }
                     for (let j = 0; j < 9; j++) {
@@ -3631,13 +4367,13 @@ function updatePhysics() {
                         const dist = obj.radius * 0.7;
                         const ex = obj.x + Math.cos(ang) * dist;
                         const ey = obj.y + Math.sin(ang) * dist;
-                        spawnExplosion(ex, ey, 30);
+                        spawnExplosion(ex, ey, 30, 'blast');
                         applyDamage(ex, ey, 30, 300, obj.team);
                     }
                 }
                 objects.splice(i, 1);
             }
-        } else if (obj.type === 'explosion') {
+        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris') {
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
         } else if (obj.type === 'shockwave') {
@@ -3655,15 +4391,22 @@ function updatePhysics() {
             applyIceFieldFreeze(tank, obj);
             for (const ally of allies) applyIceFieldFreeze(ally, obj);
             for (const enemy of enemies) applyIceFieldFreeze(enemy, obj);
+            forEachHostileDrone(obj.team, unit => { if (unit.romanSummon === 'legionary') applyIceFieldFreeze(unit, obj); });
             obj.life--;
             if (obj.life <= 0) {
                 clearIceFieldTouchState(obj.fieldId);
                 objects.splice(i, 1);
             }
-        } else if (obj.type === 'gas') {
-            // gas cloud visual fades over time
+        } else if (obj.type === 'woodIceImpact') {
+            if (!updateWoodIceImpact(obj)) objects.splice(i, 1);
+        } else if (obj.type === 'romanRemnant') {
+            obj.life--; if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'woodDecay') {
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'gas') {
+            if (!updatePoisonCloud(obj)) { objects.splice(i, 1); continue; }
+            poisonWoodInGas(obj, terrainIndex);
         } else if (obj.type === 'sandstorm') {
             obj.life--;
             if (obj.ownerRef && obj.ownerRef.alive !== false) {
@@ -3693,6 +4436,21 @@ function updatePhysics() {
             }
             if (obj.life <= 0 || (obj.ownerRef && obj.ownerRef.alive === false)) objects.splice(i, 1);
         } else if (obj.type === 'visualRocket') {
+            if (obj.barrageVisual) {
+                if (obj.delay > 0) {
+                    obj.delay--;
+                } else {
+                    obj.x += obj.vx;
+                    obj.y += obj.vy;
+                    obj.life--;
+                    if (window.effectsEnabled !== false && particles.length < 230 && Math.random() < 0.25) {
+                        particles.push({ x: obj.x, y: obj.y, vx: -obj.vx * 0.05, vy: -obj.vy * 0.05,
+                            life: 8, size: 2, color: 'rgba(90, 85, 80, 0.5)' });
+                    }
+                    if (obj.life <= 0) objects.splice(i, 1);
+                }
+                continue;
+            }
             // visual rocket supports an initial delay (stay at tube), then fly, leave a trail, and explode on arrival
             if (obj.delay && obj.delay > 0) {
                 obj.delay--;
@@ -3711,7 +4469,7 @@ function updatePhysics() {
                     const distToTarget = Math.hypot(obj.x - obj.target.x, obj.y - obj.target.y);
                     if (distToTarget <= 10) {
                         // spawn explosion at planned spot and mark it
-                        spawnExplosion(obj.target.x, obj.target.y, 30);
+                        spawnExplosion(obj.target.x, obj.target.y, 30, 'blast');
                         obj.target.exploded = true;
                         applyDamage(obj.target.x, obj.target.y, 30, 300, obj.team);
                         exploded = true;
@@ -3723,7 +4481,7 @@ function updatePhysics() {
                         if (o.type === 'targetCircle') {
                             const dist = Math.hypot(obj.x - o.x, obj.y - o.y);
                             if (dist <= o.radius + 6) {
-                                spawnExplosion(obj.x, obj.y, 30);
+                                spawnExplosion(obj.x, obj.y, 30, 'blast');
                                 applyDamage(obj.x, obj.y, 30, 300, obj.team);
                                 exploded = true;
                                 break;
@@ -3917,9 +4675,10 @@ function updatePhysics() {
         for (let index = group.length - 1; index >= 0; index--) {
             const drone = group[index];
             applyPoisonTick(drone);
+            if (drone.hp <= 0 && drone.romanSummon) { retireRomanUnit(drone); continue; }
             if (drone.hp <= 0) {
                 group.splice(index, 1);
-                spawnExplosion(drone.x + drone.w / 2, drone.y + drone.h / 2, 50);
+                spawnExplosion(drone.x + drone.w / 2, drone.y + drone.h / 2, 36, 'impact');
             }
         }
     }

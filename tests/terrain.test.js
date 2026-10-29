@@ -167,6 +167,72 @@ test('mech footprints alternate sides, render and disappear after stopping', () 
     }
 });
 
+test('Myasnoy body leaves individual leg prints while the floating eye leaves none', () => {
+    const t = terrain('forest');
+    const unit = { x: 0, y: 0, w: 38, h: 38, alive: true };
+    t.updateMovement(unit, [], [], 'myasnoy');
+    for (let i = 0; i < 30; i++) { unit.x += 3; t.updateMovement(unit, [], [], 'myasnoy'); }
+    const prints = [], colors = [];
+    const ctx = new Proxy({}, { get: (target, name) => name === 'translate'
+        ? (x, y) => prints.push({ x, y }) : name === 'fill' ? () => colors.push(target.fillStyle) : () => {},
+        set: (target, name, value) => { target[name] = value; return true; } });
+    t.drawMovement(ctx, -100, -100, 300, 200, unit, []);
+    assert.ok(prints.some(p => p.y < 19) && prints.some(p => p.y > 19));
+    assert.ok(colors.includes('#602822'), 'leg prints have their own organic appearance');
+    t.resetBattle();
+    unit.myasnoyUltActive = true;
+    t.updateMovement(unit, [], [], 'myasnoy');
+    for (let i = 0; i < 30; i++) { unit.x += 3; t.updateMovement(unit, [], [], 'myasnoy'); }
+    assert.equal(t.movementStats().marks, 0, 'the floating eye does not leave leg prints');
+    for (let i = 0; i < 100; i++) t.updateMovement(unit, [], [], 'myasnoy');
+    assert.equal(t.movementStats().marks, 0);
+});
+
+test('Myasnoy steps on swamp water create ripples without solid footprints', () => {
+    const context = { window: { currentTerrain: 'swamp' } };
+    const start = source.indexOf('    function isSwampWater(');
+    const end = source.indexOf('    const materials =', start);
+    assert.ok(start >= 0 && end > start);
+    // Use an all-water scene to isolate foot contacts from the random pool layout.
+    vm.runInNewContext(source.slice(0, start) + '    function isSwampWater() { return true; }\n' + source.slice(end), context);
+    const t = context.window.GameTerrain;
+    const unit = { x: 0, y: 0, w: 38, h: 38, alive: true };
+    t.updateMovement(unit, [], [], 'myasnoy');
+    for (let i = 0; i < 30; i++) { unit.x += 3; t.updateMovement(unit, [], [], 'myasnoy'); }
+    const fills = [], strokes = [];
+    const ctx = new Proxy({}, { get: (target, name) => name === 'fill'
+        ? () => fills.push(target.fillStyle) : name === 'stroke' ? () => strokes.push(target.strokeStyle) : () => {},
+        set: (target, name, value) => { target[name] = value; return true; } });
+    t.drawMovement(ctx, -100, -100, 300, 200, unit, []);
+    assert.ok(strokes.includes('#94ab98'), 'foot contacts disturb the water');
+    assert.equal(fills.includes('#602822'), false, 'solid organic footprints cannot remain on water');
+    for (let i = 0; i < 30; i++) t.updateMovement(unit, [], [], 'myasnoy');
+    assert.equal(t.movementStats().marks, 0, 'water ripples fade quickly');
+});
+
+test('Kamikaze leaves fiery tracks during the ultimate, including its final dash tick', () => {
+    const t = terrain('forest');
+    const unit = { x: 0, y: 0, w: 38, h: 38, alive: true, kamikazeUltActive: true };
+    t.updateMovement(unit, [], [], 'kamikaze');
+    for (let i = 0; i < 5; i++) { unit.x += 9; t.updateMovement(unit, [], [], 'kamikaze'); }
+    const colors = [];
+    const ctx = new Proxy({}, { get: (target, name) => name === 'stroke'
+        ? () => colors.push(target.strokeStyle) : () => {},
+        set: (target, name, value) => { target[name] = value; return true; } });
+    t.drawMovement(ctx, -100, -100, 300, 200, unit, []);
+    assert.ok(colors.includes('#e65016') && colors.includes('#ffc45a'));
+    t.resetBattle();
+    unit.kamikazeUltActive = false;
+    unit._kamikazeTrailThisTick = true;
+    t.updateMovement(unit, [], [], 'kamikaze');
+    unit.x += 9; t.updateMovement(unit, [], [], 'kamikaze');
+    colors.length = 0;
+    t.drawMovement(ctx, -100, -100, 300, 200, unit, []);
+    assert.ok(colors.includes('#e65016'), 'the last dash step stays fiery after the ultimate ends');
+    for (let i = 0; i < 90; i++) t.updateMovement(unit, [], [], 'kamikaze');
+    assert.equal(t.movementStats().marks, 0);
+});
+
 test('chassis turns smoothly through the angle boundary and finishes turning when stopped', () => {
     for (const type of ['normal', 'mechDiy']) {
         const t = terrain();
@@ -363,6 +429,80 @@ test('box textures differ by biome and remain stable when pushed', () => {
     assert.equal(images[5], images[4]);
 });
 
+test('wooden wall textures match biome wood and reuse their cached base after damage', () => {
+    let created = 0;
+    const colors = [];
+    const drawing = new Proxy({}, { get: (_target, name) => {
+        if (name === 'createLinearGradient') return () => ({ addColorStop: (_stop, color) => colors.push(color) });
+        return () => {};
+    }, set: () => true });
+    const context = { window: {}, document: { createElement: () => {
+        created++;
+        return { getContext: () => drawing };
+    } } };
+    vm.runInNewContext(source, context);
+    const images = [];
+    const output = { drawImage: image => images.push(image) };
+    const wall = { type: 'woodenWall', x: 100, y: 150, w: 50, h: 120, hp: 300 };
+    const baseColors = [];
+    for (const type of ['forest', 'snow', 'desert', 'swamp', 'rain', 'lava']) {
+        const before = colors.length;
+        context.window.GameTerrain.drawWoodenWall(output, wall, type);
+        baseColors.push(colors[before]);
+    }
+    assert.equal(new Set(baseColors.slice(0, 4)).size, 4);
+    assert.equal(baseColors[4], baseColors[0], 'rain uses the same wood as forest');
+    assert.notEqual(baseColors[5], baseColors[0], 'lava uses charred wood');
+    assert.equal(created, 6);
+    wall.hp = 80;
+    wall.burning = true;
+    context.window.GameTerrain.drawWoodenWall(output, wall, 'lava');
+    assert.equal(created, 6, 'damage does not regenerate the base texture');
+    assert.equal(images[6], images[5]);
+});
+
+test('wood fire uses stable animated roots and cached sprites, retaining scorch after extinguishing', () => {
+    let surfaces = 0;
+    const spriteContext = new Proxy({}, { get: (_target, name) => name === 'createRadialGradient'
+        ? () => ({ addColorStop() {} }) : () => {} });
+    const context = { window: { effectsEnabled: true }, document: { createElement: () => {
+        surfaces++; return { getContext: () => spriteContext };
+    } } };
+    vm.runInNewContext(source, context);
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 150, h: 30, burning: true,
+        burnTimer: 180, woodBurnAge: 120, woodCharAmount: 0.3, woodBurnSpread: 1 };
+    const savedWall = JSON.stringify(wall);
+    const calls = [], stack = [];
+    const state = { globalAlpha: 1, globalCompositeOperation: 'source-over' };
+    const output = new Proxy(state, { get(target, name) {
+        if (name === 'save') return () => stack.push({ ...target });
+        if (name === 'restore') return () => Object.assign(target, stack.pop());
+        if (name in target) return target[name];
+        return (...args) => calls.push({ name, args });
+    } });
+    const draw = frame => {
+        calls.length = 0;
+        context.window.GameTerrain.drawWoodenWallBurn(output, wall, frame);
+        assert.equal(stack.length, 0);
+        assert.equal(state.globalAlpha, 1);
+        assert.equal(state.globalCompositeOperation, 'source-over');
+        return calls.filter(call => call.name === 'bezierCurveTo').map(call => call.args);
+    };
+    const first = draw(60);
+    assert.ok(first.length > 0);
+    assert.deepEqual(draw(60), first, 'paused simulation must not flicker');
+    assert.notDeepEqual(draw(90), first, 'flames must animate as simulation advances');
+    assert.equal(surfaces, 2, 'smoke and scorch sprites are created once');
+    assert.equal(JSON.stringify(wall), savedWall, 'drawing must not update burn duration or damage');
+    calls.length = 0;
+    context.window.GameTerrain.drawWoodenWallBurn(output, wall, 60,
+        [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }]);
+    assert.equal(calls.filter(call => call.name === 'bezierCurveTo').length, 0, 'flames cannot rise from chipped-away wood');
+    wall.burning = false;
+    assert.equal(draw(100).length, 0);
+    assert.ok(calls.some(call => call.name === 'drawImage'), 'scorch remains after extinguishing');
+});
+
 test('night sight stops at walls, boxes and barrels and reaches its radius in the open', () => {
     const t = terrain();
     const open = t.visibilityPolygon(0, 0, 320, []);
@@ -385,4 +525,32 @@ test('night sight stops at walls, boxes and barrels and reaches its radius in th
         }
     }
     assert.ok(t.visibilityPolygon(0, 0, 320, dense).length <= 384);
+});
+
+
+test('ignited snow-biome wood permanently loses its snow coating', () => {
+    let drawn = 0;
+    const drawing = new Proxy({}, { get: (_target, name) => {
+        if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => ({ addColorStop() {} });
+        return () => {};
+    }, set: () => true });
+    const context = { window: { currentTerrain: 'snow' }, document: {
+        createElement: () => ({ getContext: () => drawing })
+    } };
+    vm.runInNewContext(source, context);
+    const gameTerrain = context.window.GameTerrain;
+    const out = { drawImage() { drawn++; } };
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 90, h: 30, hp: 300 };
+    gameTerrain.drawWallCover(out, wall);
+    assert.equal(drawn, 1);
+    context.GameTerrain = gameTerrain;
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'physics.js'), 'utf8'), context);
+    context.igniteWoodenWall(wall);
+    assert.equal(wall.woodSnowMelted, true);
+    gameTerrain.drawWallCover(out, wall);
+    assert.equal(drawn, 1, 'fresh fire must remove the snow');
+    for (let i = 0; i < 300; i++) context.updateWoodenWallBurn(wall);
+    assert.equal(wall.burning, false);
+    gameTerrain.drawWallCover(out, wall);
+    assert.equal(drawn, 1, 'the snow must not return after the fire expires');
 });

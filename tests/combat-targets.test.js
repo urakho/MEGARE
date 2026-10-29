@@ -15,7 +15,7 @@ function makeBattle() {
         objects: [], bullets: [], flames: [], particles: [], illusions: [], soundWaves: [],
         worldWidth: 1200, worldHeight: 900, currentMode: 'single', gameState: 'playing',
         navNeedsRebuild: false, window: { effectsEnabled: false },
-        FIRE_COOLDOWN: 20, GameTerrain: { reloadFactor: () => 1 }
+        FIRE_COOLDOWN: 20, GameTerrain: { reloadFactor: () => 1, speedFactor: () => 1 }
     });
     vm.runInContext(physics, context);
     context.spawnParticle = () => {};
@@ -31,6 +31,419 @@ function bullet(team, type = 'normal', damage = 100) {
     return { x: 110, y: 110, w: 8, h: 8, vx: 0, vy: 0,
         life: 20, team, owner: team === 1 ? 'enemy' : 'player', type, damage };
 }
+
+test('Kamikaze charges damage a direct target and nearby hostiles once, sparing friends', () => {
+    for (const owner of ['player', 'ally', 'enemy']) {
+        const battle = makeBattle();
+        const team = owner === 'enemy' ? 1 : 0;
+        Object.assign(battle.tank, { x: 800, y: 800 });
+        const direct = { x: 100, y: 100, w: 20, h: 20, hp: 50, team: 1 - team, alive: true };
+        const nearby = { ...direct, x: 130, hp: 300 };
+        const outside = { ...nearby, x: 200 };
+        const friend = { ...direct, hp: 300, team };
+        battle.enemies.push(direct, nearby, outside, friend);
+        const drone = { ...nearby, y: 115 };
+        battle.enemyDrones.push(drone);
+        const charge = bullet(team, 'kamikazeBullet');
+        charge.owner = owner;
+        battle.bullets.push(charge);
+        battle.runBulletTick();
+        assert.equal(battle.enemies.includes(direct), false, owner);
+        assert.ok(nearby.hp < 300 && nearby.hp > 200, owner);
+        assert.ok(drone.hp < 300, owner);
+        assert.equal(outside.hp, 300, owner);
+        assert.equal(friend.hp, 300, owner);
+        assert.equal(battle.bullets.length, 0, owner);
+        const hp = nearby.hp;
+        battle.explodeKamikazeProjectile(charge);
+        battle.runBulletTick();
+        assert.equal(nearby.hp, hp, owner);
+    }
+});
+
+test('Kamikaze charges explode at cover and expiry, and a mirror can reflect them', () => {
+    const battle = makeBattle();
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 30, h: 30, hp: 300 };
+    battle.objects.push(wall);
+    battle.bullets.push(bullet(0, 'kamikazeBullet'));
+    battle.runBulletTick();
+    assert.ok(wall.hp < 300);
+    assert.equal(battle.bullets.length, 0);
+    battle.objects.length = 0;
+    const mirror = { x: 100, y: 100, w: 20, h: 20, hp: 300, team: 1, alive: true,
+        tankType: 'mirror', mirrorShieldActive: true };
+    battle.enemies.push(mirror);
+    const charge = { ...bullet(0, 'kamikazeBullet'), vx: 1 };
+    battle.bullets.push(charge);
+    battle.runBulletTick();
+    assert.equal(charge.team, 1);
+    assert.equal(charge.vx, -1.5);
+    assert.equal(charge.detonated, undefined);
+    assert.equal(mirror.hp, 300);
+    battle.enemies.length = 0;
+    charge.life = 1;
+    battle.runBulletTick();
+    assert.equal(charge.detonated, true);
+    assert.equal(battle.bullets.length, 0);
+});
+
+test('Kamikaze dash steers gradually, breaks cover and ends in one area blast', () => {
+    const battle = makeBattle();
+    battle.tankType = 'kamikaze';
+    Object.assign(battle.tank, { x: 100, y: 100, turretAngle: 0 });
+    const direct = { x: 150, y: 100, w: 38, h: 38, hp: 400, team: 1, alive: true };
+    const nearby = { ...direct, x: 210 };
+    const ally = { ...direct, team: 0 };
+    battle.enemies.push(direct, nearby);
+    battle.allies.push(ally);
+    battle.objects.push({ type: 'wall', x: 138, y: 100, w: 6, h: 38 });
+    assert.equal(battle.startKamikazeDash(battle.tank), true);
+    assert.equal(battle.dealDamageToEntity(battle.tank, 100), 0);
+    battle.updateKamikazeDash(battle.tank, Math.PI / 2);
+    assert.ok(battle.tank.kamikazeDashAngle > 0 && battle.tank.kamikazeDashAngle <= 0.008);
+    for (let i = 0; i < 10 && battle.tank.kamikazeUltActive; i++) battle.updateKamikazeDash(battle.tank);
+    assert.equal(battle.tank.kamikazeUltActive, false);
+    assert.equal(battle.tank.kamikazeInvincible, false);
+    assert.equal(battle.tank.kamikazeRecoveryTimer, 45);
+    assert.equal(battle.objects.some(obj => obj.type === 'wall'), false);
+    assert.ok(direct.hp < nearby.hp && nearby.hp < 400);
+    assert.equal(ally.hp, 400);
+    assert.equal(battle.tank.hp, 300);
+    const hp = direct.hp;
+    battle.finishKamikazeDash(battle.tank);
+    assert.equal(direct.hp, hp);
+    assert.equal(battle.dealDamageToEntity(battle.tank, 10), 10);
+    battle.shoot();
+    assert.equal(battle.bullets.length, 0);
+    battle.tank.kamikazeRecoveryTimer = 0;
+    battle.shoot();
+    assert.equal(battle.bullets[0].type, 'kamikazeBullet');
+});
+
+test('holding Kamikaze steering stays within twenty degrees of the launch direction', () => {
+    for (const angle of [0, Math.PI / 2, Math.PI - 0.03, -Math.PI + 0.03]) {
+        for (const sign of [-1, 1]) {
+            const battle = makeBattle();
+            battle.worldWidth = battle.worldHeight = 5000;
+            Object.assign(battle.tank, { x: 2500, y: 2500, turretAngle: angle });
+            battle.startKamikazeDash(battle.tank);
+            for (let i = 0; i < 80; i++) {
+                const previous = battle.tank.kamikazeDashAngle;
+                battle.updateKamikazeDash(battle.tank, angle + sign * Math.PI / 2);
+                const deviation = Math.atan2(Math.sin(battle.tank.kamikazeDashAngle - angle), Math.cos(battle.tank.kamikazeDashAngle - angle));
+                assert.ok(Math.abs(deviation) <= Math.PI / 9 + 1e-9);
+                assert.ok(Math.abs(battle.tank.kamikazeDashAngle - previous) <= 0.008 + 1e-9);
+            }
+            assert.ok(Math.abs(battle.tank.kamikazeDashAngle - angle - sign * Math.PI / 9) < 1e-9);
+        }
+    }
+});
+
+test('Kamikaze dash ends at the map edge, times out and is interrupted by paralysis', () => {
+    for (const ending of ['edge', 'timeout', 'paralysis']) {
+        const battle = makeBattle();
+        battle.tankType = 'kamikaze';
+        Object.assign(battle.tank, { x: ending === 'edge' ? 1160 : 100, y: 100, turretAngle: 0 });
+        let blasts = 0;
+        battle.spawnExplosion = () => { blasts++; };
+        battle.startKamikazeDash(battle.tank);
+        if (ending === 'timeout') battle.tank.kamikazeDashTimer = 1;
+        if (ending === 'paralysis') battle.tank.paralyzed = true;
+        battle.updateKamikazeDash(battle.tank);
+        assert.equal(battle.tank.kamikazeUltActive, false, ending);
+        assert.equal(battle.tank.kamikazeInvincible, false, ending);
+        assert.equal(blasts, ending === 'paralysis' ? 0 : 1, ending);
+        assert.ok(battle.tank.x <= 1162, ending);
+        assert.equal(battle.startKamikazeDash(battle.tank), false, ending);
+    }
+});
+
+test('allied and hostile Kamikaze bots use the shared weapon, dash and recovery', () => {
+    for (const owner of ['ally', 'enemy']) {
+        const battle = makeBattle();
+        const start = bot.indexOf('function tickBotKamikaze(');
+        const end = bot.indexOf('function updateEnemyAI()', start);
+        vm.runInContext(bot.slice(start, end), battle);
+        battle.Math = Object.assign(Object.create(Math), { random: () => 0 });
+        battle.filterTargetsByVision = (_unit, targets) => targets;
+        let retreatSpeed = 0;
+        battle.moveParalyzedUnit = (_unit, _targets, speed) => { retreatSpeed = speed; };
+        const unit = { x: 100, y: 100, w: 38, h: 38, hp: 300, speed: 3, alive: true,
+            turretAngle: 0, tankType: 'kamikaze', team: owner === 'enemy' ? 1 : 0 };
+        const target = { ...unit, x: 250, team: 1 - unit.team, tankType: 'normal' };
+        const projectile = battle.createBotBasicProjectile(unit, owner);
+        assert.equal(projectile.type, 'kamikazeBullet');
+        assert.equal(projectile.damage, 100);
+        assert.equal(projectile.life, 65);
+        assert.equal(battle.tryBotKamikazeDash(unit, target), true);
+        assert.equal(battle.dealDamageToEntity(unit, 100), 0);
+        battle.tickBotKamikaze(unit);
+        assert.equal(battle.handleBotKamikazeMovement(unit, [target]), true);
+        assert.equal(unit.x, 109);
+        assert.equal(unit.kamikazeUltCooldown, 599);
+        unit.paralyzed = true;
+        battle.tickBotKamikaze(unit);
+        assert.equal(unit.kamikazeUltActive, false);
+        assert.equal(unit.kamikazeInvincible, false);
+        unit.paralyzed = false;
+        assert.equal(battle.handleBotKamikazeMovement(unit, [target]), true);
+        assert.equal(retreatSpeed, 0.65);
+        unit.kamikazeRecoveryTimer = 0;
+        assert.equal(battle.handleBotKamikazeMovement(unit, [target]), false);
+    }
+});
+
+test('restarting battle clears Kamikaze dash, protection and recovery', () => {
+    const battle = makeBattle();
+    const start = main.indexOf('function resetTankMatchUltState(unit)');
+    const end = main.indexOf('// Apply saved tank type properties', start);
+    vm.runInContext(main.slice(start, end), battle);
+    battle.startKamikazeDash(battle.tank);
+    battle.finishKamikazeDash(battle.tank, false);
+    battle.resetTankBattleEffects(battle.tank);
+    battle.resetTankMatchUltState(battle.tank);
+    assert.equal(battle.tank.kamikazeUltActive, false);
+    assert.equal(battle.tank.kamikazeInvincible, false);
+    assert.equal(battle.tank.kamikazeRecoveryTimer, 0);
+    assert.equal(battle.tank.kamikazeUltCooldown, 0);
+    assert.equal(battle.tank._kamikazeTrailThisTick, false);
+});
+
+test('wooden walls burn for five seconds normally and twenty percent less in rain', () => {
+    for (const biome of ['forest', 'snow', 'desert', 'swamp', 'night', 'lava', 'rain']) {
+        const battle = makeBattle();
+        battle.GameTerrain.current = () => biome;
+        const wall = { type: 'woodenWall', x: 100, y: 100, w: 100, h: 30, hp: 1000 };
+        const ticks = biome === 'rain' ? 240 : 300;
+        battle.igniteWoodenWall(wall, 300, 20, 110, 115);
+        assert.equal(wall.burnTimer, ticks, biome);
+        assert.equal(wall.woodBurnOrigin.x, 0.1);
+        for (let i = 0; i < ticks - 1; i++) battle.updateWoodenWallBurn(wall);
+        assert.equal(wall.burning, true, biome);
+        battle.updateWoodenWallBurn(wall);
+        assert.equal(wall.burning, false, biome);
+        assert.equal(wall.burnTimer, 0, biome);
+        assert.ok(Math.abs(wall.hp - (1000 - ticks * 20 / 60)) < 1e-8, biome);
+        assert.ok(wall.woodCharAmount > 0.5, biome);
+        const hp = wall.hp;
+        battle.updateWoodenWallBurn(wall);
+        assert.equal(wall.hp, hp, biome);
+    }
+});
+
+test('pyro shots, flame streams and helper ignition all respect rainy wood burn duration', () => {
+    for (const source of ['pyro', 'flame', 'helper']) {
+        const battle = makeBattle();
+        battle.GameTerrain.current = () => 'rain';
+        const wall = { type: 'woodenWall', x: 100, y: 100, w: 100, h: 30, hp: 1000 };
+        battle.objects.push(wall);
+        if (source === 'pyro') {
+            battle.bullets.push(bullet(0, 'pyroBullet', 70));
+            battle.runBulletTick();
+        } else if (source === 'flame') {
+            const start = physics.indexOf('    for (let i = flames.length - 1; i >= 0; i--)');
+            const end = physics.indexOf('    // Advance each barrage once', start);
+            assert.ok(start >= 0 && end > start);
+            vm.runInContext(`function runFlameTick() { ${physics.slice(start, end)} }`, battle);
+            battle.flames.push({ x: 110, y: 110, vx: 0, vy: 0, life: 10, damage: 0.75, team: 0 });
+            battle.runFlameTick();
+        } else {
+            battle.damageWoodenWall(wall, 5, { ignite: true });
+        }
+        assert.equal(wall.burnTimer, 240, source);
+        for (let i = 0; i < 30; i++) battle.updateWoodenWallBurn(wall);
+        battle.igniteWoodenWall(wall);
+        assert.equal(wall.burnTimer, 240, source);
+        assert.equal(wall.woodBurnAge, 30, source);
+        assert.equal(wall.burnDps, 20, source);
+    }
+});
+
+test('shield mech damages stone once per shot and breaks it on the sixth hit for every team', () => {
+    for (const owner of ['player', 'ally', 'enemy']) {
+        const battle = makeBattle();
+        battle.window.effectsEnabled = true;
+        const wall = { type: 'wall', x: 100, y: 100, w: 50, h: 50 };
+        battle.objects.push(wall);
+        for (let hit = 1; hit <= 6; hit++) {
+            const shot = bullet(owner === 'enemy' ? 1 : 0, 'mechShield', 120);
+            shot.owner = owner;
+            battle.bullets.push(shot);
+            battle.runBulletTick();
+            assert.equal(wall.wallDamageCount, hit, owner);
+            assert.equal(wall.wallHitPoints.length, hit, owner);
+            assert.equal(battle.objects.includes(wall), hit < 6, owner);
+            assert.equal(battle.bullets.length, 0, owner);
+            battle.runBulletTick();
+            assert.equal(wall.wallDamageCount, hit, 'the same shot cannot count again');
+        }
+        assert.equal(battle.navNeedsRebuild, true);
+        const rubble = battle.objects.filter(obj => obj.type === 'terrainDebris');
+        assert.equal(rubble.length, 6);
+        assert.ok(rubble.every(obj => obj.material === 'stone'));
+        assert.ok(rubble[5].fragments.length > rubble[0].fragments.length);
+    }
+});
+
+test('wood breaks into splinters from a shield shot, standard damage and fire without duplicate debris', () => {
+    for (const attack of ['shield', 'normal', 'fire']) {
+        const battle = makeBattle();
+        battle.window.effectsEnabled = true;
+        const wall = { type: 'woodenWall', x: 100, y: 100, w: 80, h: 30, hp: 300 };
+        battle.objects.push(wall);
+        if (attack === 'shield') {
+            battle.bullets.push(bullet(0, 'mechShield', 1));
+            battle.runBulletTick();
+        } else if (attack === 'normal') {
+            battle.bullets.push(bullet(0, 'normal', 300));
+            battle.runBulletTick();
+        } else {
+            wall.hp = 0;
+            wall.burning = true;
+            battle.destroyWoodenWall(wall);
+        }
+        assert.equal(battle.objects.includes(wall), false, attack);
+        const debris = battle.objects.find(obj => obj.type === 'terrainDebris');
+        assert.ok(debris, attack);
+        assert.equal(debris.material, 'wood');
+        assert.equal(debris.charred, attack === 'fire');
+        assert.ok(debris.fragments.length <= 16);
+        assert.equal(battle.isBlockingTerrainObject(debris), false);
+        const count = battle.objects.length;
+        assert.equal(battle.destroyWoodenWall(wall), false);
+        assert.equal(battle.objects.length, count);
+    }
+});
+
+test('wall debris expires through the shared physics cleanup without remaining colliders', () => {
+    const battle = makeBattle();
+    battle.window.effectsEnabled = true;
+    battle.spawnTerrainDebris({ type: 'woodenWall', x: 0, y: 0, w: 50, h: 50 }, { destroyed: true });
+    const start = physics.indexOf("        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris') {");
+    const end = physics.indexOf("        } else if (obj.type === 'shockwave') {", start);
+    assert.ok(start >= 0 && end > start);
+    vm.runInContext(`function tickDebris() { for (let i = objects.length - 1; i >= 0; i--) { const obj = objects[i]; if (false) { ${physics.slice(start, end)} } } }`, battle);
+    for (let i = 0; i < 44; i++) battle.tickDebris();
+    assert.equal(battle.objects.length, 0);
+});
+
+test('wood chip effects are throttled while fractional projectile damage stays exact', () => {
+    const battle = makeBattle();
+    battle.window.effectsEnabled = true;
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 80, h: 30, hp: 300 };
+    battle.objects.push(wall);
+    for (let frame = 0; frame < 12; frame++) {
+        battle.window.frameCount = frame;
+        battle.bullets.push(bullet(0, 'normal', 0.5));
+        battle.runBulletTick();
+    }
+    assert.equal(wall.hp, 294);
+    assert.equal(battle.objects.filter(obj => obj.type === 'terrainDebris').length, 2);
+});
+
+test('Buratino fires a mobile barrage that damages enemies once after the warning', () => {
+    const battle = makeBattle();
+    Object.assign(battle.tank, { x: 100, y: 100, turretAngle: 0, fireCooldown: 0, artilleryMode: false });
+    battle.tankType = 'buratino';
+    const enemy = { x: 320, y: 100, w: 38, h: 38, hp: 2000, team: 1, alive: true };
+    const ally = { ...enemy, team: 0 };
+    battle.enemies.push(enemy);
+    battle.allies.push(ally);
+    battle.shoot();
+    const barrage = battle.objects.find(obj => obj.buratinoBarrage);
+    assert.ok(barrage);
+    assert.equal(battle.tank.artilleryMode, false);
+    assert.equal(battle.tank.fireCooldown, battle.getTankShotCooldown('buratino'));
+    assert.equal(battle.objects.filter(obj => obj.barrageVisual).length, 13);
+    assert.equal(barrage.warningTicks, 100);
+    assert.equal(barrage.impacts[0].length, 13);
+    assert.equal(barrage.impacts[0].filter(point => Math.hypot(point.x - barrage.x, point.y - barrage.y) > barrage.radius * 0.7).length, 8);
+    for (let i = 0; i < 99; i++) battle.updateBuratinoBarrage(barrage);
+    assert.equal(enemy.hp, 2000);
+    battle.updateBuratinoBarrage(barrage);
+    assert.equal(enemy.hp, 1700);
+    assert.equal(ally.hp, 2000);
+    for (let i = 0; i < 15; i++) battle.updateBuratinoBarrage(barrage);
+    assert.equal(enemy.hp, 1700);
+    assert.equal(battle.objects.includes(barrage), false);
+});
+
+test('Buratino ultimate damages hostile units in three separate waves', () => {
+    const battle = makeBattle();
+    const attacker = { x: 100, y: 100, w: 38, h: 38, turretAngle: 0, team: 1, alive: true };
+    Object.assign(battle.tank, { x: 400, y: 100, hp: 2000 });
+    const friendly = { x: 400, y: 100, w: 38, h: 38, hp: 2000, team: 1, alive: true };
+    battle.enemies.push(friendly);
+    const barrage = battle.createBuratinoBarrage(attacker, true);
+    assert.equal(battle.objects.filter(obj => obj.barrageVisual).length, 39);
+    const rockets = battle.objects.filter(obj => obj.barrageVisual);
+    for (let wave = 0; wave < 3; wave++) {
+        for (const rocket of rockets.slice(wave * 13, (wave + 1) * 13)) {
+            assert.equal(rocket.life + rocket.delay, 100 * (wave + 1));
+        }
+    }
+    for (let wave = 0; wave < 3; wave++) {
+        for (let i = 0; i < 99; i++) battle.updateBuratinoBarrage(barrage);
+        assert.equal(battle.tank.hp, 2000 - wave * 300);
+        battle.updateBuratinoBarrage(barrage);
+        assert.equal(battle.tank.hp, 2000 - (wave + 1) * 300);
+        assert.equal(friendly.hp, 2000);
+    }
+    for (let i = 0; i < 15; i++) battle.updateBuratinoBarrage(barrage);
+    assert.equal(battle.objects.includes(barrage), false);
+});
+
+test('Buratino barrage resolves once when explosions remove nearby cover', () => {
+    const battle = makeBattle();
+    Object.assign(battle.tank, { x: 100, y: 100, turretAngle: 0, fireCooldown: 0 });
+    battle.tankType = 'buratino';
+    const enemy = { x: 320, y: 100, w: 38, h: 38, hp: 2000, team: 1, alive: true };
+    battle.enemies.push(enemy);
+    battle.objects.push({ type: 'box', x: 320, y: 100, w: 20, h: 20 });
+    const start = physics.indexOf('    // Advance each barrage once before explosions can change the objects array.');
+    const end = physics.indexOf('    for (const unit of [tank, ...allies, ...enemies])', start);
+    assert.ok(start >= 0 && end > start);
+    vm.runInContext(`function runBarrageObjects() { ${physics.slice(start, end)} }`, battle);
+    battle.shoot();
+    for (let i = 0; i < 115; i++) battle.runBarrageObjects();
+    assert.equal(enemy.hp, 1700);
+    assert.equal(battle.objects.some(obj => obj.type === 'box'), false);
+    assert.equal(battle.objects.some(obj => obj.buratinoBarrage || obj.barrageVisual), false);
+});
+
+test('ice projectiles slow hostile player, ally, and enemy tanks without freezing them', () => {
+    for (const targetKind of ['player', 'ally', 'enemy']) {
+        const battle = makeBattle();
+        const target = targetKind === 'player'
+            ? battle.tank
+            : { x: 100, y: 100, w: 38, h: 38, hp: 300, team: targetKind === 'ally' ? 0 : 1, alive: true, tankType: 'normal' };
+        target.x = 100;
+        target.y = 100;
+        if (targetKind === 'ally') battle.allies.push(target);
+        if (targetKind === 'enemy') battle.enemies.push(target);
+        battle.bullets.push(bullet(targetKind === 'enemy' ? 0 : 1, 'ice', 20));
+        battle.runBulletTick();
+        assert.equal(target.iceSlowed, true, targetKind);
+        assert.equal(target.iceSlowedTime, 240, targetKind);
+        assert.equal(target.paralyzed, undefined, targetKind);
+        assert.equal(target.frozenEffect, undefined, targetKind);
+    }
+});
+
+test('ice ultimate immediately freezes targets in range before they can escape', () => {
+    const battle = makeBattle();
+    const enemy = { x: 100, y: 100, w: 38, h: 38, hp: 300, team: 1, alive: true, tankType: 'normal' };
+    const friendly = { ...enemy, team: 0 };
+    const iceTank = { ...enemy, tankType: 'ice' };
+    const distant = { ...enemy, x: 600, y: 600 };
+    battle.enemies.push(enemy, friendly, iceTank, distant);
+    battle.createIceNova(120, 120, 80, 0);
+    assert.equal(enemy.paralyzedTime, 240);
+    assert.equal(enemy.frozenEffect, 240);
+    assert.equal(friendly.paralyzed, undefined);
+    assert.equal(iceTank.paralyzed, undefined);
+    assert.equal(distant.paralyzed, undefined);
+});
 
 test('burovoy drill deals 40 damage per second and paralyzes only hostile tanks it touches', () => {
     const battle = makeBattle();
@@ -247,7 +660,10 @@ test('poison projectile creates its damaging cloud when it strikes a wooden wall
     battle.objects.push(wall);
     battle.bullets.push({ ...bullet(0, 'toxic', 0), explodeTimer: 45, spawned: 0 });
     battle.runBulletTick();
-    assert.equal(wall.hp, 250);
+    assert.equal(wall.hp, 300);
+    assert.equal(wall.woodPoisonTimer, 180);
+    for (let tick = 0; tick < 60; tick++) battle.updateWoodenWallRot(wall);
+    assert.ok(Math.abs(wall.hp - 256) < 1e-8);
     assert.equal(battle.bullets.length, 0);
     assert.ok(battle.objects.some(obj => obj.type === 'gas'));
 });
@@ -315,7 +731,9 @@ test('explosions and gas reach hostile drones and destructible cover', () => {
     const gasWall = { x: 100, y: 100, w: 30, h: 30, type: 'woodenWall', hp: 300 };
     battle.objects.push(gasWall);
     battle.explodeGas(bullet(0, 'toxic', 50));
-    assert.equal(gasWall.hp, 250);
+    assert.equal(gasWall.hp, 300);
+    for (let tick = 0; tick < 60; tick++) battle.updateWoodenWallRot(gasWall);
+    assert.ok(Math.abs(gasWall.hp - 256) < 1e-8);
 });
 
 test('player and enemy beams damage hostile drones and break cover', () => {
@@ -413,5 +831,304 @@ test('mines from any team can damage drones, boxes and wooden walls', () => {
         assert.equal(battle.objects.includes(box), false);
         assert.ok(wall.hp < 300);
         assert.ok(drone.hp < 150);
+    }
+});
+
+
+test('gas rots wooden cover over time without burst damage, stacking or mechanical splinters', () => {
+    const battle = makeBattle();
+    battle.window.effectsEnabled = true;
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 80, h: 40, hp: 300, maxHp: 300 };
+    const farWall = { type: 'woodenWall', x: 900, y: 900, w: 40, h: 40, hp: 300 };
+    battle.objects.push(wall, farWall);
+    battle.explodeGas({ x: 105, y: 115, owner: 'player', team: 0 });
+    assert.equal(wall.hp, 300);
+    const cloud = battle.objects.find(obj => obj.type === 'gas');
+    for (let tick = 0; tick < 60; tick++) {
+        battle.poisonWoodInGas(cloud);
+        battle.poisonWoodInGas(cloud);
+        battle.updateWoodenWallRot(wall);
+    }
+    assert.ok(Math.abs(wall.hp - 256) < 1e-8, 'overlapping poison must tick once, at 44 HP per second');
+    assert.equal(farWall.woodPoisonTimer, undefined);
+    assert.ok(wall.woodRotAmount > 0.14);
+    assert.equal(wall.woodHitPoints, undefined);
+    assert.equal(battle.objects.some(obj => obj.type === 'terrainDebris'), false);
+    for (let tick = 0; tick < 180; tick++) battle.updateWoodenWallRot(wall);
+    const hpAfterPoison = wall.hp;
+    battle.updateWoodenWallRot(wall);
+    assert.equal(wall.hp, hpAfterPoison, 'decay stops when the remaining poison expires');
+    assert.ok(wall.woodRotAmount > 0, 'the rotten surface persists after damage stops');
+    while (wall.hp > 0) {
+        battle.poisonWoodenWall(wall, wall.x, wall.y + 15);
+        battle.updateWoodenWallRot(wall);
+    }
+    assert.equal(battle.objects.includes(wall), false);
+    const decay = battle.objects.find(obj => obj.type === 'woodDecay');
+    assert.ok(decay);
+    assert.equal(battle.isBlockingTerrainObject(decay), false);
+    assert.equal(battle.objects.some(obj => obj.type === 'terrainDebris'), false);
+});
+
+test('ice on wood grows and cracks before revealing a chip, then expires without generic splinters', () => {
+    const battle = makeBattle();
+    battle.window.effectsEnabled = true;
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 80, h: 40, hp: 300 };
+    battle.objects.push(wall);
+    battle.bullets.push({ ...bullet(0, 'ice', 100), x: 102, y: 120, vx: 2 });
+    battle.runBulletTick();
+    assert.equal(wall.hp, 200);
+    const impact = battle.objects.find(obj => obj.type === 'woodIceImpact');
+    assert.ok(impact);
+    assert.equal(impact.mark.active, false);
+    assert.equal(battle.objects.some(obj => obj.type === 'terrainDebris'), false);
+    for (let i = 0; i < 25; i++) assert.equal(battle.updateWoodIceImpact(impact), true);
+    assert.equal(impact.mark.active, false);
+    battle.updateWoodIceImpact(impact);
+    assert.equal(impact.mark.active, true);
+    for (let i = 26; i < 58; i++) battle.updateWoodIceImpact(impact);
+    assert.equal(impact.life, 0);
+    assert.equal(wall.hp, 200, 'ice animation must not deal damage again');
+});
+
+test('historical projectiles lodge at the entry surface with original dimensions and stop flying', () => {
+    const dimensions = { romanBlade: [14, 14], egyptArrow: [10, 4], spartanSpear: [5, 5] };
+    for (const [type, [w, h]] of Object.entries(dimensions)) {
+        for (const targetKind of ['wood', 'player', 'ally', 'enemy']) {
+            const battle = makeBattle();
+            const target = { x: 100, y: 100, w: 50, h: 40, hp: 300, alive: true, team: targetKind === 'enemy' ? 1 : 0, tankType: 'normal' };
+            if (targetKind === 'wood') { target.type = 'woodenWall'; battle.objects.push(target); }
+            else if (targetKind === 'player') battle.tank = target;
+            else battle[targetKind === 'ally' ? 'allies' : 'enemies'].push(target);
+            const projectile = { ...bullet(targetKind === 'player' || targetKind === 'ally' ? 1 : 0, type, 80),
+                x: 99, y: 120, vx: 3, vy: 0, w, h, bounces: 0, maxBounces: 1 };
+            battle.bullets.push(projectile);
+            battle.runBulletTick();
+            assert.equal(target.hp, 220, type + ' vs ' + targetKind);
+            assert.equal(battle.bullets.length, 0, 'an embedded weapon must stop flying');
+            assert.equal(target.embeddedProjectiles.length, 1);
+            const mark = target.embeddedProjectiles[0];
+            assert.equal(mark.w, w); assert.equal(mark.h, h); assert.equal(mark.type, type);
+            assert.equal(mark.angle, 0);
+            assert.ok(mark.x <= -target.w / 2 + 10, 'entry should be at the outer surface, including chipped edges');
+            assert.equal(battle.addEmbeddedProjectile(target, projectile), false, 'the same projectile cannot leave duplicate copies');
+            for (let tick = 0; tick < 59; tick++) battle.updateEmbeddedProjectiles(target);
+            assert.equal(target.embeddedProjectiles.length, 1);
+            battle.updateEmbeddedProjectiles(target);
+            assert.equal(target.embeddedProjectiles.length, targetKind === 'wood' ? 1 : 0);
+            if (targetKind === 'wood') {
+                for (let tick = 0; tick < 3600; tick++) battle.updateEmbeddedProjectiles(target);
+                assert.equal(target.embeddedProjectiles.length, 1, 'wood retains its lodged weapon for the wall lifetime');
+                battle.destroyWoodenWall(target);
+                assert.equal(target.embeddedProjectiles.length, 0);
+            }
+        }
+    }
+});
+
+test('projectile entry points follow the incoming direction on every side', () => {
+    const battle = makeBattle();
+    const target = { x: 100, y: 100, w: 50, h: 40 };
+    for (const [x, y, vx, vy, expectedX, expectedY] of [
+        [102, 120, 4, 0, -25, 0], [148, 120, -4, 0, 25, 0],
+        [125, 102, 0, 4, 0, -20], [125, 138, 0, -4, 0, 20]
+    ]) {
+        const entry = battle.projectileSurfaceEntry(target, { x, y, vx, vy });
+        assert.ok(Math.abs(entry.x - expectedX) < 1e-8);
+        assert.ok(Math.abs(entry.y - expectedY) < 1e-8);
+    }
+});
+
+
+test('wood retains every lodged weapon even when more than eight have accumulated', () => {
+    const battle = makeBattle();
+    const wall = { type: 'woodenWall', x: 100, y: 100, w: 80, h: 40, hp: 10000 };
+    battle.objects.push(wall);
+    for (let i = 0; i < 12; i++) {
+        battle.addEmbeddedProjectile(wall, { type: 'egyptArrow', x: 102, y: 102 + i * 3, vx: 4, vy: 0, w: 10, h: 4 });
+    }
+    for (let tick = 0; tick < 600; tick++) battle.updateEmbeddedProjectiles(wall);
+    assert.equal(wall.embeddedProjectiles.length, 12);
+    battle.destroyWoodenWall(wall);
+    assert.equal(wall.embeddedProjectiles.length, 0);
+});
+
+
+test('toxic wave launches a forward fan once per battle and becomes available after restart', () => {
+    const battle = makeBattle();
+    battle.tankType = 'toxic';
+    battle.tank.turretAngle = Math.PI / 2;
+    battle.keys = { KeyE: true };
+    const start = main.indexOf('        // Toxic wave replaces');
+    const end = main.indexOf('        // Plasma blast ability', start);
+    vm.runInContext(`function pressToxicUlt() { ${main.slice(start, end)} }`, battle);
+    battle.pressToxicUlt();
+    assert.equal(battle.keys.KeyE, false);
+    assert.equal(battle.tank.megaGasUsed, true);
+    assert.equal(battle.bullets.length, 5);
+    const angles = battle.bullets.map(shot => Math.atan2(shot.vy, shot.vx));
+    assert.ok(angles.every(angle => angle > 0 && angle < Math.PI), 'every node must travel in front of the turret');
+    assert.ok(Math.abs(angles[0] + angles[4] - Math.PI) < 1e-9);
+    assert.ok(battle.bullets.every(shot => shot.toxicWave && shot.type === 'toxic' && shot.team === 0));
+    battle.keys.KeyE = true;
+    battle.pressToxicUlt();
+    assert.equal(battle.bullets.length, 5);
+    const resetStart = main.indexOf('function resetTankMatchUltState(unit)');
+    const resetEnd = main.indexOf('// Apply saved tank type properties', resetStart);
+    vm.runInContext(main.slice(resetStart, resetEnd), battle);
+    battle.resetTankMatchUltState(battle.tank);
+    assert.equal(battle.activateToxicWave(battle.tank), true);
+    assert.equal(battle.bullets.length, 10);
+    for (const state of [{ paralyzed: true }, { frozenEffect: 10 }, { alive: false }, { hp: 0 }]) {
+        const unit = { x: 0, y: 0, w: 38, h: 38, hp: 300, alive: true, tankType: 'toxic', ...state };
+        assert.equal(battle.activateToxicWave(unit, 'enemy'), false);
+        assert.ok(!unit.megaGasUsed);
+    }
+    assert.equal(battle.activateToxicWave({ ...battle.tank, megaGasUsed: false, tankType: 'roman' }), false);
+});
+
+test('enemy and allied toxic AI trigger the shared wave with the correct team', () => {
+    for (const owner of ['enemy', 'ally']) {
+        const battle = makeBattle();
+        battle.Math = Object.assign(Object.create(Math), { random: () => 0 });
+        const unit = { x: 100, y: 100, w: 38, h: 38, hp: 300, alive: true, tankType: 'toxic', team: owner === 'enemy' ? 1 : 0, turretAngle: 0 };
+        let start, end;
+        if (owner === 'enemy') {
+            battle.enemy = unit; battle.distToNearest = 220;
+            start = bot.indexOf('            // Toxic uses the same wave');
+            end = bot.indexOf('            // Plasma: fire', start);
+        } else {
+            battle.ally = unit; battle.nd = 220;
+            start = bot.indexOf("        if (ally.tankType === 'toxic' && !ally.megaGasUsed");
+            end = bot.indexOf("        if (ally.tankType === 'buratino'", start);
+        }
+        vm.runInContext(bot.slice(start, end), battle);
+        assert.equal(battle.bullets.length, 5);
+        assert.ok(battle.bullets.every(shot => shot.owner === owner && shot.team === unit.team));
+        vm.runInContext(bot.slice(start, end), battle);
+        assert.equal(battle.bullets.length, 5);
+    }
+});
+
+test('toxic wave does no contact damage and overlapping clouds apply poison once per tick', () => {
+    for (const owner of ['player', 'enemy']) {
+        const battle = makeBattle();
+        const team = owner === 'enemy' ? 1 : 0;
+        const source = owner === 'player' ? battle.tank : { ...battle.tank, tankType: 'toxic', team, turretAngle: 0 };
+        if (owner === 'player') battle.tankType = 'toxic';
+        const victim = owner === 'player' ? { x: 715, y: 509, w: 20, h: 20, hp: 150, team: 1, alive: true } : battle.tank;
+        if (owner === 'enemy') Object.assign(victim, { x: 715, y: 509, w: 20, h: 20, hp: 150 });
+        else battle.enemies.push(victim);
+        const friend = { x: 715, y: 509, w: 20, h: 20, hp: 150, team, alive: true };
+        battle.allies.push(friend);
+        const drone = { x: 715, y: 509, w: 20, h: 20, hp: 150, team: 1 - team, alive: true };
+        battle.enemyDrones.push(drone);
+        battle.activateToxicWave(source, owner);
+        for (let tick = 0; tick < 40; tick++) battle.runBulletTick();
+        assert.equal(battle.bullets.length, 0);
+        assert.equal(victim.hp, 150, 'only clouds may damage a target');
+        const clouds = battle.objects.filter(obj => obj.type === 'gas');
+        assert.equal(clouds.length, 5);
+        assert.equal(battle.objects.some(obj => obj.type === 'explosion'), false, 'the wave must not spawn five explosion flashes');
+        for (const cloud of clouds) for (let tick = 0; tick < 22; tick++) battle.updatePoisonCloud(cloud);
+        assert.ok(clouds.filter(cloud => Math.hypot(cloud.x - 725, cloud.y - 519) < cloud.radius).length >= 2);
+        const start = physics.indexOf('    // Apply gas effects: check entities entering gas clouds');
+        const end = physics.indexOf('    // Respawn timers (War mode)', start);
+        vm.runInContext(`function tickPoison() { ${physics.slice(start, end)} }`, battle);
+        const wood = { type: 'woodenWall', x: 715, y: 509, w: 20, h: 20, hp: 1000, maxHp: 1000 };
+        battle.objects.push(wood);
+        for (let tick = 0; tick < 60; tick++) {
+            for (const cloud of clouds) { battle.updatePoisonCloud(cloud); battle.poisonWoodInGas(cloud); }
+            battle.updateWoodenWallRot(wood);
+            battle.tickPoison();
+        }
+        assert.ok(Math.abs(victim.hp - 106) < 1e-8, owner + ' poison must remain 44 HP/sec');
+        assert.ok(Math.abs(drone.hp - 106) < 1e-8);
+        assert.equal(friend.hp, 150);
+        assert.ok(Math.abs(wood.hp - 956) < 1e-8);
+    }
+});
+
+test('wave nodes open on cover and their clouds expand, disperse and expire', () => {
+    const battle = makeBattle();
+    battle.tankType = 'toxic';
+    battle.activateToxicWave(battle.tank);
+    battle.objects.push({ type: 'wall', x: 550, y: 400, w: 30, h: 240 });
+    for (let tick = 0; tick < 20; tick++) battle.runBulletTick();
+    assert.equal(battle.bullets.length, 0);
+    const clouds = battle.objects.filter(obj => obj.type === 'gas');
+    assert.equal(clouds.length, 5);
+    assert.ok(clouds.every(cloud => cloud.x < 580));
+    const cloud = clouds[0];
+    assert.equal(cloud.radius, 28);
+    for (let tick = 0; tick < 22; tick++) battle.updatePoisonCloud(cloud);
+    assert.equal(cloud.radius, 105);
+    while (cloud.life > 90) battle.updatePoisonCloud(cloud);
+    const full = cloud.radius;
+    while (cloud.life > 30) battle.updatePoisonCloud(cloud);
+    assert.ok(cloud.radius < full * 0.4);
+    while (cloud.life > 1) battle.updatePoisonCloud(cloud);
+    assert.equal(battle.updatePoisonCloud(cloud), false);
+    assert.equal(cloud.radius, 0);
+});
+
+
+test('Kamikaze charges and mech rockets detonate barrels on impact for all owners', () => {
+    for (const type of ['kamikazeBullet', 'mechRocketBullet']) for (const owner of ['player', 'ally', 'enemy']) {
+        const battle = makeBattle();
+        const styles = [];
+        battle.spawnExplosion = (_x, _y, _r, style) => styles.push(style);
+        const root = { type: 'barrel', x: 100, y: 100, w: 60, h: 60 };
+        const neighbor = { type: 'barrel', x: 240, y: 100, w: 60, h: 60 };
+        const safe = { type: 'barrel', x: 450, y: 100, w: 60, h: 60 };
+        battle.objects.push(root, neighbor, safe);
+        battle.bullets.push({ ...bullet(owner === 'enemy' ? 1 : 0, type, 150), owner,
+            x: 96, y: 130, vx: 1, vy: 0, w: 12, h: 8, explodeRadius: 50 });
+        battle.runBulletTick();
+        assert.equal(battle.objects.includes(root), false, type + ' ' + owner);
+        assert.equal(battle.objects.includes(neighbor), true);
+        assert.equal(neighbor.barrelFuseTicks, 15);
+        assert.equal(styles.filter(style => style === 'barrel').length, 1);
+        for (let tick = 0; tick < 14; tick++) battle.updateBarrelFuses();
+        assert.equal(battle.objects.includes(neighbor), true);
+        battle.updateBarrelFuses();
+        assert.equal(battle.objects.includes(neighbor), false);
+        assert.equal(battle.objects.includes(safe), true);
+        assert.equal(styles.filter(style => style === 'barrel').length, 2, 'each barrel must show its own blast');
+        assert.equal(battle.bullets.length, 0);
+    }
+});
+
+test('a chain reaction cannot skip or damage the wrong neighboring cover through shifted array indices', () => {
+    const battle = makeBattle();
+    const barrel = { type: 'barrel', x: 100, y: 100, w: 60, h: 60 };
+    const neighbor = { type: 'barrel', x: 220, y: 100, w: 60, h: 60 };
+    const wood = { type: 'woodenWall', x: 90, y: 90, w: 60, h: 60, hp: 300 };
+    const box = { type: 'box', x: 110, y: 110, w: 40, h: 40 };
+    const safeBox = { type: 'box', x: 400, y: 400, w: 40, h: 40 };
+    battle.objects.push(wood, barrel, box, neighbor, safeBox);
+    battle.applyDamage(110, 110, 55, 100, 0);
+    assert.equal(wood.hp, 200, 'wood must take one original impact rather than repeated or skipped damage');
+    assert.equal(battle.objects.includes(barrel), false);
+    assert.equal(battle.objects.includes(neighbor), true);
+    assert.equal(neighbor.barrelFuseTicks, 15);
+    for (let tick = 0; tick < 15; tick++) battle.updateBarrelFuses();
+    assert.equal(battle.objects.includes(neighbor), false);
+    assert.equal(battle.objects.includes(box), false);
+    assert.equal(battle.objects.includes(safeBox), true);
+});
+
+
+test('a direct shot detonates an already burning barrel immediately', () => {
+    for (const type of ['normal', 'kamikazeBullet', 'mechRocketBullet', 'rocket']) {
+        const battle = makeBattle();
+        const root = { type: 'barrel', x: 100, y: 100, w: 50, h: 50 };
+        const pending = { type: 'barrel', x: 220, y: 100, w: 50, h: 50 };
+        battle.objects.push(root, pending);
+        battle.explodeBarrel(root);
+        assert.equal(pending.barrelFuseTicks, 15);
+        battle.bullets.push({ ...bullet(0, type, 150), x: 216, y: 125, vx: 1, vy: 0, w: 12, h: 8, explodeRadius: 50 });
+        battle.runBulletTick();
+        assert.equal(battle.objects.includes(pending), false, type);
     }
 });

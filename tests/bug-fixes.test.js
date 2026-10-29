@@ -82,6 +82,10 @@ test('map import rejects invalid objects and obstacles overlapping player spawn'
         { type: 'player', x: 0, y: 0, w: 50, h: 50 }]), 'string');
     assert.equal(validate([{ type: 'wall', x: 50, y: 0, w: 50, h: 50 },
         { type: 'player', x: 0, y: 0, w: 50, h: 50 }]), null);
+    assert.equal(typeof validate([{ type: 'wall', x: 50, y: 50, w: 100, h: 50 },
+        { type: 'box', x: 100, y: 50, w: 50, h: 50 }]), 'string');
+    assert.equal(validate([{ type: 'woodenWall', x: 50, y: 50, w: 100, h: 50 },
+        { type: 'box', x: 150, y: 50, w: 50, h: 50 }]), null);
 });
 
 test('editor prevents placing a block on a player spawn in either order', () => {
@@ -102,6 +106,12 @@ test('editor prevents placing a block on a player spawn in either order', () => 
     context.activeTool = 'player';
     context.placeAt(75, 25);
     assert.equal(context.meObjects.find(o => o.type === 'player').x, 0);
+    context.meObjects = [{ type: 'woodenWall', x: 100, y: 100, w: 100, h: 50 }];
+    context.activeTool = 'box';
+    context.placeAt(175, 125);
+    assert.equal(context.meObjects.length, 1, 'a different grid cell can still belong to an existing large wall');
+    context.placeAt(225, 125);
+    assert.equal(context.meObjects.length, 2, 'touching edges must remain allowed');
 });
 
 test('importing a map with an existing name keeps both maps', () => {
@@ -212,4 +222,26 @@ test('replaced chromatic reward stops its canvas animation', () => {
     assert.deepEqual(cancelled, [1]);
     previousFrame();
     assert.equal(draws, previousDraws);
+});
+
+
+test('editor places one-cell barrels and keeps cell placement and erasing consistent', () => {
+    const context = { meObjects: [], activeTool: 'barrel', gridSize: 50, curWorldW: 900, curWorldH: 700,
+        toWorld: (x, y) => ({ wx: x, wy: y }), snapToGrid: (x, y) => ({ gx: Math.floor(x / 50) * 50, gy: Math.floor(y / 50) * 50 }),
+        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 40, MAX_OBJECTS: 750 };
+    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo()'), context);
+    vm.runInNewContext(section(editor, '    function placeAt(canvasX, canvasY)', '    function showEditorToast('), context);
+    context.placeAt(25, 25);
+    assert.equal(context.meObjects[0].w, 50); assert.equal(context.meObjects[0].h, 50);
+    assert.equal(context.meObjects[0].x, 0); assert.equal(context.meObjects[0].y, 0);
+    context.placeAt(75, 25);
+    assert.equal(context.meObjects.length, 2, 'neighboring cells must fit separate barrels');
+    context.placeAt(25, 25);
+    assert.equal(context.meObjects.length, 2, 'the barrel occupies its grid cell');
+    context.placeAt(875, 675);
+    assert.equal(context.meObjects.length, 3, 'the last map cell must also fit a barrel');
+    assert.ok(context.meObjects.every(obj => obj.x + obj.w <= 900 && obj.y + obj.h <= 700));
+    context.activeTool = 'erase';
+    context.placeAt(1, 1);
+    assert.equal(context.meObjects.length, 2, 'erasing the cell must remove its barrel');
 });

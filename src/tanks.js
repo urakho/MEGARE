@@ -30,7 +30,7 @@ const tankDescriptions = {
     },
     buratino: {
         name: "Буратино (ТОС)",
-        description: "Буратино отмечает участок поля и накрывает его плотным ракетным залпом. Его атака требует времени, зато заставляет врагов покинуть укрытие или принять взрывы. Лучше всего работает против группы, которой некуда быстро разъехаться.",
+        description: "Буратино накрывает выбранное направление быстрым ракетным залпом и может двигаться, пока ракеты летят к цели. Ульта обрушивает несколько волн на большую область, вынуждая противников покинуть опасную позицию.",
         rarity: "Эпический"
     },
     musical: {
@@ -105,7 +105,7 @@ const tankDescriptions = {
     },
     roman: {
         name: "Римский танк",
-        description: "Римский танк метает вращающийся клинок, который может отскочить от стены. Щит даёт время пережить ответный огонь и выбрать новый угол атаки. Он раскрывается там, где можно чередовать защиту и точные контрудары.",
+        description: "Римский танк метает вращающийся клинок, который может отскочить от каменной стены. Его знамя призывает легионеров, которые сопровождают танк, метают копья и защищают его мечами. Если приходит конный центурион, отряд становится больше. Всадник сближается для укола копьём, а в тесной схватке берётся за длинный меч. Он гораздо живучее пехотинцев и сражается дольше.",
         rarity: "Хроматическая"
     },
     pyro: {
@@ -125,7 +125,7 @@ const tankDescriptions = {
     },
     kamikaze: {
         name: "Камикадзе",
-        description: "Камикадзе резко разгоняется в выбранном направлении и на время рывка становится неуязвимым. Так можно прорвать строй или уйти из смертельной ловушки. Перед запуском прицелься: во время разгона сменить направление непросто.",
+        description: "Камикадзе стреляет разрывными зарядами, задевая противников рядом с попаданием. Его главный приём — неуязвимый разгон с огненными следами: заранее выбери направление, а во время рывка лишь слегка корректируй курс клавишами движения. Проламывай стены и врывайся в скопление врагов. Столкновение завершает атаку мощным взрывом, но после него танк ненадолго замедляется и не может стрелять. Продумай отход заранее.",
         rarity: "Лимитированная"
     },
     myasnoy: {
@@ -339,6 +339,25 @@ function drawMyasnoyEyeVessels(ctx, radius, moveAnimation) {
             ctx.strokeStyle = '#a82119'; ctx.lineWidth = width * 0.5; ctx.stroke();
         }
     }
+    ctx.restore();
+}
+
+function drawKamikazeFlag(ctx, x, y, width, height) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, width, height); ctx.clip();
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(x, y, width, height);
+    const cx = x + width / 2, cy = y + height / 2;
+    const radius = Math.hypot(width, height);
+    ctx.fillStyle = '#c91e2b';
+    // Sixteen rays extend to the flag edges instead of ending in a circular badge.
+    for (let i = 0; i < 16; i++) {
+        const angle = i * Math.PI / 8;
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, angle - Math.PI / 32, angle + Math.PI / 32);
+        ctx.closePath(); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, Math.min(width, height) * 0.22, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
@@ -1538,37 +1557,17 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
                 ctx.stroke();
             }
         } else if (type === 'kamikaze') {
-            // White body — Japanese imperial theme
-            ctx.fillStyle = '#f5f5f5';
-            ctx.fillRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
-            // Rising Sun (旭日旗): 16 red rays from center
-            const _kRayCount = 16;
-            const _kOuterR = Math.min(bodyW, bodyH) * 0.44;
-            ctx.fillStyle = '#cc0000';
-            for (let _kr = 0; _kr < _kRayCount; _kr++) {
-                const _ka1 = (_kr / _kRayCount) * Math.PI * 2;
-                const _ka2 = ((_kr + 0.42) / _kRayCount) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.arc(0, 0, _kOuterR, _ka1, _ka2);
-                ctx.closePath();
-                ctx.fill();
-            }
-            // Central red sun circle
-            ctx.beginPath();
-            ctx.arc(0, 0, _kOuterR * 0.3, 0, Math.PI * 2);
-            ctx.fillStyle = '#cc0000';
-            ctx.fill();
-            // White outer ring to separate rays from tracks
-            ctx.strokeStyle = '#f5f5f5';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(0, 0, _kOuterR * 0.28, 0, Math.PI * 2);
-            ctx.stroke();
-            // Thin dark border
-            ctx.strokeStyle = '#aaaaaa';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(-bodyW/2, -bodyH/2, bodyW, bodyH);
+            // Rising Sun paint reaches the hull edges and remains visible beside the turret.
+            drawKamikazeFlag(ctx, -bodyW / 2, -bodyH / 2, bodyW, bodyH);
+            const armorShade = ctx.createLinearGradient(-bodyW / 2, -bodyH / 2, bodyW / 2, bodyH / 2);
+            armorShade.addColorStop(0, 'rgba(255,255,255,0.18)');
+            armorShade.addColorStop(0.45, 'rgba(255,255,255,0)');
+            armorShade.addColorStop(1, 'rgba(24,29,36,0.22)');
+            ctx.fillStyle = armorShade;
+            ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
+            ctx.strokeStyle = '#686a6d';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
         } else if (type === 'myasnoy') {
             // Alternating tentacle steps wrap around the entire hull.
             drawMyasnoyTentacles(ctx, bodyW / 2, bodyH / 2, moveAnimation);
@@ -2789,17 +2788,14 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
         ctx.arc(0, 0, tSize * 0.52, 0, Math.PI * 2);
         ctx.stroke();
     } else if (type === 'kamikaze') {
-        // White square turret with red border and red center dot
-        ctx.fillStyle = '#f5f5f5';
-        ctx.fillRect(-tSize/2, -tSize/2, tSize, tSize);
-        ctx.strokeStyle = '#cc0000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-tSize/2, -tSize/2, tSize, tSize);
-        // Red center dot
-        ctx.beginPath();
-        ctx.arc(0, 0, tSize * 0.22, 0, Math.PI * 2);
-        ctx.fillStyle = '#cc0000';
-        ctx.fill();
+        // The red turret is the sun at the center of the hull's rays.
+        const sunRadius = tSize * 0.52;
+        const sunArmor = ctx.createRadialGradient(-sunRadius * 0.28, -sunRadius * 0.3, 0, 0, 0, sunRadius);
+        sunArmor.addColorStop(0, '#e3474e');
+        sunArmor.addColorStop(0.65, '#c91e2b');
+        sunArmor.addColorStop(1, '#ac1b27');
+        ctx.fillStyle = sunArmor;
+        ctx.beginPath(); ctx.arc(0, 0, sunRadius, 0, Math.PI * 2); ctx.fill();
     } else if (type === 'myasnoy') {
         if (heatState && heatState.isMyasnoyBody) {
             // Body bot — eye has detached, just a fleshy flesh dome on the body
@@ -3925,62 +3921,152 @@ function stopCharacterPreviewAnimations() {
 }
 
 function drawFrozenOverlay(ctx, x, y, w, h, life) {
-    const alpha = Math.max(0.12, Math.min(0.95, life / 180));
-    ctx.save();
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, `rgba(200,230,255,${0.02 * alpha})`);
-    g.addColorStop(0.5, `rgba(180,215,240,${0.06 * alpha})`);
-    g.addColorStop(1, `rgba(220,245,255,${0.03 * alpha})`);
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-
-    ctx.globalAlpha = 0.6 * alpha;
-    ctx.strokeStyle = 'rgba(220,240,255,0.6)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-        const off = (i - 1) * (h * 0.18);
+    const alpha = Math.min(1, life / 24);
+    const traceIce = () => {
         ctx.beginPath();
-        ctx.moveTo(x - w * 0.1, y + h * 0.2 + off);
-        ctx.lineTo(x + w * 1.05, y + h * 0.05 + off);
-        ctx.stroke();
-    }
-
-    const t = (Date.now() % 1000) / 1000;
-    const shimmerX = x + (t * (w + 40)) - 20;
-    ctx.globalCompositeOperation = 'lighter';
-    const shimmerGrad = ctx.createLinearGradient(shimmerX - 20, y, shimmerX + 20, y + h);
-    shimmerGrad.addColorStop(0, `rgba(255,255,255,${0.0 * alpha})`);
-    shimmerGrad.addColorStop(0.5, `rgba(255,255,255,${0.35 * alpha})`);
-    shimmerGrad.addColorStop(1, `rgba(255,255,255,${0.0 * alpha})`);
-    ctx.fillStyle = shimmerGrad;
-    ctx.fillRect(x, y, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-
-    const icCount = Math.max(3, Math.floor(w / 14));
-    const maxLen = Math.min(h * 0.9, 20);
-    for (let i = 0; i < icCount; i++) {
-        const u = (i + 0.5) / icCount;
-        const px = x + u * w + (Math.sin(i * 2 + Date.now() * 0.002) * 2);
-        const baseY = y + 2;
-        const len = maxLen * (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(i * 3 + Date.now() * 0.003)));
-        ctx.beginPath();
-        ctx.moveTo(px - 6, baseY);
-        ctx.lineTo(px + 6, baseY);
-        ctx.lineTo(px, baseY + len);
+        ctx.moveTo(x - w * 0.09, y + h * 0.05);
+        ctx.lineTo(x + w * 0.19, y - h * 0.12);
+        ctx.lineTo(x + w * 0.48, y - h * 0.08);
+        ctx.lineTo(x + w * 0.78, y - h * 0.13);
+        ctx.lineTo(x + w * 1.10, y - h * 0.04);
+        ctx.lineTo(x + w * 1.14, y + h * 0.18);
+        ctx.lineTo(x + w * 1.09, y + h * 0.46);
+        ctx.lineTo(x + w * 1.17, y + h * 0.75);
+        ctx.lineTo(x + w * 1.07, y + h * 1.10);
+        ctx.lineTo(x + w * 0.77, y + h * 1.13);
+        ctx.lineTo(x + w * 0.50, y + h * 1.08);
+        ctx.lineTo(x + w * 0.17, y + h * 1.15);
+        ctx.lineTo(x - w * 0.09, y + h * 1.07);
+        ctx.lineTo(x - w * 0.15, y + h * 0.77);
+        ctx.lineTo(x - w * 0.09, y + h * 0.46);
+        ctx.lineTo(x - w * 0.14, y + h * 0.20);
         ctx.closePath();
-        ctx.fillStyle = `rgba(180,220,255,${0.9 * alpha})`;
-        ctx.fill();
-        ctx.strokeStyle = `rgba(220,240,255,${0.95 * alpha})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(px - 2, baseY + len * 0.4);
-        ctx.lineTo(px, baseY + len * 0.2);
-        ctx.lineTo(px + 2, baseY + len * 0.4);
-        ctx.fillStyle = `rgba(255,255,255,${0.6 * alpha})`;
-        ctx.fill();
-    }
+    };
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    traceIce();
+    const body = ctx.createLinearGradient(x, y, x + w, y + h);
+    body.addColorStop(0, 'rgba(216, 248, 251, 0.64)');
+    body.addColorStop(0.52, 'rgba(123, 203, 226, 0.49)');
+    body.addColorStop(1, 'rgba(57, 119, 158, 0.61)');
+    ctx.fillStyle = body;
+    ctx.fill();
+    ctx.save();
+    traceIce();
+    ctx.clip();
+    const frost = ctx.createRadialGradient(x + w * 0.52, y + h * 0.5, w * 0.2,
+        x + w * 0.52, y + h * 0.5, w * 0.78);
+    frost.addColorStop(0, 'rgba(234, 251, 253, 0)');
+    frost.addColorStop(1, 'rgba(227, 250, 252, 0.46)');
+    ctx.fillStyle = frost;
+    ctx.fillRect(x - w * 0.2, y - h * 0.2, w * 1.4, h * 1.4);
+    ctx.fillStyle = 'rgba(230, 251, 253, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.15, y + h * 0.2);
+    ctx.lineTo(x + w * 0.33, y - h * 0.15);
+    ctx.lineTo(x + w * 0.26, y + h * 0.24);
+    ctx.lineTo(x + w * 0.03, y + h * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(48, 126, 164, 0.18)';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 1.18, y + h * 0.45);
+    ctx.lineTo(x + w * 0.79, y + h * 0.63);
+    ctx.lineTo(x + w * 0.86, y + h * 1.16);
+    ctx.lineTo(x + w * 1.16, y + h * 1.07);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(222, 248, 251, 0.24)';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.08, y + h * 1.17);
+    ctx.lineTo(x + w * 0.38, y + h * 0.88);
+    ctx.lineTo(x + w * 0.59, y + h * 1.1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(233, 253, 254, 0.58)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.02, y + h * 0.25);
+    ctx.lineTo(x + w * 0.25, y + h * 0.38);
+    ctx.lineTo(x + w * 0.19, y + h * 0.52);
+    ctx.moveTo(x + w * 0.25, y + h * 0.38);
+    ctx.lineTo(x + w * 0.39, y + h * 0.33);
+    ctx.moveTo(x + w * 0.94, y + h * 0.62);
+    ctx.lineTo(x + w * 0.72, y + h * 0.75);
+    ctx.lineTo(x + w * 0.78, y + h * 0.88);
+    ctx.stroke();
+    ctx.restore();
+    traceIce();
+    ctx.strokeStyle = 'rgba(212, 247, 250, 0.85)';
+    ctx.lineWidth = 1.3;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
+}
 
+function drawIceSlowOverlay(ctx, x, y, w, h, life, unit) {
+    const alpha = Math.min(1, life / 24);
+    if (unit._iceVisualSeed === undefined) unit._iceVisualSeed = Math.random() * 1000;
+    const time = Date.now() / 2500 + unit._iceVisualSeed;
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+        const cycle = time + i * 0.34;
+        const stage = cycle - Math.floor(cycle);
+        const opacity = Math.min(1, stage * 4, (1 - stage) * 4);
+        const hash = Math.sin((Math.floor(cycle) + i * 17.31) * 12.9898) * 43758.5453;
+        const position = hash - Math.floor(hash);
+        const side = i === 0 ? 0 : (i === 1 ? (position < 0.5 ? 3 : 1) : (position < 0.5 ? 0 : 2));
+        const anchorX = side === 0 || side === 2
+            ? x + w * (0.2 + position * 0.6) : (side === 1 ? x + w + 1 : x - 1);
+        const anchorY = side === 1 || side === 3
+            ? y + h * (0.2 + position * 0.6) : (side === 0 ? y - 1 : y + h + 1);
+        const angle = side === 0 ? 0 : side === 1 ? Math.PI / 2 : side === 2 ? Math.PI : -Math.PI / 2;
+        const width = Math.min(w, h) * (0.14 + position * 0.05);
+        const length = Math.min(w, h) * (0.32 + position * 0.12) * (side === 0 ? 1 : 0.62);
+        ctx.save();
+        ctx.globalAlpha = alpha * opacity;
+        ctx.translate(anchorX, anchorY);
+        ctx.rotate(angle);
+        ctx.fillStyle = 'rgba(181, 226, 240, 0.34)';
+        ctx.beginPath();
+        ctx.moveTo(-width, -0.7);
+        ctx.lineTo(-width * 0.45, -1.8);
+        ctx.lineTo(width * 0.2, -1.3);
+        ctx.lineTo(width * 0.9, -0.2);
+        ctx.lineTo(width * 0.7, 1.7);
+        ctx.lineTo(-width * 0.8, 1.9);
+        ctx.closePath();
+        ctx.fill();
+        const crystal = ctx.createLinearGradient(-width, 0, width, length);
+        crystal.addColorStop(0, 'rgba(228, 248, 252, 0.86)');
+        crystal.addColorStop(0.5, 'rgba(152, 217, 239, 0.84)');
+        crystal.addColorStop(1, 'rgba(86, 171, 209, 0.74)');
+        ctx.fillStyle = crystal;
+        ctx.beginPath();
+        ctx.moveTo(-width * 0.7, 0.5);
+        ctx.lineTo(width * 0.6, 0.8);
+        ctx.lineTo(width * 0.46, length * 0.36);
+        ctx.lineTo(-width * 0.25, length);
+        ctx.lineTo(-width * 0.38, length * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(43, 128, 179, 0.38)';
+        ctx.beginPath();
+        ctx.moveTo(width * 0.6, 0.8);
+        ctx.lineTo(width * 0.46, length * 0.36);
+        ctx.lineTo(-width * 0.25, length);
+        ctx.lineTo(width * 0.02, length * 0.3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(244, 255, 255, 0.82)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(-width * 0.47, 1);
+        ctx.lineTo(-width * 0.29, length * 0.51);
+        ctx.lineTo(-width * 0.25, length);
+        ctx.stroke();
+        ctx.restore();
+    }
     ctx.restore();
 }
 
@@ -4649,7 +4735,7 @@ function drawPoisonCloud(ctx, cloud) {
     const sprite = getPoisonMistSprite();
     const drift = Date.now() * 0.00035;
     ctx.save();
-    ctx.globalAlpha = fade * 0.56;
+    ctx.globalAlpha = fade * (cloud.toxicWave ? 0.36 : 0.56);
     for (let i = 0; i < 13; i++) {
         const angle = i * 2.39996 + cloud.x * 0.013;
         const distance = radius * (i < 3 ? 0.13 : 0.35 + (i % 3) * 0.12);
@@ -4658,6 +4744,23 @@ function drawPoisonCloud(ctx, cloud) {
         const y = cloud.y + Math.sin(angle) * distance + Math.cos(drift * 0.8 + i * 1.3) * radius * 0.035;
         ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
     }
+    ctx.restore();
+}
+
+function drawToxicWaveProjectile(ctx, bullet) {
+    const sprite = getPoisonMistSprite();
+    const age = Math.max(0, bullet.maxLife - bullet.life);
+    const pulse = Math.sin(age * 0.3) * 0.08;
+    ctx.save(); ctx.translate(bullet.x, bullet.y); ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+    for (let i = 3; i >= 0; i--) {
+        const size = (22 - i * 3) * (1 + pulse);
+        ctx.globalAlpha = 0.75 - i * 0.15;
+        ctx.drawImage(sprite, -i * 6 - size / 2, -size / 2 + Math.sin(age * 0.2 + i) * 1.5, size, size);
+    }
+    ctx.globalAlpha = 0.85; ctx.fillStyle = '#b6cf78';
+    ctx.beginPath(); ctx.ellipse(0, 0, 4.8, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#dfeba4'; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.ellipse(1.2, -0.7, 1.8, 0.7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
@@ -4737,6 +4840,1031 @@ function drawPlasmaBolt(ctx, bullet, charged) {
     ctx.restore();
 }
 
+const ordnanceExplosionArt = new WeakMap();
+const ordnanceExplosionSprites = new Map();
+
+function getOrdnanceExplosionSprite(kind, color = '') {
+    const key = kind + color;
+    if (ordnanceExplosionSprites.has(key)) return ordnanceExplosionSprites.get(key);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const c = canvas.getContext('2d');
+    if (kind === 'flash') {
+        const flash = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+        flash.addColorStop(0, 'rgba(255,252,228,1)');
+        flash.addColorStop(0.22, 'rgba(255,232,166,0.95)');
+        flash.addColorStop(0.55, 'rgba(255,177,65,0.4)');
+        flash.addColorStop(1, 'rgba(255,125,30,0)');
+        c.fillStyle = flash; c.fillRect(0, 0, 128, 128);
+        ordnanceExplosionSprites.set(key, canvas);
+        return canvas;
+    }
+    const colors = kind === 'smoke' ? ['rgba(96,87,76,0.8)', 'rgba(58,53,48,0.65)', 'rgba(34,32,30,0)']
+        : kind === 'ember' ? ['#ffc15e', '#db5c1d', 'rgba(94,35,19,0)']
+        : kind === 'tint' ? [color, color, 'rgba(0,0,0,0)']
+        : ['#fff0b9', '#ffac39', 'rgba(163,48,16,0)'];
+    // Bake an uneven, billowing silhouette once instead of rebuilding gradients every frame.
+    for (let i = 0; i < 8; i++) {
+        const angle = i * Math.PI / 4;
+        const reach = 17 + Math.sin(i * 3.7) * 5;
+        const x = 64 + Math.cos(angle) * reach, y = 64 + Math.sin(angle) * reach;
+        const radius = 29 + Math.sin(i * 2.3) * 5;
+        const grad = c.createRadialGradient(x - 5, y - 7, 1, x, y, radius);
+        grad.addColorStop(0, colors[0]);
+        grad.addColorStop(0.38, colors[1]);
+        grad.addColorStop(1, colors[2]);
+        c.fillStyle = grad; c.beginPath(); c.arc(x, y, radius, 0, Math.PI * 2); c.fill();
+    }
+    const core = c.createRadialGradient(61, 59, 0, 64, 64, 36);
+    core.addColorStop(0, colors[0]); core.addColorStop(0.45, colors[1]); core.addColorStop(1, colors[2]);
+    c.fillStyle = core; c.beginPath(); c.arc(64, 64, 36, 0, Math.PI * 2); c.fill();
+    ordnanceExplosionSprites.set(key, canvas);
+    return canvas;
+}
+
+function drawOrdnanceExplosion(ctx, obj) {
+    const progress = Math.max(0, Math.min(1, 1 - obj.life / (obj.maxLife || 30)));
+    if (progress >= 1) return;
+    const radius = obj.radius || 40;
+    const growth = 1 - Math.exp(-progress * 9);
+    let art = ordnanceExplosionArt.get(obj);
+    if (!art) {
+        let seed = Math.floor(Math.abs(obj.seed ?? (obj.x * 0.17 + obj.y * 0.31)) * 1000000) >>> 0;
+        const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+        const count = obj.explosionStyle === 'barrel' ? 10 : obj.explosionStyle === 'impact' ? 5 : 7;
+        art = { clouds: [], fragments: [] };
+        for (let i = 0; i < count; i++) {
+            const angle = i * Math.PI * 2 / count + random() * 0.4;
+            const distance = 0.16 + random() * 0.22;
+            art.clouds.push({ x: Math.cos(angle) * distance, y: Math.sin(angle) * distance,
+                scale: 0.6 + random() * 0.35, angle: random() * Math.PI * 2, roll: (random() - 0.5) * 0.7 });
+        }
+        const fragmentCount = obj.explosionStyle === 'barrel' ? 20 : obj.explosionStyle === 'impact' ? 7 : 12;
+        for (let i = 0; i < fragmentCount; i++) {
+            const angle = random() * Math.PI * 2;
+            art.fragments.push({ x: Math.cos(angle), y: Math.sin(angle), reach: 0.65 + random() * 0.65,
+                size: 0.5 + random(), spin: (random() - 0.5) * 8 });
+        }
+        ordnanceExplosionArt.set(obj, art);
+    }
+    ctx.save(); ctx.translate(obj.x, obj.y);
+    if (obj.color) {
+        // Ability and gas bursts keep their own palette, with a translucent turbulent edge.
+        const tint = getOrdnanceExplosionSprite('tint', obj.color);
+        const r = radius * (0.12 + growth * 0.88);
+        ctx.globalAlpha = (1 - progress) * 0.35;
+        ctx.drawImage(tint, -r, -r, r * 2, r * 2);
+        ctx.globalAlpha = Math.pow(1 - progress, 2) * 0.75;
+        ctx.strokeStyle = obj.color; ctx.lineWidth = Math.max(1, radius * 0.012 * (1 - progress));
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth *= 0.5;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.67, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        return;
+    }
+    const smoke = getOrdnanceExplosionSprite('smoke');
+    const fire = getOrdnanceExplosionSprite('fire');
+    const ember = getOrdnanceExplosionSprite('ember');
+    const hotMix = Math.max(0, 1 - progress / 0.4);
+    const smokeAlpha = Math.min(1, Math.max(0, (progress - 0.1) / 0.22)) * Math.pow(1 - progress, 0.7) * 0.7;
+    const fireAlpha = Math.max(0, 1 - progress / 0.62);
+    if (smokeAlpha > 0) for (const cloud of art.clouds) {
+        const x = cloud.x * radius * growth, y = cloud.y * radius * growth;
+        const smokeSize = radius * cloud.scale * (0.55 + growth * 0.65 + progress * 0.2);
+        ctx.globalAlpha = smokeAlpha;
+        ctx.drawImage(smoke, x - smokeSize / 2, y - smokeSize / 2 - radius * progress * 0.18, smokeSize, smokeSize);
+    }
+    // Pressure wave is brief and soft; it does not add another simulated object.
+    if (progress < 0.55) {
+        ctx.globalAlpha = Math.pow(1 - progress / 0.55, 2) * 0.42;
+        ctx.strokeStyle = '#e9cf9f'; ctx.lineWidth = Math.max(0.6, radius * 0.035 * (1 - progress));
+        ctx.beginPath(); ctx.arc(0, 0, radius * (0.15 + progress * 1.9), 0, Math.PI * 2); ctx.stroke();
+    }
+    if (fireAlpha > 0) for (const cloud of art.clouds) {
+        const size = radius * cloud.scale * (0.35 + growth * 0.85);
+        ctx.save();
+        ctx.translate(cloud.x * radius * growth, cloud.y * radius * growth);
+        ctx.rotate(cloud.angle + progress * cloud.roll);
+        ctx.globalAlpha = fireAlpha * (1 - hotMix) * 0.9;
+        ctx.drawImage(ember, -size / 2, -size / 2, size, size);
+        if (hotMix > 0) {
+            ctx.globalAlpha = fireAlpha * hotMix * 0.9;
+            ctx.drawImage(fire, -size / 2, -size / 2, size, size);
+        }
+        ctx.restore();
+    }
+    // A hot initial core gives way to the separate fire lobes and cooling smoke.
+    if (progress < 0.2) {
+        const core = radius * (0.22 + growth * 0.32);
+        ctx.globalAlpha = (1 - progress / 0.2) * 0.9;
+        ctx.drawImage(getOrdnanceExplosionSprite('flash'), -core, -core, core * 2, core * 2);
+    }
+    for (let i = 0; i < art.fragments.length; i++) {
+        const fragment = art.fragments[i];
+        const distance = radius * fragment.reach * (1 - Math.exp(-progress * 5));
+        const x = fragment.x * distance, y = fragment.y * distance + radius * progress * progress * 0.12;
+        if (i % 3 === 0) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(fragment.spin * progress);
+            ctx.globalAlpha = Math.pow(1 - progress, 1.4) * 0.85;
+            ctx.fillStyle = '#3d2c22';
+            const size = Math.max(1, radius * 0.025) * fragment.size;
+            ctx.fillRect(-size / 2, -size / 3, size, size * 0.65); ctx.restore();
+        } else if (progress < 0.65) {
+            ctx.globalAlpha = Math.pow(1 - progress / 0.65, 1.5);
+            ctx.strokeStyle = i % 2 ? '#ffd58a' : '#ed8d36';
+            ctx.lineWidth = Math.max(0.6, radius * 0.008) * fragment.size;
+            const trail = radius * 0.08 * (1 - progress);
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - fragment.x * trail, y - fragment.y * trail); ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+const terrainDebrisWoodPalettes = {
+    forest: ['#976b40', '#503922', '#cca273'], rain: ['#715333', '#382d21', '#a38960'],
+    snow: ['#c7b793', '#756b54', '#ede0bd'], desert: ['#ab704a', '#633f2d', '#d6a67b'],
+    swamp: ['#7b644a', '#3f392c', '#ad9873'], lava: ['#403830', '#211e1b', '#76624b']
+};
+
+function drawTerrainDebris(ctx, obj) {
+    const age = Math.max(0, (obj.maxLife || 44) - obj.life);
+    const flight = Math.min(1, age / 18);
+    const travel = 1 - Math.pow(1 - flight, 3);
+    const fade = Math.min(1, Math.max(0, obj.life / 14));
+    const wood = obj.material === 'wood' || obj.material === 'ice';
+    const colors = obj.material === 'rot' ? ['#554d31', '#302c20', '#798052'] : obj.charred ? ['#3e352a', '#231f1b', '#766851'] : wood
+        ? (terrainDebrisWoodPalettes[obj.biome] || terrainDebrisWoodPalettes.forest)
+        : ['#797c7b', '#373b3b', '#b5b7af'];
+    ctx.save(); ctx.translate(obj.x, obj.y);
+    const dustFade = Math.max(0, 1 - age / 14);
+    if (dustFade > 0) {
+        const color = obj.charred ? 'rgba(65,60,52,0.5)' : wood ? 'rgba(166,128,80,0.4)' : 'rgba(160,157,146,0.5)';
+        const size = obj.dustSize * (0.7 + travel * 1.2);
+        ctx.globalAlpha = dustFade * 0.65;
+        ctx.drawImage(getOrdnanceExplosionSprite('tint', color), obj.dustX - size / 2, obj.dustY - size / 2, size, size);
+    }
+    for (const fragment of obj.fragments) {
+        const x = fragment.x + fragment.dx * travel;
+        const groundY = fragment.y + fragment.dy * travel;
+        const lift = Math.sin(flight * Math.PI) * fragment.lift;
+        ctx.globalAlpha = fade * 0.15;
+        ctx.fillStyle = '#181a16';
+        ctx.beginPath(); ctx.ellipse(x, groundY + 2, fragment.size * 0.48, Math.max(1, fragment.thickness * 0.4), fragment.angle + fragment.spin * flight, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.translate(x, groundY - lift); ctx.rotate(fragment.angle + fragment.spin * flight);
+        ctx.globalAlpha = fade;
+        const length = fragment.size, width = fragment.thickness;
+        ctx.fillStyle = colors[0]; ctx.strokeStyle = colors[1]; ctx.lineWidth = 0.6;
+        ctx.beginPath(); ctx.moveTo(-length * 0.5, -width * 0.4);
+        if (wood) {
+            ctx.lineTo(length * 0.55, -width * 0.5);
+            ctx.lineTo(length * 0.32, -width * 0.05);
+            ctx.lineTo(length * 0.44, width * 0.2);
+            ctx.lineTo(-length * 0.35, width * 0.5);
+        } else {
+            ctx.lineTo(length * 0.15, -width * 0.65);
+            ctx.lineTo(length * 0.55, -width * 0.1);
+            ctx.lineTo(length * 0.22, width * 0.55);
+            ctx.lineTo(-length * 0.42, width * 0.3);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (obj.material === 'ice') { ctx.fillStyle = 'rgba(155,225,244,0.7)'; ctx.fill(); }
+        ctx.strokeStyle = colors[2]; ctx.lineWidth = 0.65;
+        ctx.beginPath(); ctx.moveTo(-length * 0.32, -width * 0.15);
+        ctx.lineTo(length * 0.26, -width * (wood ? 0.15 : 0.34)); ctx.stroke();
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+const wallBreakShapes = new WeakMap();
+
+function getWoodWallSurfaceDamage(obj) {
+    const totalDamage = Math.max(0, Math.min(1, 1 - (obj.hp ?? 300) / (obj.maxHp || 300)));
+    if (totalDamage <= 0) return null;
+    const marks = (obj.woodHitPoints || []).filter(mark => mark.active !== false);
+    if (!marks.length && (obj.woodRotAmount || (obj.woodHitPoints || []).length)) return { splits: [], dents: [] };
+    const damage = marks.length ? Math.max(...marks.map(mark => mark.damage ?? totalDamage)) : totalDamage;
+    if (marks.some(mark => mark.impactStrength != null)) {
+        const horizontal = obj.w >= obj.h;
+        const length = horizontal ? obj.w : obj.h, breadth = horizontal ? obj.h : obj.w;
+        const splits = [], dents = [];
+        for (const mark of marks) {
+            if (mark.effect === 'ice' || mark.effect === 'rot') continue;
+            const strength = mark.impactStrength ?? mark.damage ?? 0;
+            const x = Math.max(1, Math.min(obj.w - 1, mark.x * obj.w));
+            const y = Math.max(1, Math.min(obj.h - 1, mark.y * obj.h));
+            dents.push({ x, y, horizontal, length: Math.min(28, breadth * (0.025 + Math.sqrt(strength) * 0.78)), width: 0.5 + strength * 7 });
+            if (strength > 0.075) splits.push({ x, y, horizontal,
+                length: Math.min(65, length * (0.05 + strength * 0.45)), width: 0.3 + strength * 1.6 });
+        }
+        return { splits, dents };
+    }
+    const horizontal = obj.w >= obj.h;
+    const length = horizontal ? obj.w : obj.h, breadth = horizontal ? obj.h : obj.w;
+    const boards = Math.max(2, Math.min(8, Math.round(breadth / 16)));
+    const splits = [], dents = [];
+    for (let i = 0; i < boards; i++) {
+        const raw = Math.sin(obj.x * 0.13 + obj.y * 0.19 + i * 4.71) * 43758.5453;
+        const variation = raw - Math.floor(raw);
+        const severity = Math.max(0, (damage - (i % 3) * 0.06) / 0.94);
+        if (severity <= 0.1) continue;
+        const across = (i + 0.5) * breadth / boards;
+        splits.push({ x: horizontal ? length * (0.35 + variation * 0.3) : across,
+            y: horizontal ? across : length * (0.35 + variation * 0.3), horizontal,
+            length: length * (0.12 + severity * 0.2), width: 0.5 + severity * 1.4 });
+    }
+    for (const mark of marks.slice(-5).filter(mark => mark.effect !== 'ice' && mark.effect !== 'rot')) {
+        dents.push({ x: Math.max(5, Math.min(obj.w - 5, mark.x * obj.w)),
+            y: Math.max(5, Math.min(obj.h - 5, mark.y * obj.h)), horizontal,
+            length: Math.min(24, length * (0.1 + damage * 0.12)), width: 2 + damage * 3.5 });
+    }
+    return { splits, dents };
+}
+
+function getWallBreakShape(obj, wood = false) {
+    const damage = wood ? Math.max(0, Math.min(1, 1 - (obj.hp ?? 300) / (obj.maxHp || 300)))
+        : Math.min(5, obj.wallDamageCount || 0) / 6;
+    if (damage <= 0) return null;
+    const marks = (wood ? obj.woodHitPoints : obj.wallHitPoints) || [];
+    const stage = wood ? Math.ceil(damage * 15) : obj.wallDamageCount;
+    const key = `${wood ? 'wood' : 'stone'}:${obj.w}:${obj.h}:${stage}:${marks.length}:${wood ? obj.woodDamageVersion || 0 : 0}`;
+    const saved = wallBreakShapes.get(obj);
+    if (saved && saved.key === key) return saved;
+    const w = obj.w, h = obj.h, breadth = Math.min(w, h);
+    const cuts = [], splits = [];
+    const count = wood ? marks.length : Math.max(1, marks.length || obj.wallDamageCount);
+    for (let i = 0; i < count; i++) {
+        const mark = marks[i] || (wood ? obj.woodBurnOrigin || { x: 0.2 + i * 0.26, y: 0 } : { x: 0, y: 0.3 + i * 0.13 });
+        if (mark.active === false || mark.effect === 'rot') continue;
+        const distances = [mark.y * h, (1 - mark.x) * w, (1 - mark.y) * h, mark.x * w];
+        const side = distances.indexOf(Math.min(...distances));
+        const length = side % 2 ? h : w;
+        const center = (side % 2 ? mark.y : mark.x) * length;
+        const cutDamage = wood && mark.damage != null ? mark.damage : damage;
+        const strength = wood ? mark.impactStrength : null;
+        const depth = breadth * (strength != null ? 0.004 + Math.pow(strength, 0.8) * 0.5 : 0.09 + cutDamage * 0.42);
+        cuts.push({ side, center, depth: depth * (0.9 + (i % 3) * 0.1),
+            span: breadth * (strength != null ? 0.02 + Math.sqrt(strength) * 0.6 : 0.16 + cutDamage * 0.28), effect: mark.effect || 'wood', phase: i * 2.7 + obj.x * 0.07 + obj.y * 0.03 });
+    }
+    const points = [], rims = [];
+    for (let side = 0; side < 4; side++) {
+        const length = side % 2 ? h : w;
+        const steps = Math.max(12, Math.min(60, Math.ceil(length / 2.5)));
+        for (let step = 0; step <= steps; step++) {
+            const along = length * (side < 2 ? step / steps : 1 - step / steps);
+            let bite = 0, effect = 'wood';
+            for (const cut of cuts) {
+                if (cut.side !== side) continue;
+                const distance = Math.abs(along - cut.center) / cut.span;
+                if (distance >= 1) continue;
+                const roughness = 0.78 + Math.sin(step * 2.6 + cut.phase) * 0.15;
+                const candidate = cut.depth * Math.pow(1 - distance, 0.55) * roughness;
+                if (candidate > bite) { bite = candidate; effect = cut.effect; }
+            }
+            // Keep the corners joined while the edge loses irregular chunks.
+            bite *= Math.min(1, along / 3, (length - along) / 3);
+            const point = side === 0 ? { x: along, y: bite } : side === 1 ? { x: w - bite, y: along }
+                : side === 2 ? { x: along, y: h - bite } : { x: bite, y: along };
+            points.push(point);
+            if (bite > 1.2) rims.push({ ...point, side, bite, effect });
+        }
+    }
+    const surface = wood ? getWoodWallSurfaceDamage(obj) : { splits, dents: [] };
+    const shape = { key, points, rims, splits: surface.splits, dents: surface.dents, wood, damage };
+    wallBreakShapes.set(obj, shape);
+    return shape;
+}
+
+function clipWallBreakShape(ctx, obj, shape) {
+    if (!shape) return;
+    ctx.beginPath();
+    shape.points.forEach((point, index) => index
+        ? ctx.lineTo(obj.x + point.x, obj.y + point.y) : ctx.moveTo(obj.x + point.x, obj.y + point.y));
+    ctx.closePath(); ctx.clip();
+}
+
+function drawWallBrokenEdges(ctx, obj, shape) {
+    if (!shape) return;
+    const type = typeof GameTerrain !== 'undefined' && typeof GameTerrain.current === 'function' ? GameTerrain.current() : 'forest';
+    const colors = terrainDebrisWoodPalettes[type] || terrainDebrisWoodPalettes.forest;
+    ctx.save(); ctx.translate(obj.x, obj.y);
+    const trace = () => {
+        ctx.beginPath();
+        shape.points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+        ctx.closePath();
+    };
+    trace();
+    ctx.strokeStyle = shape.wood ? colors[1] : '#242827';
+    ctx.lineWidth = 1.1; ctx.stroke();
+    if (shape.wood) {
+        ctx.save(); trace(); ctx.clip();
+        for (const dent of shape.dents) {
+            ctx.save(); ctx.translate(dent.x, dent.y);
+            if (!dent.horizontal) ctx.rotate(Math.PI / 2);
+            ctx.fillStyle = colors[1];
+            ctx.beginPath(); ctx.moveTo(-dent.length * 0.5, -dent.width * 0.3);
+            ctx.lineTo(-dent.length * 0.15, -dent.width * 0.55);
+            ctx.lineTo(dent.length * 0.5, -dent.width * 0.12);
+            ctx.lineTo(dent.length * 0.23, dent.width * 0.45);
+            ctx.lineTo(-dent.length * 0.4, dent.width * 0.3); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = colors[2]; ctx.lineWidth = 0.8;
+            for (let fibre = 0; fibre < 3; fibre++) {
+                const y = (fibre - 1) * dent.width * 0.2;
+                ctx.beginPath(); ctx.moveTo(-dent.length * 0.4, y);
+                ctx.lineTo(dent.length * (0.05 + fibre * 0.1), y + 0.5); ctx.stroke();
+            }
+            ctx.restore();
+        }
+        for (const split of shape.splits) {
+            ctx.save(); ctx.translate(split.x, split.y);
+            if (!split.horizontal) ctx.rotate(Math.PI / 2);
+            ctx.fillStyle = '#342315';
+            ctx.beginPath(); ctx.moveTo(-split.length / 2, 0);
+            ctx.lineTo(-split.length * 0.12, -split.width);
+            ctx.lineTo(split.length / 2, 0);
+            ctx.lineTo(split.length * 0.18, split.width * 0.7); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = colors[2]; ctx.lineWidth = 0.65;
+            ctx.beginPath(); ctx.moveTo(-split.length / 2, -0.5);
+            ctx.lineTo(-split.length * 0.12, -split.width - 0.5);
+            ctx.lineTo(split.length * 0.35, -0.5); ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+    for (let i = 0; i < shape.rims.length; i++) {
+        const point = shape.rims[i];
+        const inwardX = point.side === 1 ? -1 : point.side === 3 ? 1 : 0;
+        const inwardY = point.side === 0 ? 1 : point.side === 2 ? -1 : 0;
+        if (shape.wood && point.effect === 'rot') {
+            ctx.fillStyle = i % 2 ? '#39402b' : '#6b7050';
+            ctx.beginPath(); ctx.arc(point.x, point.y, 1.3 + i % 3, 0, Math.PI * 2); ctx.fill();
+        } else if (shape.wood && point.effect === 'ice') {
+            ctx.fillStyle = colors[1];
+            ctx.beginPath(); ctx.moveTo(point.x, point.y); ctx.lineTo(point.x + inwardX * 3 - inwardY * 2, point.y + inwardY * 3 + inwardX * 2); ctx.lineTo(point.x + inwardX * 4 + inwardY * 2, point.y + inwardY * 4 - inwardX * 2); ctx.closePath(); ctx.fill();
+        } else if (shape.wood) {
+            // Unequal wood fibres protrude from the torn board ends into the missing section.
+            const fibre = 2 + (i % 4) * 1.2;
+            ctx.strokeStyle = i % 3 ? colors[2] : colors[1];
+            ctx.lineWidth = i % 3 ? 0.75 : 1.1;
+            ctx.beginPath(); ctx.moveTo(point.x + inwardX, point.y + inwardY);
+            ctx.lineTo(point.x - inwardX * fibre + inwardY * 0.7, point.y - inwardY * fibre + inwardX * 0.7); ctx.stroke();
+        } else if (i % 2 === 0) {
+            // Small exposed fracture planes give the missing stone a solid, chipped rim.
+            ctx.fillStyle = i % 4 ? '#626967' : '#929893';
+            ctx.beginPath(); ctx.moveTo(point.x - inwardY * 1.5, point.y + inwardX * 1.5);
+            ctx.lineTo(point.x + inwardX * 2.5, point.y + inwardY * 2.5);
+            ctx.lineTo(point.x + inwardY * 1.5, point.y - inwardX * 1.5); ctx.closePath(); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+function drawHistoricalProjectile(ctx, b, angleOverride = null) {
+    if (b.type === 'romanBlade') {
+            // Roman gladius — solid iron short-sword spinning in flight
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(angleOverride ?? b.spinAngle ?? 0);
+
+            const bLen = (b.w || 14) * 0.95; // half-length from centre to tip
+            const bWid = bLen * 0.28;         // max half-width at blade shoulder
+
+            // === Blade body (iron/steel, flat faces) ===
+            // Left side: straight back edge, right side: double-edged taper to point
+            ctx.beginPath();
+            ctx.moveTo( bLen, 0);                      // front tip
+            ctx.lineTo( bLen * 0.55,  bWid);           // upper shoulder
+            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);    // upper back edge
+            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);    // lower back edge
+            ctx.lineTo( bLen * 0.55, -bWid);           // lower shoulder
+            ctx.closePath();
+            const bladeGrad = ctx.createLinearGradient(0, -bWid, 0, bWid);
+            bladeGrad.addColorStop(0,   '#8a9aaa');   // upper edge (lighter)
+            bladeGrad.addColorStop(0.3, '#b0c0cc');   // upper bevel
+            bladeGrad.addColorStop(0.5, '#d8e4e8');   // Fuller / central highlight
+            bladeGrad.addColorStop(0.7, '#8a9aaa');   // lower bevel
+            bladeGrad.addColorStop(1,   '#5c6a74');   // lower edge (shadow)
+            ctx.fillStyle = bladeGrad;
+            ctx.fill();
+
+            // Central fuller (ridge line)
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = 0.9;
+            ctx.beginPath();
+            ctx.moveTo(bLen * 0.92, 0);
+            ctx.lineTo(-bLen * 0.3, 0);
+            ctx.stroke();
+
+            // Blade outline
+            ctx.strokeStyle = '#3d4a52';
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo( bLen, 0);
+            ctx.lineTo( bLen * 0.55,  bWid);
+            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);
+            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);
+            ctx.lineTo( bLen * 0.55, -bWid);
+            ctx.closePath();
+            ctx.stroke();
+
+            // === Crossguard (gold horizontal bar) ===
+            const gW = bWid * 0.28;
+            const gH = bWid * 1.55;
+            ctx.fillStyle = '#D4A017';
+            ctx.fillRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 0.6;
+            ctx.strokeRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
+
+            // === Handle (dark red leather wrapping) ===
+            const handleLen = bLen * 0.42;
+            const handleH   = bWid * 0.65;
+            ctx.fillStyle = '#6B1010';
+            ctx.fillRect(-bLen * 0.38 - gW - handleLen, -handleH / 2, handleLen, handleH);
+            // Wrapping bands
+            ctx.strokeStyle = '#3a0808';
+            ctx.lineWidth = 0.8;
+            for (let bi = 1; bi <= 3; bi++) {
+                const bx = -bLen * 0.38 - gW - handleLen * (bi / 4);
+                ctx.beginPath();
+                ctx.moveTo(bx, -handleH / 2);
+                ctx.lineTo(bx,  handleH / 2);
+                ctx.stroke();
+            }
+            // Pommel cap
+            const pomR = handleH * 0.72;
+            ctx.fillStyle = '#D4A017';
+            ctx.beginPath();
+            ctx.arc(-bLen * 0.38 - gW - handleLen, 0, pomR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#8B6914';
+            ctx.lineWidth = 0.6;
+            ctx.stroke();
+
+            ctx.restore();
+
+        } else if (b.type === 'egyptArrow' || b.type === 'romanPilum') {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(angleOverride ?? Math.atan2(b.vy, b.vx));
+
+            const shaftLen = Math.max(9, (b.w || 10) * 1.55);
+            const shaftH = Math.max(1.6, (b.h || 4) * 0.4);
+            const shaftX = -shaftLen * 0.35;
+
+            const shaftGrad = ctx.createLinearGradient(shaftX, 0, shaftX + shaftLen, 0);
+            shaftGrad.addColorStop(0, '#7a5220');
+            shaftGrad.addColorStop(0.5, '#a3702d');
+            shaftGrad.addColorStop(1, '#5b3b12');
+            ctx.fillStyle = shaftGrad;
+            ctx.fillRect(shaftX, -shaftH / 2, shaftLen, shaftH);
+
+            ctx.fillStyle = '#d9b25b';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen, -shaftH * 1.6);
+            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.28, 0);
+            ctx.lineTo(shaftX + shaftLen, shaftH * 1.6);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#f8e7b2';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen, -shaftH);
+            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.18, 0);
+            ctx.lineTo(shaftX + shaftLen, shaftH);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = '#6b4a18';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(shaftX, -shaftH / 2, shaftLen, shaftH);
+
+            ctx.strokeStyle = 'rgba(255,241,191,0.7)';
+            ctx.beginPath();
+            ctx.moveTo(shaftX + shaftLen * 0.15, 0);
+            ctx.lineTo(shaftX + shaftLen * 0.92, 0);
+            ctx.stroke();
+
+            ctx.fillStyle = '#8f6720';
+            ctx.beginPath();
+            ctx.moveTo(shaftX - shaftLen * 0.16, 0);
+            ctx.lineTo(shaftX, -shaftH * 1.45);
+            ctx.lineTo(shaftX + shaftLen * 0.08, 0);
+            ctx.lineTo(shaftX, shaftH * 1.45);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+
+        } else if (b.type === 'spartanSpear') {
+            // Spartan spear bullet — elongated bronze shaft with iron tip
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(angleOverride ?? Math.atan2(b.vy, b.vx));
+
+            const sLen = 22;  // half-length from center to tip
+            const sH   = 3;   // half-height
+
+            // Wooden shaft
+            ctx.fillStyle = '#8b5a2b';
+            ctx.fillRect(-sLen, -sH/2, sLen * 1.35, sH);
+
+            // Bronze wrap bands
+            ctx.strokeStyle = '#c89050';
+            ctx.lineWidth = 1;
+            for (let bi = 0; bi < 2; bi++) {
+                const bx = -sLen + sLen * (0.3 + bi * 0.45);
+                ctx.beginPath();
+                ctx.moveTo(bx, -sH/2);
+                ctx.lineTo(bx,  sH/2);
+                ctx.stroke();
+            }
+
+            // Iron tip (triangle)
+            ctx.fillStyle = '#c8d0d8';
+            ctx.beginPath();
+            ctx.moveTo(sLen * 0.35, -sH * 1.5);
+            ctx.lineTo(sLen,         0);
+            ctx.lineTo(sLen * 0.35,  sH * 1.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#6a7880';
+            ctx.lineWidth = 0.7;
+            ctx.stroke();
+
+            ctx.restore();
+
+
+    }
+}
+
+function drawEmbeddedProjectiles(ctx, target, centered = true) {
+    if (!target.embeddedProjectiles) return;
+    for (const mark of target.embeddedProjectiles) {
+        if (!mark.permanent && !(mark.life > 0)) continue;
+        const settle = Math.min(1, (mark.age || 0) / 6);
+        const depth = (mark.type === 'egyptArrow' || mark.type === 'romanPilum') ? 5 : mark.type === 'spartanSpear' ? 8 : mark.tip * 0.38;
+        const exposedTip = mark.tip - depth * (0.65 + settle * 0.35);
+        ctx.save();
+        if (centered && typeof GameTerrain !== 'undefined' && GameTerrain.getMotion) ctx.rotate((GameTerrain.getMotion(target).angle || 0) - (mark.bodyAngle || 0));
+        ctx.translate((centered ? 0 : target.x + target.w / 2) + mark.x, (centered ? 0 : target.y + target.h / 2) + mark.y);
+        ctx.rotate(mark.angle);
+        ctx.globalAlpha = mark.permanent ? 1 : Math.min(1, mark.life / 10);
+        // The surface hides the buried tip; the full-size shaft stays outside the entry hole.
+        ctx.fillStyle = 'rgba(20,17,13,0.85)';
+        ctx.beginPath(); ctx.ellipse(0, 0, 1.7, mark.type === 'spartanSpear' ? 3.4 : 2.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.rect(-160, -80, 160.2, 160); ctx.clip();
+        ctx.translate(-exposedTip, 0);
+        ctx.shadowColor = 'rgba(10,12,10,0.45)'; ctx.shadowOffsetY = 1; ctx.shadowBlur = 1;
+        drawHistoricalProjectile(ctx, { ...mark, x: 0, y: 0, vx: 1, vy: 0 }, 0);
+        ctx.restore();
+    }
+}
+
+const woodIceArt = new WeakMap();
+function getWoodIceArt(impact) {
+    let art = woodIceArt.get(impact);
+    if (art) return art;
+    const seed = impact.hitX * 1.27 + impact.hitY * 0.79 + impact.x * 0.13 + impact.y * 0.31;
+    const rand = i => { const n = Math.sin(seed + i * 19.13) * 43758.5453; return n - Math.floor(n); };
+    const radius = Math.max(14, Math.min(25, Math.min(impact.w, impact.h) * 0.57));
+    let outline = Array.from({ length: 20 }, (_, i) => {
+        const angle = i / 20 * Math.PI * 2;
+        const r = radius * (0.78 + rand(i) * 0.22);
+        return { x: Math.cos(angle) * r, y: Math.sin(angle) * r * 0.88 };
+    });
+    const clip = (polygon, nx, ny, limit) => {
+        const result = [];
+        for (let i = 0; i < polygon.length; i++) {
+            const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+            const da = a.x * nx + a.y * ny - limit, db = b.x * nx + b.y * ny - limit;
+            if (da <= 0) result.push(a);
+            if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+                const t = da / (da - db);
+                result.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+            }
+        }
+        return result;
+    };
+    // Shards come only from wood actually coated by the impact, even at an edge.
+    outline = clip(outline, -1, 0, impact.hitX);
+    outline = clip(outline, 1, 0, impact.w - impact.hitX);
+    outline = clip(outline, 0, -1, impact.hitY);
+    outline = clip(outline, 0, 1, impact.h - impact.hitY);
+    const centers = Array.from({ length: 7 }, (_, i) => ({ x: (rand(70 + i) - 0.5) * radius * 1.7, y: (rand(90 + i) - 0.5) * radius * 1.6 }));
+    const shards = centers.map((center, index) => {
+        let points = outline;
+        for (let j = 0; j < centers.length; j++) {
+            if (j === index) continue;
+            const other = centers[j];
+            points = clip(points, other.x - center.x, other.y - center.y,
+                (other.x * other.x + other.y * other.y - center.x * center.x - center.y * center.y) / 2);
+        }
+        return { points, center };
+    }).filter(shard => shard.points.length >= 3);
+    const size = Math.ceil(radius * 2 + 6), half = size / 2;
+    const image = document.createElement('canvas'); image.width = image.height = size;
+    const c = image.getContext('2d'); c.translate(half, half);
+    const trace = (ctx, points) => {
+        ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+    };
+    trace(c, outline); c.clip();
+    const frost = c.createLinearGradient(-radius, -radius, radius, radius);
+    frost.addColorStop(0, 'rgba(222,240,239,0.74)'); frost.addColorStop(0.32, 'rgba(154,194,206,0.6)');
+    frost.addColorStop(0.65, 'rgba(111,168,185,0.47)'); frost.addColorStop(1, 'rgba(198,223,227,0.67)');
+    c.fillStyle = frost; c.fillRect(-half, -half, size, size);
+    for (let i = 0; i < 65; i++) {
+        const x = (rand(120 + i) - 0.5) * radius * 2, y = (rand(220 + i) - 0.5) * radius * 2;
+        c.fillStyle = i % 4 ? 'rgba(235,249,247,0.28)' : 'rgba(83,133,151,0.2)';
+        c.fillRect(x, y, 0.5 + rand(320 + i), 0.5 + rand(420 + i));
+        if (i % 6 === 0) {
+            c.strokeStyle = 'rgba(234,248,246,0.45)'; c.lineWidth = 0.55;
+            c.beginPath(); c.moveTo(x - 2, y + 3); c.lineTo(x, y); c.lineTo(x + 2, y - 4);
+            c.moveTo(x - 1, y + 1); c.lineTo(x - 4, y); c.moveTo(x + 1, y - 2); c.lineTo(x + 3, y - 1); c.stroke();
+        }
+    }
+    trace(c, outline); c.strokeStyle = 'rgba(225,247,245,0.9)'; c.lineWidth = 1; c.stroke();
+    art = { outline, shards, radius, image, half, trace };
+    woodIceArt.set(impact, art);
+    return art;
+}
+
+const woodWallDeathArt = new WeakMap();
+function getWoodWallDeathArt(effect, frozen) {
+    let art = woodWallDeathArt.get(effect);
+    if (art) return art;
+    const wall = effect.wall, w = effect.w, h = effect.h;
+    const seed = effect.x * 0.23 + effect.y * 0.43 + (frozen ? 19 : 73);
+    const rand = i => { const n = Math.sin(seed + i * 7.913) * 43758.5453; return n - Math.floor(n); };
+    const image = document.createElement('canvas');
+    image.width = Math.max(1, Math.min(512, Math.ceil(w)));
+    image.height = Math.max(1, Math.min(512, Math.ceil(h)));
+    const c = image.getContext('2d');
+    const trace = (ctx, points) => {
+        ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+    };
+    c.save(); c.scale(image.width / w, image.height / h); c.translate(-wall.x, -wall.y);
+    const sourceWall = { ...wall, hp: effect.sourceHp || 1, burning: false };
+    const shape = getWallBreakShape(sourceWall, true);
+    if (shape) clipWallBreakShape(c, wall, shape);
+    GameTerrain.drawWoodenWall(c, wall); GameTerrain.drawWallCover(c, wall);
+    if (wall.woodRotAmount) GameTerrain.drawWoodenWallRot(c, wall);
+    if (wall.woodCharAmount) GameTerrain.drawWoodenWallBurn(c, sourceWall, 0);
+    c.translate(wall.x, wall.y);
+    if (frozen) {
+        const glaze = c.createLinearGradient(0, 0, w, h);
+        glaze.addColorStop(0, 'rgba(218,240,240,0.52)'); glaze.addColorStop(0.38, 'rgba(127,185,202,0.3)');
+        glaze.addColorStop(1, 'rgba(190,227,233,0.48)'); c.fillStyle = glaze; c.fillRect(0, 0, w, h);
+        for (let i = 0; i < Math.min(120, w * h / 24); i++) {
+            c.fillStyle = i % 4 ? 'rgba(232,250,249,0.3)' : 'rgba(72,127,148,0.22)';
+            c.fillRect(rand(i + 800) * w, rand(i + 1000) * h, 0.8 + rand(i + 1200), 0.7);
+        }
+    }
+    c.restore();
+    const cols = Math.max(2, Math.min(frozen ? 5 : 6, Math.ceil(w / (frozen ? 32 : 23))));
+    const rows = Math.max(2, Math.min(frozen ? 3 : 4, Math.ceil(h / (frozen ? 22 : 13))));
+    const grid = Array.from({ length: rows + 1 }, (_, row) => Array.from({ length: cols + 1 }, (_, col) => ({
+        x: col * w / cols + (col === 0 || col === cols ? 0 : (rand(row * 31 + col) - 0.5) * w / cols * 0.45),
+        y: row * h / rows + (row === 0 || row === rows ? 0 : (rand(row * 37 + col + 200) - 0.5) * h / rows * 0.45)
+    })));
+    const midpoint = (a, b, id, border) => {
+        const amount = border ? 0 : (rand(id + 400) - 0.5) * 0.2;
+        return { x: (a.x + b.x) / 2 - (b.y - a.y) * amount, y: (a.y + b.y) / 2 + (b.x - a.x) * amount };
+    };
+    const horizontal = Array.from({ length: rows + 1 }, (_, row) => Array.from({ length: cols }, (_, col) =>
+        midpoint(grid[row][col], grid[row][col + 1], row * 29 + col, row === 0 || row === rows)));
+    const vertical = Array.from({ length: rows }, (_, row) => Array.from({ length: cols + 1 }, (_, col) =>
+        midpoint(grid[row][col], grid[row + 1][col], row * 23 + col + 100, col === 0 || col === cols)));
+    const pieces = [];
+    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+        const id = row * cols + col;
+        const points = [grid[row][col], horizontal[row][col], grid[row][col + 1], vertical[row][col + 1],
+            grid[row + 1][col + 1], horizontal[row + 1][col], grid[row + 1][col], vertical[row][col]];
+        const cx = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+        const cy = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+        const dx = cx - (effect.hitX ?? w / 2), dy = cy - (effect.hitY ?? h / 2);
+        const distance = Math.max(8, Math.hypot(dx, dy));
+        pieces.push({ points, cx, cy, delay: frozen ? rand(id + 500) * 3 : (1 - cy / h) * 8 + rand(id + 500) * 5,
+            dx: frozen ? dx / distance * (13 + rand(id + 600) * 20) + Math.sign(effect.vx || 0) * 7 : (rand(id + 600) - 0.5) * 13,
+            dy: frozen ? dy / distance * (7 + rand(id + 700) * 12) : 12 + rand(id + 700) * 22,
+            spin: (rand(id + 900) - 0.5) * (frozen ? 1.6 : 0.7), lift: 4 + rand(id + 1100) * 9 });
+    }
+    art = { image, pieces, trace, rand };
+    woodWallDeathArt.set(effect, art);
+    return art;
+}
+
+function drawWoodWallDestruction(ctx, effect, frozen) {
+    const art = getWoodWallDeathArt(effect, frozen);
+    const age = effect.age ?? effect.maxLife - effect.life;
+    const start = frozen ? 9 : 0;
+    ctx.save(); ctx.translate(effect.x, effect.y);
+    if (frozen && age < start) {
+        ctx.drawImage(art.image, 0, 0, effect.w, effect.h);
+        ctx.globalAlpha = Math.min(1, age / 7);
+        for (const piece of art.pieces) {
+            art.trace(ctx, piece.points); ctx.strokeStyle = '#618d9e'; ctx.lineWidth = 0.85; ctx.stroke();
+            ctx.save(); ctx.translate(0.6, -0.6); art.trace(ctx, piece.points);
+            ctx.strokeStyle = 'rgba(236,252,249,0.85)'; ctx.lineWidth = 0.65; ctx.stroke(); ctx.restore();
+        }
+    } else {
+        for (const piece of art.pieces) {
+            const progress = Math.max(0, Math.min(1, (age - start - piece.delay) / (frozen ? 38 : 46)));
+            const travel = frozen ? 1 - Math.pow(1 - progress, 2) : progress * progress;
+            const lift = frozen ? Math.sin(progress * Math.PI) * piece.lift : 0;
+            ctx.save();
+            ctx.translate(piece.cx + piece.dx * travel, piece.cy + piece.dy * travel + progress * progress * (frozen ? 17 : 18) - lift);
+            ctx.rotate(piece.spin * travel);
+            const shrink = frozen ? 1 - progress * 0.12 : 1 - Math.pow(progress, 1.3) * 0.65;
+            ctx.scale(shrink, shrink); ctx.translate(-piece.cx, -piece.cy);
+            ctx.globalAlpha = Math.min(1, (1 - progress) * (frozen ? 2.4 : 2));
+            art.trace(ctx, piece.points); ctx.clip();
+            ctx.drawImage(art.image, 0, 0, effect.w, effect.h);
+            if (frozen) {
+                art.trace(ctx, piece.points); ctx.strokeStyle = 'rgba(225,249,251,0.95)'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.translate(0.8, 1); art.trace(ctx, piece.points); ctx.strokeStyle = 'rgba(59,109,130,0.65)'; ctx.lineWidth = 1; ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+    const progress = Math.max(0, (age - start) / (effect.maxLife - start));
+    if (progress > 0) {
+        const colors = frozen ? ['#c1e4e9', '#8cbacb', '#e4f5f3'] : ['#3a3d2a', '#535039', '#7b7950'];
+        for (let i = 0; i < 12; i++) {
+            const fall = Math.max(0, progress - art.rand(i + 1400) * 0.23);
+            if (!fall) continue;
+            const x = art.rand(i + 1500) * effect.w + (art.rand(i + 1600) - 0.5) * fall * (frozen ? 46 : 12);
+            const y = art.rand(i + 1700) * effect.h + fall * fall * 38 - (frozen ? Math.sin(fall * Math.PI) * 9 : 0);
+            const size = (frozen ? 1.5 : 1) + art.rand(i + 1800) * (frozen ? 2.5 : 1.5);
+            ctx.globalAlpha = Math.max(0, 1 - fall * 1.5); ctx.fillStyle = colors[i % 3];
+            ctx.beginPath(); ctx.moveTo(x - size, y); ctx.lineTo(x + size * 0.6, y - size * 0.8); ctx.lineTo(x + size, y + size * 0.7); ctx.closePath(); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+function drawWoodIceImpact(ctx, impact) {
+    if (impact.destroyedWall) { drawWoodWallDestruction(ctx, impact, true); return; }
+    const age = impact.age || 0, wall = impact.wall;
+    const art = getWoodIceArt(impact);
+    const releasing = age >= 26;
+    const progress = Math.max(0, Math.min(1, (age - 26) / 30));
+    const growth = Math.min(1, age / 11);
+    ctx.save();
+    if (!releasing) {
+        ctx.beginPath(); ctx.rect(impact.x, impact.y, impact.w, impact.h); ctx.clip();
+        const shape = getWallBreakShape(wall, true);
+        if (shape && wall.hp > 0) clipWallBreakShape(ctx, wall, shape);
+    }
+    ctx.translate(impact.x + impact.hitX, impact.y + impact.hitY);
+    ctx.scale(growth, growth);
+    if (!releasing) {
+        ctx.globalAlpha = Math.min(1, age / 4);
+        ctx.drawImage(art.image, -art.half, -art.half);
+    }
+    const crack = Math.min(1, Math.max(0, (age - 14) / 10));
+    for (let i = 0; i < art.shards.length; i++) {
+        const shard = art.shards[i];
+        ctx.save();
+        if (releasing) {
+            ctx.translate(shard.center.x * progress * 0.65, shard.center.y * progress * 0.2 + progress * progress * 17);
+            ctx.translate(shard.center.x, shard.center.y); ctx.rotate((i % 2 ? -1 : 1) * progress * 0.6); ctx.translate(-shard.center.x, -shard.center.y);
+            ctx.globalAlpha = 1 - progress;
+            art.trace(ctx, shard.points); ctx.clip();
+            ctx.drawImage(art.image, -art.half, -art.half);
+        }
+        if (crack > 0) {
+            ctx.globalAlpha = (releasing ? 1 - progress : crack) * 0.9;
+            art.trace(ctx, shard.points); ctx.strokeStyle = 'rgba(58,101,121,0.8)'; ctx.lineWidth = 0.8; ctx.stroke();
+            ctx.translate(0.55, -0.45);
+            art.trace(ctx, shard.points); ctx.strokeStyle = 'rgba(230,249,247,0.9)'; ctx.lineWidth = 0.55; ctx.stroke();
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawWoodDecay(ctx, obj) {
+    drawWoodWallDestruction(ctx, obj, false);
+}
+
+function drawRomanSummon(ctx, unit, opacity = 1, remnant = null) {
+    const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
+    const friendly = unit.team === tank.team;
+    const teamColor = friendly ? '#98ad72' : '#c37a69';
+    const fade = Math.min(1, (unit.age || 1) / 10, Math.max(0, unit.life) / 22) * opacity;
+    if (fade <= 0) return;
+    ctx.save(); ctx.translate(cx, cy); ctx.globalAlpha = fade;
+    if (remnant) {
+        ctx.rotate(remnant.expired ? 0 : (1 - remnant.life / remnant.maxLife) * 0.85);
+        ctx.translate(0, (1 - remnant.life / remnant.maxLife) * 4);
+    }
+    ctx.fillStyle = 'rgba(14,18,12,0.27)';
+    ctx.beginPath(); ctx.ellipse(1.5, unit.romanSummon === 'banner' ? 12 : 4, unit.w * 0.6, unit.isCenturion ? 8 : 4.2, unit.isCenturion ? (unit.turretAngle || 0) : 0, 0, Math.PI * 2); ctx.fill();
+    if (unit.romanSummon === 'banner') {
+        if (!remnant && unit.pending > 0) {
+            const progress = 1 - unit.pending / ROMAN_LEGION_DELAY;
+            ctx.strokeStyle = 'rgba(182,155,91,0.3)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.ellipse(0, 8, 30, 15, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.strokeStyle = '#bea365'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.ellipse(0, 8, 30, 15, 0, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2); ctx.stroke();
+        }
+        const wave = Math.sin((unit.age || 0) * 0.055) * 0.8;
+        ctx.strokeStyle = '#493321'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -28); ctx.stroke();
+        ctx.strokeStyle = '#c2a16a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-0.7, 12); ctx.lineTo(-0.7, -27); ctx.stroke();
+        ctx.fillStyle = '#58442e'; ctx.fillRect(-4, 11, 8, 3);
+        ctx.strokeStyle = '#c5a66a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-15, -22); ctx.lineTo(15, -22); ctx.stroke();
+        ctx.fillStyle = '#d1b275';
+        ctx.beginPath(); ctx.moveTo(0, -32); ctx.lineTo(2.4, -28); ctx.lineTo(0, -25); ctx.lineTo(-2.4, -28); ctx.closePath(); ctx.fill();
+        const cloth = ctx.createLinearGradient(-14, -20, 14, 6);
+        cloth.addColorStop(0, '#752827'); cloth.addColorStop(0.45, '#ad4438'); cloth.addColorStop(1, '#682226');
+        ctx.fillStyle = cloth; ctx.strokeStyle = '#c5a267'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-13, -21); ctx.lineTo(13, -21); ctx.lineTo(13 + wave, 5); ctx.quadraticCurveTo(0, 7 - wave, -13 + wave, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(244,185,135,0.22)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-8, -20); ctx.quadraticCurveTo(-6 + wave, -8, -8 + wave, 4); ctx.moveTo(7, -20); ctx.quadraticCurveTo(5 + wave, -8, 7 + wave, 4); ctx.stroke();
+        ctx.strokeStyle = '#d3b475'; ctx.lineWidth = 1;
+        for (let x = -11; x <= 11; x += 3) { ctx.beginPath(); ctx.moveTo(x + wave, 5); ctx.lineTo(x + wave, 8); ctx.stroke(); }
+        // A stylised eagle and inscription evoke Roman military standards.
+        ctx.fillStyle = '#d8bc80'; ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-3, -16); ctx.lineTo(-9, -17); ctx.lineTo(-7, -12); ctx.lineTo(-3, -10); ctx.lineTo(0, -11); ctx.lineTo(3, -10); ctx.lineTo(7, -12); ctx.lineTo(9, -17); ctx.lineTo(3, -16); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, -12, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 5px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('SPQR', wave * 0.3, 0);
+        if (!remnant && unit.pending > 0) {
+            ctx.fillStyle = '#e1d6b5'; ctx.font = 'bold 8px sans-serif'; ctx.fillText(Math.ceil(unit.pending / 60), 0, -38);
+        }
+    } else {
+        ctx.rotate(unit.turretAngle || 0);
+        const centurion = unit.isCenturion === true;
+        ctx.scale(unit.w / (centurion ? 36 : 20), unit.h / (centurion ? 30 : 25));
+        if (centurion) {
+            const gait = unit.walking ? (unit.walkPhase || 0) * 0.8 : 0;
+            // Diagonal pairs trot together; legs and hooves remain underneath the horse.
+            for (const front of [-1, 1]) for (const side of [-1, 1]) {
+                const step = unit.walking ? Math.sin(gait + (front === side ? 0 : Math.PI)) * 3 : 0;
+                const hipX = front > 0 ? 8 : -11;
+                ctx.strokeStyle = '#493126'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(hipX, side * 4); ctx.lineTo(hipX - 1 + step * 0.4, side * 8); ctx.lineTo(hipX + step, side * 11); ctx.stroke();
+                ctx.strokeStyle = '#b48a62'; ctx.lineWidth = 1.1;
+                ctx.beginPath(); ctx.moveTo(hipX - 1 + step * 0.4, side * 7); ctx.lineTo(hipX + step, side * 10); ctx.stroke();
+                ctx.fillStyle = '#292723'; ctx.beginPath(); ctx.roundRect(hipX + step - 1.4, side * 11 - 1.6, 3.6, 3.2, 1); ctx.fill();
+            }
+            const tail = unit.walking ? Math.sin(gait * 0.5) * 1.7 : 0;
+            ctx.strokeStyle = '#30271f'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(-15, 0); ctx.bezierCurveTo(-20, -1, -20, 3 + tail, -25, 2 + tail); ctx.stroke();
+            const coat = ctx.createLinearGradient(-6, -8, 3, 8);
+            coat.addColorStop(0, '#b58b61'); coat.addColorStop(0.4, '#8c603f'); coat.addColorStop(1, '#51392a');
+            ctx.fillStyle = coat; ctx.strokeStyle = '#493427'; ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.ellipse(-3, 0, 14, 7.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(-11, 0, 6.2, 6.8, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(5, -5.8); ctx.bezierCurveTo(11, -6, 13, -5, 18, -3.5); ctx.lineTo(19, 3); ctx.bezierCurveTo(12, 5.8, 10, 6, 5, 5.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = '#382a22'; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(7, -4.8); ctx.quadraticCurveTo(13, -5.5, 19, -2.8); ctx.stroke();
+            ctx.fillStyle = coat;
+            ctx.beginPath(); ctx.moveTo(16, -3.6); ctx.quadraticCurveTo(21, -5.5, 24, -2.6); ctx.lineTo(27, -1.8); ctx.quadraticCurveTo(28, 0, 26, 2); ctx.lineTo(21, 3); ctx.lineTo(16, 2.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+            for (const side of [-1, 1]) {
+                ctx.fillStyle = '#765039'; ctx.beginPath(); ctx.moveTo(18, side * 2.2); ctx.lineTo(20, side * 5.2); ctx.lineTo(21.3, side * 2.5); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#211f1c'; ctx.beginPath(); ctx.arc(23.1, side * 2.2, 0.65, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.strokeStyle = '#bc9b72'; ctx.lineWidth = 0.7;
+            ctx.beginPath(); ctx.moveTo(25, -2.5); ctx.lineTo(25.3, 2.2); ctx.moveTo(19, -3.8); ctx.lineTo(20, 3.2); ctx.stroke();
+            ctx.strokeStyle = '#493628'; ctx.lineWidth = 0.65;
+            ctx.beginPath(); ctx.moveTo(24.5, -1.7); ctx.quadraticCurveTo(14, -5, 3, -3); ctx.moveTo(24.5, 1.7); ctx.quadraticCurveTo(14, 6, 3, 5); ctx.stroke();
+            ctx.fillStyle = '#7b3030'; ctx.strokeStyle = '#b69a65'; ctx.lineWidth = 0.7;
+            ctx.beginPath(); ctx.roundRect(-9, -8, 12, 16, 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#51382a'; ctx.beginPath(); ctx.roundRect(-7, -5, 7, 10, 2); ctx.fill();
+            // Keep the rider human-sized while the mount has its own larger footprint.
+            ctx.translate(-2, unit.walking ? Math.sin(gait * 2) * 0.35 : 0);
+            ctx.scale(0.85, 0.85);
+        }
+        const stride = unit.walking ? Math.sin(unit.walkPhase || 0) * 2 : 0;
+        const melee = (unit.attackType === 'melee' || unit.attackType === 'cavalrySword') && unit.attackAnim > 0;
+        const mountedSpear = centurion && !melee;
+        const attackDuration = centurion ? (melee ? 22 : 30) : (melee ? 18 : 14);
+        const attackProgress = unit.attackAnim > 0 ? Math.max(0, Math.min(1, 1 - unit.attackAnim / attackDuration)) : 0;
+        const attack = unit.attackAnim > 0 ? Math.sin(attackProgress * Math.PI) : 0;
+        const bob = unit.walking ? Math.sin((unit.walkPhase || 0) * 2) * 0.3 : 0;
+        // Feet alternate underneath the tunic instead of sliding with the entire body.
+        for (const side of [-1, 1]) {
+            if (centurion) {
+                ctx.strokeStyle = '#9a6d4c'; ctx.lineWidth = 2.6;
+                ctx.beginPath(); ctx.moveTo(-5, side * 3); ctx.lineTo(-5.5, side * 8.5); ctx.stroke();
+                ctx.fillStyle = '#382b23'; ctx.beginPath(); ctx.roundRect(-6.5, side * 9 - 1.6, 5, 3.2, 1); ctx.fill();
+                continue;
+            }
+            const step = stride * side;
+            ctx.strokeStyle = '#b58d6d'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(-6, side * 3); ctx.lineTo(-10 + step, side * 3.8); ctx.stroke();
+            ctx.fillStyle = '#4b3528'; ctx.strokeStyle = '#241f1b'; ctx.lineWidth = 0.7;
+            ctx.beginPath(); ctx.roundRect(-13 + step, side * 3.8 - 1.6, 5.8, 3.2, 1.3); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = '#c1a17b'; ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(-10.5 + step, side * 3.8 - 1.2); ctx.lineTo(-10.5 + step, side * 3.8 + 1.2); ctx.stroke();
+        }
+        ctx.translate(bob + (melee ? attack * 1.8 : 0), 0);
+        const tunic = ctx.createLinearGradient(-10, -6, -3, 6);
+        tunic.addColorStop(0, '#b75242'); tunic.addColorStop(1, '#662c2b');
+        ctx.fillStyle = tunic; ctx.strokeStyle = '#462725'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(-7, -5); ctx.lineTo(-10, -5.8); ctx.lineTo(-11, 5.6); ctx.lineTo(-6, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#ce8a62'; ctx.lineWidth = 0.6;
+        for (const y of [-3, 0, 3]) { ctx.beginPath(); ctx.moveTo(-9.4, y); ctx.lineTo(-6.3, y); ctx.stroke(); }
+        // Broad articulated shoulders, waist and separate arms create a readable human silhouette.
+        ctx.strokeStyle = '#642e2a'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(-2, -4); ctx.lineTo(2, -7); ctx.moveTo(-2, 4); ctx.lineTo(1.5 + attack * 2, 7); ctx.stroke();
+        ctx.strokeStyle = '#bf9875'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(1, -7); ctx.lineTo(5, -6.5); ctx.moveTo(1.5 + attack * 2, 7); ctx.lineTo(5 + attack * 4, 7.5); ctx.stroke();
+        const steel = ctx.createLinearGradient(-6, -6, 0, 6);
+        steel.addColorStop(0, centurion ? '#dec78f' : '#d3d4c7'); steel.addColorStop(0.4, centurion ? '#b4975e' : '#9da69f'); steel.addColorStop(1, centurion ? '#6e5c3e' : '#545e5c');
+        ctx.fillStyle = steel; ctx.strokeStyle = '#353d3c'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.roundRect(-6.7, -5.8, 7.6, 11.6, 2.2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#59635e'; ctx.lineWidth = 0.7;
+        for (let x = -5; x < 0; x += 1.7) { ctx.beginPath(); ctx.moveTo(x, -5); ctx.quadraticCurveTo(x - 0.7, 0, x, 5); ctx.stroke(); }
+        for (const side of [-1, 1]) {
+            ctx.fillStyle = steel; ctx.beginPath(); ctx.roundRect(-3.8, side * 5 - 1.7, 5.4, 3.4, 1.2); ctx.fill(); ctx.stroke();
+        }
+        ctx.fillStyle = '#694833'; ctx.fillRect(-7.2, -4.7, 1.7, 9.4);
+        ctx.fillStyle = '#c6ac70'; ctx.fillRect(-7.3, -1, 2, 2);
+        // Cavalry uses a long spatha swing or a forward fighting-spear thrust.
+        const hand = 5 + attack * (mountedSpear ? 8 : melee ? 4 : -3);
+        ctx.save(); ctx.translate(hand, 7.5);
+        ctx.rotate(centurion ? (melee ? -1.1 + attackProgress * 1.8 : -0.08 + attack * 0.08) : (melee ? -attack * 0.25 : -attack * 0.35));
+        ctx.strokeStyle = '#47362a'; ctx.lineWidth = 1.7;
+        ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(2, 0); ctx.stroke();
+        if (melee) {
+            const bladeLength = centurion ? 19 : 13;
+            ctx.fillStyle = '#c4cbd0'; ctx.strokeStyle = '#4b565b'; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.moveTo(2, -1.3); ctx.lineTo(bladeLength - 3, -0.9); ctx.lineTo(bladeLength, 0); ctx.lineTo(bladeLength - 3, 0.9); ctx.lineTo(2, 1.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = '#eee7d4'; ctx.beginPath(); ctx.moveTo(3, -0.4); ctx.lineTo(bladeLength - 2, 0); ctx.stroke();
+            ctx.strokeStyle = '#b79a62'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(2, -2); ctx.lineTo(2, 2); ctx.stroke();
+        } else if (mountedSpear) {
+            ctx.strokeStyle = '#6e4b30'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-11, 0); ctx.lineTo(28, 0); ctx.stroke();
+            ctx.strokeStyle = '#b19261'; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.moveTo(-9, -0.35); ctx.lineTo(27, -0.35); ctx.stroke();
+            ctx.fillStyle = '#cbd1c8'; ctx.strokeStyle = '#555e58'; ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.moveTo(27, -1); ctx.lineTo(31, -1.6); ctx.lineTo(36, 0); ctx.lineTo(31, 1.6); ctx.lineTo(27, 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.strokeStyle = '#f0ead5'; ctx.beginPath(); ctx.moveTo(29, -0.3); ctx.lineTo(34, 0); ctx.stroke();
+        } else {
+            ctx.strokeStyle = '#755137'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(10, 0); ctx.stroke();
+            ctx.strokeStyle = '#9ca8ab'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(15, 0); ctx.stroke();
+            ctx.fillStyle = '#d1d8d5'; ctx.beginPath(); ctx.moveTo(17, 0); ctx.lineTo(14, -1.1); ctx.lineTo(14, 1.1); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+        // A curved scutum protects the left arm without hiding the face and torso.
+        ctx.save(); ctx.translate(unit.bracing ? 6.5 : 4.5, -7); ctx.rotate(unit.bracing ? 0.08 : -0.12);
+        const shield = ctx.createLinearGradient(-3.5, 0, 4, 0);
+        shield.addColorStop(0, '#762d2c'); shield.addColorStop(0.45, '#bd5845'); shield.addColorStop(1, '#6b292a');
+        ctx.fillStyle = shield; ctx.strokeStyle = unit.shieldHit > 0 ? '#f0deb0' : '#bd9a62'; ctx.lineWidth = unit.shieldHit > 0 ? 1.2 : 0.85;
+        ctx.beginPath();
+        if (centurion) ctx.ellipse(0, 0, 4.1, 7.2, 0, 0, Math.PI * 2);
+        else { ctx.moveTo(-3.5, -6.6); ctx.quadraticCurveTo(0, -8, 3.5, -6.6); ctx.lineTo(3.5, 6.6); ctx.quadraticCurveTo(0, 8, -3.5, 6.6); ctx.closePath(); }
+        ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#e0bc78'; ctx.lineWidth = 0.65;
+        for (const side of [-1, 1]) {
+            ctx.beginPath(); ctx.moveTo(-1.9, side * 5.7); ctx.lineTo(1, side * 3.7); ctx.lineTo(-1, side * 2.8); ctx.lineTo(1.9, side * 1.1); ctx.stroke();
+        }
+        ctx.fillStyle = '#493c2d'; ctx.beginPath(); ctx.ellipse(0, 0, 2.1, 2.7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#d5bc83'; ctx.beginPath(); ctx.ellipse(-0.3, -0.2, 1.4, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        // Imperial-style iron helmet: neck guard, cheeks and a restrained central ridge.
+        ctx.fillStyle = '#626a64'; ctx.beginPath(); ctx.ellipse(-0.5, 0, 3.6, 4.7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#bf9673'; ctx.beginPath(); ctx.ellipse(3.3, 0, 2, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+        const helmet = ctx.createLinearGradient(-2, -4, 3, 4);
+        helmet.addColorStop(0, '#e3e2ce'); helmet.addColorStop(0.4, '#b4bcb5'); helmet.addColorStop(1, '#68736e');
+        ctx.fillStyle = helmet; ctx.strokeStyle = '#404a46'; ctx.lineWidth = 0.7;
+        ctx.beginPath(); ctx.ellipse(0.5, 0, 3.7, 3.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#d9c99e'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(-2.5, 0); ctx.lineTo(3.4, 0); ctx.stroke();
+        ctx.strokeStyle = '#64706a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(3.5, -2.7); ctx.lineTo(4.5, -1.3); ctx.moveTo(3.5, 2.7); ctx.lineTo(4.5, 1.3); ctx.stroke();
+        if (centurion) {
+            // A transverse crimson crest distinguishes the officer at game scale.
+            ctx.strokeStyle = '#4f2829'; ctx.lineWidth = 3.6;
+            ctx.beginPath(); ctx.moveTo(0, -6.5); ctx.quadraticCurveTo(-2.5, 0, 0, 6.5); ctx.stroke();
+            ctx.strokeStyle = '#b94d40'; ctx.lineWidth = 2.3;
+            ctx.beginPath(); ctx.moveTo(-0.3, -6.3); ctx.quadraticCurveTo(-2.7, 0, -0.3, 6.3); ctx.stroke();
+            ctx.strokeStyle = '#df9670'; ctx.lineWidth = 0.6;
+            for (let y = -5; y <= 5; y += 2) { ctx.beginPath(); ctx.moveTo(-0.8, y); ctx.lineTo(-2.6 + Math.abs(y) * 0.16, y); ctx.stroke(); }
+        }
+    }
+    ctx.restore();
+    if (!remnant && unit.romanSummon === 'legionary') {
+        ctx.save(); ctx.globalAlpha = fade;
+        const y = unit.y - 6;
+        ctx.fillStyle = '#24261f'; ctx.fillRect(unit.x, y, unit.w, 2.5);
+        ctx.fillStyle = teamColor; ctx.fillRect(unit.x, y, unit.w * Math.max(0, unit.hp / unit.maxHp), 2.5);
+        ctx.restore();
+        if (unit.romanSummon === 'legionary') {
+            if (unit.frozenEffect > 0 && typeof drawFrozenOverlay === 'function') drawFrozenOverlay(ctx, unit.x, unit.y, unit.w, unit.h, unit.frozenEffect);
+            else if (unit.iceSlowed && typeof drawIceSlowOverlay === 'function') drawIceSlowOverlay(ctx, unit.x, unit.y, unit.w, unit.h, unit.iceSlowedTime, unit);
+        }
+    }
+}
+
+function drawRomanRemnant(ctx, object) {
+    drawRomanSummon(ctx, { ...object.unit, life: 100, age: 20 }, object.life / object.maxLife, object);
+}
+
 function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
     ctx.strokeStyle = GameTerrain.current() === 'forest' || GameTerrain.current() === 'night' ?
         'rgba(0,0,0,0.045)' : 'rgba(0,0,0,0.018)';
@@ -4760,9 +5888,9 @@ function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
 function drawReloadBar(ctx, unit, type, color) {
     if (type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket') return;
     // The machinegun reloads only after its full firing burst overheats.
-    const remaining = type === 'machinegun'
-        ? (unit.overheated ? Math.max(0, unit.heat || 0) : 0)
-        : Math.max(0, unit.fireCooldown || 0);
+    let remaining = Math.max(0, unit.fireCooldown || 0);
+    if (type === 'machinegun') remaining = unit.overheated ? Math.max(0, unit.heat || 0) : 0;
+    if (type === 'illuminat') remaining = unit.beamActive ? 0 : Math.max(0, unit.beamCooldown || 0);
     if (type === 'myasnoy' && !unit.myasnoyUltActive && remaining > 0 &&
         remaining <= 12 && (unit._reloadBarTotal || 0) <= 12 && !unit.myasnoyReloading) return;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -4806,20 +5934,20 @@ function renderGameFrame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // ensure normal drawing mode
     ctx.globalCompositeOperation = 'source-over';
-    
+
     // Viewport culling optimizations
     let camX = 0;
     let camY = 0;
     let cameraTranslated = false;
-    
+
     if (cameraFollow) {
         const offsetX = canvas.width/2 - (tank.x + tank.w/2);
         const offsetY = canvas.height/2 - (tank.y + tank.h/2);
-        
+
         ctx.save();
         ctx.translate(offsetX, offsetY);
         cameraTranslated = true;
-        
+
         camX = tank.x + tank.w/2 - canvas.width/2;
         camY = tank.y + tank.h/2 - canvas.height/2;
         // Expose to mobile controls
@@ -4829,7 +5957,7 @@ function renderGameFrame() {
         window._camX = 0;
         window._camY = 0;
     }
-    
+
     // Define safe view bounds for culling (viewport + margin)
     const cullMargin = 150;
     const viewLeft = camX - cullMargin;
@@ -4873,14 +6001,17 @@ function renderGameFrame() {
 
     // 3. Объекты
     objects.forEach(obj => {
-        const rad = obj.radius || 0; // for circles
+        const rad = (obj.radius || 0) * (obj.explosionStyle ? 1.35 : 1); // include flying fragments
         if (!isVisible(obj.x - rad, obj.y - rad, obj.w || (rad*2), obj.h || (rad*2))) return;
         if (obj.type === 'iceField') return;
+        if (obj.type === 'visualRocket' && obj.barrageVisual && obj.delay > 0) return;
 
         ctx.save();
         ctx.fillStyle = obj.color;
         if (obj.type === 'wall') {
             const wx = obj.x, wy = obj.y, ww = obj.w, wh = obj.h;
+            const brokenShape = getWallBreakShape(obj);
+            if (brokenShape) { ctx.save(); clipWallBreakShape(ctx, obj, brokenShape); }
             // Metallic/Industrial Block
             const grad = ctx.createLinearGradient(wx, wy, wx + ww, wy + wh);
             grad.addColorStop(0, '#555');
@@ -4888,14 +6019,14 @@ function renderGameFrame() {
             grad.addColorStop(1, '#222');
             ctx.fillStyle = grad;
             ctx.fillRect(wx, wy, ww, wh);
-            
+
             // Inner bevel
             ctx.lineWidth = 2;
-            ctx.strokeStyle = '#666'; 
+            ctx.strokeStyle = '#666';
             ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.stroke();
             ctx.strokeStyle = '#111';
             ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx+ww, wy+wh); ctx.lineTo(wx, wy+wh); ctx.stroke();
-            
+
             // Rivets on corners
             ctx.fillStyle = '#111';
             const m = 4;
@@ -4903,7 +6034,7 @@ function renderGameFrame() {
             ctx.fillRect(wx+ww-m-2, wy+m, 2, 2);
             ctx.fillRect(wx+m, wy+wh-m-2, 2, 2);
             ctx.fillRect(wx+ww-m-2, wy+wh-m-2, 2, 2);
-            
+
             // Simple X brace pattern in center for industrial feel
             ctx.strokeStyle = 'rgba(0,0,0,0.3)';
             ctx.lineWidth = 2;
@@ -4913,175 +6044,66 @@ function renderGameFrame() {
             ctx.stroke();
 
             GameTerrain.drawWallCover(ctx, obj);
-            // Cracks from mechShield bullets (wallDamageCount)
-            const dmgCount = obj.wallDamageCount || 0;
-            if (dmgCount > 0) {
-                // Seeded random for consistent crack patterns
-                const seededRandom = (seed) => {
-                    const x = Math.sin(seed) * 10000;
-                    return x - Math.floor(x);
-                };
-                
-                // Draw cracks - more cracks and deeper red as damage increases
-                ctx.lineWidth = 1.5 + dmgCount * 0.3;
-                for (let c = 0; c < dmgCount; c++) {
-                    const baseSeed = obj.x + obj.y + c * 1000;
-                    const rnd1 = seededRandom(baseSeed + 1.1);
-                    const rnd2 = seededRandom(baseSeed + 2.2);
-                    const rnd3 = seededRandom(baseSeed + 3.3);
-                    const rnd4 = seededRandom(baseSeed + 4.4);
-                    const rnd5 = seededRandom(baseSeed + 5.5);
-                    const rnd6 = seededRandom(baseSeed + 6.6);
-                    
-                    // Color shifts from orange to red as damage increases
-                    const redIntensity = 150 + (dmgCount / 6) * 105;
-                    const orangeIntensity = 200 - (dmgCount / 6) * 100;
-                    ctx.strokeStyle = `rgba(${Math.floor(redIntensity)}, ${Math.floor(orangeIntensity)}, 0, ${0.5 + dmgCount * 0.08})`;
-                    
-                    // Crack path across wall
-                    const startX = wx + rnd1 * ww;
-                    const startY = wy + rnd2 * wh;
-                    const midX = wx + rnd3 * ww + (rnd5 - 0.5) * 6;
-                    const midY = wy + rnd4 * wh + (rnd6 - 0.5) * 6;
-                    const endX = wx + (rnd1 + rnd3) / 2 * ww;
-                    const endY = wy + (rnd2 + rnd4) / 2 * wh;
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(startX, startY);
-                    ctx.lineTo(midX, midY);
-                    ctx.lineTo(endX, endY);
-                    ctx.stroke();
-                }
-            }
+            if (brokenShape) ctx.restore();
+            drawWallBrokenEdges(ctx, obj, brokenShape);
 
         } else if (obj.type === 'woodenWall') {
-            const wx = obj.x, wy = obj.y, ww = obj.w, wh = obj.h;
-            const hp = obj.hp ?? 300;
-            const maxHp = obj.maxHp ?? 300;
-            const dmgRatio = 1 - hp / maxHp; // 0=intact, 1=destroyed
-
-            // Base wood gradient
-            const grad = ctx.createLinearGradient(wx, wy, wx + ww, wy + wh);
-            grad.addColorStop(0, '#a0652a');
-            grad.addColorStop(0.5, '#7a4a1e');
-            grad.addColorStop(1, '#5c3310');
-            ctx.fillStyle = grad;
-            ctx.fillRect(wx, wy, ww, wh);
-
-            // Wood plank lines (horizontal)
-            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-            ctx.lineWidth = 1;
-            const planks = 3;
-            for (let p = 1; p < planks; p++) {
-                const py = wy + (wh / planks) * p;
-                ctx.beginPath(); ctx.moveTo(wx, py); ctx.lineTo(wx + ww, py); ctx.stroke();
-            }
-            // Vertical grain lines
-            ctx.strokeStyle = 'rgba(255,200,100,0.1)';
-            for (let g = 0; g < 4; g++) {
-                const gx = wx + (ww / 5) * (g + 1);
-                ctx.beginPath(); ctx.moveTo(gx, wy); ctx.lineTo(gx + 2, wy + wh); ctx.stroke();
-            }
-
-            // Edge bevel
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = 'rgba(255,180,80,0.3)';
-            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.stroke();
-            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx+ww, wy+wh); ctx.lineTo(wx, wy+wh); ctx.stroke();
-
-            // Burn tint if burning
-            if (obj.burning) {
-                ctx.fillStyle = `rgba(255,80,0,${0.15 + Math.random() * 0.1})`;
-                ctx.fillRect(wx, wy, ww, wh);
-            }
-
-            // Cracks based on damage ratio
-            if (dmgRatio > 0.1) {
-                const seededRandom = (seed) => { const x = Math.sin(seed) * 10000; return x - Math.floor(x); };
-                const crackCount = Math.floor(dmgRatio * 8) + 1;
-                ctx.lineWidth = 1 + dmgRatio * 2;
-                for (let c = 0; c < crackCount; c++) {
-                    const baseSeed = wx + wy * 7 + c * 137;
-                    const r1 = seededRandom(baseSeed + 1.1), r2 = seededRandom(baseSeed + 2.2);
-                    const r3 = seededRandom(baseSeed + 3.3), r4 = seededRandom(baseSeed + 4.4);
-                    const r5 = seededRandom(baseSeed + 5.5), r6 = seededRandom(baseSeed + 6.6);
-                    const alpha = 0.4 + dmgRatio * 0.5;
-                    ctx.strokeStyle = `rgba(30,10,0,${alpha})`;
-                    const sx = wx + r1 * ww, sy = wy + r2 * wh;
-                    const mx = wx + r3 * ww + (r5 - 0.5) * 8, my = wy + r4 * wh + (r6 - 0.5) * 8;
-                    const ex = wx + (r1 + r3) / 2 * ww, ey = wy + (r2 + r4) / 2 * wh;
-                    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
-                }
-                // Dark splinter overlay at heavy damage
-                if (dmgRatio > 0.6) {
-                    ctx.fillStyle = `rgba(20,5,0,${(dmgRatio - 0.6) * 0.5})`;
-                    ctx.fillRect(wx, wy, ww, wh);
-                }
-            }
+            const brokenShape = getWallBreakShape(obj, true);
+            if (brokenShape) { ctx.save(); clipWallBreakShape(ctx, obj, brokenShape); }
+            GameTerrain.drawWoodenWall(ctx, obj);
             GameTerrain.drawWallCover(ctx, obj);
+            if (brokenShape) ctx.restore();
+            drawWallBrokenEdges(ctx, obj, brokenShape);
+            if (obj.woodRotAmount) {
+                ctx.save(); if (brokenShape) clipWallBreakShape(ctx, obj, brokenShape);
+                GameTerrain.drawWoodenWallRot(ctx, obj); ctx.restore();
+            }
+            GameTerrain.drawWoodenWallBurn(ctx, obj, window.frameCount || 0, brokenShape && brokenShape.points);
+            drawEmbeddedProjectiles(ctx, obj, false);
 
         } else if (obj.type === 'barrel') {
-            const cx = obj.x + obj.w/2;
-            const cy = obj.y + obj.h/2;
-            const rx = obj.w/2;
-            const ry = Math.max(6, obj.h * 0.18);
-
-            const grad = ctx.createLinearGradient(obj.x, obj.y, obj.x, obj.y + obj.h);
-            grad.addColorStop(0, '#4b2b17');
-            grad.addColorStop(0.45, '#7a4d2a');
-            grad.addColorStop(0.55, '#c27f48');
-            grad.addColorStop(1, '#5a2f18');
-            ctx.fillStyle = grad;
-            ctx.fillRect(obj.x, obj.y + ry * 0.5, obj.w, obj.h - ry);
-
-            ctx.beginPath();
-            ctx.ellipse(cx, obj.y + ry * 0.6, rx * 0.92, ry * 0.9, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#6b361b';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
-
-            const bandH = Math.max(4, obj.h * 0.08);
-            const bandY1 = obj.y + obj.h * 0.28;
-            const bandY2 = obj.y + obj.h * 0.62;
-            ctx.fillStyle = '#33363a'; ctx.fillRect(obj.x, bandY1, obj.w, bandH);
-            ctx.fillStyle = '#2b2f34'; ctx.fillRect(obj.x, bandY2, obj.w, bandH);
-            ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(obj.x, bandY1 + 1, obj.w, 1);
-            ctx.fillRect(obj.x, bandY2 + 1, obj.w, 1);
-
-            ctx.fillStyle = 'rgba(220,220,220,0.6)';
-            const rivetCount = Math.max(3, Math.floor(obj.w / 40));
-            for (let r = 0; r < rivetCount; r++) {
-                const rxpos = obj.x + 8 + (r / (rivetCount - 1)) * (obj.w - 16);
-                ctx.beginPath(); ctx.arc(rxpos, bandY1 + bandH/2, 2, 0, Math.PI*2); ctx.fill();
-                ctx.beginPath(); ctx.arc(rxpos, bandY2 + bandH/2, 2, 0, Math.PI*2); ctx.fill();
-            }
-
-            ctx.beginPath();
-            ctx.moveTo(obj.x + obj.w * 0.18, obj.y + obj.h * 0.12);
-            ctx.quadraticCurveTo(obj.x + obj.w * 0.23, obj.y + obj.h * 0.5, obj.x + obj.w * 0.18, obj.y + obj.h * 0.88);
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = Math.max(2, obj.w * 0.06); ctx.stroke();
-
-            const radial = ctx.createRadialGradient(cx, obj.y + ry*0.6, 2, cx, obj.y + ry*0.6, rx*1.1);
-            radial.addColorStop(0, 'rgba(255,255,255,0.22)');
-            radial.addColorStop(0.25, 'rgba(255,255,255,0.06)');
-            radial.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = radial;
-            ctx.beginPath(); ctx.ellipse(cx, obj.y + ry * 0.6, rx * 0.9, ry * 0.9, 0, 0, Math.PI * 2); ctx.fill();
-
-            // bottom shadow ellipse
-            ctx.beginPath();
-            ctx.ellipse(cx, obj.y + obj.h - ry * 0.35, rx * 0.9, ry * 0.6, 0, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0,0,0,0.22)';
-            ctx.fill();
+            GameTerrain.drawBarrel(ctx, obj);
         } else if (obj.type === 'targetCircle') {
-            ctx.strokeStyle = obj.color;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
-            ctx.stroke();
+            if (obj.buratinoBarrage) {
+                const warning = Math.min(1, obj.elapsed / obj.warningTicks);
+                const flash = (obj.flashTicks || 0) / 8;
+                ctx.fillStyle = obj.ultimate
+                    ? `rgba(233, 65, 25, ${0.11 + flash * 0.22})`
+                    : `rgba(241, 158, 50, ${0.09 + flash * 0.22})`;
+                ctx.strokeStyle = obj.ultimate ? 'rgba(255, 106, 58, 0.78)' : 'rgba(255, 190, 96, 0.78)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                if (obj.elapsed < obj.warningTicks) {
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = 'rgba(255, 234, 175, 0.9)';
+                    ctx.beginPath();
+                    ctx.arc(obj.x, obj.y, obj.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * warning);
+                    ctx.stroke();
+                }
+            } else {
+                ctx.strokeStyle = obj.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        } else if (obj.type === 'woodIceImpact') {
+            drawWoodIceImpact(ctx, obj);
+        } else if (obj.type === 'romanRemnant') {
+            drawRomanRemnant(ctx, obj);
+        } else if (obj.type === 'woodDecay') {
+            drawWoodDecay(ctx, obj);
+        } else if (obj.type === 'terrainDebris') {
+            drawTerrainDebris(ctx, obj);
         } else if (obj.type === 'explosion') {
+            if (obj.explosionStyle || obj.color) {
+                drawOrdnanceExplosion(ctx, obj);
+                ctx.restore();
+                return;
+            }
             const maxLife = obj.maxLife || 30;
             const t = Math.max(0, obj.life / maxLife); // 1→0
             const progress = 1 - t;                   // 0→1
@@ -5492,6 +6514,8 @@ function renderGameFrame() {
             drawPlasmaBolt(ctx, b, false);
         } else if (b.type === 'plasmaBlast') {
             drawPlasmaBolt(ctx, b, true);
+        } else if (b.type === 'toxic' && b.toxicWave) {
+            drawToxicWaveProjectile(ctx, b);
         } else if (b.type === 'toxic') {
             const r = Math.max(3, b.w / 2);
             const wobble = Math.sin(Date.now() * 0.02 + b.x) * 2;
@@ -5619,180 +6643,8 @@ function renderGameFrame() {
                 });
             }
 
-        } else if (b.type === 'romanBlade') {
-            // Roman gladius — solid iron short-sword spinning in flight
-            ctx.save();
-            ctx.translate(b.x, b.y);
-            ctx.rotate(b.spinAngle || 0);
-
-            const bLen = (b.w || 14) * 0.95; // half-length from centre to tip
-            const bWid = bLen * 0.28;         // max half-width at blade shoulder
-
-            // === Blade body (iron/steel, flat faces) ===
-            // Left side: straight back edge, right side: double-edged taper to point
-            ctx.beginPath();
-            ctx.moveTo( bLen, 0);                      // front tip
-            ctx.lineTo( bLen * 0.55,  bWid);           // upper shoulder
-            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);    // upper back edge
-            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);    // lower back edge
-            ctx.lineTo( bLen * 0.55, -bWid);           // lower shoulder
-            ctx.closePath();
-            const bladeGrad = ctx.createLinearGradient(0, -bWid, 0, bWid);
-            bladeGrad.addColorStop(0,   '#8a9aaa');   // upper edge (lighter)
-            bladeGrad.addColorStop(0.3, '#b0c0cc');   // upper bevel
-            bladeGrad.addColorStop(0.5, '#d8e4e8');   // Fuller / central highlight
-            bladeGrad.addColorStop(0.7, '#8a9aaa');   // lower bevel
-            bladeGrad.addColorStop(1,   '#5c6a74');   // lower edge (shadow)
-            ctx.fillStyle = bladeGrad;
-            ctx.fill();
-
-            // Central fuller (ridge line)
-            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-            ctx.lineWidth = 0.9;
-            ctx.beginPath();
-            ctx.moveTo(bLen * 0.92, 0);
-            ctx.lineTo(-bLen * 0.3, 0);
-            ctx.stroke();
-
-            // Blade outline
-            ctx.strokeStyle = '#3d4a52';
-            ctx.lineWidth = 0.7;
-            ctx.beginPath();
-            ctx.moveTo( bLen, 0);
-            ctx.lineTo( bLen * 0.55,  bWid);
-            ctx.lineTo(-bLen * 0.38,  bWid * 0.72);
-            ctx.lineTo(-bLen * 0.38, -bWid * 0.72);
-            ctx.lineTo( bLen * 0.55, -bWid);
-            ctx.closePath();
-            ctx.stroke();
-
-            // === Crossguard (gold horizontal bar) ===
-            const gW = bWid * 0.28;
-            const gH = bWid * 1.55;
-            ctx.fillStyle = '#D4A017';
-            ctx.fillRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
-            ctx.strokeStyle = '#8B6914';
-            ctx.lineWidth = 0.6;
-            ctx.strokeRect(-bLen * 0.38 - gW, -gH / 2, gW * 2, gH);
-
-            // === Handle (dark red leather wrapping) ===
-            const handleLen = bLen * 0.42;
-            const handleH   = bWid * 0.65;
-            ctx.fillStyle = '#6B1010';
-            ctx.fillRect(-bLen * 0.38 - gW - handleLen, -handleH / 2, handleLen, handleH);
-            // Wrapping bands
-            ctx.strokeStyle = '#3a0808';
-            ctx.lineWidth = 0.8;
-            for (let bi = 1; bi <= 3; bi++) {
-                const bx = -bLen * 0.38 - gW - handleLen * (bi / 4);
-                ctx.beginPath();
-                ctx.moveTo(bx, -handleH / 2);
-                ctx.lineTo(bx,  handleH / 2);
-                ctx.stroke();
-            }
-            // Pommel cap
-            const pomR = handleH * 0.72;
-            ctx.fillStyle = '#D4A017';
-            ctx.beginPath();
-            ctx.arc(-bLen * 0.38 - gW - handleLen, 0, pomR, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#8B6914';
-            ctx.lineWidth = 0.6;
-            ctx.stroke();
-
-            ctx.restore();
-
-        } else if (b.type === 'egyptArrow') {
-            ctx.save();
-            ctx.translate(b.x, b.y);
-            ctx.rotate(Math.atan2(b.vy, b.vx));
-
-            const shaftLen = Math.max(9, (b.w || 10) * 1.55);
-            const shaftH = Math.max(1.6, (b.h || 4) * 0.4);
-            const shaftX = -shaftLen * 0.35;
-
-            const shaftGrad = ctx.createLinearGradient(shaftX, 0, shaftX + shaftLen, 0);
-            shaftGrad.addColorStop(0, '#7a5220');
-            shaftGrad.addColorStop(0.5, '#a3702d');
-            shaftGrad.addColorStop(1, '#5b3b12');
-            ctx.fillStyle = shaftGrad;
-            ctx.fillRect(shaftX, -shaftH / 2, shaftLen, shaftH);
-
-            ctx.fillStyle = '#d9b25b';
-            ctx.beginPath();
-            ctx.moveTo(shaftX + shaftLen, -shaftH * 1.6);
-            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.28, 0);
-            ctx.lineTo(shaftX + shaftLen, shaftH * 1.6);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.fillStyle = '#f8e7b2';
-            ctx.beginPath();
-            ctx.moveTo(shaftX + shaftLen, -shaftH);
-            ctx.lineTo(shaftX + shaftLen + shaftLen * 0.18, 0);
-            ctx.lineTo(shaftX + shaftLen, shaftH);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.strokeStyle = '#6b4a18';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(shaftX, -shaftH / 2, shaftLen, shaftH);
-
-            ctx.strokeStyle = 'rgba(255,241,191,0.7)';
-            ctx.beginPath();
-            ctx.moveTo(shaftX + shaftLen * 0.15, 0);
-            ctx.lineTo(shaftX + shaftLen * 0.92, 0);
-            ctx.stroke();
-
-            ctx.fillStyle = '#8f6720';
-            ctx.beginPath();
-            ctx.moveTo(shaftX - shaftLen * 0.16, 0);
-            ctx.lineTo(shaftX, -shaftH * 1.45);
-            ctx.lineTo(shaftX + shaftLen * 0.08, 0);
-            ctx.lineTo(shaftX, shaftH * 1.45);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.restore();
-
-        } else if (b.type === 'spartanSpear') {
-            // Spartan spear bullet — elongated bronze shaft with iron tip
-            ctx.save();
-            ctx.translate(b.x, b.y);
-            ctx.rotate(Math.atan2(b.vy, b.vx));
-
-            const sLen = 22;  // half-length from center to tip
-            const sH   = 3;   // half-height
-
-            // Wooden shaft
-            ctx.fillStyle = '#8b5a2b';
-            ctx.fillRect(-sLen, -sH/2, sLen * 1.35, sH);
-
-            // Bronze wrap bands
-            ctx.strokeStyle = '#c89050';
-            ctx.lineWidth = 1;
-            for (let bi = 0; bi < 2; bi++) {
-                const bx = -sLen + sLen * (0.3 + bi * 0.45);
-                ctx.beginPath();
-                ctx.moveTo(bx, -sH/2);
-                ctx.lineTo(bx,  sH/2);
-                ctx.stroke();
-            }
-
-            // Iron tip (triangle)
-            ctx.fillStyle = '#c8d0d8';
-            ctx.beginPath();
-            ctx.moveTo(sLen * 0.35, -sH * 1.5);
-            ctx.lineTo(sLen,         0);
-            ctx.lineTo(sLen * 0.35,  sH * 1.5);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#6a7880';
-            ctx.lineWidth = 0.7;
-            ctx.stroke();
-
-            ctx.restore();
-
+        } else if (b.type === 'romanBlade' || b.type === 'egyptArrow' || b.type === 'spartanSpear' || b.type === 'romanPilum') {
+            drawHistoricalProjectile(ctx, b);
         } else if (b.type === 'illuminat') {
             ctx.save();
             ctx.translate(b.x, b.y);
@@ -6448,10 +7300,9 @@ function renderGameFrame() {
             }
 
         } else if (b.type === 'kamikazeBullet') {
-            // White bullet with red dot — Japanese Hinomaru flag style
+            // Original white round with a red center; damage still uses an explosive blast.
             const _kr = (b.w || 10) / 2;
             ctx.save();
-            // White outer circle
             ctx.beginPath();
             ctx.arc(b.x, b.y, _kr, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
@@ -6459,7 +7310,6 @@ function renderGameFrame() {
             ctx.strokeStyle = '#aaaaaa';
             ctx.lineWidth = 1;
             ctx.stroke();
-            // Red center circle
             ctx.beginPath();
             ctx.arc(b.x, b.y, _kr * 0.46, 0, Math.PI * 2);
             ctx.fillStyle = '#cc0000';
@@ -7052,6 +7902,7 @@ function renderGameFrame() {
         }
         const _aBurovoyDrill = getBurovoyDrillRenderState(a);
         drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, spartanRage: a.hp < (a.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(a), burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit, isMyasnoyBody: !!(a.isMyasnoyBody) }, GameTerrain.getMotion(a));
+        drawEmbeddedProjectiles(ctx, a);
         drawSandCurseOverlay(ctx, Math.max(a.w, a.h) * 0.85, a.sandCurseTimer || 0);
         // Hit flash - radial impact burst
         const _aFlashAge = Date.now() - (a.hitFlashTime || 0);
@@ -7070,7 +7921,9 @@ function renderGameFrame() {
         }
         ctx.restore();
         if (_aBurovoyDrill.burovoyBurrowActive) drawBurovoyBurrowCracks(ctx, a);
-        if (a.frozenEffect && a.frozenEffect > 0) drawFrozenOverlay(ctx, a.x, a.y, a.w, a.h, a.frozenEffect);
+        if (a.mechPowerStunTime > 0 && typeof drawParalysisOverlay === 'function') drawParalysisOverlay(ctx, a.x, a.y, a.w, a.h);
+        if (a.paralyzed && a.frozenEffect > 0) drawFrozenOverlay(ctx, a.x, a.y, a.w, a.h, a.frozenEffect);
+        else if (a.iceSlowed && a.iceSlowedTime > 0) drawIceSlowOverlay(ctx, a.x, a.y, a.w, a.h, a.iceSlowedTime, a);
         ctx.fillStyle = 'blue';
         ctx.fillRect(a.x, a.y - 10, a.w, 5);
         ctx.fillStyle = 'black';
@@ -7379,7 +8232,7 @@ function renderGameFrame() {
         if (enemy.isBoss) {
             drawBossOn(ctx, enemy.w, enemy.h, enemy.turretAngle || 0, enemy.phase || 1);
         } else {
-            const _drawColor = enemy.paralyzed ? '#00FFFF' : (enemy.color || '#B22222');
+            const _drawColor = enemy.paralyzed && !(enemy.mechPowerStunTime > 0) ? '#00FFFF' : (enemy.color || '#B22222');
             // Calculate movement animation for mech tanks
             const _moveAnim = GameTerrain.getMotion(enemy);
             const _eTankType = enemy.tankType || 'normal';
@@ -7387,6 +8240,7 @@ function renderGameFrame() {
             drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated, spartanRage: enemy.hp < (enemy.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(enemy), burovoyDrillAnim: _enemyBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _enemyBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _enemyBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _enemyBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _enemyBurovoyDrill.burovoyDrillHit }, _moveAnim);
             drawSandCurseOverlay(ctx, Math.max(enemy.w, enemy.h) * 0.85, enemy.sandCurseTimer || 0);
         }
+        drawEmbeddedProjectiles(ctx, enemy);
         // Hit flash - radial impact burst
         const _eFlashAge = Date.now() - (enemy.hitFlashTime || 0);
         if (_eFlashAge < 120) {
@@ -7405,7 +8259,9 @@ function renderGameFrame() {
         // Boss phase 2 glow overlay is already baked into drawBossOn
         ctx.restore();
         if (_enemyBurovoyDrill && _enemyBurovoyDrill.burovoyBurrowActive) drawBurovoyBurrowCracks(ctx, enemy);
-        if (enemy.frozenEffect && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
+        if (enemy.mechPowerStunTime > 0 && typeof drawParalysisOverlay === 'function') drawParalysisOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h);
+        if (enemy.paralyzed && enemy.frozenEffect > 0) drawFrozenOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.frozenEffect);
+        else if (enemy.iceSlowed && enemy.iceSlowedTime > 0) drawIceSlowOverlay(ctx, enemy.x, enemy.y, enemy.w, enemy.h, enemy.iceSlowedTime, enemy);
         // Draw Квант overload debuff indicator
         if (enemy._kvantOverload && enemy._kvantOverloadTimer > 0) {
             const _ovProg = enemy._kvantOverloadTimer / 300; // 1 = just applied, 0 = about to explode
@@ -7539,6 +8395,7 @@ function renderGameFrame() {
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, spartanRage: tank.hp < tank.maxHp * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyAttackAngle: tank.myasnoyAttackAngle, myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
             ? ((tank.myasnoySeparationAnim || 0) / Math.max(1, tank.myasnoySeparationAnimMax || 18))
             : 0 }, moveAnim);
+        drawEmbeddedProjectiles(ctx, tank);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
 
         // Draw Квант overload indicator on player tank (when debuffed by enemy bot)
@@ -7583,92 +8440,6 @@ function renderGameFrame() {
             ctx.fill();
         }
 
-        // Draw Roman Shield on top of tank body
-        if (tankType === 'roman' && tank.romanShieldActive) {
-            ctx.save();
-            const _now = Date.now();
-            const rShieldR = Math.max(tank.w, tank.h) * 0.88;
-            const _pulse = 0.7 + 0.3 * Math.sin(_now * 0.008);
-
-            // === Glowing base dome: crimson core fading to gold rim ===
-            const rGrad = ctx.createRadialGradient(0, 0, rShieldR * 0.22, 0, 0, rShieldR);
-            rGrad.addColorStop(0,    `rgba(180, 30, 10, ${0.06 * _pulse})`);
-            rGrad.addColorStop(0.5,  `rgba(255, 160, 0, ${0.10 * _pulse})`);
-            rGrad.addColorStop(0.82, `rgba(255, 215, 0, ${0.28 * _pulse})`);
-            rGrad.addColorStop(1,    `rgba(255, 130, 0, ${0.58 * _pulse})`);
-            ctx.beginPath();
-            ctx.arc(0, 0, rShieldR, 0, Math.PI * 2);
-            ctx.fillStyle = rGrad;
-            ctx.fill();
-
-            // === Bright outer rim with gold glow ===
-            ctx.shadowBlur = 14;
-            ctx.shadowColor = '#FFD700';
-            ctx.strokeStyle = `rgba(255, 215, 0, ${0.92 * _pulse})`;
-            ctx.lineWidth = 3.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, rShieldR, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            // === Outer rotating octagon ===
-            ctx.save();
-            ctx.rotate(_now * 0.0018);
-            ctx.strokeStyle = `rgba(255, 200, 50, ${0.50 * _pulse})`;
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            for (let _si = 0; _si <= 8; _si++) {
-                const _a = (_si / 8) * Math.PI * 2;
-                const _r = rShieldR * 1.07 * (1 + 0.04 * Math.sin(_si * 2.5 + _now * 0.009));
-                if (_si === 0) ctx.moveTo(Math.cos(_a) * _r, Math.sin(_a) * _r);
-                else          ctx.lineTo(Math.cos(_a) * _r, Math.sin(_a) * _r);
-            }
-            ctx.closePath();
-            ctx.stroke();
-            ctx.restore();
-
-            // === Inner concentric rings ===
-            [0.62, 0.38].forEach((_ratio, _ri) => {
-                ctx.strokeStyle = `rgba(255, 215, 0, ${(0.16 + _ri * 0.1) * _pulse})`;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(0, 0, rShieldR * _ratio, 0, Math.PI * 2);
-                ctx.stroke();
-            });
-
-            // === Slowly rotating golden spokes ===
-            ctx.save();
-            ctx.rotate(_now * 0.0022);
-            ctx.strokeStyle = `rgba(255, 200, 50, ${0.38 * _pulse})`;
-            ctx.lineWidth = 1.2;
-            for (let _si = 0; _si < 4; _si++) {
-                const _a = (_si / 4) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.moveTo(Math.cos(_a) * rShieldR * 0.18, Math.sin(_a) * rShieldR * 0.18);
-                ctx.lineTo(Math.cos(_a) * rShieldR * 0.84, Math.sin(_a) * rShieldR * 0.84);
-                ctx.stroke();
-            }
-            ctx.restore();
-
-            // === Counter-rotating bright arc highlights ===
-            ctx.save();
-            ctx.rotate(-_now * 0.0045);
-            ctx.shadowBlur = 7;
-            ctx.shadowColor = '#fff8cc';
-            for (let _ai = 0; _ai < 3; _ai++) {
-                const _a = (_ai / 3) * Math.PI * 2;
-                ctx.strokeStyle = `rgba(255, 255, 200, ${0.78 * _pulse})`;
-                ctx.lineWidth = 2.5;
-                ctx.beginPath();
-                ctx.arc(0, 0, rShieldR + 5, _a, _a + Math.PI * 0.35);
-                ctx.stroke();
-            }
-            ctx.shadowBlur = 0;
-            ctx.restore();
-
-            ctx.restore();
-        }
-
         // Rainbow aura when imitator transformation is active
         if (tank.imitatorActive) {
             const auraR = Math.max(tank.w, tank.h) * 0.72;
@@ -7686,13 +8457,14 @@ function renderGameFrame() {
 
         ctx.restore();
         if (_playerBurovoyDrill.burovoyBurrowActive) drawBurovoyBurrowCracks(ctx, tank);
-        if (tank.paralyzed && (tankType === 'mechDiy' || tankType === 'mechShield' || tankType === 'mechRocket')) drawParalysisOverlay(ctx, tank.x, tank.y, tank.w, tank.h);
+        if ((tank.paralyzed || tank.mechPowerStunTime > 0) && (tankType === 'mechDiy' || tankType === 'mechShield' || tankType === 'mechRocket')) drawParalysisOverlay(ctx, tank.x, tank.y, tank.w, tank.h);
         if ((tankType === 'mechShield') && typeof drawShieldActiveOverlay === 'function') {
             const _fadeR = tank.mechShieldActive ? 1 : Math.max(0, (tank.mechShieldFadeTimer || 0) / 30);
             const _dmgP = tank.mechShieldDamagePercent || 0;
             if (_fadeR > 0) drawShieldActiveOverlay(ctx, tank.x, tank.y, tank.w, tank.h, _fadeR, _dmgP);
         }
-        if (tank.frozenEffect && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
+        if (tank.paralyzed && tank.frozenEffect > 0) drawFrozenOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.frozenEffect);
+        else if (tank.iceSlowed && tank.iceSlowedTime > 0) drawIceSlowOverlay(ctx, tank.x, tank.y, tank.w, tank.h, tank.iceSlowedTime, tank);
         ctx.fillStyle = 'green';
         ctx.fillRect(tank.x, tank.y - 10, tank.w, 5);
         ctx.fillStyle = 'black';
@@ -7723,6 +8495,7 @@ function renderGameFrame() {
     if (typeof playerDrones !== 'undefined' && playerDrones.length > 0) {
         for (const d of playerDrones) {
             if (!d.alive || !GameTerrain.canSee(tank, d, objects)) continue;
+            if (d.romanSummon) { drawRomanSummon(ctx, d); continue; }
             const cx = d.x + d.w / 2;
             const cy = d.y + d.h / 2;
             const dr = d.w / 2;
@@ -7799,6 +8572,7 @@ function renderGameFrame() {
     if (typeof enemyDrones !== 'undefined' && enemyDrones.length > 0) {
         for (const d of enemyDrones) {
             if (!d.alive || !GameTerrain.canSee(tank, d, objects)) continue;
+            if (d.romanSummon) { drawRomanSummon(ctx, d); continue; }
             const cx = d.x + d.w / 2;
             const cy = d.y + d.h / 2;
             const dr = d.w / 2;

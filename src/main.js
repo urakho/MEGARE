@@ -904,7 +904,9 @@ const tank = {
     barrageCooldown: 0,
     // Musical tank sound ricochet cooldown
     soundRicochetCooldown: 0,
-    // Roman tank shield ultimate
+    // Roman reinforcements; old shield fields stay inactive.
+    romanLegionCooldown: 0,
+    romanBanner: null,
     romanShieldActive: false,
     romanShieldTimer: 0,
     romanShieldCooldown: 0,
@@ -987,7 +989,7 @@ function updateMyasnoyEyeAttackSweep(unit) {
         const enemy = enemies[index];
         if (!enemy || !enemy.alive || hitTargets.has(enemy) || !withinSweep(enemy)) continue;
         hitTargets.add(enemy);
-        enemy.hp -= damage;
+        if (!(enemy.kamikazeUltActive && enemy.kamikazeInvincible)) enemy.hp -= damage;
         enemy.hitFlashTime = Date.now();
         for (let particle = 0; particle < 6; particle++) {
             spawnParticle(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, '#cc0000', 0.9);
@@ -1009,7 +1011,7 @@ function updateMyasnoyEyeAttackSweep(unit) {
             hitTargets.has(object) || !withinSweep(object)) continue;
         if (object.type === 'woodenWall') {
             hitTargets.add(object);
-            if (typeof damageWoodenWall === 'function') damageWoodenWall(object, damage, { hitColor: '#cc2200', hitParticles: 4 });
+            if (typeof damageWoodenWall === 'function') damageWoodenWall(object, damage, { hitColor: '#cc2200', hitParticles: 4, hitX: centerX, hitY: centerY });
         } else if (object.type === 'box') {
             hitTargets.add(object);
             for (let particle = 0; particle < 5; particle++) spawnParticle(object.x + object.w / 2, object.y + object.h / 2, '#cc8800', 0.9);
@@ -1042,10 +1044,12 @@ function resetTankMatchUltState(unit) {
     unit.mirrorShieldCooldown = 0;
 
     unit.kamikazeUltActive = false;
+    unit._kamikazeTrailThisTick = false;
     unit.kamikazeUltCooldown = 0;
     unit.kamikazeInvincible = false;
     unit.kamikazeInvincibleTimer = 0;
     unit.kamikazeDashTimer = 0;
+    unit.kamikazeRecoveryTimer = 0;
 
     unit.egyptianSwarmActive = false;
     unit.egyptianSwarmTimer = 0;
@@ -1069,6 +1073,8 @@ function resetTankMatchUltState(unit) {
 
     unit.mechRocketUltCooldown = 0;
 
+    unit.romanLegionCooldown = 0;
+    unit.romanBanner = null;
     unit.romanShieldActive = false;
     unit.romanShieldTimer = 0;
     unit.romanShieldCooldown = 0;
@@ -1093,6 +1099,7 @@ function resetTankMatchUltState(unit) {
 }
 
 function resetTankBattleEffects(unit) {
+    unit.embeddedProjectiles = [];
     unit.heat = 0;
     unit.overheated = false;
     unit._kvantOverload = false;
@@ -1102,6 +1109,8 @@ function resetTankBattleEffects(unit) {
     unit.kvantUltTimer = 0;
     unit.kvantUltCooldown = 0;
     unit.mechBurstCooldown = 0;
+    unit.mechPowerStunTime = 0;
+    unit.mechLowEnergyLatched = false;
     unit.history = [];
     unit.hitFlashTime = 0;
     unit._vx = 0;
@@ -1109,6 +1118,7 @@ function resetTankBattleEffects(unit) {
     unit.baseAngle = 0;
     unit.trackOffset = 0;
     unit.kamikazeDashAngle = 0;
+    unit.kamikazeDashStartAngle = 0;
 }
 
 // Apply saved tank type properties
@@ -1632,8 +1642,12 @@ let updateMobileHud = null;
                 return { ...getCooldownStatus(tank.soundRicochetCooldown || 0, 720), visible: true };
             case 'robot':
                 return { ...getCooldownStatus(tank.robotDroneCooldown || 0, 900), visible: true };
-            case 'roman':
-                return { ...getCooldownStatus(tank.romanShieldCooldown || 0, 720), visible: true, active: !!tank.romanShieldActive, text: tank.romanShieldActive ? 'ACTIVE' : getCooldownStatus(tank.romanShieldCooldown || 0, 720).text };
+            case 'roman': {
+                const status = getCooldownStatus(tank.romanLegionCooldown || 0, ROMAN_LEGION_COOLDOWN);
+                const banner = tank.romanBanner;
+                const waiting = !!(banner && banner.alive && banner.pending > 0);
+                return { ...status, visible: true, active: waiting, text: waiting ? Math.ceil(banner.pending / 60) + 's' : status.text };
+            }
             case 'kamikaze':
                 return { ...getCooldownStatus(tank.kamikazeUltCooldown || 0, 600), visible: true, active: !!tank.kamikazeUltActive, text: tank.kamikazeUltActive ? 'ACTIVE' : getCooldownStatus(tank.kamikazeUltCooldown || 0, 600).text };
             case 'mechRocket': {
@@ -2017,7 +2031,7 @@ function startGame(mode) {
     // Reset plasma blast ability
     tank.plasmaBlastUsed = 0;
     
-    // Reset Roman shield ability
+    // Clear Roman combat state
     tank.romanShieldActive = false;
     tank.romanShieldTimer = 0;
     tank.romanShieldCooldown = 0;
@@ -4052,7 +4066,7 @@ function updateDuelZone() {
             if (!e || !e.alive) continue;
 
             if (!isSafe(e)) {
-                e.hp -= 100 / 60;
+                if (!(e.kamikazeUltActive && e.kamikazeInvincible)) e.hp -= 100 / 60;
                 if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
                 if (e.hp <= 0) {
                     enemies.splice(i, 1);
@@ -4099,19 +4113,15 @@ function update() {
     // player input only when alive
     if (tank.alive !== false) {
         if (tank.moveCooldown > 0) tank.moveCooldown--;
+        if (tankType !== 'mechDiy' && tankType !== 'mechShield' && tankType !== 'mechRocket') updateMechPower(tank);
         // mechDiy energy regen runs every frame (even while paralyzed)
         if (tankType === 'mechDiy') {
             const _eUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechDiy', 'energy') : 0;
             tank.mechMaxEnergy = 110 + _eUpgLvl * 20;
             if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
-            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            updateMechPower(tank);
             if (tank.mechEnergy >= 100 && tank.hp < tank.maxHp) {
                 tank.hp = Math.min(tank.maxHp, tank.hp + 0.08);
-            }
-            // Trigger 1-second paralysis when energy hits 5 or below
-            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
-                tank.paralyzed = true;
-                tank.paralyzedTime = 60;
             }
         }
         // mechRocket energy regen and ult cooldown tick
@@ -4119,23 +4129,20 @@ function update() {
             const _rUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechRocket', 'energy') : 0;
             tank.mechMaxEnergy = 150 + _rUpgLvl * 20;
             if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
-            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            updateMechPower(tank);
             if ((tank.mechRocketUltCooldown || 0) > 0) tank.mechRocketUltCooldown--;
-            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
-                tank.paralyzed = true;
-                tank.paralyzedTime = 60;
-            }
         }
         // Kamikaze ult cooldown tick
         if (tankType === 'kamikaze') {
             if ((tank.kamikazeUltCooldown || 0) > 0) tank.kamikazeUltCooldown--;
+            if ((tank.kamikazeRecoveryTimer || 0) > 0) tank.kamikazeRecoveryTimer--;
         }
         // mechShield energy regen and shield activation
         if (tankType === 'mechShield') {
             const _sUpgLvl = (typeof getTankUpgrade === 'function') ? getTankUpgrade('mechShield', 'energy') : 0;
             tank.mechMaxEnergy = 130 + _sUpgLvl * 20;
             if (typeof tank.mechEnergy === 'undefined') tank.mechEnergy = tank.mechMaxEnergy;
-            tank.mechEnergy = Math.min(tank.mechMaxEnergy, (tank.mechEnergy || 0) + 0.05);
+            updateMechPower(tank);
             // Shield active when energy >= 100
             const _hadShield = tank.mechShieldActive;
             tank.mechShieldActive = (tank.mechEnergy || 0) >= 100;
@@ -4149,13 +4156,9 @@ function update() {
                 tank.mechShieldDamagePercent -= 1.67; // 100/60 = 1.67 per frame
                 if (tank.mechShieldDamagePercent < 0) tank.mechShieldDamagePercent = 0;
             }
-            // Paralysis at low energy
-            if (tank.mechEnergy <= 5 && !tank.paralyzed) {
-                tank.paralyzed = true;
-                tank.paralyzedTime = 60;
-            }
         }
         // handle paralyze state for player tank
+        const frozenByIce = tank.paralyzed && (tank.frozenEffect || 0) > 0;
         if (tank.paralyzed) {
             tank.paralyzedTime = (tank.paralyzedTime || 0) - 1;
             if (tank.paralyzedTime <= 0) tank.paralyzed = false;
@@ -4167,7 +4170,6 @@ function update() {
         if (tank.iceSlowed) {
             tank.iceSlowedTime = (tank.iceSlowedTime || 0) - 1;
             if (tank.iceSlowedTime <= 0) tank.iceSlowed = false;
-            if (tank.frozenEffect) tank.frozenEffect--;
         }
 
         // Wind knockback: smooth decaying push from air bullet
@@ -4213,8 +4215,8 @@ function update() {
 
 
         
-        // Block player controls during autopilot or ultimate charge
-        if (tank.isAutopilotActive || tank.isUltimateActive || tank.kamikazeUltActive) {
+        // Block movement during ice freeze, autopilot, or ultimate charge
+        if (frozenByIce || (tank.mechPowerStunTime || 0) > 0 || tank.isAutopilotActive || tank.isUltimateActive || tank.kamikazeUltActive) {
             isW = isS = isA = isD = false;
         }
         
@@ -4230,6 +4232,7 @@ function update() {
         if (isD) { dx += tank.speed; tank.baseAngle = 0; }
         const terrainSpeedFactor = GameTerrain.speedFactor();
         dx *= terrainSpeedFactor; dy *= terrainSpeedFactor;
+        if (tankType === 'kamikaze' && (tank.kamikazeRecoveryTimer || 0) > 0) { dx *= 0.65; dy *= 0.65; }
         // Apply ice-slow 50% movement penalty
         if (tank.iceSlowed) { dx *= 0.5; dy *= 0.5; }
         // Store velocity so flames inherit it (bug fix: flames don't drift back when moving)
@@ -4241,103 +4244,21 @@ function update() {
                 moveWithCollision(0, dy);
             }
         }
-        // Kamikaze ult "Разгон": dash straight, break walls, deal 150 dmg on enemy hit
+        // Preserve fiery tracks on the final dash tick.
+        tank._kamikazeTrailThisTick = tankType === 'kamikaze' && tank.kamikazeUltActive;
         if (tankType === 'kamikaze' && tank.kamikazeUltActive) {
-            tank.kamikazeDashTimer = (tank.kamikazeDashTimer || 0) - 1;
-            const dashSpd = 9.0;
-            const dvx = Math.cos(tank.kamikazeDashAngle) * dashSpd;
-            const dvy = Math.sin(tank.kamikazeDashAngle) * dashSpd;
-            tank.x += dvx;
-            tank.y += dvy;
-            // Spawn speed trail particles
-            if (Math.random() > 0.3) spawnParticle(tank.x + tank.w/2, tank.y + tank.h/2, '#ff6600');
-            // Break destructible objects
-            for (let _oi = objects.length - 1; _oi >= 0; _oi--) {
-                const _obj = objects[_oi];
-                if (checkRectCollision(tank, _obj)) {
-                    if (_obj.type === 'woodenWall' || _obj.type === 'wall' || _obj.type === 'box' || _obj.type === 'barrel') {
-                        // Break all wall types during kamikaze dash
-                        spawnExplosion(_obj.x + (_obj.w||0)/2, _obj.y + (_obj.h||0)/2, 32);
-                        objects.splice(_oi, 1);
-                        if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
-                    }
-                }
-            }
-            // Damage enemies on collision
-            if (tank.kamikazeUltActive) {
-                for (const _ke of enemies) {
-                    if (!_ke || !_ke.alive) continue;
-                    if (checkRectCollision(tank, _ke)) {
-                        _ke.hp -= 150;
-                        _ke.hitFlashTime = Date.now();
-                        // Knockback — but don't push enemy into a wall
-                        const _kbDx = Math.cos(tank.kamikazeDashAngle) * 80;
-                        const _kbDy = Math.sin(tank.kamikazeDashAngle) * 80;
-                        const _kbProbe = { x: _ke.x + _kbDx, y: _ke.y + _kbDy, w: _ke.w, h: _ke.h };
-                        let _kbBlocked = false;
-                        for (const _kbObj of objects) {
-                            if (!_kbObj) continue;
-                            if ((_kbObj.type === 'wall' || _kbObj.type === 'woodenWall') && checkRectCollision(_kbProbe, _kbObj)) {
-                                _kbBlocked = true; break;
-                            }
-                        }
-                        if (!_kbBlocked) {
-                            _ke.x += _kbDx;
-                            _ke.y += _kbDy;
-                            _ke.x = Math.max(0, Math.min(worldWidth - _ke.w, _ke.x));
-                            _ke.y = Math.max(0, Math.min(worldHeight - _ke.h, _ke.y));
-                        }
-                        spawnExplosion(tank.x + tank.w/2, tank.y + tank.h/2, 45);
-                        tank.kamikazeUltActive = false;
-                        break;
-                    }
-                }
-            }
-            if ((tank.kamikazeDashTimer || 0) <= 0) {
-                tank.kamikazeUltActive = false;
-                // Start 1-second post-dash invincibility window
-                if (tank.kamikazeInvincible && !tank.kamikazeInvincibleTimer) {
-                    tank.kamikazeInvincibleTimer = 60;
-                }
-            }
-            tank.x = Math.max(0, Math.min(worldWidth - tank.w, tank.x));
-            tank.y = Math.max(0, Math.min(worldHeight - tank.h, tank.y));
-        }
-        // Tick post-dash invincibility timer
-        if (tankType === 'kamikaze' && !tank.kamikazeUltActive && tank.kamikazeInvincible) {
-            if ((tank.kamikazeInvincibleTimer || 0) > 0) {
-                tank.kamikazeInvincibleTimer--;
-            } else {
-                tank.kamikazeInvincible = false;
-            }
+            const steerX = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+            const steerY = (keys['KeyS'] ? 1 : 0) - (keys['KeyW'] ? 1 : 0);
+            const inverted = tank.invertedControls > 0 ? -1 : 1;
+            const steeringAngle = steerX || steerY
+                ? Math.atan2(steerY * inverted, steerX * inverted) : tank.kamikazeDashAngle;
+            updateKamikazeDash(tank, steeringAngle);
         }
         // turret rotation with arrow keys (same effect as mouse wheel)
         if (keys['ArrowLeft']) tank.turretAngle -= 0.06;
-        // Mega-gas ability (one-time per battle) for toxic tank on E
+        // Toxic wave replaces the one-use gas bomb without changing its match limit.
         if (tankType === 'toxic' && keys['KeyE']) {
-            if (!tank.megaGasUsed) {
-                // spawn a thrown mega bomb in turret direction (straight, no upward arc)
-                const ang = tank.turretAngle;
-                const sx = tank.x + tank.w/2 + Math.cos(ang) * 20;
-                const sy = tank.y + tank.h/2 + Math.sin(ang) * 20;
-                const speed = 8;
-                // mega bomb flies straight along turret angle, then falls with gravity
-                bullets.push({
-                    x: sx,
-                    y: sy,
-                    w: 8,
-                    h: 8,
-                    vx: Math.cos(ang) * speed,
-                    vy: Math.sin(ang) * speed, // fly in turret direction
-                    life: 500,
-                    owner: 'player',
-                    team: 0,
-                    type: 'megabomb',
-                    explodeTimer: 60, // explode after 60 ticks (~1 second)
-                    spawned: 5 // spawn protection for 5 ticks
-                });
-                tank.megaGasUsed = true;
-            }
+            activateToxicWave(tank, 'player');
             keys['KeyE'] = false;
         }
         // Plasma blast ability for plasma tank on E (limited uses per battle)
@@ -4677,13 +4598,7 @@ function update() {
 
         // Kamikaze: E key activates "Разгон" dash in turret direction
         if (tankType === 'kamikaze' && keys['KeyE']) {
-            if ((tank.kamikazeUltCooldown || 0) === 0 && !tank.kamikazeUltActive) {
-                tank.kamikazeUltActive = true;
-                tank.kamikazeDashAngle = tank.turretAngle;
-                tank.kamikazeDashTimer = 90; // 1.5 seconds at 60fps
-                tank.kamikazeUltCooldown = 600; // 10 second cooldown
-                tank.kamikazeInvincible = true;
-                tank.kamikazeInvincibleTimer = 0;
+            if (startKamikazeDash(tank)) {
                 for (let _kp = 0; _kp < 14; _kp++) {
                     const _ka = Math.random() * Math.PI * 2;
                     spawnParticle(tank.x + tank.w/2 + Math.cos(_ka)*18, tank.y + tank.h/2 + Math.sin(_ka)*18, '#ff4400');
@@ -4693,58 +4608,12 @@ function update() {
         }
 
 
-        // Buratino: E key ultra barrage - same artillery mode but bigger area + more rockets
+        // Buratino ultimate launches three waves while the tank remains mobile.
         if (tankType === 'buratino') {
             if (keys['KeyE']) {
                 if (!tank.barrageCooldown || tank.barrageCooldown <= 0) {
-                    // Target circle with 2.5x bigger radius than regular attack
-                    const dist = 400;
-                    const targetX = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * dist;
-                    const targetY = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * dist;
-                    const targetCircle = { x: targetX, y: targetY, radius: 160, color: tank.color, timer: 180, type: 'targetCircle', team: tank.team };
-                    // More planned explosion positions (inner 8 + outer 24)
-                    targetCircle.planned = [];
-                    for (let j = 0; j < 8; j++) {
-                        const ang = (j / 8) * Math.PI * 2;
-                        targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * targetCircle.radius * 0.35, y: targetCircle.y + Math.sin(ang) * targetCircle.radius * 0.35, exploded: false });
-                    }
-                    for (let j = 0; j < 24; j++) {
-                        const ang = (j / 24) * Math.PI * 2;
-                        targetCircle.planned.push({ x: targetCircle.x + Math.cos(ang) * targetCircle.radius * 0.75, y: targetCircle.y + Math.sin(ang) * targetCircle.radius * 0.75, exploded: false });
-                    }
-                    objects.push(targetCircle);
-                    tank.artilleryMode = true;
-                    tank.artilleryTimer = 180;
-                    tank.barrageCooldown = 900; // 15 second cooldown
-                    // More visual rockets in wider fan (5 rows x 9 cols, spread 1.5 rad)
-                    const ultRows = 5;
-                    const ultCols = 9;
-                    const tSizeU = Math.min(tank.w, tank.h) * 0.35 * 1.5;
-                    const insetU = 6;
-                    const usableWU = tSizeU - insetU * 2;
-                    const usableHU = tSizeU - insetU * 2;
-                    const fanSpreadU = 1.5;
-                    for (let r = 0; r < ultRows; r++) {
-                        const ry = -tSizeU/2 + insetU + r * (usableHU / (ultRows - 1 || 1));
-                        for (let c = 0; c < ultCols; c++) {
-                            const cx2 = -tSizeU/2 + insetU + c * (usableWU / (ultCols - 1 || 1));
-                            const lx = cx2, ly = ry;
-                            const sx = tank.x + tank.w/2 + Math.cos(tank.turretAngle) * lx - Math.sin(tank.turretAngle) * ly;
-                            const sy = tank.y + tank.h/2 + Math.sin(tank.turretAngle) * lx + Math.cos(tank.turretAngle) * ly;
-                            const colNorm = ultCols <= 1 ? 0.5 : c / (ultCols - 1);
-                            const rowNorm = ultRows <= 1 ? 0.5 : r / (ultRows - 1);
-                            const angOffset = (colNorm - 0.5) * fanSpreadU + (rowNorm - 0.5) * 0.06;
-                            const angRocket = tank.turretAngle + angOffset + (Math.random() - 0.5) * 0.03;
-                            const planned = targetCircle.planned;
-                            const idx = (r * ultCols + c) % planned.length;
-                            const targetPos = planned[idx];
-                            const dx = targetPos.x - sx;
-                            const dy = targetPos.y - sy;
-                            const delay = Math.floor((r * ultCols + c) * 1 + Math.random() * 2);
-                            const travel = Math.max(16, tank.artilleryTimer - delay - 2);
-                            objects.push({ type: 'visualRocket', x: sx, y: sy, vx: dx/travel, vy: dy/travel, life: travel + 6, delay: delay, w: 4, h: 3, color: '#000', angOffset: angOffset, target: targetPos, team: 0 });
-                        }
-                    }
+                    createBuratinoBarrage(tank, true);
+                    tank.barrageCooldown = 900;
                 }
                 keys['KeyE'] = false;
             }
@@ -4823,25 +4692,11 @@ function update() {
             }
         }
         if (tank.robotDroneCooldown > 0) tank.robotDroneCooldown--;
-        // Roman Tank: E key activates shield (50% dmg reduction for 4s, 10s cooldown)
-        if (tankType === 'roman') {
-            if (keys['KeyE'] && (!tank.romanShieldCooldown || tank.romanShieldCooldown <= 0) && !tank.romanShieldActive) {
-                tank.romanShieldActive = true;
-                tank.romanShieldTimer  = 240; // 4 seconds
-                tank.romanShieldCooldown = 720; // 12 seconds
-                // Shield activation particles
-                const cx = tank.x + tank.w/2, cy = tank.y + tank.h/2;
-                for (let p = 0; p < 20; p++) {
-                    spawnParticle(cx + (Math.random()-0.5)*55, cy + (Math.random()-0.5)*55, '#FFD700', 0.85);
-                }
-                keys['KeyE'] = false;
-            }
+        // Roman standard calls in a small legion after a vulnerable rally period.
+        if (tankType === 'roman' && keys['KeyE']) {
+            castRomanBanner(tank, 'player');
+            keys['KeyE'] = false;
         }
-        if (tank.romanShieldActive) {
-            tank.romanShieldTimer--;
-            if (tank.romanShieldTimer <= 0) tank.romanShieldActive = false;
-        }
-        if (tank.romanShieldCooldown > 0) tank.romanShieldCooldown--;
         // Квант: E — «Перегруз сети» (волна замедляет/снижает урон врагов, через 5с взрыв 80 урона)
         if (tankType === 'kvant') {
             if (keys['KeyE'] && (!tank.kvantUltCooldown || tank.kvantUltCooldown <= 0) && !tank.kvantUltActive) {
@@ -4898,7 +4753,7 @@ function update() {
                         spawnParticle(_ex + Math.cos(_pa)*_pd, _ey + Math.sin(_pa)*_pd, '#00e5ff', 0.85);
                     }
                 }
-                _oe.hp -= 80;
+                if (!(_oe.kamikazeUltActive && _oe.kamikazeInvincible)) _oe.hp -= 80;
                 if (_oe.hp <= 0) {
                     if (typeof objects !== 'undefined') objects.push({ type: 'shockwave', x: _ex, y: _ey, radius: 5, speed: 18, life: 20, maxLife: 20, color: '#00e5ff' });
                     if (typeof spawnExplosion === 'function') spawnExplosion(_ex, _ey, 50);
@@ -5212,7 +5067,7 @@ function update() {
             if (be.isBoss) { be.burning = false; be.burnTimer = 0; continue; } // Boss immune to burn
             be.burnTimer = (be.burnTimer || 0) - 1;
             // Deal 10 HP/sec at 60fps = 10/60 per frame
-            be.hp -= (be.burnDps || 10) / 60;
+            if (!(be.kamikazeUltActive && be.kamikazeInvincible)) be.hp -= (be.burnDps || 10) / 60;
             // Emit small orange particles
             if (Math.random() > 0.6) spawnParticle(be.x + Math.random() * be.w, be.y + Math.random() * be.h, '#ff6600', 0.5);
             if (be.burnTimer <= 0) { be.burning = false; be.burnTimer = 0; }
@@ -5236,17 +5091,12 @@ function update() {
         // Burn DoT on wooden walls (2x damage per second vs tanks)
         for (let wi = objects.length - 1; wi >= 0; wi--) {
             const wo = objects[wi];
-            if (!wo || wo.type !== 'woodenWall' || !wo.burning) continue;
-            wo.burnTimer = (wo.burnTimer || 0) - 1;
-            // 20 HP/sec at 60fps = 20/60 per frame (2x normal burn)
-            wo.hp = (wo.hp ?? 300) - (wo.burnDps || 20) / 60;
-            if (Math.random() > 0.5) spawnParticle(wo.x + Math.random() * wo.w, wo.y + Math.random() * wo.h, '#ff6600', 0.5);
-            if (wo.burnTimer <= 0) { wo.burning = false; wo.burnTimer = 0; }
+            if (!wo || wo.type !== 'woodenWall') continue;
+            updateWoodenWallRot(wo);
+            if (!objects.includes(wo)) continue;
+            updateWoodenWallBurn(wo);
             if (wo.hp <= 0) {
-                spawnParticle(wo.x + wo.w/2, wo.y + wo.h/2, '#ff4400', 1);
-                for (let k = 0; k < 6; k++) spawnParticle(wo.x + Math.random() * wo.w, wo.y + Math.random() * wo.h, '#ff6600', 0.7);
-                objects.splice(wi, 1);
-                if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
+                destroyWoodenWall(wo);
             }
         }
 
@@ -5302,10 +5152,10 @@ function update() {
                     const dx = (e.x + e.w / 2) - mine.x;
                     const dy = (e.y + e.h / 2) - mine.y;
                     if (Math.hypot(dx, dy) < mine.radius + e.w / 2) {
-                        spawnExplosion(mine.x, mine.y, 55);
+                        spawnExplosion(mine.x, mine.y, 55, 'blast');
                         let dmgMine = mine.damage;
                         if (mine.owner === 'player' || (!mine.team || mine.team === 'player')) dmgMine = applyPlayerDamage(dmgMine);
-                        e.hp -= dmgMine;
+                        if (!(e.kamikazeUltActive && e.kamikazeInvincible)) e.hp -= dmgMine;
                         if (e.hp <= 0) e.alive = false;
                         for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                         triggered = true;
@@ -5318,7 +5168,7 @@ function update() {
                     const dx = (tank.x + tank.w / 2) - mine.x;
                     const dy = (tank.y + tank.h / 2) - mine.y;
                     if (Math.hypot(dx, dy) < mine.radius + tank.w / 2) {
-                        spawnExplosion(mine.x, mine.y, 55);
+                        spawnExplosion(mine.x, mine.y, 55, 'blast');
                         if (!isPlayerDamageProtected()) tank.hp -= mine.damage;
                         for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                         triggered = true;
@@ -5330,8 +5180,8 @@ function update() {
                         const dx = (a.x + a.w / 2) - mine.x;
                         const dy = (a.y + a.h / 2) - mine.y;
                         if (Math.hypot(dx, dy) < mine.radius + a.w / 2) {
-                            spawnExplosion(mine.x, mine.y, 55);
-                            a.hp -= mine.damage;
+                            spawnExplosion(mine.x, mine.y, 55, 'blast');
+                            if (!(a.kamikazeUltActive && a.kamikazeInvincible)) a.hp -= mine.damage;
                             if (a.hp <= 0) a.alive = false;
                             for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                             triggered = true;
@@ -5347,7 +5197,7 @@ function update() {
                     const dx = drone.x + drone.w / 2 - mine.x;
                     const dy = drone.y + drone.h / 2 - mine.y;
                     if (Math.hypot(dx, dy) >= mine.radius + drone.w / 2) return;
-                    spawnExplosion(mine.x, mine.y, 55);
+                    spawnExplosion(mine.x, mine.y, 55, 'blast');
                     for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
                     triggered = true;
                 });
@@ -5357,7 +5207,7 @@ function update() {
                 for (const obj of objects) {
                     if (obj.type !== 'box' && obj.type !== 'woodenWall') continue;
                     if (!circleIntersectsRect(mine.x, mine.y, mine.radius, obj)) continue;
-                    spawnExplosion(mine.x, mine.y, 55);
+                    spawnExplosion(mine.x, mine.y, 55, 'blast');
                     triggered = true;
                     break;
                 }
@@ -5375,6 +5225,7 @@ function update() {
         if (playerDrones.length > 0) {
             for (let di = playerDrones.length - 1; di >= 0; di--) {
                 const d = playerDrones[di];
+                if (d.romanSummon) continue;
                 if (!d.alive) { playerDrones.splice(di, 1); continue; }
                 // Countdown lifespan
                 d.life--;
@@ -5465,6 +5316,7 @@ function update() {
         if (enemyDrones.length > 0) {
             for (let di = enemyDrones.length - 1; di >= 0; di--) {
                 const d = enemyDrones[di];
+                if (d.romanSummon) continue;
                 if (!d.alive) { enemyDrones.splice(di, 1); continue; }
                 // Countdown lifespan
                 d.life--;
@@ -5772,6 +5624,7 @@ function update() {
 // --- APPEND_POINT_UPDATE_REST ---
     updateSpecialProjectiles();
     if (gameState !== 'playing') return;
+    updateRomanLegion();
     _measureGamePhase('physics', updatePhysics);
     GameTerrain.updateMovement(tank, enemies, allies, tankType);
 }

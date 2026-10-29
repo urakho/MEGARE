@@ -108,6 +108,11 @@
                 return 'Объект за пределами карты';
         }
         if (hasBlockedPlayerSpawn(data.objects)) return 'Место появления игрока занято препятствием';
+        for (let i = 0; i < physObjs.length; i++) {
+            for (let j = i + 1; j < physObjs.length; j++) {
+                if (overlaps(physObjs[i], physObjs[j])) return 'Препятствия не должны находиться друг в друге';
+            }
+        }
         return null; // ok
     }
 
@@ -213,27 +218,11 @@
         for (const obj of meObjects) {
             if (obj.type === 'enemy' || obj.type === 'player' || obj.type === 'ally') continue;
             if (obj.type === 'barrel') {
-                // Draw barrel as a red-banded cylinder preview
-                const bx = obj.x, by = obj.y, bw = obj.w, bh = obj.h;
-                const bcx = bx + bw / 2;
-                const grad = ctx.createLinearGradient(bx, by, bx, by + bh);
-                grad.addColorStop(0,    '#4b2b17');
-                grad.addColorStop(0.45, '#7a4d2a');
-                grad.addColorStop(0.55, '#c27f48');
-                grad.addColorStop(1,    '#5a2f18');
-                ctx.fillStyle = grad;
-                ctx.fillRect(bx, by + bh * 0.1, bw, bh * 0.8);
-                ctx.fillStyle = '#33363a';
-                ctx.fillRect(bx, by + bh * 0.28, bw, Math.max(3, bh * 0.08));
-                ctx.fillRect(bx, by + bh * 0.62, bw, Math.max(3, bh * 0.08));
-                // hazard stripe
-                ctx.fillStyle = 'rgba(255,80,0,0.7)';
-                ctx.font = `bold ${Math.max(8, bh * 0.45)}px 'Courier New'`;
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText('💥', bcx, by + bh / 2);
-                ctx.textBaseline = 'alphabetic';
+                GameTerrain.drawBarrel(ctx, obj, 'forest');
             } else if (obj.type === 'box') {
                 GameTerrain.drawBox(ctx, obj, 'forest');
+            } else if (obj.type === 'woodenWall') {
+                GameTerrain.drawWoodenWall(ctx, obj, 'forest');
             } else {
                 const def = OBJ_TYPES[obj.type];
                 ctx.fillStyle = def.color;
@@ -338,11 +327,9 @@
                 ctx.lineWidth   = 1.5 / zoom;
                 ctx.beginPath(); ctx.arc(px, py, gridSize * 0.42, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
             } else if (activeTool === 'barrel') {
-                ctx.fillStyle   = 'rgba(122,77,42,0.5)';
-                ctx.strokeStyle = '#c87d40';
-                ctx.lineWidth = 1.5 / zoom;
-                ctx.fillRect(hoverCell.gx, hoverCell.gy, gridSize, gridSize);
-                ctx.strokeRect(hoverCell.gx, hoverCell.gy, gridSize, gridSize);
+                ctx.save(); ctx.globalAlpha = 0.55;
+                GameTerrain.drawBarrel(ctx, { x: hoverCell.gx, y: hoverCell.gy, w: gridSize, h: gridSize }, 'forest');
+                ctx.restore();
             } else {
                 const def = OBJ_TYPES[activeTool] || OBJ_TYPES.wall;
                 ctx.fillStyle   = def.color + 'aa';
@@ -365,10 +352,13 @@
         if (wx < 0 || wy < 0 || wx >= curWorldW || wy >= curWorldH) return;
 
         const { gx, gy } = snapToGrid(wx, wy);
+        const occupiesCell = o => o.type === 'barrel'
+            ? Math.floor(o.x / gridSize) * gridSize === gx && Math.floor(o.y / gridSize) * gridSize === gy
+            : o.x === gx && o.y === gy;
 
         if (activeTool === 'erase') {
             const before = meObjects.length;
-            meObjects = meObjects.filter(o => !(o.x === gx && o.y === gy));
+            meObjects = meObjects.filter(o => !occupiesCell(o));
             if (meObjects.length !== before) { updateHUD(); render(); }
             return;
         }
@@ -386,11 +376,22 @@
             return;
         }
 
+        const placementSize = gridSize;
+        const placementX = gx + (gridSize - placementSize) / 2;
+        const placementY = gy + (gridSize - placementSize) / 2;
+        if (placementX + placementSize > curWorldW || placementY + placementSize > curWorldH) return;
+
         // Check for duplicate on same cell
-        if (meObjects.some(o => o.x === gx && o.y === gy)) return;
+        if (meObjects.some(occupiesCell)) return;
+        if (['wall', 'woodenWall', 'box', 'barrel'].includes(activeTool) &&
+            meObjects.some(o => ['wall', 'woodenWall', 'box', 'barrel'].includes(o.type) &&
+                overlaps(o, { x: placementX, y: placementY, w: placementSize, h: placementSize }))) {
+            showEditorToast('Это место уже занято другим препятствием');
+            return;
+        }
 
         if (['wall', 'woodenWall', 'box', 'barrel'].includes(activeTool) &&
-            meObjects.some(o => o.type === 'player' && overlaps(o, { x: gx, y: gy, w: gridSize, h: gridSize }))) {
+            meObjects.some(o => o.type === 'player' && overlaps(o, { x: placementX, y: placementY, w: placementSize, h: placementSize }))) {
             showEditorToast('Нельзя ставить препятствие на место появления игрока');
             return;
         }
@@ -412,7 +413,7 @@
             }
         }
 
-        meObjects.push({ type: activeTool, x: gx, y: gy, w: gridSize, h: gridSize });
+        meObjects.push({ type: activeTool, x: placementX, y: placementY, w: placementSize, h: placementSize });
         updateHUD();
         render();
     }
