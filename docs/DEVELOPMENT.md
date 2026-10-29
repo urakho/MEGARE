@@ -1,0 +1,61 @@
+# Development
+
+Follow [AGENTS.md](../AGENTS.md), especially KISS, preservation of existing gameplay, English code comments, and honest verification reporting.
+
+## Run the game
+
+Open [index.html](../index.html) in a modern browser, keeping the repository directories together so relative script, stylesheet, audio and artwork paths resolve. No compilation, package installation or backend process is configured. A static web server may also serve the repository, but there is no project-specific server command.
+
+The page directly loads classic scripts in a fixed order. See [ARCHITECTURE.md](ARCHITECTURE.md) before moving declarations or changing startup: `main.js` refers to functions supplied by later scripts and starts the frame loop on window load.
+
+Use a consistent browser and origin/location for local progress. Profiles, settings and maps use localStorage; serving from a different origin or switching between a local file and HTTP can expose a different storage area. Browser music playback may wait for user interaction. No minimum browser version or tested platform support matrix is declared.
+
+## Tests
+
+Tests require Node.js with the built-in `node:test`, `node:assert/strict`, `node:fs`, `node:path`, and `node:vm` facilities. Node.js v22.16.0 was used for the verified command below; this records an observed environment, not a declared minimum version.
+
+From the repository root:
+
+```text
+node --test tests/*.test.js
+```
+
+This command was executed during the documentation assessment on 2026-10-29: all 200 tests in 22 test files passed. This is a historical verification result, not a guarantee about later changes.
+
+For a focused check:
+
+```text
+node --test tests/startup.test.js
+```
+
+The focused form selects an existing test file; the full-suite command above is the command executed during the assessment.
+
+Tests in [tests/](../tests/) read source files and run complete scripts or selected functions/source sections in VM contexts with mocked game/browser globals. They cover startup and frame timing, movement and box pushing, navigation/collision indexing, targeting and damage, explosions, status effects, reloads, terrain, training, mech behavior and progression, maps, and specific vehicle abilities. They do not launch the full browser game.
+
+When adding a regression test:
+
+1. Use or extend the relevant existing `*.test.js` file; use the existing built-in Node pattern without dependencies.
+2. Supply the globals the tested code actually uses and test observable behavior, including the regression's boundary conditions.
+3. When changing source markers or declaration layout, inspect tests that extract source slices. A test harness failure can reflect an extraction assumption.
+4. Run the relevant checks and report the exact command, result and any untested behavior. Do not add tests that merely duplicate implementation details or test unrelated behavior.
+
+## Browser verification
+
+For changes affecting browser behavior, check startup/console errors, the relevant menu or battle mode, input, pause/restart, and the affected save/load path as appropriate. Exercise touch mode or audio interactions when changed. Node tests do not establish Canvas appearance, real event behavior, audio playback or browser storage compatibility.
+
+The documentation task ran the Node suite but did not perform a complete browser smoke test. No automated end-to-end browser workflow is configured in the repository.
+
+## Working conventions and assets
+
+- Inspect Git status first and preserve existing tracked and untracked work. Existing browser profile directories, screenshots and an icon archive under `tests/` are artifacts, not the test runner or dependencies; do not clean them up as an unrelated task.
+- Keep existing script order and global naming conventions unless an intentional change requires otherwise. Inspect both standard and custom-map reset paths, and all player/enemy/ally paths when changing a shared mechanic.
+- Prefer small JavaScript/HTML/CSS changes. No formatter, linter, package manager, build configuration, CI workflow or desktop packaging procedure is configured.
+- [png/](../png/) contains menu, mech/drone and other raster artwork, including subdirectories for containers. [svg/](../svg/) includes currency artwork referenced from [style.css](../style.css).
+- [music/mp3/](../music/mp3/) contains the music currently referenced by `main.js`; [music/m4a/](../music/m4a/) is also present. Much of the game artwork is drawn procedurally in Canvas rather than loaded as image files.
+- Developer commands are implemented in [src/admin.js](../src/admin.js), controlled by `ADMIN_ENABLED`. Optional maintenance behavior lives in [src/pause-menu.js](../src/pause-menu.js). These are browser-side controls, not a server or access-control architecture.
+
+## Documentation and cross-chat continuity
+
+Start from `AGENTS.md`, then read only the documents relevant to the task. Update architecture, gameplay, development instructions or confirmed goals when the corresponding behavior changes. Keep stable working rules in `AGENTS.md`; do not copy the documents into agent instructions or depend on prior conversations.
+
+Reusable workflows belong in [.agents/skills/](../.agents/skills/) only after a repeated need is demonstrated. Concrete approved task plans may live in [plans/](../plans/). Both directories initially contain only `.gitkeep`; neither is a required framework or a task backlog.
