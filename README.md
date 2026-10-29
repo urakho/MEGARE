@@ -1,5 +1,7 @@
 # MEGARE
 
+**[Play MEGARE online](https://urakho.github.io/MEGARE/)** — open the game in your browser without downloading or installing it. GitHub Pages publishes the game from the `main` branch of [urakho/MEGARE](https://github.com/urakho/MEGARE); updates pushed to `main` are published automatically, with no separate manual deployment step.
+
 MEGARE is a top-down browser combat game about tanks and mechs fighting bots. Choose a vehicle, learn its weapons and special abilities, and use movement and the battlefield to survive. Between battles, unlock more vehicles, upgrade your favorites, and build your own combat scenarios in the map editor.
 
 The game focuses on trying different fighting styles: holding a firing line, attacking through ricochets, controlling enemies with elemental effects, or supporting an AI teammate. Its interface is primarily Russian; the repository documentation is in English.
@@ -37,6 +39,8 @@ Trial, training, and custom maps provide no normal battle rewards or trophy-loss
 
 No compilation, package installation, or backend process is needed. You can also serve the repository through a static web server. Browser music playback may require an initial click or other interaction.
 
+## Controls and saves
+
 | Input | Action |
 | --- | --- |
 | W / A / S / D | Move |
@@ -48,6 +52,8 @@ No compilation, package installation, or backend process is needed. You can also
 Movement and turret aiming are separate controls. A touch-control mode provides on-screen movement, aiming/attack, and ability controls.
 
 Progress, local profiles, settings, and saved maps use browser `localStorage`. Keep using the same browser and origin/location to access the same saves. Clearing browser storage can remove them; local profiles are not online accounts and have no cloud synchronization. Switching between opening the file directly and serving it over HTTP can expose different storage areas.
+
+The published GitHub Pages game also saves progress in your browser. Saves from a local copy do not automatically transfer to the published game.
 
 ## Project and documentation
 

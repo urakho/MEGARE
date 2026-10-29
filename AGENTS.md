@@ -13,6 +13,8 @@
 
 MEGARE is a browser game about tank and mech combat against bots. It uses JavaScript, HTML, CSS, Canvas 2D, DOM UI, browser audio, and localStorage. Classic scripts share mutable state; there is no configured frontend build system, desktop package, or authoritative game server.
 
+The public game is hosted on [GitHub Pages](https://urakho.github.io/MEGARE/) from `main`; pushing updates to `main` publishes them without a separate manual deployment step. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for publishing details.
+
 Read the relevant documents before substantial changes:
 
 | Need | Source |

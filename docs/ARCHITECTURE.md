@@ -1,5 +1,9 @@
 # Current architecture
 
+## Hosting and distribution
+
+GitHub Pages serves the static game at [urakho.github.io/MEGARE](https://urakho.github.io/MEGARE/) from the repository's `main` branch. Updates pushed to `main` are published automatically without a separate manual deployment step; see [DEVELOPMENT.md](DEVELOPMENT.md). The page, scripts, and assets load under the `/MEGARE/` path using relative URLs. Hosting delivers files only: simulation, input, rendering, and localStorage persistence execute in the player's browser.
+
 ## Loading and initialization
 
 [index.html](../index.html) defines the page, game canvas, menu and dialog elements, and loads [style.css](../style.css). Its external scripts execute in this order:

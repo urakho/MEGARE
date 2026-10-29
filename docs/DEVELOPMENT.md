@@ -4,11 +4,19 @@ Follow [AGENTS.md](../AGENTS.md), especially KISS, preservation of existing game
 
 ## Run the game
 
+Play the public version at [urakho.github.io/MEGARE](https://urakho.github.io/MEGARE/) without downloading the repository. It is hosted on GitHub Pages from `main`.
+
 Open [index.html](../index.html) in a modern browser, keeping the repository directories together so relative script, stylesheet, audio and artwork paths resolve. No compilation, package installation or backend process is configured. A static web server may also serve the repository, but there is no project-specific server command.
 
 The page directly loads classic scripts in a fixed order. See [ARCHITECTURE.md](ARCHITECTURE.md) before moving declarations or changing startup: `main.js` refers to functions supplied by later scripts and starts the frame loop on window load.
 
 Use a consistent browser and origin/location for local progress. Profiles, settings and maps use localStorage; serving from a different origin or switching between a local file and HTTP can expose a different storage area. Browser music playback may wait for user interaction. No minimum browser version or tested platform support matrix is declared.
+
+## Publish updates
+
+GitHub Pages publishes this repository from the `main` branch. Pushing updates to `main` triggers publication of the public game; there is no separate manual deployment command or project build step. Publication may take time to appear on the live site. Local edits and work on other branches do not update the public version until pushed to `main`.
+
+Keep script, stylesheet, and asset URLs relative so they work under the `/MEGARE/` project path. GitHub Pages serves static files; it does not run the game simulation or store player progress. Saves in a local copy do not automatically transfer to the hosted version.
 
 ## Tests
 

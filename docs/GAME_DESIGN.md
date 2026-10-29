@@ -2,6 +2,8 @@
 
 This document describes the current source behavior. Detailed balance values remain in the source; menu descriptions and comments can lag behind implementation. See [ARCHITECTURE.md](ARCHITECTURE.md) for subsystem boundaries and limitations.
 
+Players can access the public game through [GitHub Pages](https://urakho.github.io/MEGARE/) without installation. It is published from `main`; see [PROJECT.md](PROJECT.md) for distribution details. Battles run in the player's browser against bots, and progression remains local to that browser even when playing on the public site.
+
 ## Battle modes and objectives
 
 Mode setup is in `startGame` in [src/main.js](../src/main.js), with spawning and map rules in [src/mode-map.js](../src/mode-map.js).
