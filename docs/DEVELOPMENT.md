@@ -40,6 +40,21 @@ The focused form selects an existing test file; the full-suite command above is 
 
 Tests in [tests/](../tests/) read source files and run complete scripts or selected functions/source sections in VM contexts with mocked game/browser globals. They cover startup and frame timing, movement and box pushing, navigation/collision indexing, targeting and damage, explosions, status effects, reloads, terrain, training, mech behavior and progression, maps, and specific vehicle abilities. They do not launch the full browser game.
 
+Use the relevant existing regression tests when changing these systems:
+
+| Area | Tests |
+| --- | --- |
+| Paralysis, ice freeze, mech power depletion | [paralysis.test.js](../tests/paralysis.test.js), [combat-targets.test.js](../tests/combat-targets.test.js) |
+| Shared cooldowns, bursts, heat, reload bars, waterjet | [reload.test.js](../tests/reload.test.js) |
+| Directional box contact, parallel rows, speed penalties, stable movement | [box-push.test.js](../tests/box-push.test.js) |
+| Wood reactions, projectile embedding, poison, damage and explosion presentation, barrel chains | [combat-targets.test.js](../tests/combat-targets.test.js), [explosions.test.js](../tests/explosions.test.js) |
+| Roman banners, escort behavior, centurions, placement and melee attacks | [roman-legion.test.js](../tests/roman-legion.test.js) |
+| Biomes, sight, traces and terrain rendering | [terrain.test.js](../tests/terrain.test.js) |
+| Resource-save guard and animation/frame-loop lifecycles | [resources.test.js](../tests/resources.test.js), [performance-loops.test.js](../tests/performance-loops.test.js), [background-loop.test.js](../tests/background-loop.test.js) |
+| Battle resets and custom maps | [bug-fixes.test.js](../tests/bug-fixes.test.js), [critical-fixes.test.js](../tests/critical-fixes.test.js), [map-obstacles.test.js](../tests/map-obstacles.test.js) |
+
+Shared mechanics should be checked for the player, AI allies and AI opponents as applicable, including hostile/friendly drones or summons when targeted. Exercise both `startGame` and `window.startCustomMapMode` when changing per-battle state, cooldowns or effects; a standard restart test does not establish that custom-map restart also resets them.
+
 When adding a regression test:
 
 1. Use or extend the relevant existing `*.test.js` file; use the existing built-in Node pattern without dependencies.
@@ -52,6 +67,22 @@ When adding a regression test:
 For changes affecting browser behavior, check startup/console errors, the relevant menu or battle mode, input, pause/restart, and the affected save/load path as appropriate. Exercise touch mode or audio interactions when changed. Node tests do not establish Canvas appearance, real event behavior, audio playback or browser storage compatibility.
 
 The documentation task ran the Node suite but did not perform a complete browser smoke test. No automated end-to-end browser workflow is configured in the repository.
+
+## Performance diagnosis
+
+[src/main.js](../src/main.js) exposes an opt-in browser-console profiler for an actual game session:
+
+```js
+window.startGamePerformanceProfile();
+// Play the scenario you want to measure, then run:
+window.stopGamePerformanceProfile();
+```
+
+The start call resets and enables measurement. The stop call disables it and returns per-phase `count`, `averageMs`, and `maxMs`; it returns `null` if profiling was not active. Measured phases include `update`, `render`, `enemyAI` (also used for boss AI), `allyAI`, and `physics`. `count` is the number of calls, not the number of displayed frames: simulation can run several updates per render.
+
+AI and physics measurements are nested inside `update`; do not add their times to `update` as though they were independent phases. These timings cover the instrumented JavaScript calls, not all browser work or end-to-end FPS. Compare the same map, vehicle, unit load and settings, and use browser performance tools for rendering, layout, audio or other costs outside those calls.
+
+Preserve the existing resource-change guard, navigation budget/indexing, cached graphics and visibility-aware animation lifecycles when optimizing; see [ARCHITECTURE.md](ARCHITECTURE.md). Historical FPS figures from development conversations are not current measurements or a performance guarantee. Record the actual scenario and measurement method before claiming an improvement. The profiling calls above were inspected in source; this documentation update did not run a browser benchmark.
 
 ## Working conventions and assets
 

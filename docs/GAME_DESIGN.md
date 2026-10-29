@@ -28,13 +28,16 @@ Standard victory is reached when the enemy collection is empty; defeat is normal
 - Touch mode provides movement and attack/aim controls plus ability input. Escape toggles pause; result and pause screens provide restart/menu actions.
 - Vehicles have type-specific HP and speed, modified by upgrades and active effects. Chassis orientation/animation follows movement and can differ from turret direction.
 - Movement respects world bounds and obstacle rectangles. `moveSmallSteps` in [src/bot.js](../src/bot.js) is shared by bots and collision-aware movement/knockback paths.
-- Boxes can be pushed in connected rows/chains; the push slows with the load and stops at blocking terrain. Stone walls block movement. Wooden walls are destructible and support burning, poison decay and ice interactions. Barrels can explode and ignite other barrels through fuse processing.
+- Boxes can be pushed in connected rows/chains and stop at blocking terrain. One moving box has no speed penalty; each additional moving box multiplies speed by 0.9. Only boxes contacted along the push direction join the moving group. Contact between boxes must overlap by at least one tenth of the smaller relevant side; a tank touching two rows can push both together. The same chain rules are used for player and bot movement. See `pushBoxChain` in `physics.js`.
+- Stone walls block movement. Wooden walls are destructible and react differently to ordinary hits, burning, poison and ice; barrels support chain explosions. See the terrain interaction rules below.
 
 ## Vehicles and combat
 
 The starting vehicle is `normal`. Other tanks and the three mech types can be unlocked and selected. Base HP/speed and setup are in `main.js`; attacks and effects are distributed among `main.js`, `physics.js`, and `bot.js`. [src/tanks.js](../src/tanks.js) and [src/mechs.js](../src/mechs.js) contain presentation and descriptions, not the sole gameplay definitions.
 
 Weapons differ in trajectories, reloads, damage, range, targeting and terrain interaction. Ordinary projectiles, piercing shots, ricochets, flames, beams, clouds, explosives, mines and summons use different processing paths. Owner/team fields help distinguish hostile targets, but individual attack paths implement their own rules.
+
+Standard weapon cooldowns for the player and bots share `getTankShotCooldown`; bursts, heat and energy still have type-specific behavior. Reload bars are drawn for the player and allies, not enemies, and omitted for all three mech types. Machinegun reload display follows overheat recovery rather than every bullet interval; Illuminat's bar follows beam cooldown rather than active beam time.
 
 Representative implemented mechanics:
 
@@ -51,9 +54,29 @@ Representative implemented mechanics:
 | `roman`, `spartan`, `kvant` | Ricocheting blade and banner-summoned legion; piercing spear and low-health speed change; transforming projectiles and an overload ability. |
 | `kamikaze`, `myasnoy` | Special dash/explosion and ghost behavior; a separation ability with a controlled eye and independently acting body. |
 
-`mechDiy`, `mechShield`, and `mechRocket` use regenerating energy as well as HP. Their attacks spend energy; very low energy triggers a temporary power stun. Their attack patterns differ: queued cannon bursts, a shield-oriented dense shot, and rockets. Energy capacity and shield behavior are type-specific; upgrades can change energy capacity. See `updateMechPower` and mech attack paths rather than treating energy as ordinary tank heat.
+`mechDiy`, `mechShield`, and `mechRocket` use regenerating energy as well as HP. Their attacks spend energy; very low energy triggers a temporary power stun that blocks movement and firing. Energy continues regenerating during the stun, and a depleted battery does not repeatedly restart it until rearmed by recovery. Their attack patterns differ: queued cannon bursts, a shield-oriented dense shot, and rockets. Energy capacity and shield behavior are type-specific; upgrades can change energy capacity. See `updateMechPower` and mech attack paths rather than treating energy as ordinary tank heat.
 
 Abilities do not share one universal resource model. Some have cooldowns, some have match-limited uses, and some depend on energy or vehicle state. Effects include burn, poison, freeze/slow, paralysis, blindness/control disruption, shields and knockback; each has attack-specific protection and expiry rules.
+
+### Control effects and special abilities
+
+- An ice projectile slows a hostile vehicle without fully freezing it. The ice ultimate immediately freezes nearby eligible targets and creates an ice field with contact-freeze behavior. Full ice freeze prevents movement and firing.
+- Ordinary paralysis prevents firing and weapon abilities while allowing movement; paralyzed bots can retreat. Burovoy's drill suppresses attacks while in contact, and its drill-specific paralysis clears when contact ends. Other independent effects can still remain active. Mech power stun and full ice freeze also stop movement, unlike paralysis alone.
+- Waterjet deals continuous damage and knockback without applying paralysis; its burst ends in a reload.
+- Toxic projectiles do no direct contact damage to vehicles: their clouds apply the poison. The toxic ultimate launches a forward fan of expanding clouds once per battle, for players and bots. Overlapping clouds do not multiply poison damage on the same target in a simulation step; wood also receives non-stacking poison decay.
+- Kamikaze's ultimate is an invulnerable dash with gradual steering limited to 20 degrees either side of its launch direction. It ends in an area explosion, followed by a brief recovery with slower movement and blocked firing. Its normal projectiles also explode; fiery dash tracks are visual effects.
+- Illuminat leaves a ground sign after three simulated seconds stationary, retaining only the two newest signs per vehicle. Signs damage hostile units touching them. The super makes the eye red and ignites that vehicle's signs visually for its duration; the flames do not add a separate fire-damage effect.
+- Roman's ultimate places a banner and summons reinforcements after a delay. A normal successful summon yields three legionaries; if a centurion is rolled, the group expands to four legionaries and one mounted centurion. Only one centurion is selected for that group. Placement requires free space. The banner ignores projectiles and is not a destructible objective in the current implementation. Soldiers escort their commander, return from distant pursuits, throw weapons and use melee attacks that require a windup and a target still in reach. The mounted centurion uses a spear and spatha and outlives ordinary legionaries. The ability also works for bots.
+
+### Terrain interactions and damage presentation
+
+Wooden walls retain localized damage marks instead of uniformly shrinking. Ordinary hits produce chips and splinters whose visible severity depends on damage. Fire leaves persistent charring; igniting snow-covered wood removes its snow even after the fire ends. Poison causes gradual rot and a crumbling destruction effect; ice creates a local crust that fractures into icy wood fragments. These effects share wall HP and destruction handling, rather than being separate kinds of wall.
+
+Roman blades/pilums, Spartan spears and Egyptian arrows can embed in targets using their original artwork and dimensions. In wooden walls they remain until the wall is destroyed; marks embedded in vehicles expire. Repeated impacts preserve earlier wall damage shapes. Rocket-mech impacts can create larger visible wood damage without increasing the underlying HP damage merely because the effect is larger.
+
+Generated-map barrels occupy one 50-pixel cell; newly placed editor barrels use the selected grid-cell size. A barrel blast ignites nearby barrels with a fuse of 15 simulation steps, or 0.25 simulated seconds at the game's update rate. Overlapping blasts preserve an already burning fuse, and each barrel detonates once. Direct damaging hits can detonate a barrel immediately. Chain processing advances through simulation updates, so it pauses with combat and does not recursively detonate the entire chain at once. Clearing the map clears pending barrels too.
+
+Explosion artwork and gameplay hit areas are distinct: a larger fireball or more debris does not by itself imply a larger damage radius or more HP damage. Debris and destruction animations are temporary presentation objects, not replacement blocking obstacles. Relevant handlers include `explodeBarrel`, `updateBarrelFuses`, `damageWoodenWall`, and `addEmbeddedProjectile` in `physics.js`.
 
 ## AI and maps
 
@@ -62,7 +85,7 @@ Bots navigate with A* on an obstacle grid, perform local movement checks, select
 Generated maps contain walls, wooden walls and boxes, with additional objects/spawns depending on mode. World dimensions differ by mode and the camera follows the player. [src/terrain.js](../src/terrain.js) implements biome appearance and rules:
 
 - Ordinary battles randomly select forest, snow, desert, swamp or rain.
-- Swamp applies a movement penalty. Rain applies a smaller movement penalty and faster reload progression.
+- Swamp reduces movement speed by 10%. Rain reduces movement speed by 5% and increases reload duration by 5% relative to the same weapon on ordinary terrain. `reloadFactor()` scales cooldown progress by `1 / 1.05`, so a lower factor means a longer reload. Wooden-wall burn duration is 20% shorter in rain.
 - Night is implemented with limited range and obstacle-blocked sight, but excluded from ordinary random selection.
 - Boss fights use lava terrain; training explicitly uses forest. Lava has its own appearance without the swamp/rain modifiers.
 

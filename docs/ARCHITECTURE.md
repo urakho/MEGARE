@@ -33,6 +33,8 @@ Inline scripts then manage animated menu particles and the random favicon/info i
 
 `startGame(mode)` resets combat state, chooses terrain and world size, generates the mode's map and units, and sets `gameState` to `playing`. `window.startCustomMapMode` is a separate reset/launch path for editor maps. Changes to battle initialization must consider both paths.
 
+Roman banners and soldiers share the existing `playerDrones` and `enemyDrones` arrays, distinguished by `romanSummon` (`banner` or `legionary`). Team and owner fields control allegiance; a soldier's `commander` identifies the tank it escorts. `castRomanBanner`, spawning, combat, and expiry run in `physics.js`; `drawRomanSummon` and `drawRomanRemnant` are in `tanks.js`. There is no separate legion script. Banner damage immunity and soldier targeting are handled by the shared combat paths as well as legion-specific helpers.
+
 `gameLoop(now)` schedules itself with `requestAnimationFrame`. During unpaused play, an accumulator advances simulation in `1000 / 60` millisecond steps, with time and step limits on catch-up. It increments `window.frameCount` before each `update()`. It then renders one frame and updates the mobile HUD. Paused/non-playing paths still call `update()`, which updates music and returns before normal combat. A visibility-change handler resets the accumulator.
 
 Within `update()`, the main order is:
@@ -84,6 +86,14 @@ Navigation uses a grid plus collision checks, not an external physics engine. Gr
 
 `renderGameFrame` draws the visible world through camera offsets: terrain, obstacles, units, projectiles and effects, with helpers from tanks, mechs and terrain. It also updates previews, displayed resources, and result presentation. Rendering therefore is not a pure read-only boundary. Preview and container animations have their own presentation timers/frame callbacks.
 
+Existing optimizations preserve this architecture:
+
+- World rendering skips off-screen objects and reuses an unchanged menu backdrop. Terrain textures and effect sprites are cached rather than regenerated for every draw.
+- Character cards use visibility tracking and a shared preview animation loop; closing the character menu calls `stopCharacterPreviewAnimations`. The mech card preview functions draw a single frame rather than starting separate perpetual loops. Detail/reward previews have separate lifecycles and must also stop when dismissed or replaced.
+- Inline menu particles stop scheduling frames when the menu or page is hidden. `ContainerArt` animates visible shop cards or the active opening flow and stops scheduling when neither is visible or the page is hidden. These presentation loops are separate from the one battlefield loop.
+
+Container shop/opening artwork is drawn through Canvas in `container-art.js`, rather than loaded from container PNGs. Currency artwork uses local SVG files referenced from CSS; `ui-icons.js` replaces currency symbols beside amounts while preserving other emoji and selected avatars. Most other interface symbols remain emoji. Existing image assets can remain in the repository even when a particular UI path no longer uses them.
+
 `main.js` stores keyboard state in `keys`, rotates the turret with arrow keys or wheel input, and maps touch controls to movement, aim, firing, and ability actions. Pause uses Escape in `pause-menu.js`. The editor has separate pointer/touch handlers. There is no independent input abstraction.
 
 Most UI structure is in `index.html`; styles are in `style.css`. Scripts also construct markup, set styles, and attach handlers. Music uses browser `Audio` objects pointing to `music/mp3/`, with mode-based selection, saved volume, and retry after user interaction when autoplay is blocked.
@@ -91,6 +101,8 @@ Most UI structure is in `index.html`; styles are in `style.css`. Scripts also co
 ## Persistence
 
 `saveProgress()` in `main.js` writes resources, upgrades, trophies, claimed rewards and unlocked vehicles to flat localStorage keys, then snapshots the active profile. `PROFILE_SAVE_KEYS` defines the profile snapshot set; `megare_profiles` stores profile slots and `megare_activeProfile` selects one. Profile initialization migrates existing flat data or restores the active slot. Some systems write individual keys directly.
+
+`updateCoinDisplay()` compares coins, gems, trophies and parts with `_lastDisplayedResources` before updating the resource UI and calling `saveProgress()`. Repeated render-time calls with unchanged resources therefore avoid repeated storage writes. This guard is not a general dirty-state tracker: changes to unlocks, upgrades or other saved data still depend on their explicit save calls.
 
 Settings use separate `setting...` keys. Custom maps use `me_maps` in `mapeditor.js` and can be transferred as `.meg` JSON files. These settings and maps are outside the profile snapshot list. There is no cloud persistence or server validation. Storage parsing/error handling differs between call sites; do not assume every saved value is validated uniformly.
 
