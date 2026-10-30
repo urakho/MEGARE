@@ -4,6 +4,8 @@ MEGARE is a top-down browser combat game built around player-controlled tanks an
 
 For a player-facing introduction, launch instructions, and basic controls, start with the root [README](../README.md).
 
+The current release label is **3.0**. Player-facing release notes are stored newest first in `newsData` in [src/news.js](../src/news.js); the version dialog in [index.html](../index.html) displays the same release number. The 3.0 announcement groups the retained biome, combat, Roman escort, terrain interaction, artwork, interface, and reliability changes; older announcements remain available below it.
+
 ## Availability and distribution
 
 The game is publicly available at [urakho.github.io/MEGARE](https://urakho.github.io/MEGARE/). GitHub Pages publishes the static game files from the `main` branch of [urakho/MEGARE](https://github.com/urakho/MEGARE). Updates pushed to `main` are published automatically; no separate manual deployment, application installation, or game server is required. Local copies can also run directly in a browser.
