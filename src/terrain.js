@@ -38,6 +38,8 @@
     let woodScorchImage = null;
     const boxTextures = new WeakMap();
     const swampWater = [];
+    const rainWater = [];
+    const waterOil = new Map();
     function seeded(seed) {
         return () => {
             seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -63,6 +65,7 @@
             ctx.quadraticCurveTo(p[0], p[1], (p[0] + next[0]) / 2, (p[1] + next[1]) / 2);
         }
         ctx.closePath(); ctx.fill();
+        return points;
     }
     function swampPools(c, size, rand) {
         swampWater.length = 0;
@@ -76,6 +79,7 @@
                 const r = 0.82 + Math.sin(a * 3 + phase) * 0.13 + Math.cos(a * 5 - phase) * 0.06;
                 return [Math.cos(a) * rx * r, Math.sin(a) * ry * r];
             });
+            swampWater[swampWater.length - 1].points = points;
             function outline(scale) {
                 c.beginPath();
                 c.moveTo((points[19][0] + points[0][0]) * scale / 2, (points[19][1] + points[0][1]) * scale / 2);
@@ -231,11 +235,13 @@
         }
         if (type === 'swamp') swampPools(c, size, rand);
         if (wet && type !== 'swamp') {
+            rainWater.length = 0;
             for (let i = 0; i < 20; i++) {
                 const x = 50 + rand() * (size - 100), y = 35 + rand() * (size - 70);
                 const rx = 12 + rand() * 34, ry = 4 + rand() * 12;
                 patch(c, x, y + 2, rx + 2, ry + 2, rand, 'rgba(19,23,16,0.3)');
-                patch(c, x, y, rx, ry, rand, 'rgba(88,111,111,0.27)');
+                const outline = patch(c, x, y, rx, ry, rand, 'rgba(88,111,111,0.27)');
+                rainWater.push({ x, y, rx, ry, points: outline.map(p => [p[0] - x, p[1] - y]) });
                 c.strokeStyle = 'rgba(183,208,210,0.2)';
                 c.lineWidth = 0.7;
                 c.beginPath(); c.moveTo(x - rx * 0.45, y - 1); c.quadraticCurveTo(x, y - ry * 0.4, x + rx * 0.4, y - 1); c.stroke();
@@ -292,6 +298,61 @@
         }
         ctx.fillStyle = patterns.get(type);
         ctx.fillRect(left, top, width, height);
+        drawWaterOil(ctx, left, top, width, height, type);
+    }
+
+    function addOilToWater(x, y, amount) {
+        const type = current();
+        if ((type !== 'swamp' && type !== 'rain') || window.effectsEnabled === false ||
+            !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(amount) || amount < 0) return false;
+        if (!groundTiles.has(type)) groundTiles.set(type, makeGround(type));
+        const pools = type === 'swamp' ? swampWater : rainWater;
+        for (let index = 0; index < pools.length; index++) {
+            const pool = pools[index];
+            const cx = pool.x + Math.round((x - pool.x) / 768) * 768;
+            const cy = pool.y + Math.round((y - pool.y) / 768) * 768;
+            const px = x - cx, py = y - cy;
+            if (Math.abs(px) > pool.rx || Math.abs(py) > pool.ry) continue;
+            let inside = false;
+            for (let i = 0, j = pool.points.length - 1; i < pool.points.length; j = i++) {
+                const a = pool.points[i], b = pool.points[j];
+                if ((a[1] > py) !== (b[1] > py) && px < (b[0] - a[0]) * (py - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+            }
+            if (!inside) continue;
+            if (amount > 0) {
+                const key = type + ':' + index + ':' + cx + ':' + cy;
+                let stain = waterOil.get(key);
+                if (!stain) {
+                    if (waterOil.size >= 64) waterOil.delete(waterOil.keys().next().value);
+                    stain = { ...pool, x: cx, y: cy, type, amount: 0 };
+                    waterOil.set(key, stain);
+                }
+                stain.amount = Math.min(10000, stain.amount + amount * 0.2);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function drawWaterOil(ctx, left, top, width, height, type) {
+        if (window.effectsEnabled === false) return;
+        for (const stain of waterOil.values()) {
+            if (stain.type !== type || stain.x + stain.rx < left || stain.x - stain.rx > left + width ||
+                stain.y + stain.ry < top || stain.y - stain.ry > top + height) continue;
+            ctx.save(); ctx.translate(stain.x, stain.y);
+            const points = stain.points;
+            ctx.beginPath();
+            const last = points[points.length - 1];
+            ctx.moveTo((last[0] + points[0][0]) / 2, (last[1] + points[0][1]) / 2);
+            for (let i = 0; i < points.length; i++) {
+                const next = points[(i + 1) % points.length];
+                ctx.quadraticCurveTo(points[i][0], points[i][1], (points[i][0] + next[0]) / 2, (points[i][1] + next[1]) / 2);
+            }
+            ctx.closePath();
+            ctx.globalAlpha = (1 - Math.exp(-stain.amount / (15 + stain.rx * stain.ry * 0.03))) * 0.9;
+            ctx.fillStyle = '#030807'; ctx.fill();
+            ctx.restore();
+        }
     }
 
     function coatingProfile(w, h, rand, snow) {
@@ -1156,8 +1217,10 @@
     };
     function resetBattle() {
         motionHistory = new WeakMap(); trackMarks.length = 0; driveParticles.length = 0; illuminatMarks.length = 0; sightIndex = null;
+        waterOil.clear();
     }
     function updateMovement(player, enemies, allies, playerType) {
+        if (window.effectsEnabled === false) driveParticles.length = 0;
         for (const list of [trackMarks, driveParticles]) {
             let count = 0;
             for (const item of list) {
@@ -1277,7 +1340,7 @@
                 state.lastMark = { x: rearX, y: rearY, cos, sin };
                 state.distance %= 7;
             }
-            if (unitType === 'illuminat' || unitType === 'air' || state.particleDistance < 16) return;
+            if (window.effectsEnabled === false || unitType === 'illuminat' || unitType === 'air' || state.particleDistance < 16) return;
             state.particleDistance %= 16;
             state.emissions++;
             for (const side of [-1, 1]) {
@@ -1513,6 +1576,7 @@
         }
         const visibility = new WeakMap();
         for (const p of driveParticles) {
+            if (window.effectsEnabled === false) break;
             if (p.x < left || p.x > right || p.y < top || p.y > bottom) continue;
             if (!visibility.has(p.owner)) visibility.set(p.owner, canSee(player, p.owner, objects));
             if (!visibility.get(p.owner)) continue;
@@ -1562,6 +1626,7 @@
     }
     function wrap(value, size) { return ((value % size) + size) % size; }
     function drawWeather(ctx, width, height, frame, type, camX, camY) {
+        if (window.effectsEnabled === false) return;
         if (type === 'snow') {
             // Thin wind ribbons and a few drifting ice crystals; no blizzard.
             ctx.strokeStyle = 'rgba(231,244,246,0.12)';
@@ -1692,7 +1757,7 @@
     }
 
     window.GameTerrain = { normalize, current, randomType, label, speedFactor, reloadFactor, movementSpeed, canSee, NIGHT_VISION_RADIUS,
-        groundColor, drawGround, drawWallCover, drawWoodenWall, drawWoodenWallBurn, drawWoodenWallRot, drawBox, drawBarrel, visibilityPolygon, drawAtmosphere,
+        groundColor, drawGround, addOilToWater, drawWallCover, drawWoodenWall, drawWoodenWallBurn, drawWoodenWallRot, drawBox, drawBarrel, visibilityPolygon, drawAtmosphere,
         resetBattle, updateMovement, drawMovement, movementStats, getMotion, forEachIlluminatMark, activateIlluminatSuper,
         isIlluminatSuperActive, illuminatSuperStrength };
     window.currentTerrain = normalize(window.currentTerrain);

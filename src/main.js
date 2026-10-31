@@ -762,6 +762,11 @@ const tankMaxHpByType = {
     'boss_hell': 7500
 };
 
+function isCustomMapTankType(type) {
+    return typeof type === 'string' && type !== 'boss_hell' &&
+        (Object.hasOwn(tankMaxHpByType, type) || Object.hasOwn(window.mechMaxHpByType || {}, type));
+}
+
 function setTankHP(type) {
     const base = tankMaxHpByType[type] || window.mechMaxHpByType?.[type] || 300;
     const hp = base + getTankUpgrade(type, 'hp') * 50;
@@ -995,7 +1000,7 @@ function updateMyasnoyEyeAttackSweep(unit) {
             spawnParticle(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, '#cc0000', 0.9);
         }
         if (enemy.hp <= 0) {
-            if (typeof spawnExplosion === 'function') spawnExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 40);
+            if (typeof spawnExplosion === 'function') spawnExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 40, 'tank', enemy);
             enemies.splice(index, 1);
             if (typeof gainTrophies === 'function') gainTrophies(1);
         }
@@ -1099,7 +1104,21 @@ function resetTankMatchUltState(unit) {
 }
 
 function resetTankBattleEffects(unit) {
+    unit._immersionHeatFrame = undefined;
+    unit._immersionIlluminatFrame = undefined;
+    unit._immersionElectricFrame = undefined;
+    unit._immersionWaterFrame = undefined;
+    unit._immersionImpactFrame = undefined;
+    unit._immersionMusicFrame = undefined;
+    unit._immersionBarrageFrame = undefined;
+    unit._immersionAirFrame = undefined;
+    unit._immersionAirAngle = undefined;
     unit.embeddedProjectiles = [];
+    unit._oilTrailX = undefined;
+    unit._oilTrailY = undefined;
+    unit._oilDripTicks = 0;
+    unit._oilPool = null;
+    unit._damageEffectTick = 0;
     unit.heat = 0;
     unit.overheated = false;
     unit._kvantOverload = false;
@@ -1166,6 +1185,7 @@ window.onkeyup = (e) => {
 // SETTINGS
 // ========================
 window.effectsEnabled = localStorage.getItem('settingEffects') !== 'false';
+window.immersionEnabled = localStorage.getItem('settingImmersion') === 'true';
 window.deviceModeMobile = localStorage.getItem('settingMobile') === 'true';
 // Offline mode: when true, app will avoid full page reloads when returning to menu
 window.offlineMode = localStorage.getItem('settingOffline') === 'true';
@@ -1217,6 +1237,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     const modal = document.getElementById('settingsModal');
     const closeBtn = document.getElementById('settingsClose');
     const chkEffects = document.getElementById('settingEffects');
+    const chkImmersion = document.getElementById('settingImmersion');
     const chkMobile  = document.getElementById('settingMobile');
     const chkMusicVolume = document.getElementById('settingMusicVolume');
     const chkOffline = document.getElementById('settingOffline');
@@ -1224,6 +1245,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
 
     // Apply saved values
     chkEffects.checked = window.effectsEnabled;
+    if (chkImmersion) chkImmersion.checked = window.immersionEnabled;
     chkMobile.checked  = window.deviceModeMobile;
     chkMusicVolume.value = Math.round(window.musicVolume * 100);
     if (chkOffline) chkOffline.checked = !!window.offlineMode;
@@ -1260,6 +1282,12 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
 
     closeBtn.addEventListener('click', () => {
         window.effectsEnabled   = chkEffects.checked;
+        if (!window.effectsEnabled) particles.length = 0;
+        window.dispatchEvent(new Event('effectschange'));
+        if (chkImmersion) {
+            window.immersionEnabled = chkImmersion.checked;
+            localStorage.setItem('settingImmersion', chkImmersion.checked);
+        }
         window.deviceModeMobile = chkMobile.checked;
         window.musicVolume = chkMusicVolume.value / 100;
         if (chkOffline) {
@@ -2351,8 +2379,9 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
             { x: worldWidth / 2,   y: 80 },
         ];
     enemies = spawnPositions.map((pos, i) => {
-        // Random type each time for variety
-        const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
+        const selectedType = enemySpawns?.[i]?.tankType;
+        const tt = isCustomMapTankType(selectedType) ? selectedType
+            : _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         // In 'solo' mode each enemy gets its own team (2, 3, 4...) so they fight each other
         const teamId = (enemyMode === 'solo') ? (i + 2) : 1;
         return {
@@ -2373,8 +2402,8 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
 
     // Spawn allies (friendly tanks on player team) on their exact editor markers
     const alliedTanks = (allySpawns && allySpawns.length > 0) ? allySpawns.map((spawn, i) => {
-        // Random type for allied tanks
-        const tt = _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
+        const tt = isCustomMapTankType(spawn.tankType) ? spawn.tankType
+            : _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         const spawnPos = _spawnMarkerToTankPos(spawn, 38, 38, tank.x + 50 + i * 44, tank.y);
         return {
             x: spawnPos.x, y: spawnPos.y, w: 38, h: 38,
@@ -4056,7 +4085,7 @@ function updateDuelZone() {
                 gameState = 'lose';
                 loseModeTrophies();
                 syncResultOverlay('lose');
-                spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
             }
         }
 
@@ -4070,7 +4099,7 @@ function updateDuelZone() {
                 if (Math.random() > 0.8) spawnParticle(e.x + e.w/2, e.y + e.h/2, '#FF0000');
                 if (e.hp <= 0) {
                     enemies.splice(i, 1);
-                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                 }
             }
         }
@@ -4756,7 +4785,7 @@ function update() {
                 if (!(_oe.kamikazeUltActive && _oe.kamikazeInvincible)) _oe.hp -= 80;
                 if (_oe.hp <= 0) {
                     if (typeof objects !== 'undefined') objects.push({ type: 'shockwave', x: _ex, y: _ey, radius: 5, speed: 18, life: 20, maxLife: 20, color: '#00e5ff' });
-                    if (typeof spawnExplosion === 'function') spawnExplosion(_ex, _ey, 50);
+                    if (typeof spawnExplosion === 'function') spawnExplosion(_ex, _ey, 50, 'tank', _oe);
                     enemies.splice(_oi, 1);
                     if (typeof gainTrophies === 'function') gainTrophies(1);
                     // Trigger win immediately if this was the last enemy alive
@@ -5074,7 +5103,7 @@ function update() {
             if (be.hp <= 0) {
                 be.alive = false;
                 enemies.splice(bi, 1);
-                spawnExplosion(be.x + be.w/2, be.y + be.h/2, 65);
+                spawnExplosion(be.x + be.w/2, be.y + be.h/2, 65, 'tank', be);
             }
         }
 
@@ -5107,7 +5136,7 @@ function update() {
                 const _de = enemies[_di];
                 if (!_de || _de.hp > 0 || _de.alive === false) continue;
                 _de.alive = false;
-                if (typeof spawnExplosion === 'function') spawnExplosion(_de.x + _de.w/2, _de.y + _de.h/2, 65);
+                if (typeof spawnExplosion === 'function') spawnExplosion(_de.x + _de.w/2, _de.y + _de.h/2, 65, 'tank', _de);
                 if (currentMode === 'war') {
                     _de.respawnTimer = _de.respawnTimer || 600;
                 } else {
@@ -5120,7 +5149,7 @@ function update() {
                     const _al = allies[_ai];
                     if (!_al || _al.hp > 0 || _al.alive === false) continue;
                     _al.alive = false;
-                    if (typeof spawnExplosion === 'function') spawnExplosion(_al.x + _al.w/2, _al.y + _al.h/2, 65);
+                    if (typeof spawnExplosion === 'function') spawnExplosion(_al.x + _al.w/2, _al.y + _al.h/2, 65, 'tank', _al);
                     if (currentMode === 'war') {
                         _al.respawnTimer = _al.respawnTimer || 600;
                     } else {
@@ -5131,7 +5160,7 @@ function update() {
             // Player tank sweep
             if (typeof tank !== 'undefined' && tank.hp <= 0 && tank.alive !== false) {
                 tank.alive = false;
-                if (typeof spawnExplosion === 'function') spawnExplosion(tank.x + tank.w/2, tank.y + tank.h/2, 70);
+                if (typeof spawnExplosion === 'function') spawnExplosion(tank.x + tank.w/2, tank.y + tank.h/2, 70, 'tank', tank);
                 if (currentMode !== 'war' && currentMode !== 'training') {
                     gameState = 'lose';
                     if (typeof loseModeTrophies === 'function') loseModeTrophies();

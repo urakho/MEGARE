@@ -773,19 +773,33 @@
             <input type="range" id="settingMusicVolume" min="0" max="100" value="50" style="width:100px;">
         </div>
 
-        <div style="text-align:center; margin-top:24px;">
-            <!-- Offline mode: if enabled, game will not perform a full page reload when returning to menu -->
-            <div class="settings-row" style="margin-bottom:10px;">
+        <!-- Offline mode: avoid a full page reload when returning to the menu. -->
+        <div class="settings-row">
+            <div>
+                <div class="settings-label">Оффлайн</div>
+                <div class="settings-desc">Если включено — игра не будет перезагружать страницу при выходе в меню</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="settingOffline">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+
+        <section class="settings-experimental" aria-labelledby="settingsExperimentalTitle">
+            <h3 id="settingsExperimentalTitle">Экспериментальное</h3>
+            <div class="settings-row">
                 <div>
-                    <div class="settings-label">Оффлайн</div>
-                    <div class="settings-desc">Если включено — игра не будет перезагружать страницу при выходе в меню</div>
+                    <div class="settings-label">Эффекты погружения</div>
+                    <div class="settings-desc">Погода, повреждения и реакции на атаки на экране</div>
                 </div>
                 <label class="toggle-switch">
-                    <input type="checkbox" id="settingOffline">
+                    <input type="checkbox" id="settingImmersion" aria-label="Эффекты погружения">
                     <span class="toggle-track"></span>
                 </label>
             </div>
+        </section>
 
+        <div style="text-align:center; margin-top:24px;">
             <button id="settingsCommandBtn" class="btn btn-secondary" style="display:none; min-width:140px; margin-bottom:10px;">💬 Команды</button>
             <button id="settingsClose" class="btn btn-primary" style="min-width:140px;">Сохранить</button>
         </div>
@@ -851,6 +865,7 @@
         <button class="me-tool-btn" data-tool="barrel">🚨 Бочка · 3</button>
         <button class="me-tool-btn" data-tool="enemy">💀 Враг · 4</button>
         <button class="me-tool-btn" data-tool="ally">🤝 Союзник · 5</button>
+        <div class="me-label" style="font-size:10px; margin:4px 0;">Нажмите на врага или союзника на карте, чтобы выбрать его танк.</div>
         <button class="me-tool-btn" data-tool="player">🟢 Игрок · 6</button>
         <button class="me-tool-btn" data-tool="erase">🗑️ Стереть · 7</button>
         <hr class="me-sep">
@@ -877,6 +892,21 @@
 
     </div><!-- /me-workspace -->
 
+  </div>
+</div>
+
+<!-- Per-bot vehicle selection -->
+<div id="meBotModal" class="modal-overlay" style="display:none; z-index:420;">
+  <div class="modal-box">
+    <h2 id="meBotTitle" class="modal-title">Танк бота</h2>
+    <label for="meBotTank" class="me-label">Выберите технику для этого бота</label>
+    <select id="meBotTank" class="me-input me-select" style="margin-top:12px;">
+      <option value="">Случайный</option>
+    </select>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:20px;">
+      <button id="meBotApply" class="btn btn-primary">Применить</button>
+      <button id="meBotCancel" class="btn btn-secondary">Отмена</button>
+    </div>
   </div>
 </div>
 
@@ -1051,7 +1081,7 @@
     let frame = 0;
     let animationFrameId = null;
     const menuEl = document.getElementById('mainMenu');
-    const menuVisible = () => menuEl && menuEl.style.display !== 'none' && menuEl.style.display !== '' && !document.hidden;
+    const menuVisible = () => menuEl && menuEl.style.display !== 'none' && menuEl.style.display !== '' && !document.hidden && window.effectsEnabled !== false;
 
     function start() {
         if (animationFrameId === null && menuVisible()) {
@@ -1105,6 +1135,7 @@
             .observe(menuEl, { attributes: true, attributeFilter: ['style'] });
     }
     document.addEventListener('visibilitychange', () => menuVisible() ? start() : stop());
+    window.addEventListener('effectschange', () => menuVisible() ? start() : stop());
     start();
 })();
 </script>

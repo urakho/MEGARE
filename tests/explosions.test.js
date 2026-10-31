@@ -18,16 +18,105 @@ function battle() {
     return context;
 }
 
-test('tank destruction keeps its original fireball, shockwave, lifetime and particles', () => {
+test('tank destruction leaves capped wreckage alongside its visual-only explosion', () => {
     const context = battle();
-    context.spawnExplosion(100, 200, 65);
-    assert.equal(context.objects.length, 2);
-    assert.equal(context.objects[0].explosionStyle, undefined);
-    assert.equal(context.objects[0].radius, 65);
-    assert.equal(context.objects[0].life, 28);
-    assert.equal(context.objects[1].type, 'shockwave');
-    assert.equal(context.objects[1].life, 18);
+    context.spawnExplosion(100, 200, 65, 'tank', { w: 38, h: 38, color: '#b22222', tankType: 'machinegun', baseAngle: 0.4, turretAngle: 0.7 });
+    assert.equal(context.objects.length, 3);
+    assert.equal(context.objects[0].type, 'tankWreck');
+    assert.equal(context.objects[0].x, 100);
+    assert.equal(context.objects[0].y, 200);
+    assert.equal(context.objects[0].color, '#b22222');
+    assert.equal(context.objects[0].hullAngle, 0.4);
+    assert.equal(context.objects[0].turretAngle, 0.7);
+    assert.equal(context.objects[0].tankType, 'machinegun');
+    assert.equal(context.objects[1].explosionStyle, 'tank');
+    assert.equal(context.objects[1].radius, 65);
+    assert.equal(context.objects[1].life, 54);
+    assert.equal(context.objects[1].damage, undefined);
+    assert.equal(context.objects[2].type, 'shockwave');
+    assert.equal(context.objects[2].life, 18);
     assert.equal(context.particles.length, 50);
+    for (let i = 0; i < 20; i++) context.spawnExplosion(i, 0, 65);
+    const wrecks = context.objects.filter(obj => obj.type === 'tankWreck');
+    assert.equal(wrecks.length, 20);
+    assert.equal(wrecks[0].x, 0);
+});
+
+test('critical oil leakage makes small moving drops and grows one stationary pool', () => {
+    const context = battle();
+    const tank = context.tank;
+    let poured = 0;
+    context.GameTerrain = { addOilToWater: (_x, _y, amount) => { poured += amount; return true; } };
+    Object.assign(tank, { x: 0, y: 0, w: 38, h: 38, hp: 20, maxHp: 100 });
+    const oil = () => context.objects.filter(obj => obj.type === 'tankOilTrail');
+    context.updateTankDamageEffects();
+    tank.x = 12;
+    context.updateTankDamageEffects();
+    assert.equal(oil().length, 0, 'exactly 20 percent HP does not leak');
+    tank.hp = 19;
+    context.updateTankDamageEffects();
+    tank.x = 24;
+    for (let tick = 0; tick < 3; tick++) context.updateTankDamageEffects();
+    assert.equal(oil().length, 2);
+    assert.ok(oil().every(drop => drop.radius < 3 && drop.life === 2100 && drop.damage === undefined));
+    assert.ok(oil().every(drop => drop.x < tank.x + tank.w / 2), 'leak stays at the rear of the hull');
+    for (let tick = 0; tick < 35; tick++) context.updateTankDamageEffects();
+    const pool = tank._oilPool;
+    assert.ok(pool);
+    const count = oil().length, radius = pool.radius;
+    for (let tick = 0; tick < 35; tick++) context.updateTankDamageEffects();
+    assert.equal(oil().length, count, 'stationary leakage reuses its puddle');
+    assert.ok(pool.radius > radius);
+    for (let tick = 0; tick < 700; tick++) context.updateTankDamageEffects();
+    assert.ok(pool.radius <= tank.w * 0.24, 'continued leakage keeps a compact puddle');
+    assert.ok(poured > 100, 'fresh leakage keeps adding oil to terrain water');
+    context.window.effectsEnabled = false;
+    tank.x = 36;
+    context.updateTankDamageEffects();
+    assert.equal(oil().length, count);
+});
+
+test('damage smoke drifts independently of its source and expires in simulation', () => {
+    const context = battle();
+    context.tank.hp = 100;
+    context.tank.maxHp = 300;
+    context.updateTankDamageEffects();
+    const smoke = context.objects.find(obj => obj.type === 'tankDamageSmoke');
+    assert.ok(smoke);
+    const start = physics.indexOf("        } else if (obj.type === 'tankDamageSmoke') {");
+    const end = physics.indexOf("        } else if (obj.type === 'explosion' ||", start);
+    assert.ok(start >= 0 && end > start);
+    vm.runInContext(`function tickSmoke() { for (let i=objects.length-1;i>=0;i--) { const obj=objects[i]; if(false) { ${physics.slice(start,end)} } } }`, context);
+    const x = smoke.x, y = smoke.y;
+    context.tank.x += 200;
+    context.tickSmoke();
+    assert.ok(smoke.x > x && smoke.x < x + 1);
+    assert.ok(smoke.y < y);
+    for (let i=1;i<90;i++) context.tickSmoke();
+    assert.equal(context.objects.filter(obj => obj.type === 'tankDamageSmoke').length, 0);
+});
+
+test('damage source follows the visible hull instead of snapping to movement input', () => {
+    const context = battle();
+    let visibleAngle = 0;
+    context.GameTerrain = { getMotion: () => ({ angle: visibleAngle }) };
+    Object.assign(context.tank, { hp: 49, maxHp: 100, baseAngle: 0 });
+    const start = drawing.indexOf('function drawTankDamage(');
+    const end = drawing.indexOf('function drawTankDamageSmoke(', start);
+    vm.runInContext(drawing.slice(start, end), context);
+    const anchors = [];
+    const canvas = new Proxy({}, { get: (_target, name) => {
+        if (name === 'createRadialGradient') return (x, y) => { anchors.push({ x, y }); return { addColorStop() {} }; };
+        return () => {};
+    } });
+    context.drawTankDamage(canvas, context.tank);
+    context.tank.baseAngle = Math.PI / 2;
+    visibleAngle = 0.1;
+    context.drawTankDamage(canvas, context.tank);
+    assert.ok(Math.hypot(anchors[1].x - anchors[0].x, anchors[1].y - anchors[0].y) < 2);
+    context.updateTankDamageEffects();
+    const smoke = context.objects.find(obj => obj.type === 'tankDamageSmoke');
+    assert.ok(Math.abs(smoke.x - (context.tank.x + context.tank.w / 2 + anchors[1].x)) < 0.001);
 });
 
 test('projectile impacts and larger barrel fireballs keep their damage radii', () => {
@@ -72,11 +161,210 @@ test('effects setting disables all explosion spawning', () => {
     assert.equal(context.particles.length, 0);
 });
 
+test('smoke and oil respect separate damage thresholds', () => {
+    const sample = (hp, enabled = true) => {
+        const context = battle();
+        Object.assign(context.tank, { hp, maxHp: 100 });
+        context.window.effectsEnabled = enabled;
+        for (let tick=0;tick<40;tick++) context.updateTankDamageEffects();
+        assert.equal(context.tank.hp, hp, 'presentation does not deal damage');
+        return {
+            smoke: context.objects.filter(obj => obj.type === 'tankDamageSmoke').length,
+            oil: context.objects.filter(obj => obj.type === 'tankOilTrail').length
+        };
+    };
+    assert.deepEqual(sample(50), { smoke: 0, oil: 0 });
+    assert.deepEqual(sample(49.9), { smoke: 3, oil: 0 });
+    assert.deepEqual(sample(30), { smoke: 3, oil: 0 });
+    assert.deepEqual(sample(29.9), { smoke: 5, oil: 0 });
+    assert.deepEqual(sample(20), { smoke: 5, oil: 0 });
+    assert.deepEqual(sample(19.9), { smoke: 5, oil: 1 });
+    assert.deepEqual(sample(10), { smoke: 5, oil: 1 });
+    assert.deepEqual(sample(9.9), { smoke: 8, oil: 1 });
+    assert.deepEqual(sample(9.9, false), { smoke: 0, oil: 0 });
+});
+
+test('screen immersion preserves moving drops and smoke, freezes on pause, and clears between battles', () => {
+    const start = drawing.indexOf('let immersionPresentation = null;');
+    const end = drawing.indexOf('function getImmersionEdgeArt(', start);
+    assert.ok(start >= 0 && end > start);
+    const context = vm.createContext({ window: { immersionEnabled: true }, gameState: 'playing', battleSessionId: 1 });
+    vm.runInContext(drawing.slice(start, end), context);
+    const unit = { hp: 100, maxHp: 100, alive: true };
+    let state;
+    for (let frame = 0; frame < 120; frame++) state = context.updateImmersionPresentation(unit, 'rain', frame, 1);
+    assert.ok(state.drops.length > 0 && state.drops.length <= 18);
+    const drop = [...state.drops].sort((a, b) => a.y - b.y)[0], y = drop.y;
+    for (let frame = 120; frame < 130; frame++) state = context.updateImmersionPresentation(unit, 'rain', frame, 0);
+    assert.ok(state.drops.includes(drop) && drop.y > y, 'existing rain keeps sliding after movement stops');
+    const paused = JSON.stringify(state);
+    for (let i = 0; i < 30; i++) context.updateImmersionPresentation(unit, 'rain', 129, 0);
+    assert.equal(JSON.stringify(state), paused);
+    context.battleSessionId++;
+    state = context.updateImmersionPresentation(unit, 'forest', 130, 0);
+    assert.equal(state.drops.length, 0);
+    unit.hp = 9;
+    for (let frame = 131; frame < 311; frame++) state = context.updateImmersionPresentation(unit, 'forest', frame, 0);
+    assert.ok(state.smoke.length > 0 && state.smoke.length <= 22);
+    assert.ok(state.smoke.some(puff => puff.y < 1), 'fire smoke rises into the screen');
+    unit.hp = 100;
+    for (let frame = 311; frame < 551; frame++) state = context.updateImmersionPresentation(unit, 'forest', frame, 0);
+    assert.equal(state.smoke.length, 0);
+    context.window.immersionEnabled = false;
+    assert.equal(context.updateImmersionPresentation(unit, 'snow', 551, 0), null);
+});
+
+test('immersion statuses follow cold, cloud contact, drill contact and distinct fire attacks', () => {
+    const start = drawing.indexOf('let immersionPresentation = null;');
+    const end = drawing.indexOf('function getImmersionEdgeArt(', start);
+    const context = vm.createContext({ window: { immersionEnabled: true }, gameState: 'playing', battleSessionId: 1, objects: [] });
+    vm.runInContext(drawing.slice(start, end), context);
+    const unit = { x: 0, y: 0, w: 38, h: 38, hp: 100, maxHp: 100, alive: true };
+    let frame = 0, state;
+    const advance = (count = 90) => {
+        for (let i = 0; i < count; i++) state = context.updateImmersionPresentation(unit, 'forest', frame++, 0);
+        return state;
+    };
+    unit.burning = true; unit.burnTimer = 300;
+    advance();
+    assert.ok(state.pyro > 0.95 && state.smoke.length > 0, 'pyro burning works at full HP');
+    unit.iceSlowed = true; unit.iceSlowedTime = 240;
+    advance(1);
+    assert.equal(state.fire, 0); assert.equal(state.pyro, 0); assert.equal(state.smoke.length, 0);
+    assert.equal(state.iced, true);
+    advance();
+    assert.ok(state.ice > 0.95); assert.equal(state.frozen, 0, 'ordinary ice hits do not cover the whole screen');
+    unit.frozenEffect = 180; advance(); assert.ok(state.frozen > 0.95);
+    const paused = JSON.stringify(state);
+    context.updateImmersionPresentation(unit, 'forest', frame - 1, 0);
+    assert.equal(JSON.stringify(state), paused);
+    unit.frozenEffect = 0; unit.iceSlowed = false; unit.iceSlowedTime = 0; unit.burning = false;
+    advance(120);
+    assert.equal(state.iced, false);
+    unit.hp = 9; advance();
+    assert.ok(state.fire > 0.9 && state.smoke.length > 0);
+    unit._immersionHeatFrame = frame;
+    advance(30);
+    assert.ok(state.heat > 0.8); assert.ok(state.pyro < 0.01);
+    assert.equal(state.fire, 0, 'flamethrower heat takes precedence over damage flames');
+    assert.equal(state.smoke.length, 0, 'flamethrower heat does not emit fire smoke');
+    unit.hp = 100;
+    context.objects.push({ type: 'gas', x: 19, y: 19, radius: 50, life: 100 });
+    advance(); assert.ok(state.gas > 0.95);
+    unit.x = 300; unit.poisonTimer = 180;
+    advance(120); assert.equal(state.gas, 0, 'lingering poison outside the cloud does not cover the screen');
+    context.Math = Object.assign(Object.create(Math), { random: () => 0.2 });
+    unit.burovoyDrillParalysis = true; advance(); assert.ok(state.drill > 0.95);
+    const firstDrillSeed = state.drillSeed;
+    advance(10); assert.equal(state.drillSeed, firstDrillSeed, 'one contact keeps stable crack geometry');
+    unit.burovoyDrillParalysis = false; unit.paralyzed = true;
+    advance(120); assert.equal(state.drill, 0, 'ordinary paralysis does not keep drill cracks');
+    context.Math.random = () => 0.8;
+    unit.burovoyDrillParalysis = true; advance(1);
+    assert.notEqual(state.drillSeed, firstDrillSeed, 'a new drill contact generates a different pattern');
+    const pausedDrill = JSON.stringify(state);
+    context.updateImmersionPresentation(unit, 'forest', frame - 1, 0);
+    assert.equal(JSON.stringify(state), pausedDrill, 'pause does not reroll the cracks');
+    unit.burovoyDrillParalysis = false; advance(120);
+    unit._immersionIlluminatFrame = frame;
+    advance(31); assert.equal(state.illuminatAge, 0.5);
+    advance(30); assert.equal(state.illuminatAge, 1, 'Illuminat crosses the screen for one simulated second');
+    context.battleSessionId++;
+    state = context.updateImmersionPresentation({ ...unit, _immersionIlluminatFrame: undefined }, 'forest', frame++, 0);
+    assert.equal(state.smoke.length, 0); assert.equal(state.gas, 0); assert.equal(state.illuminatAge, 2);
+    context.window.immersionEnabled = false;
+    assert.equal(context.updateImmersionPresentation(unit, 'forest', frame++, 0), null);
+});
+
+test('new immersion reactions track hostile swarms, overload and water without leaking between battles', () => {
+    const start = drawing.indexOf('let immersionPresentation = null;'), end = drawing.indexOf('function getImmersionEdgeArt(', start);
+    const context = vm.createContext({ window: { immersionEnabled: true }, gameState: 'playing', battleSessionId: 1, objects: [] });
+    vm.runInContext(drawing.slice(start, end), context);
+    const unit = { x: 0, y: 0, w: 38, h: 38, hp: 100, maxHp: 100, alive: true, team: 0 };
+    let frame = 0, state;
+    const advance = count => { for (let i = 0; i < count; i++) state = context.updateImmersionPresentation(unit, 'forest', frame++, 0); };
+    context.objects.push({ type: 'pharaohSwarm', x: 19, y: 19, radius: 78, life: 300, team: 0 });
+    advance(60); assert.equal(state.swarm, 0, 'friendly swarms do not cover the screen');
+    context.objects[0].team = 1; advance(60);
+    assert.ok(state.swarm > 0.95); assert.equal(state.insects.length, 96);
+    const bug = state.insects[0], position = bug.x; advance(10); assert.notEqual(bug.x, position);
+    const wasFlying = bug.flying; bug.modeTime = 0; advance(1);
+    assert.equal(bug.flying, !wasFlying, 'flies alternate between flight and crawling');
+    const paused = JSON.stringify(state); context.updateImmersionPresentation(unit, 'forest', frame - 1, 0);
+    assert.equal(JSON.stringify(state), paused);
+    unit.x = 400; unit.sandCurseTimer = 300; advance(120);
+    assert.equal(state.swarm, 0); assert.equal(state.insects.length, 0, 'leaving the swarm clears bugs despite the lingering curse');
+    unit._kvantOverload = true; advance(60); assert.ok(state.overload > 0.95);
+    unit._kvantOverload = false; advance(120); assert.equal(state.overload, 0);
+    unit._immersionElectricFrame = frame; unit._immersionImpactFrame = frame; unit._immersionWaterFrame = frame;
+    advance(1); assert.equal(state.electricAge, 0); assert.equal(state.impactAge, 0);
+    assert.equal(state.wetDrops.length, 12);
+    const drop = state.wetDrops[0], y = drop.y; advance(30); assert.ok(drop.y > y, 'large drops slide after the hit');
+    unit._immersionWaterFrame = frame; advance(1);
+    const spraySeed = state.spraySeed, sprayTime = state.sprayTime;
+    for (let i = 0; i < 180; i++) { unit._immersionWaterFrame = frame; advance(1); }
+    assert.equal(state.spraySeed, spraySeed, 'sustained water contact keeps the spray direction stable');
+    assert.ok(state.sprayTime > sprayTime + 2.9, 'continuous spray never restarts its animation clock');
+    assert.ok(state.wetDrops.length <= 28); assert.ok(state.water > 0.9);
+    advance(480); assert.equal(state.wetDrops.length, 0); assert.equal(state.water, 0); assert.ok(state.impactAge > 0.85);
+    context.battleSessionId++; advance(1);
+    assert.equal(state.insects.length, 0); assert.equal(state.wetDrops.length, 0);
+    context.window.immersionEnabled = false;
+    assert.equal(context.updateImmersionPresentation(unit, 'forest', frame++, 0), null);
+});
+
+test('poison immersion reads real cloud ownership and keeps friendly mist faint', () => {
+    const context = battle();
+    context.window.immersionEnabled = true; context.window.effectsEnabled = false; context.battleSessionId = 1;
+    const start = drawing.indexOf('let immersionPresentation = null;'), end = drawing.indexOf('function getImmersionEdgeArt(', start);
+    vm.runInContext(drawing.slice(start, end), context);
+    let frame = 0, state;
+    const advance = () => { for (let i = 0; i < 180; i++) state = context.updateImmersionPresentation(context.tank, 'forest', frame++, 0); };
+    const makeCloud = (owner, team) => context.explodeGas({ x: 1019, y: 1019, owner, team });
+    for (const owner of ['player', 'ally']) {
+        context.objects.length = 0; makeCloud(owner, 0); advance();
+        assert.ok(state.gas > 0.05 && state.gas <= 0.061, `${owner} gas stays faint`);
+        assert.equal(context.objects.find(obj => obj.type === 'gas').ownerTeam, 0);
+    }
+    makeCloud('enemy', 1); advance(); assert.ok(state.gas > 0.99, 'hostile gas dominates overlapping friendly gas');
+    context.objects = context.objects.filter(obj => obj.owner !== 'enemy'); advance();
+    assert.ok(state.gas > 0.05 && state.gas < 0.061, 'only faint mist remains after hostile gas is removed');
+    context.tank.x += 500; advance(); assert.equal(state.gas, 0);
+});
+
+test('music, air and barrage immersion expire, pause and bound repeated hits', () => {
+    const start = drawing.indexOf('let immersionPresentation = null;'), end = drawing.indexOf('function getImmersionEdgeArt(', start);
+    const context = vm.createContext({ window: { immersionEnabled: true }, gameState: 'playing', battleSessionId: 1, objects: [] });
+    vm.runInContext(drawing.slice(start, end), context);
+    const unit = { x: 0, y: 0, w: 38, h: 38, hp: 100, maxHp: 100, alive: true, team: 0 };
+    let frame = 0, state;
+    const advance = count => { for (let i = 0; i < count; i++) state = context.updateImmersionPresentation(unit, 'forest', frame++, 0); };
+    unit._immersionMusicFrame = 0; unit._immersionAirFrame = 0; unit._immersionAirAngle = Math.PI / 2; unit._immersionBarrageFrame = 0;
+    advance(1); assert.equal(state.musicPulses.length, 1); assert.equal(state.airAge, 0); assert.equal(state.airAngle, Math.PI / 2);
+    const initialShock = state.barrageShockFrame;
+    for (let i = 0; i < 12; i++) {
+        advance(6); unit._immersionMusicFrame = frame; unit._immersionBarrageFrame = frame; advance(1);
+        assert.ok(state.musicPulses.length <= 4);
+    }
+    assert.equal(state.barrageShockFrame, initialShock, 'sustained barrages do not restart strong shake');
+    assert.ok(state.barrageShockAge > 0.4);
+    const paused = JSON.stringify(state); context.updateImmersionPresentation(unit, 'forest', frame - 1, 0);
+    assert.equal(JSON.stringify(state), paused);
+    advance(60); unit._immersionBarrageFrame = frame; advance(1);
+    assert.equal(state.barrageShockAge, 0, 'a later separate wave gets its own impact');
+    advance(120); assert.equal(state.musicPulses.length, 0); assert.ok(state.barrageAge > 1.1 && state.airAge > 0.9);
+    delete unit._immersionMusicFrame; delete unit._immersionAirFrame; delete unit._immersionAirAngle; delete unit._immersionBarrageFrame;
+    context.battleSessionId++; advance(1); assert.equal(state.musicPulses.length, 0); assert.equal(state.barrageAge, 2); assert.equal(state.airAge, 2);
+    context.window.immersionEnabled = false; advance(1); assert.equal(state, null);
+});
+
 test('explosion rendering restores canvas state, caches sprites and leaves simulation untouched', () => {
     let surfaces = 0;
-    const spriteContext = new Proxy({}, { get: (_target, name) => (name === 'createRadialGradient' || name === 'createLinearGradient')
-        ? () => ({ addColorStop() {} }) : () => {} });
-    const calls = [], stack = [], legacyStops = [];
+    const spriteContext = new Proxy({}, { get: (_target, name) => name === 'createImageData'
+        ? (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) })
+        : (name === 'createRadialGradient' || name === 'createLinearGradient')
+            ? () => ({ addColorStop() {} }) : () => {} });
+    const calls = [], stack = [];
     const state = { globalAlpha: 1, globalCompositeOperation: 'source-over', fillStyle: '#initial', strokeStyle: '#initial', lineWidth: 1 };
     const canvas = new Proxy(state, { get(target, name) {
         if (name === 'save') return () => stack.push({ ...target });
@@ -84,7 +372,7 @@ test('explosion rendering restores canvas state, caches sprites and leaves simul
             assert.ok(stack.length, 'canvas restore without a matching save');
             Object.assign(target, stack.pop());
         };
-        if (name === 'createRadialGradient' || name === 'createLinearGradient') return () => ({ addColorStop: (_offset, color) => legacyStops.push(color) });
+        if (name === 'createRadialGradient' || name === 'createLinearGradient') return () => ({ addColorStop() {} });
         if (name in target) return target[name];
         return (...args) => calls.push({ name, args });
     } });
@@ -113,13 +401,119 @@ test('explosion rendering restores canvas state, caches sprites and leaves simul
     calls.length = 0;
     render.runInContext(context);
     assert.notDeepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), firstImages);
-    objects.push({ type: 'explosion', x: 100, y: 100, radius: 65, life: 24, maxLife: 28 });
+    objects.length = 0;
+    const blast = { type: 'explosion', explosionStyle: 'tank', x: 100, y: 100, radius: 65, seed: 0.7, life: 50, maxLife: 54 };
+    objects.push(blast);
+    const savedBlast = JSON.stringify(blast);
     render.runInContext(context);
-    assert.ok(legacyStops.some(color => color.startsWith('rgba(255,255,220,')), 'tank fireball still uses its original gradient');
+    const bakedSurfaces = surfaces;
+    calls.length = 0;
+    render.runInContext(context);
+    const tankImages = calls.filter(call => call.name === 'drawImage').map(call => call.args);
+    calls.length = 0;
+    render.runInContext(context);
+    assert.deepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), tankImages);
+    assert.equal(surfaces, bakedSurfaces, 'tank textures are reused across frames');
+    assert.equal(JSON.stringify(blast), savedBlast, 'drawing never advances explosion life');
+    blast.life = 10;
+    calls.length = 0;
+    render.runInContext(context);
+    assert.notDeepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), tankImages);
+    assert.equal(surfaces, bakedSurfaces);
     assert.equal(stack.length, 0);
     assert.equal(state.fillStyle, '#initial');
     assert.equal(state.globalAlpha, 1);
     assert.equal(state.globalCompositeOperation, 'source-over');
+    context.window.effectsEnabled = false;
+    objects.push({ type: 'shockwave', x: 100, y: 100, radius: 50, life: 10 },
+        { type: 'terrainDebris', x: 100, y: 100, radius: 50, life: 30, fragments: [] },
+        { type: 'implosion', x: 100, y: 100, radius: 50, life: 10 });
+    calls.length = 0;
+    render.runInContext(context);
+    assert.equal(calls.length, 0, 'turning effects off immediately hides existing cosmetic objects');
+    const particleStart = drawing.indexOf('    particles.forEach(p => {', drawing.indexOf('function renderGameFrame('));
+    const particleEnd = drawing.indexOf('    // 3.', particleStart);
+    assert.ok(particleStart >= 0 && particleEnd > particleStart);
+    context.particles = [{ x: 100, y: 100, size: 5, life: 1, rgb: '255,120,0' }];
+    vm.runInContext(drawing.slice(particleStart, particleEnd), context);
+    assert.equal(calls.length, 0, 'existing free particles are hidden too');
+    context.window.effectsEnabled = true;
+    objects.length = 0;
+    objects.push(blast);
+    const death = { elapsed: 380, duration: 1000, blast: null };
+    context.window.immersionEnabled = true;
+    context.window.effectsEnabled = false;
+    context.advanceImmersionDeath = () => death;
+    context.performance = { now: () => 380 };
+    const immersionStart = drawing.indexOf('function drawImmersionEffects(');
+    const immersionEnd = drawing.indexOf('function renderGameFrame(', immersionStart);
+    vm.runInContext('let immersionPresentation = null;\n' + drawing.slice(immersionStart, immersionEnd), context);
+    calls.length = 0;
+    vm.runInContext('drawImmersionEffects(ctx, 1280, 720, null)', context);
+    assert.ok(calls.some(call => call.name === 'drawImage'), 'immersion remains independent of world effects');
+    assert.equal(surfaces, bakedSurfaces, 'screen blast reuses the world blast textures');
+    assert.equal(death.elapsed, 380, 'drawing does not advance the defeat clock');
+    assert.equal(stack.length, 0);
+    assert.equal(state.fillStyle, '#initial');
+    assert.equal(state.globalAlpha, 1);
+    assert.equal(state.globalCompositeOperation, 'source-over');
+    const statusStart = drawing.indexOf('let immersionStatusCache = null;');
+    assert.ok(statusStart > 0 && statusStart < immersionStart);
+    context.drawTankOn = () => {};
+    vm.runInContext(drawing.slice(statusStart, immersionStart), context);
+    context.status = { heat: 1, gas: 1, ice: 1, frozen: 1, drill: 1, illuminatAge: 0.5, iced: true };
+    const savedStatus = JSON.stringify(context.status);
+    vm.runInContext('drawImmersionStatusEffects(ctx, 800, 600, status, 1)', context);
+    const statusSurfaces = surfaces;
+    vm.runInContext('drawImmersionStatusEffects(ctx, 800, 600, status, 1)', context);
+    assert.equal(surfaces, statusSurfaces, 'status artwork is cached instead of rebuilt each frame');
+    assert.equal(JSON.stringify(context.status), savedStatus);
+    assert.equal(stack.length, 0);
+    assert.equal(state.globalAlpha, 1);
+    assert.equal(state.globalCompositeOperation, 'source-over');
+    const cracksA = vm.runInContext("getImmersionStatusArt('cracks', 800, 600, 123)", context);
+    assert.equal(vm.runInContext("getImmersionStatusArt('cracks', 800, 600, 123)", context), cracksA);
+    const cracksB = vm.runInContext("getImmersionStatusArt('cracks', 800, 600, 456)", context);
+    assert.notEqual(cracksB, cracksA, 'new contact replaces the cached crack artwork');
+    calls.length = 0;
+    vm.runInContext('drawImmersionPyro(ctx, 800, 600, 1, 1)', context);
+    const pyroSurfaces = surfaces;
+    const pausedPyro = calls.filter(call => call.name === 'drawImage').map(call => call.args);
+    calls.length = 0;
+    vm.runInContext('drawImmersionPyro(ctx, 800, 600, 1, 1)', context);
+    assert.deepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), pausedPyro);
+    assert.equal(surfaces, pyroSurfaces, 'pyro plumes reuse their baked textures');
+    calls.length = 0;
+    vm.runInContext('drawImmersionPyro(ctx, 800, 600, 1, 1.3)', context);
+    assert.notDeepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), pausedPyro);
+    assert.equal(surfaces, pyroSurfaces);
+    assert.equal(stack.length, 0);
+    assert.equal(state.globalAlpha, 1);
+    assert.equal(state.globalCompositeOperation, 'source-over');
+    const rainStart = drawing.indexOf('function drawImmersionRain(');
+    vm.runInContext(drawing.slice(rainStart, statusStart), context);
+    state.canvas = { width: 800, height: 600 };
+    context.combat = { impactAge: 0.2, electricAge: 0.15, overload: 1, swarm: 1, iced: false,
+        insects: [{ x: 0.3, y: 0.4, angle: 0.2, speed: 0.1, size: 1, phase: 0, flying: true },
+            { x: 0.7, y: 0.6, angle: 1, speed: 0.1, size: 1, phase: 0, flying: false }],
+        musicAge: 0.1, musicPulses: [48, 54], barrageAge: 0.2, barrageShockAge: 0.2, airAge: 0.2, airAngle: 0.7,
+        water: 1, sprayTime: 0.1, spraySeed: 0.3,
+        wetDrops: [{ x: 0.3, y: 0.3, radius: 12, age: 0.5, life: 5, seed: 1 }] };
+    const savedCombat = JSON.stringify(context.combat);
+    vm.runInContext('drawImmersionCombatEffects(ctx, 800, 600, combat, 1)', context);
+    const combatSurfaces = surfaces;
+    calls.length = 0;
+    vm.runInContext('drawImmersionCombatEffects(ctx, 800, 600, combat, 1)', context);
+    const combatImages = calls.filter(call => call.name === 'drawImage').map(call => call.args);
+    calls.length = 0;
+    vm.runInContext('drawImmersionCombatEffects(ctx, 800, 600, combat, 1)', context);
+    assert.deepEqual(calls.filter(call => call.name === 'drawImage').map(call => call.args), combatImages);
+    assert.equal(surfaces, combatSurfaces, 'combat overlays reuse sprites and a single scene snapshot');
+    assert.equal(JSON.stringify(context.combat), savedCombat, 'rendering does not advance combat presentation');
+    assert.equal(stack.length, 0);
+    assert.equal(state.globalAlpha, 1);
+    assert.equal(state.globalCompositeOperation, 'source-over');
+    context.window.effectsEnabled = true;
     objects.length = 0;
     objects.push({ type: 'terrainDebris', x: 100, y: 100, radius: 80, life: 38, maxLife: 44,
         material: 'wood', biome: 'snow', dustSize: 40, dustX: 0, dustY: 0,

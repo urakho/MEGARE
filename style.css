@@ -831,6 +831,26 @@ b { color: #ffcc00; }
 #settingsModal .modal-box {
     background: #0f1923;
     text-align: left;
+    align-items: stretch;
+}
+#settingsModal .settings-row > div { min-width: 0; }
+#settingsModal .settings-experimental {
+    margin-top: 20px;
+    padding: 16px;
+    border: 2px solid #b98038;
+    border-left: 5px solid #f4b34d;
+    border-radius: 10px;
+    background: linear-gradient(120deg, #352719, #241f1c);
+    flex-shrink: 0;
+}
+#settingsModal .settings-experimental h3 {
+    margin: 0 0 8px;
+    color: #ffca78;
+    font-size: 17px;
+}
+#settingsModal .settings-experimental .settings-row {
+    padding: 8px 0 0;
+    border-bottom: 0;
 }
 #achievementsModal .modal-box {
     background: #1a1200;
@@ -2246,6 +2266,8 @@ canvas.tank-display {
 }
 .me-input:focus { border-color: #f39c12; }
 .me-select { appearance: none; }
+#meBotTank { color-scheme: dark; }
+#meBotModal .modal-box { align-items: stretch; background: #0f1923; }
 
 .me-canvas-wrap {
     flex: 1;

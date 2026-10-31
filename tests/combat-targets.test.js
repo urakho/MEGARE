@@ -32,6 +32,164 @@ function bullet(team, type = 'normal', damage = 100) {
         life: 20, team, owner: team === 1 ? 'enemy' : 'player', type, damage };
 }
 
+test('flamethrower hits mark presentation heat only after unblocked damage', () => {
+    const start = physics.indexOf('    for (let i = flames.length - 1;');
+    const end = physics.indexOf('    // Advance each barrage once', start);
+    assert.ok(start >= 0 && end > start);
+    for (const team of [0, 1]) for (const blocked of [false, true]) {
+        const battle = makeBattle();
+        battle.window.frameCount = 120;
+        battle.tank.romanShieldActive = blocked;
+        battle.flames.push({ x: 519, y: 519, vx: 0, vy: 0, life: 20, damage: 22, team, owner: team ? 'enemy' : 'ally' });
+        vm.runInContext(`function hitFlame() { ${physics.slice(start, end)} }`, battle);
+        battle.hitFlame();
+        assert.equal(battle.tank.hp, blocked || team === 0 ? 300 : 278);
+        assert.equal(battle.tank._immersionHeatFrame, blocked || team === 0 ? undefined : 120);
+        assert.equal(battle.tank.burning, undefined, 'heat presentation does not add a burn status');
+    }
+});
+
+test('own and allied projectiles cannot trigger player attack immersion statuses', () => {
+    for (const owner of ['player', 'ally']) for (const type of ['ice', 'pyroBullet', 'electricBall']) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100 });
+        battle.window.frameCount = 100;
+        battle.bullets.push({ ...bullet(0, type, 20), owner, homingStrength: 0.15 });
+        battle.runBulletTick();
+        assert.equal(battle.tank.hp, 300, `${owner} ${type}`);
+        assert.equal(battle.tank.iceSlowed, undefined);
+        assert.equal(battle.tank.burning, undefined);
+        assert.equal(battle.tank._immersionElectricFrame, undefined);
+    }
+});
+
+test('electric impacts record a cue only for a fresh unprotected hostile hit', () => {
+    for (const protectedHit of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100, hp: 1000, kamikazeInvincible: protectedHit });
+        battle.window.frameCount = 100;
+        battle.bullets.push({ ...bullet(1, 'electricBall', 150), homingStrength: 0.15 });
+        battle.runBulletTick();
+        assert.equal(battle.tank.hp, protectedHit ? 1000 : 850);
+        assert.equal(battle.tank._immersionElectricFrame, protectedHit ? undefined : 100);
+        battle.window.frameCount = 101; battle.runBulletTick();
+        assert.equal(battle.tank._immersionElectricFrame, protectedHit ? undefined : 100, 'chain shots cannot repeatedly refresh one hit');
+    }
+});
+
+test('musical and air hits cue immersion only after hostile unprotected damage', () => {
+    for (const type of ['musical', 'airBullet']) for (const team of [0, 1]) for (const protectedHit of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100, kamikazeInvincible: protectedHit });
+        battle.window.frameCount = 120;
+        battle.bullets.push({ ...bullet(team, type, 20), vx: 0, vy: 1 });
+        battle.runBulletTick();
+        const hit = team === 1 && !protectedHit;
+        assert.equal(battle.tank.hp, hit ? 280 : 300);
+        assert.equal(battle.tank._immersionMusicFrame, hit && type === 'musical' ? 120 : undefined);
+        assert.equal(battle.tank._immersionAirFrame, hit && type === 'airBullet' ? 120 : undefined);
+        assert.equal(battle.tank._immersionAirAngle, hit && type === 'airBullet' ? Math.PI / 2 : undefined);
+    }
+});
+
+test('musical ultimate waves cue immersion only when they damage the hostile player', () => {
+    for (const team of [0, 1]) for (const protectedHit of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100, kamikazeInvincible: protectedHit });
+        battle.window.frameCount = 140;
+        battle.musicalSoundWaves = [{ x: 118, y: 118, vx: 1, vy: 0, radius: 6, life: 60, damage: 30, bounces: 0, maxBounces: 8, team }];
+        battle.updateSpecialProjectiles();
+        assert.equal(battle.tank.hp, team === 1 && !protectedHit ? 270 : 300);
+        assert.equal(battle.tank._immersionMusicFrame, team === 1 && !protectedHit ? 140 : undefined);
+    }
+});
+
+test('Buratino normal, ultimate, rocket and legacy barrages cue only hostile damage', () => {
+    for (const mode of ['normal', 'ultimate', 'rocket', 'legacy']) for (const team of [0, 1]) for (const protectedHit of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100, hp: 1000, kamikazeInvincible: protectedHit });
+        battle.window.frameCount = 100;
+        if (mode === 'normal' || mode === 'ultimate') {
+            const ultimate = mode === 'ultimate'; battle.tank.x = ultimate ? 300 : 220;
+            const source = { x: 0, y: 100, w: 38, h: 38, turretAngle: 0, team };
+            const barrage = battle.createBuratinoBarrage(source, ultimate);
+            for (let i = 0; i < 100; i++) battle.updateBuratinoBarrage(barrage);
+        } else if (mode === 'rocket') battle.explodeRocket({ x: 119, y: 119, team });
+        else {
+            battle.buratinoBarrages = [{ x: 119, y: 119, vx: 0, vy: 0, radius: 5, life: 1, explosionRadius: 100, damage: 300, team }];
+            battle.updateSpecialProjectiles();
+        }
+        assert.equal(battle.tank._immersionBarrageFrame, team === 1 && !protectedHit ? 100 : undefined, `${mode} team ${team}`);
+        if (team === 1 && !protectedHit) assert.ok(battle.tank.hp < 1000);
+    }
+    const battle = makeBattle(); Object.assign(battle.tank, { x: 100, y: 100, hp: 5000 });
+    for (const frame of [100, 101, 112]) {
+        battle.window.frameCount = frame; battle.explodeRocket({ x: 119, y: 119, team: 1 });
+        assert.equal(battle.tank._immersionBarrageFrame, frame === 101 ? 100 : frame, 'near-simultaneous blasts are coalesced');
+    }
+});
+
+test('Kamikaze impact presentation requires direct contact with the player', () => {
+    for (const contact of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100, hp: 1000 });
+        const unit = { x: contact ? 55 : 800, y: 100, w: 38, h: 38, hp: 300, alive: true, team: 1, tankType: 'kamikaze', turretAngle: 0 };
+        battle.enemies.push(unit); battle.window.frameCount = 120;
+        battle.startKamikazeDash(unit);
+        if (!contact) unit.kamikazeDashTimer = 1;
+        battle.updateKamikazeDash(unit);
+        assert.equal(battle.tank._immersionImpactFrame, contact ? 120 : undefined);
+        assert.equal(unit.kamikazeUltActive, false);
+        assert.ok(contact ? battle.tank.hp < 1000 : battle.tank.hp === 1000);
+    }
+});
+
+test('waterjet cue follows damage contact and respects shields', () => {
+    const start = bot.indexOf('    function updateUnitWaterjet('), end = bot.indexOf('    // Waterjet: Player', start);
+    assert.ok(start >= 0 && end > start);
+    for (const team of [0, 1]) for (const blocked of [false, true]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 200, y: 100, romanShieldActive: blocked });
+        battle.window.frameCount = 140; battle.moveSmallSteps = () => true;
+        vm.runInContext(bot.slice(start, end), battle);
+        battle.source = { x: 100, y: 100, w: 38, h: 38, hp: 300, team, tankType: 'waterjet', waterjetActive: true, waterjetTimer: 60, turretAngle: 0 };
+        vm.runInContext('updateUnitWaterjet(source, [tank])', battle);
+        assert.equal(battle.tank.hp, blocked || team === 0 ? 300 : 298.5);
+        assert.equal(battle.tank._immersionWaterFrame, blocked || team === 0 ? undefined : 140);
+    }
+});
+
+test('Illuminat immersion cue is recorded only when its ultimate reaches the player', () => {
+    const bot = fs.readFileSync(path.join(__dirname, '..', 'src', 'bot.js'), 'utf8');
+    const start = bot.indexOf('            // Illuminat: inversion of controls');
+    const end = bot.indexOf('            // electric: charge ultimate', start);
+    assert.ok(start >= 0 && end > start);
+    for (const team of [0, 1]) for (const inRange of [false, true]) {
+        const battle = makeBattle();
+        battle.window.frameCount = 240;
+        battle.Math = Object.assign(Object.create(Math), { random: () => 0 });
+        battle.GameTerrain.activateIlluminatSuper = () => {};
+        battle.enemy = { x: inRange ? 400 : 0, y: 500, w: 38, h: 38, tankType: 'illuminat', team };
+        battle.distToNearest = 100;
+        vm.runInContext(bot.slice(start, end), battle);
+        assert.equal(battle.tank._immersionIlluminatFrame, inRange && team === 1 ? 240 : undefined);
+        assert.equal(battle.tank.invertedControls, inRange && team === 1 ? 120 : undefined);
+    }
+});
+
+test('Kvant overload does not affect a player on the same team', () => {
+    const start = bot.indexOf('            if (enemy.kvantUltCooldown === undefined)'), end = bot.indexOf('            // Roman reinforcements', start);
+    assert.ok(start >= 0 && end > start);
+    for (const team of [0, 1]) {
+        const battle = makeBattle();
+        battle.Math = Object.assign(Object.create(Math), { random: () => 0 });
+        battle.enemy = { x: 400, y: 500, w: 38, h: 38, tankType: 'kvant', team, kvantUltCooldown: 0 };
+        battle.distToNearest = 100;
+        vm.runInContext(bot.slice(start, end), battle);
+        assert.equal(battle.tank._kvantOverload, team === 1 ? true : undefined);
+    }
+});
+
 test('Kamikaze charges damage a direct target and nearby hostiles once, sparing friends', () => {
     for (const owner of ['player', 'ally', 'enemy']) {
         const battle = makeBattle();
@@ -315,15 +473,21 @@ test('wood breaks into splinters from a shield shot, standard damage and fire wi
     }
 });
 
-test('wall debris expires through the shared physics cleanup without remaining colliders', () => {
+test('wall debris and oil marks expire through the shared physics cleanup', () => {
     const battle = makeBattle();
     battle.window.effectsEnabled = true;
     battle.spawnTerrainDebris({ type: 'woodenWall', x: 0, y: 0, w: 50, h: 50 }, { destroyed: true });
-    const start = physics.indexOf("        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris') {");
+    battle.objects.push({ type: 'tankOilTrail', life: 2100 });
+    const start = physics.indexOf("        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris' || obj.type === 'tankOilTrail') {");
     const end = physics.indexOf("        } else if (obj.type === 'shockwave') {", start);
     assert.ok(start >= 0 && end > start);
     vm.runInContext(`function tickDebris() { for (let i = objects.length - 1; i >= 0; i--) { const obj = objects[i]; if (false) { ${physics.slice(start, end)} } } }`, battle);
     for (let i = 0; i < 44; i++) battle.tickDebris();
+    assert.equal(battle.objects.length, 1);
+    assert.equal(battle.objects[0].type, 'tankOilTrail');
+    for (let i = 44; i < 2099; i++) battle.tickDebris();
+    assert.equal(battle.objects.length, 1);
+    battle.tickDebris();
     assert.equal(battle.objects.length, 0);
 });
 

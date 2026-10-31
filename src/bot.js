@@ -879,11 +879,12 @@ function updateEnemyAI() {
                 // Affect player and allies
                 const targetsToInvert = [tank, ...allies];
                 for (const t of targetsToInvert) {
-                    if (!t) continue;
+                    if (!t || t.team === enemy.team) continue;
                     const ex = t.x + (t.w||0)/2, ey = t.y + (t.h||0)/2;
                     if (Math.hypot(ex - cx, ey - cy) <= range) {
                         t.invertedControls = 120;
                         t.confused = 120;
+                        if (t === tank) t._immersionIlluminatFrame = window.frameCount || 0;
                     }
                 }
                 enemy.inversionUsed = (enemy.inversionUsed || 0) + 1;
@@ -941,7 +942,7 @@ function updateEnemyAI() {
             if (enemy.tankType === 'kvant' && enemy.kvantUltCooldown <= 0 && distToNearest < 300 && Math.random() < 0.02) {
                 const _kEx = enemy.x + enemy.w/2, _kEy = enemy.y + enemy.h/2;
                 objects.push({ type: 'shockwave', x: _kEx, y: _kEy, radius: 10, speed: 18, life: 14, maxLife: 14, color: '#00e5ff' });
-                if (typeof tank !== 'undefined' && tank.alive) {
+                if (typeof tank !== 'undefined' && tank.alive && tank.team !== enemy.team) {
                     const _kTx = tank.x + tank.w/2, _kTy = tank.y + tank.h/2;
                     if (Math.hypot(_kTx - _kEx, _kTy - _kEy) <= 250) {
                         tank._kvantOverload = true;
@@ -2471,11 +2472,11 @@ function updateAllyAI() {
                                 loseModeTrophies();
                                 syncResultOverlay('lose');
                             }
-                            spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                            spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                         } else {
                             if (currentMode === 'war') { 
                                 e.alive = false; e.respawnTimer = 600; 
-                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                             } else {
                                 // Check list existence before splicing
                                 const idxE = enemies.indexOf(e);
@@ -2483,7 +2484,7 @@ function updateAllyAI() {
                                 const idxA = allies.indexOf(e);
                                 if (idxA !== -1) { allies.splice(idxA, 1); }
                                 
-                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                             }
                         }
                     }
@@ -2600,6 +2601,9 @@ function updateAllyAI() {
             const isDrone = playerDrones.includes(e) || enemyDrones.includes(e);
             const dealt = isDrone ? damageCombatDrone(e, 1.5 * _wjMult) : dealDamageToEntity(e, 1.5 * _wjMult);
             if (dealt <= 0) continue;
+            if (e === tank) {
+                tank._immersionWaterFrame = window.frameCount || 0;
+            }
             if (isDrone && e.hp <= 0) continue;
             e.hitFlashTime = Date.now();
             // Knockback along beam direction (medium force) — use movement helper so collisions are respected
@@ -2638,13 +2642,12 @@ function updateAllyAI() {
             if (e.hp <= 0) {
                 if (e === tank) {
                     gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
-                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                 } else {
-                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                     e.alive = false;
                     const idxE = enemies.indexOf(e); if (idxE !== -1) { enemies.splice(idxE, 1); }
                     const idxA = allies.indexOf(e); if (idxA !== -1) allies.splice(idxA, 1);
-                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
                 }
             }
         }

@@ -11,6 +11,36 @@ function terrain(type = 'forest') {
     return context.window.GameTerrain;
 }
 
+test('disabled particle effects hide weather and stop driving particles without changing movement', () => {
+    let paintCalls = 0;
+    const paint = new Proxy({}, { get: (_target, name) => {
+        if (name === 'save' || name === 'restore') return () => {};
+        return () => { paintCalls++; };
+    } });
+    const context = { window: { currentTerrain: 'rain', effectsEnabled: true } };
+    vm.runInNewContext(source, context);
+    const t = context.window.GameTerrain;
+    const player = { x: 0, y: 0, w: 38, h: 38, alive: true };
+    t.updateMovement(player, [], [], 'normal');
+    for (let tick = 0; tick < 10; tick++) { player.x += 3; t.updateMovement(player, [], [], 'normal'); }
+    assert.ok(t.movementStats().particles > 0);
+    const angle = t.getMotion(player).angle;
+    context.window.effectsEnabled = false;
+    for (const biome of ['rain', 'snow', 'desert', 'lava']) {
+        t.drawAtmosphere(paint, { width: 800, height: 600 }, player, 0, 0, [], 100, biome);
+        assert.equal(paintCalls, 0, biome + ' weather particles must be hidden');
+    }
+    for (let tick = 0; tick < 10; tick++) { player.x += 3; t.updateMovement(player, [], [], 'normal'); }
+    assert.equal(t.movementStats().particles, 0);
+    assert.ok(t.movementStats().marks > 0, 'ordinary ground tracks remain visible');
+    assert.equal(player.x, 60);
+    assert.equal(t.getMotion(player).angle, angle);
+    assert.equal(t.speedFactor(), 0.95, 'rain movement penalty is independent of particles');
+    context.window.effectsEnabled = true;
+    for (let tick = 0; tick < 6; tick++) { player.x += 3; t.updateMovement(player, [], [], 'normal'); }
+    assert.ok(t.movementStats().particles > 0, 'driving particles resume after enabling effects');
+});
+
 test('terrain penalties apply only to swamp and rain', () => {
     const t = terrain();
     for (const type of ['forest', 'snow', 'desert', 'night']) {
@@ -22,6 +52,46 @@ test('terrain penalties apply only to swamp and rain', () => {
     assert.equal(t.speedFactor('rain'), 0.95);
     assert.ok(Math.abs(t.reloadFactor('rain') - 1 / 1.05) < 1e-12);
     assert.equal(t.normalize('unknown'), 'forest');
+});
+
+test('rain and swamp water darkens with local oil volume and clears between battles', () => {
+    for (const type of ['rain', 'swamp']) {
+        const paint = new Proxy({}, { get: (_target, name) => name === 'createLinearGradient' || name === 'createRadialGradient'
+            ? () => ({ addColorStop() {} }) : () => {} });
+        const context = { window: { currentTerrain: type, effectsEnabled: true },
+            document: { createElement: () => ({ getContext: () => paint }) } };
+        vm.runInNewContext(source, context);
+        const t = context.window.GameTerrain;
+        let point;
+        for (let y = 0; y < 768 && !point; y += 8) for (let x = 0; x < 768; x += 8) {
+            if (t.addOilToWater(x, y, 0)) { point = { x, y }; break; }
+        }
+        assert.ok(point, type + ' should contain detectable water');
+        const alpha = [], stack = [];
+        const output = new Proxy({ globalAlpha: 1 }, { get(target, name) {
+            if (name === 'createPattern') return () => ({});
+            if (name === 'save') return () => stack.push({ ...target });
+            if (name === 'restore') return () => Object.assign(target, stack.pop());
+            if (name === 'fill') return () => { if (target.fillStyle === '#030807') alpha.push(target.globalAlpha); };
+            if (name in target) return target[name];
+            return () => {};
+        } });
+        const draw = () => { alpha.length = 0; t.drawGround(output, -100, -100, 1700, 1000); return [...alpha]; };
+        assert.equal(draw().length, 0);
+        assert.equal(t.addOilToWater(point.x, point.y, 12), true);
+        const first = draw();
+        t.addOilToWater(point.x, point.y, 100);
+        const more = draw();
+        assert.equal(first.length, 1);
+        assert.ok(first[0] < 0.15, 'a small leak darkens water gradually');
+        assert.ok(more[0] > first[0]);
+        t.addOilToWater(point.x + 768, point.y, 12);
+        assert.equal(draw().length, 2, 'repeated terrain tiles have separate contamination');
+        t.resetBattle();
+        assert.equal(draw().length, 0);
+        context.window.currentTerrain = 'forest';
+        assert.equal(t.addOilToWater(point.x, point.y, 100), false);
+    }
 });
 
 test('random terrain selects the five active map types and skips night', () => {

@@ -16,6 +16,8 @@ test('menu particles stop requesting frames while hidden and resume when shown',
     let observerCallback;
     const listeners = {};
     const ctx = { clearRect() {} };
+    const window = { innerWidth: 800, innerHeight: 600, effectsEnabled: true,
+        addEventListener: (name, callback) => { listeners[name] = callback; } };
     const canvas = { width: 0, height: 0, getContext: () => ctx };
     const menu = { style: { display: 'flex' } };
     const document = {
@@ -25,7 +27,7 @@ test('menu particles stop requesting frames while hidden and resume when shown',
     };
     vm.runInNewContext(script, {
         document,
-        window: { innerWidth: 800, innerHeight: 600, addEventListener() {} },
+        window,
         MutationObserver: class { constructor(callback) { observerCallback = callback; } observe() {} },
         requestAnimationFrame: callback => { const id = nextId++; queued.set(id, callback); return id; },
         cancelAnimationFrame: id => queued.delete(id),
@@ -44,6 +46,15 @@ test('menu particles stop requesting frames while hidden and resume when shown',
     menu.style.display = 'flex';
     observerCallback();
     assert.equal(queued.size, 1);
+
+    window.effectsEnabled = false;
+    listeners.effectschange();
+    assert.equal(queued.size, 0, 'disabled particles stop the menu loop');
+    observerCallback();
+    assert.equal(queued.size, 0);
+    window.effectsEnabled = true;
+    listeners.effectschange();
+    assert.equal(queued.size, 1, 'enabling particles restarts a single loop');
 
     document.hidden = true;
     listeners.visibilitychange();

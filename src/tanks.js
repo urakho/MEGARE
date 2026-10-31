@@ -361,6 +361,286 @@ function drawKamikazeFlag(ctx, x, y, width, height) {
     ctx.restore();
 }
 
+let tankFireSprite = null;
+
+function getTankFireSprite() {
+    if (tankFireSprite) return tankFireSprite;
+    const art = document.createElement('canvas');
+    art.width = 64; art.height = 96;
+    const c = art.getContext('2d');
+    const pixels = c.createImageData(art.width, art.height);
+    const hash = (x, y) => {
+        const value = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return value - Math.floor(value);
+    };
+    const noise = (x, y) => {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        let fx = x - ix, fy = y - iy;
+        fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+        const top = hash(ix, iy) * (1 - fx) + hash(ix + 1, iy) * fx;
+        const bottom = hash(ix, iy + 1) * (1 - fx) + hash(ix + 1, iy + 1) * fx;
+        return top * (1 - fy) + bottom * fy;
+    };
+    // Bake turbulent density and temperature once; animate the small wisps at draw time.
+    for (let y = 0; y < art.height; y++) for (let x = 0; x < art.width; x++) {
+        const height = y / art.height;
+        const turbulence = noise(x / 10, y / 15) * 0.7 + noise(x / 3, y / 5) * 0.3;
+        const center = Math.sin(height * 10) * 0.12 * (1 - height);
+        const edge = 1 - Math.abs((x - 32) / 32 + center) / (0.12 + height * 0.48);
+        const density = Math.max(0, Math.min(1, edge * 1.5 + (turbulence - 0.55) * 0.9));
+        const temperature = Math.max(0, Math.min(1, edge * 0.65 + height * 0.2 + (turbulence - 0.5) * 0.4));
+        const fade = Math.min(1, height * 9) * Math.min(1, (1 - height) * 15);
+        const offset = (y * art.width + x) * 4;
+        pixels.data[offset] = 180 + temperature * 75;
+        pixels.data[offset + 1] = 28 + temperature * temperature * 208;
+        pixels.data[offset + 2] = 3 + Math.pow(temperature, 6) * 85;
+        pixels.data[offset + 3] = density * fade * 245;
+    }
+    c.putImageData(pixels, 0, 0);
+    tankFireSprite = art;
+    return art;
+}
+
+function drawTankDamage(ctx, unit) {
+    if (window.effectsEnabled === false || !(unit.hp > 0) || unit.burovoyBurrowActive) return;
+    const health = unit.hp / (unit.maxHp || 300);
+    if (health >= 0.5) return;
+    const size = Math.max(unit.w, unit.h);
+    const angle = getTankEffectHullAngle(unit);
+    const x = -unit.w * 0.27 * Math.cos(angle) - unit.h * 0.18 * Math.sin(angle);
+    const y = -unit.w * 0.27 * Math.sin(angle) + unit.h * 0.18 * Math.cos(angle);
+    const time = (window.frameCount || 0) / 60;
+    ctx.save();
+    const soot = ctx.createRadialGradient(x, y, 0, x, y, size * 0.18);
+    soot.addColorStop(0, 'rgba(12, 13, 11, 0.7)');
+    soot.addColorStop(1, 'rgba(26, 22, 17, 0)');
+    ctx.fillStyle = soot;
+    ctx.beginPath(); ctx.arc(x, y, size * 0.18, 0, Math.PI * 2); ctx.fill();
+    if (health < 0.3) {
+        const critical = health < 0.1;
+        const fire = getTankFireSprite();
+        const count = critical ? 5 : 3;
+        const glowRadius = size * (critical ? 0.6 : 0.34);
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+        glow.addColorStop(0, critical ? 'rgba(255,116,19,0.35)' : 'rgba(255,104,18,0.18)');
+        glow.addColorStop(1, 'rgba(255,77,8,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(x, y, glowRadius, 0, Math.PI * 2); ctx.fill();
+        for (let i = 0; i < count; i++) {
+            const pulse = 0.78 + Math.sin(time * (9 + i * 0.7) + i * 2.4) * 0.22;
+            const height = size * (critical ? 0.82 : 0.5) * pulse;
+            const width = size * (critical ? 0.46 : 0.32);
+            ctx.save();
+            ctx.translate(x + Math.sin(i * 3.7 + time * 1.3) * size * (critical ? 0.12 : 0.07), y + size * 0.06);
+            ctx.rotate(Math.sin(time * 5 + i * 2.1) * 0.12);
+            ctx.globalAlpha = 0.65 + pulse * 0.15;
+            ctx.drawImage(fire, -width / 2, -height, width, height);
+            ctx.restore();
+        }
+    }
+    ctx.restore();
+}
+
+function drawTankDamageSmoke(ctx, smoke) {
+    if (window.effectsEnabled === false) return;
+    const age = 1 - smoke.life / smoke.maxLife;
+    const width = smoke.size * (0.23 + age * (1.05 + smoke.stage * 0.08));
+    ctx.save();
+    ctx.translate(smoke.x, smoke.y);
+    ctx.rotate(smoke.seed + age * 0.25);
+    ctx.globalAlpha = Math.sin(age * Math.PI) * (smoke.stage === 1 ? 0.23 : smoke.stage === 2 ? 0.35 : 0.45);
+    ctx.drawImage(getOrdnanceExplosionSprite('tankSmoke'), -width / 2, -width / 2, width, width);
+    ctx.restore();
+}
+
+const tankOilArt = new WeakMap();
+
+function getTankOilArt(oil) {
+    let art = tankOilArt.get(oil);
+    if (art) return art;
+    art = document.createElement('canvas');
+    art.width = art.height = 64;
+    const c = art.getContext('2d');
+    const seed = oil.seed || 0;
+    const points = [];
+    for (let i = 0; i < 16; i++) {
+        const angle = i * Math.PI / 8;
+        const radius = 21 * (1 + Math.sin(i * 2.3 + seed) * 0.16 + Math.cos(i * 4.7 + seed) * 0.09);
+        points.push({ x: 32 + Math.cos(angle) * radius, y: 32 + Math.sin(angle) * radius * 0.86 });
+    }
+    c.beginPath();
+    c.moveTo((points[0].x + points[15].x) / 2, (points[0].y + points[15].y) / 2);
+    for (let i = 0; i < 16; i++) {
+        const next = points[(i + 1) % 16];
+        c.quadraticCurveTo(points[i].x, points[i].y, (points[i].x + next.x) / 2, (points[i].y + next.y) / 2);
+    }
+    c.closePath();
+    const oilFill = c.createRadialGradient(25, 24, 2, 32, 32, 27);
+    oilFill.addColorStop(0, 'rgba(14, 18, 14, 0.78)');
+    oilFill.addColorStop(0.65, 'rgba(7, 10, 7, 0.82)');
+    oilFill.addColorStop(1, 'rgba(17, 16, 10, 0.25)');
+    c.fillStyle = oilFill; c.fill();
+    c.save(); c.clip();
+    // A broken, low-contrast reflection makes the surface wet without a bright outline.
+    c.strokeStyle = 'rgba(102, 119, 108, 0.17)'; c.lineWidth = 1.1;
+    c.beginPath(); c.ellipse(30, 30, 16, 12, -0.3, 3.7 + seed * 0.06, 4.9); c.stroke();
+    c.strokeStyle = 'rgba(78, 94, 103, 0.2)'; c.lineWidth = 2.2;
+    c.beginPath(); c.ellipse(34, 35, 10, 6, -0.2, 3.2, 4.5); c.stroke();
+    c.restore();
+    tankOilArt.set(oil, art);
+    return art;
+}
+
+function drawTankOilTrail(ctx, oil) {
+    if (window.effectsEnabled === false) return;
+    const spread = 1 + (1 - Math.exp(-(oil.age || 0) / 28)) * 0.35;
+    const width = (oil.visualRadius ?? oil.radius) * 3 * spread;
+    ctx.save();
+    ctx.translate(oil.x, oil.y);
+    ctx.rotate(oil.angle);
+    ctx.globalAlpha = Math.min(1, oil.life / 500) * (oil.inWater ? 0.28 : 1);
+    ctx.drawImage(getTankOilArt(oil), -width * (oil.stretch || 1) / 2, -width / 2, width * (oil.stretch || 1), width);
+    ctx.restore();
+}
+
+const tankWreckArt = new WeakMap();
+
+function getTankWreckArt(wreck) {
+    let art = tankWreckArt.get(wreck);
+    if (art) return art;
+    // Reuse the vehicle's own artwork so its armor and weapon remain recognizable.
+    const extent = Math.max(wreck.width, wreck.height) * 4;
+    art = document.createElement('canvas');
+    art.width = art.height = Math.ceil(extent * 2);
+    const c = art.getContext('2d');
+    c.translate(art.width / 2, art.height / 2);
+    c.scale(2, 2);
+    c.filter = 'saturate(0.45) brightness(0.65)';
+    if (wreck.isBoss) drawBossOn(c, wreck.width, wreck.height, 0, 1);
+    else drawTankOn(c, 0, 0, wreck.width, wreck.height, wreck.color, 0, 1, wreck.tankType, null, 0);
+    tankWreckArt.set(wreck, art);
+    return art;
+}
+
+function drawTankWreck(ctx, wreck) {
+    const size = wreck.radius;
+    const age = wreck.age ?? 90;
+    const travel = 1 - Math.exp(-age / 13);
+    const flight = Math.min(1, age / 40);
+    const art = getTankWreckArt(wreck);
+    const extent = art.width / 2;
+    ctx.save();
+    ctx.translate(wreck.x, wreck.y);
+    const soot = ctx.createRadialGradient(0, 0, size * 0.1, 0, 0, size * 1.65);
+    soot.addColorStop(0, 'rgba(10, 10, 9, 0.6)');
+    soot.addColorStop(0.65, 'rgba(23, 19, 15, 0.28)');
+    soot.addColorStop(1, 'rgba(23, 19, 15, 0)');
+    ctx.fillStyle = soot;
+    ctx.beginPath(); ctx.arc(0, 0, size * 1.65, 0, Math.PI * 2); ctx.fill();
+
+    ctx.save();
+    ctx.rotate(wreck.hullAngle);
+    // Jagged cuts pull the original hull apart, keeping its tracks and surface detail.
+    for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(side * size * 0.2 * travel, side * size * 0.1 * travel);
+        ctx.rotate(side * 0.13 * travel);
+        ctx.beginPath();
+        ctx.moveTo(side * size * 1.08, -size * 1.22);
+        ctx.lineTo(side * size * 0.12, -size * 1.22);
+        ctx.lineTo(side * size * 0.26, -size * 0.48);
+        ctx.lineTo(-side * size * 0.08, -size * 0.15);
+        ctx.lineTo(side * size * 0.2, size * 0.12);
+        ctx.lineTo(side * size * 0.02, size * 0.48);
+        ctx.lineTo(side * size * 0.16, size * 1.22);
+        ctx.lineTo(side * size * 1.08, size * 1.22);
+        ctx.closePath();
+        ctx.clip();
+        ctx.beginPath();
+        ctx.rect(-extent / 2, -extent / 2, extent, extent);
+        ctx.rect(size * 0.58, -size * 0.23, size * 1.8, size * 0.46);
+        ctx.clip('evenodd');
+        ctx.drawImage(art, -extent / 2, -extent / 2, extent, extent);
+        ctx.restore();
+    }
+    // Torn armor exposes a dark engine bay, ribs, and severed pipes.
+    const cavity = ctx.createRadialGradient(-size * 0.07, -size * 0.07, 0, 0, 0, size * 0.64);
+    cavity.addColorStop(0, '#080b0a'); cavity.addColorStop(0.65, '#161b17');
+    cavity.addColorStop(0.88, '#4c4d3c'); cavity.addColorStop(1, '#252b23');
+    ctx.fillStyle = cavity; ctx.strokeStyle = '#101610'; ctx.lineWidth = Math.max(1, size * 0.06);
+    ctx.beginPath();
+    for (let i = 0; i < 14; i++) {
+        const a = i * Math.PI / 7;
+        const rough = 0.87 + Math.sin(i * 3.7 + wreck.seed * 8) * 0.14;
+        const x = Math.cos(a) * size * 0.58 * rough;
+        const y = Math.sin(a) * size * 0.46 * rough;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#444b43';
+    ctx.fillRect(-size * 0.3, -size * 0.2, size * 0.43, size * 0.33);
+    ctx.strokeStyle = '#8a8d77'; ctx.lineWidth = Math.max(0.6, size * 0.035);
+    for (let rib = 0; rib < 4; rib++) {
+        const x = size * (-0.26 + rib * 0.1);
+        ctx.beginPath(); ctx.moveTo(x, -size * 0.18); ctx.lineTo(x, size * 0.1); ctx.stroke();
+    }
+    ctx.strokeStyle = '#383c32'; ctx.lineWidth = Math.max(1, size * 0.07);
+    ctx.beginPath(); ctx.moveTo(size * 0.1, -size * 0.25);
+    ctx.bezierCurveTo(size * 0.4, -size * 0.35, size * 0.12, size * 0.25, size * 0.4, size * 0.3); ctx.stroke();
+    ctx.strokeStyle = '#9c7044'; ctx.lineWidth = Math.max(0.8, size * 0.035);
+    ctx.beginPath(); ctx.moveTo(size * 0.05, -size * 0.95);
+    ctx.lineTo(size * 0.18, -size * 0.65); ctx.lineTo(size * 0.06, -size * 0.5); ctx.stroke();
+    ctx.restore();
+
+    // A short section of the original running gear lands separately from the hull.
+    ctx.save();
+    ctx.translate(-size * 1.1 * travel, size * 1.05 * travel);
+    ctx.rotate(wreck.hullAngle - travel * 0.55);
+    ctx.beginPath(); ctx.rect(-wreck.width * 0.32, -wreck.height * 0.09, wreck.width * 0.64, wreck.height * 0.18); ctx.clip();
+    ctx.drawImage(art, -extent / 2, -extent / 2 + wreck.height * 0.5, extent, extent);
+    ctx.restore();
+
+    // Cut the detached turret and its original barrel from the same texture.
+    ctx.save();
+    const turretX = size * (1.6 + wreck.seed * 0.45) * travel;
+    const turretY = -size * (0.5 + wreck.seed * 0.3) * travel;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#11160e';
+    ctx.beginPath(); ctx.ellipse(turretX, turretY + 3, size * 0.7, size * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.translate(turretX, turretY - Math.sin(flight * Math.PI) * size * 1.2);
+    ctx.rotate(wreck.turretAngle + (0.5 + wreck.seed * 0.9) * travel);
+    ctx.beginPath();
+    ctx.roundRect(-size * 0.67, -size * 0.67, size * 1.34, size * 1.34, size * 0.06);
+    ctx.rect(0, -size * 0.24, size * 2.2, size * 0.48);
+    ctx.clip();
+    ctx.drawImage(art, -extent / 2, -extent / 2, extent, extent);
+    ctx.restore();
+
+    ctx.fillStyle = '#4e544a'; ctx.strokeStyle = '#acaa8e'; ctx.lineWidth = Math.max(0.6, size * 0.025);
+    for (let i = 0; i < 8; i++) {
+        const angle = wreck.seed * 6 + i * 1.65;
+        const distance = size * (1.1 + (i % 3) * 0.4) * travel;
+        ctx.save(); ctx.translate(Math.cos(angle) * distance, Math.sin(angle) * distance - Math.sin(flight * Math.PI) * size * (0.3 + i * 0.05));
+        ctx.rotate(angle + (1 - travel) * 2);
+        ctx.beginPath(); ctx.moveTo(-size * 0.15, -size * 0.06);
+        ctx.lineTo(size * 0.13, -size * 0.1); ctx.lineTo(size * 0.06, size * 0.1);
+        ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    if (age < 180 && window.effectsEnabled !== false) {
+        const fade = Math.min(1, age / 20) * (1 - age / 180);
+        ctx.globalAlpha = fade * 0.8;
+        ctx.drawImage(getOrdnanceExplosionSprite('ember'), -size * 0.35, -size * 0.3, size * 0.7, size * 0.7);
+        for (let i = 0; i < 3; i++) {
+            const rise = (age / 65 + i / 3) % 1;
+            const width = size * (0.6 + rise);
+            ctx.globalAlpha = fade * (1 - rise) * 0.35;
+            ctx.drawImage(getOrdnanceExplosionSprite('tankSmoke'), -width / 2 + rise * size * 0.2, -width / 2 - rise * size * 1.4, width, width);
+        }
+    }
+    ctx.restore();
+}
+
 function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type = 'normal', heatState = null, moveAnimation = 0) {
     if (!isFinite(cx) || !isFinite(cy) || !W || !H || !isFinite(W) || !isFinite(H)) return;
     
@@ -1733,7 +2013,7 @@ function drawTankOn(ctx, cx, cy, W, H, color, turretAngle, turretScale = 1, type
 
             // Dynamic floating dust / wind particles being sucked in
             ctx.fillStyle = '#bdfdf2';
-            for (let p = 0; p < 8; p++) {
+            for (let p = 0; window.effectsEnabled !== false && p < 8; p++) {
                 // Particles spiral inward and loop back outward
                 const progress = ((t * 2 + p * 0.125) % 1.0); // 0.0 to 1.0
                 const pR = bodyW * 0.7 * (1 - progress); // start far, go to 0
@@ -4843,6 +5123,110 @@ function drawPlasmaBolt(ctx, bullet, charged) {
 const ordnanceExplosionArt = new WeakMap();
 const ordnanceExplosionSprites = new Map();
 
+const tankBlastSprites = new Map();
+
+function getTankBlastSprite(kind, variant = 0) {
+    const key = kind + variant;
+    if (tankBlastSprites.has(key)) return tankBlastSprites.get(key);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 192;
+    const c = canvas.getContext('2d'), pixels = c.createImageData(192, 192);
+    const hash = (x, y) => {
+        const n = Math.sin(x * 127.1 + y * 311.7 + variant * 73.3) * 43758.5453;
+        return n - Math.floor(n);
+    };
+    const noise = (x, y) => {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        let fx = x - ix, fy = y - iy;
+        fx *= fx * (3 - 2 * fx); fy *= fy * (3 - 2 * fy);
+        return (hash(ix, iy) * (1 - fx) + hash(ix + 1, iy) * fx) * (1 - fy)
+            + (hash(ix, iy + 1) * (1 - fx) + hash(ix + 1, iy + 1) * fx) * fy;
+    };
+    const palette = [[77, 32, 22], [190, 51, 12], [255, 126, 22], [255, 211, 104], [255, 246, 207]];
+    // Bake turbulent volume and a broken silhouette; no per-frame pixel work.
+    for (let y = 0; y < 192; y++) for (let x = 0; x < 192; x++) {
+        const nx = (x - 95.5) / 88, ny = (y - 95.5) / 88;
+        const coarse = noise(x / 27, y / 27), detail = noise(x / 9, y / 9);
+        const turbulence = coarse * 0.7 + detail * 0.22 + noise(x / 3, y / 3) * 0.08;
+        const edge = 1 - Math.hypot(nx, ny) + (coarse - 0.5) * 0.42;
+        const alpha = Math.min(1, Math.max(0, edge * 6));
+        const index = (y * 192 + x) * 4;
+        if (kind === 'fire' || kind === 'ember') {
+            let heat = edge * 0.5 + turbulence * 1.05 - 0.18;
+            if (kind === 'ember') heat = heat * 0.65 - 0.04;
+            heat = Math.max(0, Math.min(0.999, heat));
+            const band = heat * (palette.length - 1), low = Math.floor(band), mix = band - low;
+            for (let channel = 0; channel < 3; channel++) pixels.data[index + channel] = palette[low][channel] * (1 - mix) + palette[low + 1][channel] * mix;
+        } else {
+            const light = Math.max(0, 1 - Math.hypot(nx + 0.3, ny + 0.4));
+            const shade = (kind === 'dust' ? 75 : 24) + turbulence * (kind === 'dust' ? 55 : 66) + light * 24;
+            pixels.data[index] = shade + (kind === 'dust' ? 15 : 0);
+            pixels.data[index + 1] = shade;
+            pixels.data[index + 2] = shade - (kind === 'dust' ? 19 : 5);
+        }
+        pixels.data[index + 3] = alpha * (kind === 'dust' ? 150 : 245);
+    }
+    c.putImageData(pixels, 0, 0);
+    tankBlastSprites.set(key, canvas);
+    return canvas;
+}
+
+function drawTankExplosion(ctx, obj) {
+    const progress = Math.max(0, Math.min(1, 1 - obj.life / (obj.maxLife || 54)));
+    if (progress >= 1) return;
+    const radius = obj.radius || 65, seed = obj.seed || 0;
+    const expansion = 1 - Math.exp(-progress * 10);
+    const fade = Math.min(1, (1 - progress) / 0.28);
+    ctx.save(); ctx.translate(obj.x, obj.y);
+    // Dust travels along the ground while the hot fuel clouds rise above it.
+    for (let i = 0; i < 9; i++) {
+        const angle = i * Math.PI * 2 / 9 + seed;
+        const reach = radius * (0.2 + expansion * 0.92);
+        const size = radius * (0.23 + progress * 0.5);
+        ctx.globalAlpha = Math.sin(progress * Math.PI) * 0.32;
+        ctx.drawImage(getTankBlastSprite('dust'), Math.cos(angle) * reach - size / 2,
+            Math.sin(angle) * reach * 0.65 - size * 0.23, size, size * 0.46);
+    }
+    for (let i = 0; i < 10; i++) {
+        const angle = i * 2.39996 + seed;
+        const variation = 0.5 + Math.sin(i * 7.13 + seed) * 0.5;
+        const delay = i % 3 * 0.035;
+        const age = Math.max(0, progress - delay);
+        const growth = 1 - Math.exp(-age * 12);
+        const x = Math.cos(angle) * radius * (0.12 + growth * 0.36);
+        const y = Math.sin(angle) * radius * growth * 0.28 - radius * age * (0.25 + variation * 0.35);
+        const size = radius * (0.48 + variation * 0.32) * (0.25 + growth);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(angle + age * (variation - 0.5));
+        const smoke = Math.min(1, Math.max(0, (age - 0.08) * 5));
+        ctx.globalAlpha = smoke * fade * 0.85;
+        ctx.drawImage(getTankBlastSprite('smoke', i % 2), -size * 0.58, -size * 0.58, size * 1.16, size * 1.16);
+        const fire = Math.max(0, 1 - age / (0.38 + variation * 0.22));
+        ctx.globalAlpha = fire * fade;
+        ctx.drawImage(getTankBlastSprite('fire', i % 2), -size / 2, -size / 2, size, size);
+        ctx.globalAlpha = fire * fade * Math.min(1, age * 6);
+        ctx.drawImage(getTankBlastSprite('ember', i % 2), -size / 2, -size / 2, size, size);
+        ctx.restore();
+    }
+    if (progress < 0.17) {
+        const size = radius * (0.3 + expansion * 0.6);
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = (1 - progress / 0.17) * 0.95;
+        ctx.drawImage(getOrdnanceExplosionSprite('flash'), -size, -size, size * 2, size * 2);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+    // Fine incandescent streaks cool before the smoke clears.
+    for (let i = 0; i < 24 && progress < 0.7; i++) {
+        const angle = seed + i * 2.39996, speed = 0.65 + (i % 5) * 0.15;
+        const distance = radius * speed * (1 - Math.exp(-progress * 5));
+        const x = Math.cos(angle) * distance, y = Math.sin(angle) * distance + radius * progress * progress * 0.3;
+        const trail = radius * (0.03 + progress * 0.12);
+        ctx.globalAlpha = Math.pow(1 - progress / 0.7, 1.5);
+        ctx.strokeStyle = i % 3 ? '#ffbe64' : '#fff2c4'; ctx.lineWidth = Math.max(0.7, radius * 0.009);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.cos(angle) * trail, y - Math.sin(angle) * trail); ctx.stroke();
+    }
+    ctx.restore();
+}
+
 function getOrdnanceExplosionSprite(kind, color = '') {
     const key = kind + color;
     if (ordnanceExplosionSprites.has(key)) return ordnanceExplosionSprites.get(key);
@@ -4859,7 +5243,8 @@ function getOrdnanceExplosionSprite(kind, color = '') {
         ordnanceExplosionSprites.set(key, canvas);
         return canvas;
     }
-    const colors = kind === 'smoke' ? ['rgba(96,87,76,0.8)', 'rgba(58,53,48,0.65)', 'rgba(34,32,30,0)']
+    const colors = kind === 'tankSmoke' ? ['rgba(102,109,107,0.65)', 'rgba(45,51,50,0.58)', 'rgba(29,34,32,0)']
+        : kind === 'smoke' ? ['rgba(96,87,76,0.8)', 'rgba(58,53,48,0.65)', 'rgba(34,32,30,0)']
         : kind === 'ember' ? ['#ffc15e', '#db5c1d', 'rgba(94,35,19,0)']
         : kind === 'tint' ? [color, color, 'rgba(0,0,0,0)']
         : ['#fff0b9', '#ffac39', 'rgba(163,48,16,0)'];
@@ -5921,6 +6306,1085 @@ function drawReloadBar(ctx, unit, type, color) {
     ctx.restore();
 }
 
+let immersionEdgeCache = null;
+let immersionDustSprite = null;
+let immersionPresentation = null;
+
+function updateImmersionPresentation(unit, biome, frame, motionStrength) {
+    if (!window.immersionEnabled || gameState !== 'playing' || !unit || unit.alive === false || !(unit.hp > 0)) {
+        immersionPresentation = null;
+        return null;
+    }
+    const session = typeof battleSessionId === 'undefined' ? 0 : battleSessionId;
+    if (!immersionPresentation || immersionPresentation.session !== session) {
+        immersionPresentation = { session, frame: frame - 1, rain: 0, desert: 0, snow: 0, swamp: 0, fire: 0,
+            ice: 0, frozen: 0, gas: 0, drill: 0, drillSeed: 0, drilling: false, pyro: 0, heat: 0, iced: false, illuminatAge: 2,
+            electricAge: 2, impactAge: 2, swarm: 0, overload: 0, water: 0, wasJet: false,
+            musicAge: 2, musicFrame: undefined, musicPulses: [], barrageAge: 2, barrageFrame: undefined,
+            barrageShockFrame: undefined, barrageShockAge: 2, airAge: 2, airAngle: 0,
+            sprayTime: 0, spraySeed: 0, sprayClock: 0, wetDrops: [], insects: [],
+            drops: [], smoke: [], rainClock: 0, smokeClock: 0 };
+    }
+    const state = immersionPresentation;
+    const dt = Math.max(0, Math.min(0.05, (frame - state.frame) / 60));
+    state.frame = frame;
+    if (dt === 0) return state;
+    const health = unit.hp / (unit.maxHp || 300);
+    const hitAge = stamp => Number.isFinite(stamp) ? Math.max(0, (frame - stamp) / 60) : 2;
+    state.electricAge = hitAge(unit._immersionElectricFrame);
+    state.impactAge = hitAge(unit._immersionImpactFrame);
+    state.musicAge = hitAge(unit._immersionMusicFrame);
+    if (Number.isFinite(unit._immersionMusicFrame) && state.musicFrame !== unit._immersionMusicFrame) {
+        state.musicFrame = unit._immersionMusicFrame;
+        if (state.musicAge < 0.9 && (!state.musicPulses.length || state.musicFrame - state.musicPulses[state.musicPulses.length - 1] >= 6)) {
+            state.musicPulses.push(state.musicFrame);
+            if (state.musicPulses.length > 4) state.musicPulses.shift();
+        }
+    }
+    state.musicPulses = state.musicPulses.filter(stamp => hitAge(stamp) < 0.9);
+    state.barrageAge = hitAge(unit._immersionBarrageFrame);
+    if (Number.isFinite(unit._immersionBarrageFrame) && state.barrageFrame !== unit._immersionBarrageFrame) {
+        if (!Number.isFinite(state.barrageShockFrame) || unit._immersionBarrageFrame - state.barrageFrame > 48) state.barrageShockFrame = unit._immersionBarrageFrame;
+        state.barrageFrame = unit._immersionBarrageFrame;
+    }
+    state.barrageShockAge = hitAge(state.barrageShockFrame);
+    state.airAge = hitAge(unit._immersionAirFrame);
+    state.airAngle = Number.isFinite(unit._immersionAirAngle) ? unit._immersionAirAngle : 0;
+    const jet = hitAge(unit._immersionWaterFrame) < 0.14;
+    const inSwarm = typeof objects !== 'undefined' && objects.some(obj => obj.type === 'pharaohSwarm' && obj.life > 0 && obj.team !== unit.team &&
+        Math.hypot(obj.x - Math.max(unit.x, Math.min(obj.x, unit.x + unit.w)),
+            obj.y - Math.max(unit.y, Math.min(obj.y, unit.y + unit.h))) <= obj.radius);
+    for (const [type, target] of [['swarm', inSwarm ? 1 : 0], ['overload', unit._kvantOverload ? 1 : 0], ['water', jet ? 1 : 0]]) {
+        state[type] += (target - state[type]) * Math.min(1, dt * (target ? 9 : 4));
+        if (!target && state[type] < 0.01) state[type] = 0;
+    }
+    if (state.swarm > 0.01) {
+        if (!state.insects.length) for (let i = 0; i < 96; i++) state.insects.push({
+            x: Math.random(), y: Math.random(), angle: Math.random() * Math.PI * 2,
+            speed: 0.25 + Math.random() * 0.45, size: 0.65 + Math.random() * 0.7, phase: Math.random() * 6,
+            flying: i < 64, modeTime: 0.4 + Math.random() * 2 });
+        for (const bug of state.insects) {
+            bug.modeTime -= dt;
+            if (bug.modeTime <= 0) {
+                bug.flying = !bug.flying; bug.modeTime = 0.5 + Math.random() * (bug.flying ? 1.3 : 2.5);
+                bug.angle += (Math.random() - 0.5) * 3;
+            }
+            bug.angle += Math.sin(frame * (bug.flying ? 0.11 : 0.035) + bug.phase) * dt * (bug.flying ? 10 : 2);
+            const speed = bug.speed * (bug.flying ? 1 : 0.065);
+            bug.x = (bug.x + Math.cos(bug.angle) * speed * dt + 1) % 1;
+            bug.y = (bug.y + Math.sin(bug.angle) * speed * dt + 1) % 1;
+        }
+    } else state.insects.length = 0;
+    if (state.water > 0) state.sprayTime += dt;
+    if (jet && !state.wasJet) {
+        if (state.water < 0.2) state.spraySeed = Math.random() * Math.PI * 2;
+        state.sprayClock += 12;
+    }
+    state.wasJet = jet;
+    if (jet) state.sprayClock += dt * 16;
+    while (state.sprayClock >= 1) {
+        state.sprayClock--;
+        if (state.wetDrops.length < 28) state.wetDrops.push({ x: 0.03 + Math.random() * 0.94, y: 0.03 + Math.random() * 0.78,
+            radius: 12 + Math.random() * 14, speed: 0.025 + Math.random() * 0.06, age: 0, life: 4 + Math.random() * 3, seed: Math.random() * 6 });
+    }
+    for (const drop of state.wetDrops) {
+        drop.age += dt; drop.life -= dt; drop.speed += dt * 0.035; drop.y += drop.speed * dt;
+        drop.x += Math.sin(drop.age * 2 + drop.seed) * dt * 0.002;
+    }
+    state.wetDrops = state.wetDrops.filter(drop => drop.life > 0 && drop.y < 1.08);
+    const frozen = (unit.frozenEffect || 0) > 0;
+    const cold = frozen || !!unit.iceSlowed || (unit.iceSlowedTime || 0) > 0;
+    const heatHit = frame >= unit._immersionHeatFrame && frame - unit._immersionHeatFrame < 45;
+    const pyroBurn = !!unit.burning && (unit.burnTimer || 0) > 0;
+    const drilling = !!unit.burovoyDrillParalysis;
+    if (drilling && !state.drilling) state.drillSeed = Math.floor(Math.random() * 4294967296);
+    state.drilling = drilling;
+    let gasStrength = 0;
+    if (typeof objects !== 'undefined') for (const obj of objects) {
+        if (obj.type !== 'gas' || obj.life <= 0 ||
+            Math.hypot(unit.x + unit.w / 2 - obj.x, unit.y + unit.h / 2 - obj.y) > obj.radius) continue;
+        const sourceTeam = obj.ownerTeam ?? obj.team;
+        const friendly = sourceTeam !== undefined ? sourceTeam === unit.team : obj.owner === 'player' || obj.owner === 'ally';
+        gasStrength = Math.max(gasStrength, friendly ? 0.06 : 1);
+    }
+    for (const [type, target] of [['ice', cold ? 1 : 0], ['frozen', frozen ? 1 : 0],
+        ['gas', gasStrength], ['drill', unit.burovoyDrillParalysis ? 1 : 0]]) {
+        state[type] += (target - state[type]) * Math.min(1, dt * (target ? 6 : 4));
+        if (!target && state[type] < 0.02) state[type] = 0;
+    }
+    state.iced = cold || state.ice > 0 || state.frozen > 0;
+    state.illuminatAge = Number.isFinite(unit._immersionIlluminatFrame)
+        ? Math.max(0, (frame - unit._immersionIlluminatFrame) / 60) : 2;
+    if (state.iced) {
+        state.fire = 0; state.pyro = 0; state.heat = 0;
+        state.smoke.length = 0; state.smokeClock = 0;
+    } else {
+        state.pyro += ((pyroBurn ? 1 : 0) - state.pyro) * Math.min(1, dt * 5);
+        state.heat += ((heatHit && !pyroBurn ? 1 : 0) - state.heat) * Math.min(1, dt * 5);
+        if (!heatHit && state.heat < 0.02) state.heat = 0;
+    }
+    const heatOnly = !pyroBurn && (heatHit || state.heat > 0);
+    if (heatOnly) {
+        state.fire = 0; state.pyro = 0; state.smoke.length = 0; state.smokeClock = 0;
+    }
+    for (const type of ['rain', 'desert', 'snow', 'swamp', 'fire']) {
+        const target = type === 'fire' ? (!state.iced && !heatOnly && health < 0.3 && !unit.burovoyBurrowActive ? (health < 0.1 ? 1 : 0.65) : 0)
+            : biome === type ? (type === 'rain' ? Math.min(1, motionStrength) : 1) : 0;
+        state[type] += (target - state[type]) * Math.min(1, dt * (type === 'fire' ? 4 : 1.5));
+    }
+    for (const drop of state.drops) {
+        drop.age += dt; drop.life -= dt * (biome === 'rain' ? 1 : 3);
+        drop.speed += dt * 0.008;
+        drop.y += drop.speed * dt;
+        drop.x += Math.sin(drop.age * 1.7 + drop.seed) * dt * 0.0015;
+    }
+    state.drops = state.drops.filter(drop => drop.y < 1.08 && drop.life > 0);
+    if (biome === 'rain' && motionStrength > 0.05) {
+        state.rainClock += dt * (6 + Math.min(1, motionStrength) * 8);
+        while (state.rainClock >= 1) {
+            state.rainClock--;
+            if (state.drops.length < 18) state.drops.push({ x: Math.random(), y: Math.random() * 0.85,
+                radius: 2.7 + Math.random() * 3.8, speed: 0.025 + Math.random() * 0.07,
+                age: 0, life: 5 + Math.random() * 5, seed: Math.random() * 6 });
+        }
+    }
+    // Nearby beads combine into a heavier drop that slides faster.
+    for (let i = 0; i < state.drops.length; i++) for (let j = i + 1; j < state.drops.length; j++) {
+        const a = state.drops[i], b = state.drops[j];
+        if (a.life > 0 && b.life > 0 && Math.hypot((a.x - b.x) * 1.5, a.y - b.y) < 0.014) {
+            a.radius = Math.min(10, Math.hypot(a.radius, b.radius));
+            a.speed = Math.min(0.14, Math.max(a.speed, b.speed) * 1.25); b.life = 0;
+        }
+    }
+    for (const puff of state.smoke) {
+        puff.age += dt; puff.x += puff.vx * dt; puff.y += puff.vy * dt;
+    }
+    state.smoke = state.smoke.filter(puff => puff.age < 3.2);
+    if (!state.iced && Math.max(state.fire, state.pyro) > 0.04) {
+        state.smokeClock += dt * Math.max(state.fire, state.pyro) * (state.pyro > 0.1 ? 12 : 7);
+        while (state.smokeClock >= 1) {
+            state.smokeClock--;
+            if (state.smoke.length < 22) {
+                const edge = state.pyro > 0.1 ? Math.floor(Math.random() * 4) : 0;
+                state.smoke.push({ x: edge === 1 ? 0 : edge === 2 ? 1 : Math.random(), y: edge === 0 ? 1 : edge === 3 ? 0 : Math.random(),
+                    vx: edge === 1 ? 0.09 : edge === 2 ? -0.09 : (Math.random() - 0.35) * 0.025,
+                    vy: edge === 3 ? -0.035 : -0.11 - Math.random() * 0.04,
+                    pyro: state.pyro > 0.1, size: (state.pyro > 0.1 ? 0.2 : 0.14) + Math.random() * 0.08,
+                    age: 0, angle: Math.random() * 6 });
+            }
+        }
+    }
+    return state;
+}
+
+function getImmersionEdgeArt(type, width, height) {
+    if (!immersionEdgeCache || immersionEdgeCache.width !== width || immersionEdgeCache.height !== height) {
+        immersionEdgeCache = { width, height, images: new Map() };
+    }
+    if (immersionEdgeCache.images.has(type)) return immersionEdgeCache.images.get(type);
+    const art = document.createElement('canvas');
+    art.width = width; art.height = height;
+    const c = art.getContext('2d');
+    const depth = Math.min(width * (type === 'snow' ? 0.13 : 0.11), type === 'snow' ? 160 : 130);
+    for (const side of [0, 1]) {
+        const mask = document.createElement('canvas');
+        mask.width = 72; mask.height = Math.min(512, Math.ceil(height / 2));
+        const m = mask.getContext('2d'), pixels = m.createImageData(mask.width, mask.height);
+        let seed = 12387 + side * 3151 + (type === 'snow' ? 0 : 919);
+        const grid = new Float32Array(32 * 128);
+        for (let i = 0; i < grid.length; i++) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; grid[i] = seed / 4294967296; }
+        const noise = (x, y) => {
+            const ix = Math.floor(x), iy = Math.floor(y);
+            let fx = x - ix, fy = y - iy;
+            fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+            const at = (xx, yy) => grid[(yy % 128) * 32 + xx % 32];
+            return (at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy)
+                + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy;
+        };
+        for (let y = 0; y < mask.height; y++) for (let x = 0; x < mask.width; x++) {
+            const edge = x / mask.width;
+            const grain = noise(x / 9, y / 14) * 0.7 + noise(x / 2.2, y / 3.5) * 0.3;
+            const density = Math.max(0, Math.min(1, (1 - edge) * 1.5 + (grain - 0.5) * 0.9)) * Math.pow(1 - edge, 0.85);
+            const offset = (y * mask.width + x) * 4;
+            pixels.data[offset] = type === 'snow' ? 195 + grain * 55 : 25 + grain * 36;
+            pixels.data[offset + 1] = type === 'snow' ? 222 + grain * 30 : 33 + grain * 35;
+            pixels.data[offset + 2] = type === 'snow' ? 239 + grain * 16 : 15 + grain * 17;
+            pixels.data[offset + 3] = density * (type === 'snow' ? 235 : 225);
+        }
+        m.putImageData(pixels, 0, 0);
+        c.save(); c.translate(side ? width : 0, 0); c.scale(side ? -1 : 1, 1);
+        c.drawImage(mask, 0, 0, depth, height);
+        c.globalCompositeOperation = 'source-atop';
+        if (type === 'snow') {
+            c.strokeStyle = 'rgba(244,252,255,0.45)'; c.lineWidth = 0.9;
+            for (let i = 0; i < 19; i++) {
+                const y = height * (i + 0.4) / 19;
+                const length = depth * (0.18 + Math.sin(i * 2.7 + side) ** 2 * 0.4);
+                c.beginPath(); c.moveTo(0, y); c.lineTo(length, y - length * 0.4);
+                for (let branch = 1; branch < 4; branch++) {
+                    const x = length * branch / 4, by = y - x * 0.4;
+                    c.moveTo(x, by); c.lineTo(x - length * 0.15, by - length * 0.18);
+                    c.moveTo(x, by); c.lineTo(x - length * 0.1, by + length * 0.16);
+                }
+                c.stroke();
+            }
+        } else {
+            c.strokeStyle = 'rgba(153,164,104,0.27)'; c.lineWidth = 1.4;
+            for (let i = 0; i < 16; i++) {
+                const x = depth * (0.18 + Math.sin(i * 3.3 + side) ** 2 * 0.3), y = height * i / 16;
+                c.beginPath(); c.moveTo(x - 4, y);
+                c.bezierCurveTo(x + 5, y + 6, x - 4, y + 14, x + 1, y + 22); c.stroke();
+            }
+        }
+        c.restore();
+        const rim = Math.min(height * (type === 'snow' ? 0.05 : side ? 0.065 : 0.025), type === 'snow' ? 40 : side ? 45 : 18);
+        c.save();
+        c.translate(side ? 0 : width, side ? height : 0);
+        c.rotate(side ? -Math.PI / 2 : Math.PI / 2);
+        c.drawImage(mask, 0, 0, rim, width);
+        c.restore();
+    }
+    immersionEdgeCache.images.set(type, art);
+    return art;
+}
+
+function getImmersionDustSprite() {
+    if (immersionDustSprite) return immersionDustSprite;
+    const art = document.createElement('canvas');
+    art.width = art.height = 128;
+    const c = art.getContext('2d');
+    const dust = c.createRadialGradient(58, 67, 0, 64, 64, 64);
+    dust.addColorStop(0, 'rgba(155,105,43,0.72)');
+    dust.addColorStop(0.3, 'rgba(174,123,59,0.48)');
+    dust.addColorStop(0.65, 'rgba(190,141,76,0.18)');
+    dust.addColorStop(1, 'rgba(190,141,76,0)');
+    c.fillStyle = dust; c.fillRect(0, 0, 128, 128);
+    immersionDustSprite = art;
+    return art;
+}
+
+function drawImmersionFire(ctx, width, height, intensity, time) {
+    const reach = height * (0.15 + intensity * 0.14);
+    const glow = ctx.createLinearGradient(0, height, 0, height - reach);
+    glow.addColorStop(0, 'rgba(247,69,7,' + intensity * 0.52 + ')');
+    glow.addColorStop(1, 'rgba(247,69,7,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, height - reach, width, reach);
+    const count = Math.min(24, Math.ceil(width / 75));
+    for (let layer = 0; layer < 2; layer++) for (let i = -1; i <= count; i++) {
+        const phase = i * 4.37 + layer * 2.1;
+        const pulse = 0.72 + Math.sin(time * (5 + i % 3) + phase) * 0.17 + Math.sin(time * 9 + phase * 2) * 0.08;
+        const flameHeight = reach * pulse * (layer ? 0.9 : 0.7);
+        const flameWidth = Math.max(width / count * (layer ? 2.1 : 2.8), flameHeight * 0.65);
+        const x = width * (i + layer * 0.43 + Math.sin(phase) * 0.24) / count;
+        ctx.save(); ctx.translate(x + Math.sin(time * 2 + phase) * 4, height + reach * 0.13);
+        ctx.rotate(Math.sin(time * 2.5 + phase) * 0.12);
+        ctx.globalAlpha = intensity * (layer ? 0.68 : 0.42);
+        ctx.drawImage(getTankFireSprite(), -flameWidth / 2, -flameHeight, flameWidth, flameHeight);
+        ctx.restore();
+    }
+}
+
+function drawImmersionRain(ctx, width, height, drops) {
+    const scale = Math.max(0.8, Math.min(width, height) / 600);
+    for (const drop of drops) {
+        if (drop.life <= 0) continue;
+        const x = drop.x * width, y = drop.y * height, r = Math.max(1.4, drop.radius * scale);
+        const opacity = Math.min(1, drop.age * 2) * Math.min(1, drop.life);
+        ctx.globalAlpha = opacity;
+        const trail = Math.min(65, drop.age * drop.speed * height);
+        const streak = ctx.createLinearGradient(x, y - trail, x, y);
+        streak.addColorStop(0, 'rgba(198,225,237,0)'); streak.addColorStop(1, 'rgba(198,225,237,0.2)');
+        ctx.strokeStyle = streak; ctx.lineWidth = Math.max(0.8, r * 0.28);
+        ctx.beginPath(); ctx.moveTo(x - 1, y - trail); ctx.quadraticCurveTo(x + 1, y - trail / 2, x, y); ctx.stroke();
+        const lens = ctx.createRadialGradient(x - r * 0.2, y - r * 0.3, 0, x, y, r * 1.5);
+        lens.addColorStop(0, 'rgba(198,226,237,0.14)'); lens.addColorStop(1, 'rgba(7,22,31,0.3)');
+        ctx.fillStyle = lens;
+        ctx.beginPath(); ctx.moveTo(x, y - r * 1.8);
+        ctx.bezierCurveTo(x - r * 1.4, y - r * 0.5, x - r, y + r, x, y + r * 1.2);
+        ctx.bezierCurveTo(x + r, y + r, x + r * 1.3, y - r * 0.5, x, y - r * 1.8); ctx.fill();
+        ctx.strokeStyle = 'rgba(232,247,255,0.7)'; ctx.lineWidth = Math.max(0.8, r * 0.16);
+        ctx.beginPath(); ctx.arc(x, y, r * 0.75, 3.5, 4.6); ctx.stroke();
+        ctx.strokeStyle = 'rgba(153,191,213,0.4)'; ctx.lineWidth = Math.max(0.8, r * 0.14);
+        ctx.beginPath(); ctx.arc(x, y + r * 0.2, r * 0.8, 0.5, 1.8); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+}
+
+let immersionStatusCache = null;
+let immersionIlluminatArt = null;
+const immersionPyroSprites = [];
+
+function getImmersionPyroSprite(variant) {
+    if (immersionPyroSprites[variant]) return immersionPyroSprites[variant];
+    const art = document.createElement('canvas'); art.width = 128; art.height = 192;
+    const c = art.getContext('2d'), pixels = c.createImageData(128, 192);
+    let seed = 8137 + variant * 7919;
+    const grid = new Float32Array(32 * 32);
+    for (let i = 0; i < grid.length; i++) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; grid[i] = seed / 4294967296; }
+    const noise = (x, y) => {
+        const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
+        fx *= fx * (3 - 2 * fx); fy *= fy * (3 - 2 * fy);
+        const at = (xx, yy) => grid[((yy + 32) % 32) * 32 + (xx + 32) % 32];
+        return (at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy)
+            + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy;
+    };
+    for (let y = 0; y < 192; y++) for (let x = 0; x < 128; x++) {
+        const rise = y / 192, nx = (x - 64) / 64;
+        const coarse = noise(x / 23, y / 28), fine = noise(x / 7, y / 9);
+        const warp = Math.sin(rise * 11 + variant * 2) * 0.17 + (coarse - 0.5) * 0.34;
+        const edge = 1 - Math.abs(nx + warp) / (0.1 + rise * 0.94);
+        const density = Math.max(0, Math.min(1, (edge + (coarse * 0.7 + fine * 0.3 - 0.5) * 0.95) * 2.2));
+        const hot = Math.max(0, Math.min(1, edge * 0.65 + rise * 0.3 + (coarse - 0.5) * 0.3 + (fine - 0.5) * 0.12));
+        const fade = Math.min(1, rise * 12) * Math.min(1, (1 - rise) * 10);
+        const index = (y * 128 + x) * 4;
+        pixels.data[index] = 198 + hot * 57; pixels.data[index + 1] = 36 + hot * hot * 209;
+        pixels.data[index + 2] = 6 + Math.pow(hot, 5) * 143; pixels.data[index + 3] = density * fade * 240;
+    }
+    c.putImageData(pixels, 0, 0);
+    immersionPyroSprites[variant] = art;
+    return art;
+}
+
+function getImmersionStatusArt(type, width, height, variant = 0) {
+    if (!immersionStatusCache || immersionStatusCache.width !== width || immersionStatusCache.height !== height) {
+        immersionStatusCache = { width, height, images: new Map() };
+    }
+    if (type === 'cracks' && immersionStatusCache.crackSeed !== variant) {
+        immersionStatusCache.images.delete(type);
+        immersionStatusCache.crackSeed = variant;
+    }
+    if (immersionStatusCache.images.has(type)) return immersionStatusCache.images.get(type);
+    const art = document.createElement('canvas'); art.width = width; art.height = height;
+    const c = art.getContext('2d');
+    let seed = type === 'cracks' ? variant >>> 0 : 9713;
+    const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    if (type === 'cracks') {
+        const paths = [];
+        const columns = width > height * 1.5 ? 3 : 2, rows = height > width ? 3 : 2;
+        for (let row = 0; row < rows; row++) for (let col = 0; col < columns; col++) {
+            const cx = width * (col + 0.18 + random() * 0.64) / columns;
+            const cy = height * (row + 0.18 + random() * 0.64) / rows;
+            const radius = Math.hypot(width / columns, height / rows) * (0.62 + random() * 0.18);
+            const count = 8 + Math.floor(random() * 5);
+            const spokes = [];
+            for (let ray = 0; ray < count; ray++) {
+                const angle = ray * Math.PI * 2 / count + (random() - 0.5) * 0.28;
+                const length = radius * (0.55 + random() * 0.65), points = [{ x: cx, y: cy }];
+                for (let step = 1; step <= 8; step++) {
+                    const bend = (random() - 0.5) * length * 0.045;
+                    points.push({ x: cx + Math.cos(angle) * length * step / 8 - Math.sin(angle) * bend,
+                        y: cy + Math.sin(angle) * length * step / 8 + Math.cos(angle) * bend });
+                }
+                spokes.push(points); paths.push(points);
+                const branch = points[5], turn = angle + (ray % 2 ? 0.5 : -0.6);
+                paths.push([branch, { x: branch.x + Math.cos(turn) * length * 0.13, y: branch.y + Math.sin(turn) * length * 0.13 },
+                    { x: branch.x + Math.cos(turn + 0.15) * length * 0.23, y: branch.y + Math.sin(turn + 0.15) * length * 0.23 }]);
+            }
+            // Broken stress rings connect the radial fractures into damaged glass.
+            for (const step of [2, 4, 6]) for (let ray = 0; ray < count; ray++) {
+                if (random() < 0.28) continue;
+                const a = spokes[ray][step], b = spokes[(ray + 1) % count][step];
+                paths.push([a, { x: (a.x + b.x) / 2 + (random() - 0.5) * 5,
+                    y: (a.y + b.y) / 2 + (random() - 0.5) * 5 }, b]);
+            }
+            c.fillStyle = 'rgba(210,230,236,0.3)';
+            for (let chip = 0; chip < 15; chip++) {
+                const x = cx + (random() - 0.5) * 15, y = cy + (random() - 0.5) * 15;
+                c.beginPath(); c.moveTo(x, y); c.lineTo(x + random() * 5, y - 2);
+                c.lineTo(x + 1, y + random() * 4); c.closePath(); c.fill();
+            }
+        }
+        c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath();
+        for (const points of paths) {
+            c.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) c.lineTo(points[i].x, points[i].y);
+        }
+        c.strokeStyle = 'rgba(8,18,23,0.38)'; c.lineWidth = 1.6; c.stroke();
+        c.save(); c.translate(0.45, -0.4);
+        c.strokeStyle = 'rgba(222,239,244,0.72)'; c.lineWidth = 0.55; c.stroke(); c.restore();
+    } else {
+        // Low-resolution rime is baked once; fine crystal veins stay at viewport resolution.
+        const texture = document.createElement('canvas'); texture.width = Math.min(384, width);
+        texture.height = Math.max(1, Math.round(texture.width * height / width));
+        const t = texture.getContext('2d'), pixels = t.createImageData(texture.width, texture.height);
+        const grid = new Float32Array(33 * 33);
+        for (let i = 0; i < grid.length; i++) grid[i] = random();
+        const noise = (x, y) => {
+            const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy;
+            fx *= fx * (3 - 2 * fx); fy *= fy * (3 - 2 * fy);
+            const at = (xx, yy) => grid[(yy % 33) * 33 + xx % 33];
+            return (at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy)
+                + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy;
+        };
+        for (let y = 0; y < texture.height; y++) for (let x = 0; x < texture.width; x++) {
+            const nx = x / texture.width, ny = y / texture.height;
+            const n = noise(nx * 7, ny * 7) * 0.62 + noise(nx * 28, ny * 28) * 0.28 + random() * 0.1;
+            const edge = Math.min(nx / 0.18, (1 - nx) / 0.18, ny / 0.23, (1 - ny) / 0.23);
+            const rime = Math.pow(Math.max(0, 1 - edge + (n - 0.5) * 0.6), 1.5);
+            const alpha = type === 'frozen' ? 0.12 + n * 0.26 + rime * 0.44 : rime * (0.32 + n * 0.55);
+            const index = (y * texture.width + x) * 4;
+            pixels.data[index] = 174 + n * 68; pixels.data[index + 1] = 211 + n * 35;
+            pixels.data[index + 2] = 230 + n * 24; pixels.data[index + 3] = Math.min(0.9, alpha) * 255;
+        }
+        t.putImageData(pixels, 0, 0); c.drawImage(texture, 0, 0, width, height);
+        const frond = (x, y, angle, length, opacity) => {
+            c.save(); c.translate(x, y); c.rotate(angle); c.globalAlpha = opacity;
+            c.lineWidth = 0.6; c.strokeStyle = '#e8f9ff'; c.beginPath(); c.moveTo(0, 0);
+            c.quadraticCurveTo(length * 0.025, length * 0.5, 0, length);
+            for (let branch = 1; branch < 15; branch++) for (const side of [-1, 1]) {
+                const along = branch / 16, reach = length * (0.12 + random() * 0.12) * Math.sin(along * Math.PI);
+                const bx = side * reach, by = along * length + reach * 0.65;
+                c.moveTo(0, along * length); c.quadraticCurveTo(bx * 0.45, along * length + reach * 0.2, bx, by);
+                for (let twig = 1; twig <= 3; twig++) {
+                    const tx = bx * twig / 4, ty = along * length + reach * 0.65 * twig / 4;
+                    c.moveTo(tx, ty); c.lineTo(tx + side * reach * 0.3, ty - reach * 0.12);
+                }
+            }
+            c.stroke(); c.restore();
+        };
+        for (let side = 0; side < 4; side++) {
+            const span = side < 2 ? width : height, depth = side < 2 ? height : width;
+            c.save();
+            if (side === 1) { c.translate(width, height); c.rotate(Math.PI); }
+            if (side === 2) { c.translate(0, height); c.rotate(-Math.PI / 2); }
+            if (side === 3) { c.translate(width, 0); c.rotate(Math.PI / 2); }
+            const count = Math.ceil(span / 65);
+            for (let i = 0; i < count; i++) {
+                const x = span * (i + random()) / count;
+                frond(x, -3, (random() - 0.5) * 0.8, depth * (0.06 + random() * 0.11), 0.15 + random() * 0.27);
+            }
+            // Sparse slender icicles have curved edges, translucent cores and broken highlights.
+            if (type === 'ice' && side < 2) for (let i = 0, count = Math.ceil(span / (side ? 135 : 90)); i < count; i++) {
+                const x = span * (i + 0.2 + random() * 0.6) / count, half = 2 + random() * 4;
+                const length = depth * (side ? 0.04 + random() * 0.06 : 0.07 + random() * 0.16);
+                const tip = (random() - 0.5) * half;
+                const ice = c.createLinearGradient(x - half, 0, x + half, 0);
+                ice.addColorStop(0, 'rgba(102,171,203,0.18)'); ice.addColorStop(0.43, 'rgba(229,252,255,0.64)');
+                ice.addColorStop(0.7, 'rgba(141,204,228,0.25)'); ice.addColorStop(1, 'rgba(239,252,255,0.5)');
+                c.fillStyle = ice; c.beginPath(); c.moveTo(x - half, -2);
+                c.quadraticCurveTo(x - half * 0.55, length * 0.65, x + tip, length);
+                c.quadraticCurveTo(x + half * 0.4, length * 0.7, x + half, -2); c.closePath(); c.fill();
+                c.strokeStyle = 'rgba(242,254,255,0.65)'; c.lineWidth = 0.7;
+                c.beginPath(); c.moveTo(x - half * 0.4, length * 0.12); c.lineTo(x + tip * 0.7, length * 0.88); c.stroke();
+            }
+            c.restore();
+        }
+        if (type === 'frozen') for (let i = 0; i < 28; i++) {
+            frond(random() * width, random() * height, random() * Math.PI * 2,
+                Math.min(width, height) * (0.05 + random() * 0.18), 0.16 + random() * 0.2);
+        }
+    }
+    immersionStatusCache.images.set(type, art);
+    return art;
+}
+
+function getImmersionIlluminatArt() {
+    if (immersionIlluminatArt) return immersionIlluminatArt;
+    const art = document.createElement('canvas'); art.width = art.height = 384;
+    const c = art.getContext('2d');
+    c.scale(1.5, 1.5);
+    drawTankOn(c, 128, 128, 190, 190, '#19111f', -Math.PI / 2, 1, 'illuminat', { illuminatUltStrength: 1 }, 0);
+    c.globalCompositeOperation = 'source-atop'; c.fillStyle = 'rgba(8,4,14,0.8)'; c.fillRect(0, 0, 256, 256);
+    c.globalCompositeOperation = 'source-over';
+    const glow = c.createRadialGradient(128, 143, 1, 128, 143, 48);
+    glow.addColorStop(0, 'rgba(255,47,24,0.9)'); glow.addColorStop(0.35, 'rgba(214,12,9,0.4)'); glow.addColorStop(1, 'rgba(255,10,0,0)');
+    c.fillStyle = glow; c.fillRect(80, 95, 96, 96);
+    const eye = c.createRadialGradient(127, 141, 1, 128, 143, 43);
+    eye.addColorStop(0, '#ffcd9b'); eye.addColorStop(0.16, '#ff5830'); eye.addColorStop(0.55, '#bc1c17'); eye.addColorStop(1, '#390a13');
+    c.fillStyle = eye; c.beginPath(); c.moveTo(83, 143);
+    c.quadraticCurveTo(128, 115, 173, 143); c.quadraticCurveTo(128, 170, 83, 143); c.fill();
+    c.fillStyle = '#19060c'; c.beginPath(); c.ellipse(128, 143, 6, 13, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(255,227,196,0.85)'; c.beginPath(); c.ellipse(123, 137, 2, 3, 0.4, 0, Math.PI * 2); c.fill();
+    immersionIlluminatArt = art;
+    return art;
+}
+
+function drawImmersionPyro(ctx, width, height, intensity, time) {
+    ctx.save();
+    const glow = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.28,
+        width / 2, height / 2, Math.hypot(width, height) * 0.55);
+    glow.addColorStop(0, 'rgba(244,75,8,0)'); glow.addColorStop(0.65, 'rgba(211,59,8,0.11)');
+    glow.addColorStop(1, 'rgba(255,108,16,0.46)');
+    ctx.globalAlpha = intensity; ctx.fillStyle = glow; ctx.fillRect(0, 0, width, height);
+    // Local -Y points into the screen; every plume base stays beyond its own edge.
+    for (let edge = 0; edge < 4; edge++) {
+        const span = edge < 2 ? width : height, depth = edge < 2 ? height : width;
+        const count = Math.min(24, Math.ceil(span / 75) + 2);
+        ctx.save();
+        if (edge === 0) ctx.translate(0, height);
+        if (edge === 1) { ctx.translate(width, 0); ctx.rotate(Math.PI); }
+        if (edge === 2) ctx.rotate(Math.PI / 2);
+        if (edge === 3) { ctx.translate(width, height); ctx.rotate(-Math.PI / 2); }
+        for (let i = -1; i <= count; i++) {
+            const phase = i * 2.39996 + edge * 1.73;
+            const cycle = (time * (0.45 + (i + 4) % 4 * 0.06) + (i + 1) * 0.381 + edge * 0.217) % 1;
+            const envelope = Math.pow(Math.sin(cycle * Math.PI), 0.6);
+            const x = span * (i + 0.5 + Math.sin(time * 1.8 + phase) * 0.16) / count;
+            const y = depth * (0.065 - cycle * 0.025);
+            const tall = Math.min(width, height) * (0.2 + (Math.sin(phase) + 1) * 0.08) * (0.7 + cycle * 0.55);
+            const broad = Math.max(span / count * 1.6, tall * (0.6 + Math.sin(phase * 2) * 0.15));
+            ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(time * 2 + phase) * 0.1);
+            ctx.globalAlpha = intensity * envelope * 0.85;
+            ctx.drawImage(getImmersionPyroSprite((i + 3 + edge) % 3), -broad / 2, -tall, broad, tall);
+            ctx.globalAlpha *= 0.18;
+            ctx.drawImage(getTankBlastSprite('ember', (i + 3) % 2), -broad * 0.65, -tall * 0.65, broad * 1.3, tall * 0.7);
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawImmersionStatusEffects(ctx, width, height, state, time) {
+    ctx.save();
+    if (state.heat > 0.005 && !state.iced) {
+        const heat = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.hypot(width, height) / 2);
+        heat.addColorStop(0, 'rgba(255,139,54,0.025)'); heat.addColorStop(0.55, 'rgba(235,94,25,0.1)');
+        heat.addColorStop(1, 'rgba(255,64,9,0.48)');
+        ctx.globalAlpha = state.heat * (0.88 + Math.sin(time * 8) * 0.12); ctx.fillStyle = heat; ctx.fillRect(0, 0, width, height);
+    }
+    if (state.gas > 0.005) {
+        ctx.globalAlpha = state.gas; ctx.fillStyle = 'rgba(45,106,17,0.16)'; ctx.fillRect(0, 0, width, height);
+        const gas = getOrdnanceExplosionSprite('tint', 'rgba(72,139,28,0.48)');
+        for (let i = 0; i < 8; i++) {
+            const x = width * ((i * 0.381 + time * 0.012) % 1), y = height * (0.1 + (i % 3) * 0.4) + Math.sin(time * 0.6 + i) * height * 0.08;
+            ctx.globalAlpha = state.gas * (0.28 + Math.sin(time * 0.7 + i) * 0.07);
+            ctx.drawImage(gas, x - width * 0.45, y - height * 0.48, width * 0.9, height * 0.96);
+        }
+    }
+    if (state.ice > 0) {
+        const ice = getImmersionStatusArt('ice', width, height);
+        const scale = 1 + (1 - Math.sqrt(state.ice)) * 0.28;
+        ctx.globalAlpha = state.ice;
+        ctx.drawImage(ice, width * (1 - scale) / 2, height * (1 - scale) / 2, width * scale, height * scale);
+    }
+    if (state.frozen > 0) {
+        ctx.globalAlpha = state.frozen; ctx.drawImage(getImmersionStatusArt('frozen', width, height), 0, 0);
+    }
+    if (state.drill > 0.005) {
+        ctx.globalAlpha = state.drill * 0.85;
+        ctx.drawImage(getImmersionStatusArt('cracks', width, height, state.drillSeed || 0), Math.sin(time * 27) * state.drill * 0.35, 0);
+    }
+    if (state.illuminatAge < 1) {
+        const progress = state.illuminatAge, travel = progress * progress * (3 - 2 * progress);
+        const size = Math.min(width * 0.75, height * 0.7, 460) * (0.88 + Math.sin(progress * Math.PI) * 0.12);
+        const x = width / 2 + Math.sin(progress * Math.PI) * width * 0.025;
+        const y = height * (1 - travel) + size * (0.5 - travel);
+        const opacity = Math.pow(Math.sin(progress * Math.PI), 0.5);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(progress * Math.PI * 2) * 0.035);
+        for (let echo = 3; echo > 0; echo--) {
+            ctx.globalAlpha = opacity * (0.065 - echo * 0.012);
+            ctx.drawImage(getImmersionIlluminatArt(), -size / 2, -size / 2 + echo * size * 0.06, size, size);
+        }
+        ctx.globalAlpha = opacity * 0.9;
+        ctx.drawImage(getImmersionIlluminatArt(), -size / 2, -size / 2, size, size); ctx.restore();
+    }
+    ctx.restore();
+}
+
+let immersionSceneSnapshot = null;
+const immersionInsectSprites = [];
+let immersionElectricPaths = null;
+
+function getImmersionFlySprite(frame, flying) {
+    const key = frame + (flying ? 4 : 0);
+    if (immersionInsectSprites[key]) return immersionInsectSprites[key];
+    const art = document.createElement('canvas'); art.width = art.height = 48;
+    const c = art.getContext('2d'); c.translate(24, 24);
+    c.strokeStyle = '#11130f'; c.lineWidth = 0.9; c.lineCap = 'round';
+    for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg++) {
+        const stride = Math.sin(frame * Math.PI / 2 + leg * 1.7) * (flying ? 1 : 2);
+        c.beginPath(); c.moveTo(side * 3, (leg - 1) * 3);
+        c.lineTo(side * 7, (leg - 1) * 6 + stride);
+        c.lineTo(side * 11, (leg - 1) * 8 + stride); c.stroke();
+    }
+    for (const side of [-1, 1]) {
+        c.save(); c.translate(side * 2, -2); c.rotate(side * (flying ? 0.65 + frame % 2 * 0.65 : 0.3));
+        c.fillStyle = flying ? 'rgba(85,104,105,0.28)' : 'rgba(102,120,122,0.38)';
+        c.strokeStyle = 'rgba(32,43,41,0.48)'; c.lineWidth = 0.55;
+        c.beginPath(); c.ellipse(side * 4, 6, flying ? 6.5 : 4.5, 11, -side * 0.2, 0, Math.PI * 2); c.fill(); c.stroke();
+        c.beginPath(); c.moveTo(0, 0); c.lineTo(side * 5, 14); c.moveTo(side * 2, 6); c.lineTo(side * 8, 7); c.stroke(); c.restore();
+    }
+    c.fillStyle = '#080b09'; c.beginPath(); c.ellipse(0, 5, 3.7, 6.8, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#242c29'; c.beginPath(); c.ellipse(0, -1, 4.2, 4.8, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#090b09'; c.beginPath(); c.ellipse(0, -7, 4, 3, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#43201a'; c.beginPath(); c.ellipse(-2.7, -7.3, 1.3, 2, -0.3, 0, Math.PI * 2); c.ellipse(2.7, -7.3, 1.3, 2, 0.3, 0, Math.PI * 2); c.fill();
+    immersionInsectSprites[key] = art;
+    return art;
+}
+
+function getImmersionElectricPaths(seed) {
+    if (immersionElectricPaths && immersionElectricPaths.seed === seed) return immersionElectricPaths.paths;
+    let randomState = seed ^ 0x73a91;
+    const random = () => { randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0; return randomState / 4294967296; };
+    const fracture = (a, b, roughness, steps) => {
+        let points = [a, b];
+        for (let step = 0; step < steps; step++) {
+            const next = [points[0]];
+            for (let i = 1; i < points.length; i++) {
+                const p = points[i - 1], q = points[i], offset = (random() - 0.5) * roughness;
+                next.push({ x: (p.x + q.x) / 2 - (q.y - p.y) * offset,
+                    y: (p.y + q.y) / 2 + (q.x - p.x) * offset }, q);
+            }
+            points = next; roughness *= 0.82;
+        }
+        return points;
+    };
+    const paths = [];
+    for (let i = 0; i < 5; i++) {
+        const roots = [[-0.02, 0.23], [1.02, 0.68], [0.65, -0.02], [0.26, 1.02], [1.02, 0.12]];
+        const tips = [[0.4, 0.35], [0.62, 0.55], [0.57, 0.39], [0.37, 0.65], [0.73, 0.28]];
+        const start = { x: roots[i][0], y: roots[i][1] }, end = { x: tips[i][0] + (random() - 0.5) * 0.2, y: tips[i][1] + (random() - 0.5) * 0.2 };
+        const points = fracture(start, end, 0.8, 6);
+        paths.push({ points, branch: false, phase: random() * 6 });
+        for (let j = 0; j < 3; j++) {
+            const p = points[17 + j * 16], angle = Math.atan2(end.y - start.y, end.x - start.x) + (random() > 0.5 ? 1 : -1) * (0.45 + random());
+            const length = 0.07 + random() * 0.14;
+            paths.push({ points: fracture(p, { x: p.x + Math.cos(angle) * length, y: p.y + Math.sin(angle) * length }, 1, 5),
+                branch: true, phase: random() * 6 });
+        }
+    }
+    immersionElectricPaths = { seed, paths };
+    return paths;
+}
+
+let immersionWaterSpraySprite = null;
+
+function getImmersionWaterSpraySprite() {
+    if (immersionWaterSpraySprite) return immersionWaterSpraySprite;
+    const art = document.createElement('canvas'); art.width = 32; art.height = 64;
+    const c = art.getContext('2d'), water = c.createLinearGradient(0, 0, 0, 64);
+    water.addColorStop(0, 'rgba(174,230,250,0)'); water.addColorStop(0.6, 'rgba(111,199,232,0.32)');
+    water.addColorStop(0.85, 'rgba(210,246,255,0.8)'); water.addColorStop(1, 'rgba(80,168,201,0.1)');
+    c.fillStyle = water; c.beginPath(); c.moveTo(16, 0);
+    c.bezierCurveTo(15, 25, 6, 39, 9, 51); c.bezierCurveTo(12, 64, 26, 57, 24, 46);
+    c.bezierCurveTo(21, 33, 17, 18, 16, 0); c.fill();
+    c.strokeStyle = 'rgba(241,253,255,0.85)'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(12, 39); c.quadraticCurveTo(9, 46, 12, 51); c.stroke();
+    immersionWaterSpraySprite = art;
+    return art;
+}
+
+function drawImmersionWaterImpact(ctx, width, height, state, scene) {
+    const time = state.sprayTime, seed = state.spraySeed, x = width * 0.5, y = height * 0.48;
+    const scale = Math.max(0.7, Math.min(width, height) / 500), radius = Math.min(width, height) * 0.095;
+    ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.lineCap = 'round';
+    if (scene) {
+        ctx.save(); ctx.globalAlpha = state.water * 0.65; ctx.beginPath(); ctx.ellipse(x, y, radius * 0.9, radius * 0.65, 0, 0, Math.PI * 2); ctx.clip();
+        const side = radius * 2;
+        ctx.drawImage(scene, x - radius, y - radius, side, side,
+            x - radius + Math.sin(time * 8) * 2, y - radius + Math.cos(time * 7) * 2, side, side); ctx.restore();
+    }
+    // Short-lived water webs break apart independently; there is no static full-screen film.
+    for (let i = 0; i < 7; i++) {
+        const progress = (time * (1.7 + i % 3 * 0.2) + i * 0.618034) % 1;
+        const direction = seed + i * 2.39996, reach = radius * (0.35 + Math.sqrt(progress) * (1.3 + i % 3 * 0.45));
+        const spread = 0.16 + i % 3 * 0.08;
+        const point = (a, r) => [x + Math.cos(a) * r, y + Math.sin(a) * r + progress * progress * radius * 0.45];
+        ctx.globalAlpha = state.water * Math.sin(progress * Math.PI) * 0.65;
+        ctx.beginPath(); ctx.moveTo(...point(direction - spread, radius * 0.2));
+        ctx.quadraticCurveTo(...point(direction - spread, reach * 0.6), ...point(direction - spread * 0.7, reach));
+        ctx.quadraticCurveTo(...point(direction, reach * 1.12), ...point(direction + spread, reach * 0.88));
+        ctx.quadraticCurveTo(...point(direction + spread, reach * 0.5), ...point(direction + spread, radius * 0.2)); ctx.closePath();
+        ctx.fillStyle = 'rgba(125,208,238,0.2)'; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(...point(direction - spread * 0.7, reach));
+        ctx.quadraticCurveTo(...point(direction, reach * 1.12), ...point(direction + spread, reach * 0.88));
+        ctx.strokeStyle = 'rgba(226,249,255,0.8)'; ctx.lineWidth = 1.2 * scale; ctx.stroke();
+    }
+    const pressure = ctx.createRadialGradient(x, y, 0, x, y, radius * 0.9);
+    pressure.addColorStop(0, 'rgba(242,253,255,0.65)'); pressure.addColorStop(0.4, 'rgba(178,232,251,0.3)'); pressure.addColorStop(1, 'rgba(180,234,253,0)');
+    ctx.globalAlpha = state.water; ctx.fillStyle = pressure; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const spray = getImmersionWaterSpraySprite();
+    for (let i = 0; i < 130; i++) {
+        const life = 0.38 + i % 7 * 0.055, progress = (time / life + i * 0.618034) % 1;
+        const direction = seed + i * 2.39996 + Math.sin(i * 13.7) * 0.2;
+        const distance = progress * Math.min(width, height) * (0.45 + i % 5 * 0.15);
+        const px = x + Math.cos(direction) * distance, py = y + Math.sin(direction) * distance + progress * progress * height * 0.17;
+        const size = (2.8 + i % 7 * 1.05) * scale * (i % 13 === 0 ? 1.8 : 1) * (0.8 + progress * 0.6);
+        ctx.save(); ctx.translate(px, py); ctx.rotate(direction - Math.PI / 2);
+        ctx.globalAlpha = state.water * Math.min(1, progress * 18) * Math.pow(1 - progress, 0.4);
+        ctx.drawImage(spray, -size, -size * 2.2, size * 2, size * 4.4); ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawImmersionWaterDrops(ctx, width, height, drops, scene) {
+    const scale = Math.max(0.9, Math.min(width, height) / 600);
+    for (const drop of drops) {
+        const x = drop.x * width, y = drop.y * height, r = drop.radius * scale;
+        const opacity = Math.min(1, drop.age * 10) * Math.min(1, drop.life);
+        ctx.save(); ctx.globalAlpha = opacity;
+        const trail = Math.min(height * 0.08, drop.age * (drop.speed || 0.04) * height * 0.7);
+        const streak = ctx.createLinearGradient(x, y - trail, x, y);
+        streak.addColorStop(0, 'rgba(174,218,232,0)'); streak.addColorStop(1, 'rgba(183,226,241,0.12)');
+        ctx.strokeStyle = streak; ctx.lineWidth = Math.max(1.3, r * 0.18); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x + Math.sin(drop.seed) * r * 0.25, y - trail);
+        ctx.bezierCurveTo(x - r * 0.3, y - trail * 0.6, x + r * 0.35, y - trail * 0.3, x, y); ctx.stroke();
+        // The lens magnifies the live battlefield; the surrounding wet film remains transparent.
+        const shape = () => {
+            ctx.beginPath(); ctx.moveTo(x + Math.sin(drop.seed) * r * 0.12, y - r * 1.9);
+            ctx.bezierCurveTo(x - r * 0.1, y - r * 0.95, x - r * 0.85, y - r * 0.1, x - r * 0.65, y + r * 0.5);
+            ctx.bezierCurveTo(x - r * 0.4, y + r * 1.2, x + r * 0.6, y + r * 1.2, x + r * 0.7, y + r * 0.4);
+            ctx.bezierCurveTo(x + r * 0.85, y - r * 0.2, x + r * 0.13, y - r * 1.1, x + Math.sin(drop.seed) * r * 0.12, y - r * 1.9); ctx.closePath();
+        };
+        if (scene) {
+            ctx.save(); shape(); ctx.clip();
+            const sx = Math.max(0, x - r), sy = Math.max(0, y - r * 1.9);
+            const sw = Math.min(r * 2, width - sx), sh = Math.min(r * 3.2, height - sy);
+            if (sw > 0 && sh > 0) ctx.drawImage(scene, sx, sy, sw, sh, sx - r * 0.2, sy - r * 0.2, sw * 1.22, sh * 1.18);
+            ctx.restore();
+        }
+        const lens = ctx.createRadialGradient(x - r * 0.25, y - r * 0.3, r * 0.1, x, y, r * 1.3);
+        lens.addColorStop(0, 'rgba(224,247,255,0.18)'); lens.addColorStop(0.5, 'rgba(114,173,197,0.025)'); lens.addColorStop(0.82, 'rgba(13,38,49,0.12)'); lens.addColorStop(1, 'rgba(64,119,138,0.18)');
+        shape(); ctx.fillStyle = lens; ctx.fill(); ctx.strokeStyle = 'rgba(8,30,39,0.25)'; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.strokeStyle = 'rgba(235,251,255,0.88)'; ctx.lineWidth = Math.max(1, r * 0.1);
+        ctx.beginPath(); ctx.moveTo(x - r * 0.2, y - r * 0.6); ctx.bezierCurveTo(x - r * 0.4, y - r * 0.36, x - r * 0.57, y, x - r * 0.5, y + r * 0.25); ctx.stroke();
+        ctx.strokeStyle = 'rgba(218,246,255,0.54)'; ctx.lineWidth = Math.max(0.7, r * 0.06);
+        ctx.beginPath(); ctx.moveTo(x + r * 0.1, y + r * 0.8); ctx.quadraticCurveTo(x + r * 0.4, y + r * 0.74, x + r * 0.48, y + r * 0.4); ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function drawImmersionMusicDistortion(ctx, width, height, pulses, scene, time) {
+    ctx.save();
+    // Refraction follows only the two newest wavefronts, leaving the center clear.
+    for (const stamp of pulses.slice(-2)) {
+        const progress = (time - stamp / 60) / 0.9;
+        if (progress < 0 || progress >= 1) continue;
+        const radius = Math.hypot(width, height) * (0.035 + progress * 0.65);
+        const band = Math.min(width, height) * 0.025 * (1 - progress * 0.4);
+        const inner = Math.max(0.5, radius - band);
+        ctx.save(); ctx.beginPath();
+        ctx.ellipse(width / 2, height / 2, radius + band, (radius + band) * 0.74, 0, 0, Math.PI * 2);
+        ctx.moveTo(width / 2 + inner, height / 2);
+        ctx.ellipse(width / 2, height / 2, inner, inner * 0.74, 0, 0, Math.PI * 2);
+        ctx.clip('evenodd');
+        const zoom = 1 + Math.sin(progress * 26) * 0.012 * (1 - progress);
+        ctx.globalAlpha = (1 - progress) * 0.75;
+        ctx.drawImage(scene, width * (1 - zoom) / 2, height * (1 - zoom) / 2, width * zoom, height * zoom);
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawImmersionMusic(ctx, width, height, state, time) {
+    const pulses = state.musicPulses || [];
+    if (!pulses.length) return;
+    ctx.save(); ctx.lineCap = 'round';
+    const diagonal = Math.hypot(width, height), overlap = 1 / Math.max(1, pulses.length * 0.7);
+    for (const stamp of pulses) {
+        const age = time - stamp / 60, progress = age / 0.9;
+        if (progress < 0 || progress >= 1) continue;
+        const radius = diagonal * (0.035 + progress * 0.65), fade = Math.pow(1 - progress, 0.75);
+        const phase = stamp * 0.037 + age * 0.18;
+        for (let section = 0; section < 3; section++) {
+            const start = phase + section * Math.PI * 2 / 3, end = start + Math.PI * 0.52;
+            const arc = (r, offset = 0) => {
+                ctx.beginPath(); ctx.ellipse(width / 2, height / 2, r, r * 0.74, 0, start + offset, end + offset);
+            };
+            ctx.globalAlpha = fade * overlap;
+            arc(radius); ctx.strokeStyle = 'rgba(93,174,255,0.12)'; ctx.lineWidth = 14 + fade * 8; ctx.stroke();
+            ctx.strokeStyle = 'rgba(135,236,255,0.68)'; ctx.lineWidth = 2; ctx.stroke();
+            arc(Math.max(1, radius - 4)); ctx.strokeStyle = 'rgba(207,159,255,0.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+            const echoRadius = Math.max(1, radius - diagonal * (0.015 + progress * 0.035));
+            arc(echoRadius, 0.12); ctx.globalAlpha = fade * overlap * 0.28;
+            ctx.strokeStyle = '#b29cff'; ctx.lineWidth = 2.5; ctx.stroke();
+        }
+    }
+    const envelope = Math.max(0, 1 - state.musicAge / 0.9), count = Math.max(24, Math.min(48, Math.floor(width / 15)));
+    const spectrum = ctx.createLinearGradient(0, 0, width, 0);
+    spectrum.addColorStop(0, '#75eaff'); spectrum.addColorStop(0.5, '#939bff'); spectrum.addColorStop(1, '#d29bff');
+    for (let i = 0; i < count; i++) {
+        const energy = 0.15 + Math.sin(i * 0.68 + time * 7) ** 2 * 0.5 + Math.sin(time * 18 - i * 0.39) ** 2 * 0.35;
+        const heightOfBar = Math.min(width, height) * 0.08 * energy * envelope, x = width * (i + 1) / (count + 1);
+        ctx.beginPath(); ctx.moveTo(x, height - 5); ctx.lineTo(x, height - 5 - heightOfBar);
+        ctx.strokeStyle = spectrum; ctx.globalAlpha = envelope * 0.12; ctx.lineWidth = 7; ctx.stroke();
+        ctx.globalAlpha = envelope * 0.6; ctx.lineWidth = 2.3; ctx.stroke();
+    }
+    ctx.globalAlpha = envelope; ctx.fillStyle = 'rgba(114,131,255,0.018)'; ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+}
+
+function drawImmersionImpactReactions(ctx, width, height, state, time) {
+    ctx.save(); ctx.globalAlpha = 1;
+    const diagonal = Math.hypot(width, height);
+    drawImmersionMusic(ctx, width, height, state, time);
+    if (state.barrageAge < 1.1) {
+        const age = state.barrageAge, progress = age / 1.1, fade = Math.pow(1 - progress, 0.7);
+        ctx.globalAlpha = Math.max(0, 1 - age / 0.1) * 0.1; ctx.fillStyle = '#ffe6b5'; ctx.fillRect(0, 0, width, height);
+        for (let i = 0; i < 8; i++) {
+            const side = i % 4, along = 0.2 + Math.floor(i / 4) * 0.6;
+            const size = Math.min(width, height) * (0.55 + age * 0.35);
+            const inset = size * (0.04 + age * 0.07);
+            const x = side === 0 ? inset : side === 1 ? width - inset : width * along;
+            const y = side === 2 ? inset : side === 3 ? height - inset : height * along;
+            ctx.globalAlpha = Math.pow(Math.sin(progress * Math.PI), 0.8) * 0.36;
+            ctx.drawImage(getTankBlastSprite('dust'), x - size / 2, y - size / 2, size, size);
+        }
+        for (let i = 0; i < 24; i++) {
+            const side = i % 2 ? 1 : -1, size = 1.5 + i % 4;
+            const x = width * (side < 0 ? 0.04 + age * (0.1 + i % 3 * 0.03) : 0.96 - age * (0.1 + i % 3 * 0.03));
+            const y = height * (0.1 + i * 0.137 % 0.75 - age * 0.12 + age * age * 0.3);
+            ctx.save(); ctx.translate(x, y); ctx.rotate(i * 1.7 + age * (4 + i % 3)); ctx.globalAlpha = fade * 0.8;
+            ctx.fillStyle = ['#a58e66', '#d6bf94', '#5d584a'][i % 3];
+            ctx.beginPath(); ctx.moveTo(-size, -size * 0.3); ctx.lineTo(size, -size * 0.5); ctx.lineTo(size * 0.4, size * 0.6); ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+    }
+    if (state.airAge < 0.9) {
+        const age = state.airAge, progress = age / 0.9, fade = Math.pow(1 - progress, 0.7);
+        ctx.save(); ctx.translate(width / 2, height / 2); ctx.rotate(state.airAngle || 0); ctx.lineCap = 'round';
+        for (let i = 0; i < 2; i++) {
+            const size = Math.min(width, height) * 0.65, x = diagonal * (-0.35 + progress * 0.75 - i * 0.18);
+            const y = Math.min(width, height) * (i ? 0.17 : -0.2);
+            ctx.globalAlpha = fade * 0.13;
+            ctx.drawImage(getTankBlastSprite('dust'), x - size / 2, y - size / 2, size, size);
+        }
+        for (let i = 0; i < 20; i++) {
+            const head = diagonal * (-0.4 + progress * 1.1 + i % 4 * 0.15), length = diagonal * (0.14 + i % 3 * 0.06);
+            const y = diagonal * ((i * 0.618034) % 1 - 0.5), bend = Math.sin(i * 3.7 + age * 10) * 12;
+            ctx.beginPath(); ctx.moveTo(head - length, y);
+            ctx.bezierCurveTo(head - length * 0.7, y + bend, head - length * 0.2, y - bend * 0.5, head, y + bend * 0.3);
+            ctx.globalAlpha = fade; ctx.strokeStyle = 'rgba(160,225,210,0.05)'; ctx.lineWidth = 10; ctx.stroke();
+            ctx.strokeStyle = 'rgba(212,244,234,0.6)'; ctx.lineWidth = 1.1 + i % 3 * 0.65; ctx.stroke();
+        }
+        for (let i = 0; i < 62; i++) {
+            const x = diagonal * (((i * 0.618034 + progress * 1.1) % 1) - 0.5), y = diagonal * ((i * 0.273) % 1 - 0.5);
+            const size = 1 + i % 4 * 0.65;
+            ctx.globalAlpha = fade * 0.8; ctx.fillStyle = i % 3 ? '#c7c0a2' : '#e9f5de';
+            ctx.beginPath(); ctx.moveTo(x - size * 2, y); ctx.lineTo(x, y - size * 0.6); ctx.lineTo(x + size, y + size * 0.5); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawImmersionCombatEffects(ctx, width, height, state, time) {
+    ctx.save(); ctx.globalAlpha = 1;
+    const impact = state.impactAge < 0.85, barrage = state.barrageAge < 1.1, music = state.musicAge < 0.9;
+    let scene = null;
+    if ((impact || barrage || music || state.overload > 0.005 || state.water > 0.005 || state.wetDrops.length > 0) && ctx.canvas) {
+        if (!immersionSceneSnapshot || immersionSceneSnapshot.width !== width || immersionSceneSnapshot.height !== height) {
+            immersionSceneSnapshot = document.createElement('canvas');
+            immersionSceneSnapshot.width = width; immersionSceneSnapshot.height = height;
+        }
+        const snapshot = immersionSceneSnapshot.getContext('2d');
+        snapshot.globalCompositeOperation = 'copy'; snapshot.drawImage(ctx.canvas, 0, 0, width, height);
+        snapshot.globalCompositeOperation = 'source-over'; scene = immersionSceneSnapshot;
+    }
+    if (scene && (impact || barrage || music)) {
+        let dx = 0, dy = 0;
+        if (impact) {
+            const age = state.impactAge, strength = Math.min(24, Math.min(width, height) * 0.045) * Math.pow(1 - age / 0.85, 2);
+            dx += (Math.sin(age * 97) + Math.sin(age * 163) * 0.4) * strength;
+            dy += Math.cos(age * 113) * strength * 0.75;
+        }
+        if (barrage && state.barrageShockAge < 0.4) {
+            const age = state.barrageShockAge, strength = Math.min(9, Math.min(width, height) * 0.014) * Math.pow(1 - age / 0.4, 2);
+            dx += Math.sin(age * 103) * strength; dy += Math.cos(age * 137) * strength * 0.7;
+        }
+        if (music && state.musicAge < 0.3) {
+            const age = state.musicAge, strength = Math.min(2.5, Math.min(width, height) * 0.004) * (1 - age / 0.3);
+            dx += Math.sin(age * 125) * strength; dy += Math.cos(age * 107) * strength * 0.5;
+        }
+        const margin = impact ? 0.04 : (barrage ? 0.018 * Math.pow(Math.max(0, 1 - state.barrageShockAge / 0.4), 2) : 0)
+            + (music ? 0.004 * Math.max(0, 1 - state.musicAge / 0.3) : 0);
+        ctx.fillStyle = '#211c13'; ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(scene, -width * margin + dx, -height * margin + dy, width * (1 + margin * 2), height * (1 + margin * 2));
+    }
+    if (scene && music) drawImmersionMusicDistortion(ctx, width, height, state.musicPulses || [], scene, time);
+    if (impact) {
+        const age = state.impactAge, fade = Math.max(0, 1 - age / 0.85);
+        for (let i = 0; i < 18; i++) {
+            const angle = i * 2.39996, spread = 0.2 + age * 1.6;
+            const x = width * (0.5 + Math.cos(angle) * spread * (0.25 + i % 3 * 0.09));
+            const y = height * (0.98 - age * (0.5 + i % 4 * 0.14));
+            const size = Math.max(width, height) * (0.22 + age * 0.45 + i % 3 * 0.035);
+            ctx.globalAlpha = Math.pow(Math.sin(Math.min(1, age / 0.85) * Math.PI), 1.2) * 0.24;
+            ctx.drawImage(getTankBlastSprite('dust'), x - size / 2, y - size / 2, size, size);
+        }
+        ctx.globalAlpha = 1;
+        if (age < 0.65 && !state.iced) drawTankExplosion(ctx, { x: width / 2, y: height * 0.96,
+            radius: Math.min(width, height) * 0.26, maxLife: 0.65, life: 0.65 - age, seed: 0.31 });
+        const pressure = ctx.createRadialGradient(width / 2, height * 0.94, 0, width / 2, height * 0.94, Math.max(width, height) * 0.65);
+        pressure.addColorStop(0, 'rgba(255,234,180,' + Math.max(0, 1 - age / 0.13) * 0.6 + ')');
+        pressure.addColorStop(0.25, 'rgba(218,189,130,' + fade * 0.08 + ')'); pressure.addColorStop(1, 'rgba(30,22,13,0)');
+        ctx.fillStyle = pressure; ctx.fillRect(0, 0, width, height);
+        if (age < 0.38) {
+            ctx.globalAlpha = (1 - age / 0.38) * 0.35; ctx.strokeStyle = '#e9d4ac'; ctx.lineWidth = 2 + fade * 5;
+            ctx.beginPath(); ctx.ellipse(width / 2, height * 1.06, width * (0.04 + age * 2.4), height * (0.03 + age * 1.7), 0, Math.PI, Math.PI * 2); ctx.stroke();
+        }
+        for (let i = 0; i < 38; i++) {
+            const velocity = 0.45 + i % 7 * 0.15, angle = Math.PI * (1.12 + i * 0.618 % 0.78);
+            const x = width * (0.5 + Math.cos(angle) * velocity * age), y = height * (1.02 + Math.sin(angle) * velocity * age + age * age * 0.7);
+            const size = 1.5 + i % 4 * 1.5;
+            ctx.save(); ctx.globalAlpha = fade; ctx.translate(x, y); ctx.rotate(i * 1.7 + age * (i % 5 + 4));
+            ctx.fillStyle = ['#514738', '#9c8861', '#c1ac7e', '#302d26'][i % 4];
+            ctx.beginPath(); ctx.moveTo(-size, -size * 0.3); ctx.lineTo(size * 0.6, -size * 0.6); ctx.lineTo(size, size * 0.4); ctx.lineTo(-size * 0.5, size * 0.65); ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+    }
+    drawImmersionImpactReactions(ctx, width, height, state, time);
+    if (state.overload > 0.005) {
+        const phase = Math.floor(time * 9);
+        if (scene) for (let i = 0; i < 32; i++) {
+            const edge = i % 4, sw = width * (0.08 + i % 5 * 0.025), sh = 2 + i % 3 * 3;
+            const sx = edge === 0 ? 0 : edge === 1 ? width - sw : ((i * 0.173 + phase * 0.037) % 1) * (width - sw);
+            const sy = edge < 2 ? ((i * 0.173 + phase * 0.037) % 1) * (height - sh) : edge === 2 ? 0 : height - sh;
+            const shift = Math.sin(i * 4.3 + phase) * width * 0.025 * state.overload;
+            const lift = edge < 2 ? Math.cos(i + phase) * 3 : Math.cos(i + phase) * height * 0.02;
+            ctx.globalAlpha = state.overload;
+            ctx.drawImage(scene, sx, sy, sw, sh, sx + shift, sy + lift, sw, sh);
+            ctx.strokeStyle = i % 3 ? 'rgba(63,228,255,0.55)' : 'rgba(245,62,134,0.5)';
+            ctx.lineWidth = 1; ctx.strokeRect(sx + shift, sy + lift, sw, sh);
+        }
+        ctx.globalCompositeOperation = 'difference'; ctx.globalAlpha = state.overload; ctx.fillStyle = '#ffffff';
+        for (let i = 0; i < 5; i++) {
+            const sw = width * (0.09 + (i + phase) % 3 * 0.045), sh = height * (0.07 + i % 3 * 0.045);
+            const x = i % 2 ? width - sw : 0, y = ((i * 0.217 + phase * 0.023) % 0.82) * height;
+            ctx.fillRect(x, y, sw, sh);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+        // Local signal loss, displaced scan bands and dead pixels keep the center readable.
+        if (scene) for (let i = 0; i < 3; i++) {
+            const y = ((phase * 0.071 + i * 0.317) % 0.96) * height, h = 3 + i * 3;
+            const shift = Math.sin(phase * 3 + i) * width * 0.05;
+            ctx.globalAlpha = state.overload * 0.55;
+            ctx.drawImage(scene, 0, y, width, h, shift, y, width, h);
+            ctx.fillStyle = i % 2 ? 'rgba(70,236,255,0.2)' : 'rgba(255,48,122,0.18)'; ctx.fillRect(0, y, width, 1);
+        }
+        ctx.globalAlpha = state.overload;
+        for (let i = 0; i < 100; i++) {
+            const side = i % 4, along = ((i * 0.618034 + phase * 0.037) % 1), depth = (Math.sin(i * 71 + phase * 5) + 1) * 0.055;
+            const x = side === 0 ? depth * width : side === 1 ? (1 - depth) * width : along * width;
+            const y = side === 2 ? depth * height : side === 3 ? (1 - depth) * height : along * height;
+            ctx.fillStyle = ['rgba(2,8,15,0.85)', 'rgba(105,241,255,0.65)', 'rgba(247,58,138,0.5)', 'rgba(214,246,255,0.6)'][i % 4];
+            ctx.fillRect(x, y, 2 + i % 6 * 2, 1 + i % 3);
+        }
+        for (let side = 0; side < 4; side++) {
+            ctx.beginPath();
+            for (let j = 0; j < 13; j++) {
+                const along = j / 12, depth = (0.015 + (j % 3) * 0.014) * (0.7 + Math.sin(phase + j * 1.7) * 0.3);
+                const x = side < 2 ? (side ? 1 - depth : depth) * width : along * width;
+                const y = side < 2 ? along * height : (side === 2 ? depth : 1 - depth) * height;
+                if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+            }
+            ctx.globalAlpha = state.overload * 0.5; ctx.strokeStyle = '#070a14'; ctx.lineWidth = 4; ctx.stroke();
+            ctx.strokeStyle = side % 2 ? '#e2549b' : '#65f0fc'; ctx.lineWidth = 0.8; ctx.stroke();
+        }
+    }
+    if (state.electricAge < 0.7) {
+        const age = state.electricAge, fade = Math.pow(1 - age / 0.7, 0.65);
+        const paths = getImmersionElectricPaths(Math.round((time - age) * 60));
+        ctx.globalAlpha = fade; ctx.fillStyle = 'rgba(103,150,255,0.035)'; ctx.fillRect(0, 0, width, height);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        for (const bolt of paths) {
+            const visible = Math.min(1, age / (bolt.branch ? 0.13 : 0.07));
+            const count = Math.max(2, Math.ceil(bolt.points.length * visible));
+            ctx.beginPath();
+            for (let i = 0; i < count; i++) {
+                const p = bolt.points[i], x = p.x * width, y = p.y * height;
+                if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+            }
+            const pulse = 0.7 + Math.pow(Math.sin(age * 37 + bolt.phase), 2) * 0.3, thickness = bolt.branch ? 0.45 : 1;
+            ctx.globalAlpha = fade * pulse;
+            for (const [color, size] of [['rgba(80,83,255,0.07)', 18], ['rgba(71,133,255,0.22)', 7], ['rgba(149,205,255,0.85)', 2.7], ['rgba(246,253,255,1)', 0.9]]) {
+                ctx.strokeStyle = color; ctx.lineWidth = size * thickness; ctx.stroke();
+            }
+        }
+    }
+    if (state.swarm > 0.005) for (let i = 0; i < state.insects.length; i++) {
+        const bug = state.insects[i], size = Math.max(24, Math.min(34, Math.min(width, height) * 0.055)) * bug.size * (i % 7 === 0 ? 1.5 : 1);
+        ctx.save(); ctx.translate(bug.x * width, bug.y * height); ctx.rotate(bug.angle + Math.PI / 2);
+        const sprite = getImmersionFlySprite((Math.floor(time * (bug.flying ? 53 : 12) + bug.phase) + i) % 4, bug.flying);
+        if (bug.flying) {
+            ctx.globalAlpha = state.swarm * 0.16; ctx.drawImage(sprite, -size / 2, -size / 2 + size * 0.19, size, size);
+        }
+        ctx.globalAlpha = state.swarm * 0.95;
+        ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+        ctx.restore();
+    }
+    if (state.water > 0.005) drawImmersionWaterImpact(ctx, width, height, state, scene);
+    ctx.globalAlpha = 1;
+    drawImmersionWaterDrops(ctx, width, height, state.wetDrops, scene);
+    ctx.restore();
+}
+
+function drawImmersionEffects(ctx, width, height, unit) {
+    const death = typeof advanceImmersionDeath === 'function' ? advanceImmersionDeath(performance.now()) : null;
+    if (!window.immersionEnabled) { immersionPresentation = null; return; }
+    ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    if (death && death.elapsed < death.duration) {
+        immersionPresentation = null;
+        const progress = Math.min(1, death.elapsed / death.duration);
+        if (!death.blast) death.blast = { seed: 0.73, maxLife: 1 };
+        Object.assign(death.blast, { x: width / 2, y: height * 0.6, radius: Math.hypot(width, height) * 0.85, life: 1 - progress });
+        // Camera recoil affects only the overlay and settles before the result window.
+        ctx.save();
+        const recoil = Math.pow(1 - progress, 3) * Math.min(width, height) * 0.025;
+        ctx.translate(Math.sin(progress * 83) * recoil, Math.cos(progress * 97) * recoil);
+        drawTankExplosion(ctx, death.blast);
+        ctx.restore();
+        const flash = Math.max(0, 1 - progress / 0.1);
+        if (flash > 0) {
+            ctx.fillStyle = 'rgba(255,242,198,' + flash * 0.95 + ')'; ctx.fillRect(0, 0, width, height);
+        }
+        ctx.fillStyle = 'rgba(15,12,9,' + Math.max(0, (progress - 0.65) / 0.35) * 0.65 + ')';
+        ctx.fillRect(0, 0, width, height);
+    } else {
+        const biome = GameTerrain.current();
+        const state = updateImmersionPresentation(unit, biome, window.frameCount || 0, GameTerrain.getMotion(unit).strength || 0);
+        if (state) {
+            const time = (window.frameCount || 0) / 60;
+            for (const type of ['snow', 'swamp']) if (state[type] > 0.005) {
+                ctx.globalAlpha = state[type];
+                const drift = type === 'swamp' ? Math.sin(time * 0.3) * 2 : 0;
+                ctx.drawImage(getImmersionEdgeArt(type, width, height), 0, drift - 2, width, height + 4);
+            }
+            ctx.globalAlpha = 1;
+            if (state.rain > 0.005) {
+                const wet = ctx.createLinearGradient(0, 0, 0, height);
+                wet.addColorStop(0, 'rgba(76,121,148,' + state.rain * 0.015 + ')');
+                wet.addColorStop(1, 'rgba(34,83,112,' + state.rain * 0.055 + ')');
+                ctx.fillStyle = wet; ctx.fillRect(0, 0, width, height);
+            }
+            if (state.desert > 0.005) {
+                const gust = 0.45 + Math.sin(time * 0.7) ** 2 * 0.55;
+                ctx.fillStyle = 'rgba(170,117,48,' + state.desert * gust * 0.16 + ')';
+                ctx.fillRect(0, 0, width, height);
+                for (let i = 0; i < 140; i++) {
+                    const speed = 170 + (i % 7) * 47;
+                    const x = ((time * speed + i * 97) % (width + 100)) - 50;
+                    const y = height * ((i * 0.381) % 1) + Math.sin(time * 0.8 + i) * 18;
+                    ctx.strokeStyle = (i % 3 === 0 ? 'rgba(86,51,20,' : 'rgba(248,220,158,') + state.desert * gust * (0.4 + i % 3 * 0.12) + ')';
+                    ctx.lineWidth = i % 4 === 0 ? 2 : 1;
+                    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 3 - i % 9, y + 1.3); ctx.stroke();
+                }
+                const cloud = getImmersionDustSprite();
+                for (let i = 0; i < 3; i++) {
+                    const x = ((time * 75 + i * width * 0.63) % (width * 1.9)) - width * 0.65;
+                    ctx.globalAlpha = state.desert * gust * 0.7;
+                    ctx.drawImage(cloud, x, height * (-0.04 + i * 0.34), width * 0.95, height * 0.5);
+                }
+            }
+            ctx.globalAlpha = 1;
+            drawImmersionRain(ctx, width, height, state.drops);
+            if (!state.iced && Math.max(state.fire, state.pyro) > 0.005) {
+                if (state.pyro > 0.005) drawImmersionPyro(ctx, width, height, state.pyro, time);
+                else drawImmersionFire(ctx, width, height, state.fire, time);
+            }
+            for (const puff of state.iced ? [] : state.smoke) {
+                const size = height * puff.size * (1 + puff.age * 0.65);
+                ctx.save(); ctx.translate(puff.x * width, puff.y * height); ctx.rotate(puff.angle + puff.age * 0.05);
+                ctx.globalAlpha = Math.min(1, puff.age * 3) * Math.sqrt(Math.max(0, 1 - puff.age / 3.2)) * (puff.pyro ? 0.3 : 0.38);
+                ctx.drawImage(puff.pyro ? getTankBlastSprite('smoke') : getOrdnanceExplosionSprite('tankSmoke'), -size / 2, -size / 2, size, size); ctx.restore();
+            }
+            drawImmersionStatusEffects(ctx, width, height, state, time);
+            drawImmersionCombatEffects(ctx, width, height, state, time);
+        }
+    }
+    ctx.restore();
+}
+
 function renderGameFrame() {
     const isMenuBackdrop = gameState === 'menu' && mainMenu && mainMenu.style.display !== 'none';
     if (isMenuBackdrop && menuBackdropWidth === canvas.width &&
@@ -5987,6 +7451,7 @@ function renderGameFrame() {
     // 2. Частицы пыли
     if (gameState === 'playing') GameTerrain.drawMovement(ctx, viewLeft, viewTop, viewRight, viewBottom, tank, objects);
     particles.forEach(p => {
+        if (window.effectsEnabled === false) return;
         if (!isVisible(p.x, p.y, p.size || 4, p.size || 4)) return;
         const alpha = Math.min(1, Math.max(0, p.life));
         if (p.rgb) {
@@ -6001,9 +7466,11 @@ function renderGameFrame() {
 
     // 3. Объекты
     objects.forEach(obj => {
-        const rad = (obj.radius || 0) * (obj.explosionStyle ? 1.35 : 1); // include flying fragments
+        const rad = (obj.radius || 0) * (obj.type === 'tankWreck' ? 2.3 : obj.explosionStyle === 'tank' ? 1.65 : obj.explosionStyle ? 1.35 : 1);
         if (!isVisible(obj.x - rad, obj.y - rad, obj.w || (rad*2), obj.h || (rad*2))) return;
-        if (obj.type === 'iceField') return;
+        if (obj.type === 'iceField' || obj.type === 'tankDamageSmoke') return;
+        if (window.effectsEnabled === false && ['explosion', 'shockwave', 'implosion', 'terrainDebris',
+            'romanRemnant', 'woodDecay', 'woodIceImpact'].includes(obj.type)) return;
         if (obj.type === 'visualRocket' && obj.barrageVisual && obj.delay > 0) return;
 
         ctx.save();
@@ -6096,53 +7563,15 @@ function renderGameFrame() {
             drawRomanRemnant(ctx, obj);
         } else if (obj.type === 'woodDecay') {
             drawWoodDecay(ctx, obj);
+        } else if (obj.type === 'tankOilTrail') {
+            drawTankOilTrail(ctx, obj);
+        } else if (obj.type === 'tankWreck') {
+            drawTankWreck(ctx, obj);
         } else if (obj.type === 'terrainDebris') {
             drawTerrainDebris(ctx, obj);
         } else if (obj.type === 'explosion') {
-            if (obj.explosionStyle || obj.color) {
-                drawOrdnanceExplosion(ctx, obj);
-                ctx.restore();
-                return;
-            }
-            const maxLife = obj.maxLife || 30;
-            const t = Math.max(0, obj.life / maxLife); // 1→0
-            const progress = 1 - t;                   // 0→1
-            ctx.save();
-            if (obj.color) {
-                // Colored wave (e.g. illuminat ult, gas visual) — expand ring with tint
-                const r = Math.max(1, obj.radius * Math.sqrt(progress + 0.01));
-                const grad = ctx.createRadialGradient(obj.x, obj.y, r * 0.55, obj.x, obj.y, r);
-                const alpha = t * 0.7;
-                grad.addColorStop(0, obj.color.replace(/,[^,)]+\)$/, `, ${alpha})`) );
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = obj.color;
-                ctx.globalAlpha = alpha;
-                ctx.beginPath();
-                ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
-            } else {
-                // Real fire explosion
-                const r = Math.max(1, obj.radius * Math.sqrt(progress + 0.01));
-                const grad = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, r);
-                if (progress < 0.35) {
-                    grad.addColorStop(0,    `rgba(255,255,220,${t})`);
-                    grad.addColorStop(0.15, `rgba(255,230,50,${t * 0.95})`);
-                    grad.addColorStop(0.45, `rgba(255,110,0,${t * 0.85})`);
-                    grad.addColorStop(0.72, `rgba(160,25,0,${t * 0.7})`);
-                    grad.addColorStop(1,    `rgba(50,25,5,0)`);
-                } else {
-                    grad.addColorStop(0,    `rgba(255,150,15,${t * 0.65})`);
-                    grad.addColorStop(0.3,  `rgba(120,50,0,${t * 0.55})`);
-                    grad.addColorStop(0.62, `rgba(70,55,45,${t * 0.45})`);
-                    grad.addColorStop(1,    `rgba(30,30,30,0)`);
-                }
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.restore();
+            if (obj.explosionStyle === 'tank' || (!obj.explosionStyle && !obj.color)) drawTankExplosion(ctx, obj);
+            else drawOrdnanceExplosion(ctx, obj);
         } else if (obj.type === 'shockwave') {
             const maxLife = obj.maxLife || 20;
             const t = Math.max(0, obj.life / maxLife);
@@ -6173,6 +7602,10 @@ function renderGameFrame() {
                     ctx.beginPath(); ctx.arc(obj.x, obj.y, r, _sa, _sa + 0.32); ctx.stroke();
                 }
                 ctx.shadowBlur = 0;
+            } else if (obj.tankBlast) {
+                ctx.strokeStyle = `rgba(215,191,150,${t * t * 0.3})`;
+                ctx.lineWidth = Math.max(0.5, 4 * t);
+                ctx.beginPath(); ctx.ellipse(obj.x, obj.y, obj.radius, obj.radius * 0.75, 0, 0, Math.PI * 2); ctx.stroke();
             } else {
                 // Default shockwave (orange/yellow)
                 ctx.strokeStyle = `rgba(255,220,110,${alpha})`;
@@ -6989,7 +8422,7 @@ function renderGameFrame() {
             }
 
             // Orbiting micro-sparks
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; window.effectsEnabled !== false && i < 6; i++) {
                 const aa = t * 3 + i * (Math.PI * 2 / 6);
                 const rr = radius * 1.8 + Math.sin(t * 6 + i) * 2;
                 const sx = b.x + Math.cos(aa) * rr;
@@ -7208,7 +8641,7 @@ function renderGameFrame() {
             ctx.shadowBlur = 0;
 
             // Rotating ember sparks around the orb
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; window.effectsEnabled !== false && i < 5; i++) {
                 const sa = t * 2.5 + (i / 5) * Math.PI * 2;
                 const sr = pr * 1.55 + Math.sin(t * 4 + i) * pr * 0.25;
                 const sx = b.x + Math.cos(sa) * sr;
@@ -7274,7 +8707,7 @@ function renderGameFrame() {
 
             // Draw some flying debris/dust around it
             ctx.fillStyle = '#bdfdf2';
-            for (let d = 0; d < 3; d++) {
+            for (let d = 0; window.effectsEnabled !== false && d < 3; d++) {
                 const dx = Math.cos(t * 1.5 + d * 2) * (pr * 1.2);
                 const dy = Math.sin(t * 1.5 + d * 2) * (pr * 1.2);
                 ctx.beginPath();
@@ -7738,7 +9171,7 @@ function renderGameFrame() {
             
             // Healing particles (sparkles around the zone)
             ctx.globalAlpha = 0.6 * fadeAlpha;
-            for (let p = 0; p < 8; p++) {
+            for (let p = 0; window.effectsEnabled !== false && p < 8; p++) {
                 const angle = (p / 8) * Math.PI * 2 + Date.now() * 0.002;
                 const pRadius = zone.radius + 5;
                 const px = zone.x + Math.cos(angle) * pRadius;
@@ -7902,6 +9335,7 @@ function renderGameFrame() {
         }
         const _aBurovoyDrill = getBurovoyDrillRenderState(a);
         drawTankOn(ctx, 0, 0, a.w, a.h, a.color || '#888', a.turretAngle || 0, 1, a.tankType || 'normal', { heat: a.heat, overheated: a.overheated, spartanRage: a.hp < (a.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(a), burovoyDrillAnim: _aBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _aBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _aBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _aBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _aBurovoyDrill.burovoyDrillHit, isMyasnoyBody: !!(a.isMyasnoyBody) }, GameTerrain.getMotion(a));
+        drawTankDamage(ctx, a);
         drawEmbeddedProjectiles(ctx, a);
         drawSandCurseOverlay(ctx, Math.max(a.w, a.h) * 0.85, a.sandCurseTimer || 0);
         // Hit flash - radial impact burst
@@ -8240,6 +9674,7 @@ function renderGameFrame() {
             drawTankOn(ctx, 0, 0, enemy.w, enemy.h, _drawColor, enemy.turretAngle || 0, 1, _eTankType, { heat: enemy.heat, overheated: enemy.overheated, spartanRage: enemy.hp < (enemy.maxHp || tankMaxHpByType.spartan) * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(enemy), burovoyDrillAnim: _enemyBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _enemyBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _enemyBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _enemyBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _enemyBurovoyDrill.burovoyDrillHit }, _moveAnim);
             drawSandCurseOverlay(ctx, Math.max(enemy.w, enemy.h) * 0.85, enemy.sandCurseTimer || 0);
         }
+        drawTankDamage(ctx, enemy);
         drawEmbeddedProjectiles(ctx, enemy);
         // Hit flash - radial impact burst
         const _eFlashAge = Date.now() - (enemy.hitFlashTime || 0);
@@ -8395,6 +9830,7 @@ function renderGameFrame() {
         drawTankOn(ctx, 0, 0, tank.w, tank.h, tank.color, tank.turretAngle, 1, tankType, { heat: tank.heat, overheated: tank.overheated, spartanRage: tank.hp < tank.maxHp * 0.5, illuminatUltStrength: GameTerrain.illuminatSuperStrength(tank), burovoyDrillAnim: _playerBurovoyDrill.burovoyDrillAnim, burovoyBurrowActive: _playerBurovoyDrill.burovoyBurrowActive, burovoyBurrowPhase: _playerBurovoyDrill.burovoyBurrowPhase, burovoyDrillActive: _playerBurovoyDrill.burovoyDrillActive, burovoyDrillHit: _playerBurovoyDrill.burovoyDrillHit, myasnoyEyeForm: tankType === 'myasnoy' && typeof tank !== 'undefined' && !!tank.myasnoyUltActive, myasnoyAttackTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyAttackTimer || 0) : 0), myasnoyAttackAngle: tank.myasnoyAttackAngle, myasnoyHypnoBeamTimer: (tankType === 'myasnoy' && tank.myasnoyUltActive ? (tank.myasnoyHypnoBeamTimer || 0) : 0), myasnoySeparationPulse: (tankType === 'myasnoy' && tank.myasnoyUltActive && (tank.myasnoySeparationAnim || 0) > 0)
             ? ((tank.myasnoySeparationAnim || 0) / Math.max(1, tank.myasnoySeparationAnimMax || 18))
             : 0 }, moveAnim);
+        drawTankDamage(ctx, tank);
         drawEmbeddedProjectiles(ctx, tank);
         drawSandCurseOverlay(ctx, Math.max(tank.w, tank.h) * 0.85, tank.sandCurseTimer || 0);
 
@@ -8737,7 +10173,7 @@ function renderGameFrame() {
                 ctx.fill();
                 
                 // Spark particles
-                if (alpha > 0.3) {
+                if (window.effectsEnabled !== false && alpha > 0.3) {
                     for (let s = 0; s < 3; s++) {
                         const sparkAngle = Math.random() * Math.PI * 2;
                         const sparkDist = Math.random() * 30 + 20;
@@ -8858,6 +10294,12 @@ function renderGameFrame() {
         }
     }
 
+    for (const smoke of objects) {
+        if (smoke.type !== 'tankDamageSmoke' || !isVisible(smoke.x - smoke.radius, smoke.y - smoke.radius, smoke.radius * 2, smoke.radius * 2)) continue;
+        if (smoke.source && !GameTerrain.canSee(tank, smoke.source, objects)) continue;
+        drawTankDamageSmoke(ctx, smoke);
+    }
+
     if (cameraTranslated) ctx.restore();
     if (gameState === 'playing') {
         GameTerrain.drawAtmosphere(ctx, canvas, tank, camX, camY, objects, window.frameCount || 0);
@@ -8961,6 +10403,8 @@ function renderGameFrame() {
         (typeof lastResultState === 'undefined' || lastResultState !== gameState)) {
         syncResultOverlay();
     }
+
+    drawImmersionEffects(ctx, canvas.width, canvas.height, tank);
 
     if (isMenuBackdrop) {
         menuBackdropWidth = canvas.width;

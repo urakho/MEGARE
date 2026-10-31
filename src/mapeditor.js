@@ -35,7 +35,7 @@
     };
 
     // ─── state ─────────────────────────────────────────────────────────────────
-    let meObjects  = [];       // { type, x, y, w, h }
+    let meObjects  = [];       // { type, x, y, w, h, tankType? }
     let undoStack  = [];       // snapshots for undo
     let activeTool = 'wall';   // 'wall' | 'box' | 'barrel' | 'erase' | 'enemy' | 'player'
     let enemyMode  = 'group';  // 'group' = all team 1 | 'solo' = each own team
@@ -54,6 +54,58 @@
     // ─── DOM refs (filled in init) ──────────────────────────────────────────────
     let modal, canvas, canvasWrap, ctx;
     let nameInput, mapSizeSelect, enemyModeSelect, winMsgInput, loseMsgInput, objectCountEl, coordsEl;
+    let botModal, botTankSelect, botTitle, selectedBot = null;
+    const spawnTankSprites = new Map();
+
+    function spawnTankName(type) {
+        return window.tankDescriptions?.[type]?.name || window.mechDescriptions?.[type]?.name || type || 'Случайный';
+    }
+
+    function drawSpawnTank(obj, x, y) {
+        if (!obj.tankType || typeof drawTankOn !== 'function') return false;
+        const key = obj.type + ':' + obj.tankType;
+        if (!spawnTankSprites.has(key)) {
+            const sprite = document.createElement('canvas'); sprite.width = sprite.height = 128;
+            drawTankOn(sprite.getContext('2d'), 64, 64, 64, 64, OBJ_TYPES[obj.type].color,
+                -Math.PI / 2, 1, obj.tankType, null, 0);
+            spawnTankSprites.set(key, sprite);
+        }
+        const size = obj.w * 1.3;
+        ctx.drawImage(spawnTankSprites.get(key), x - size / 2, y - size / 2, size, size);
+        return true;
+    }
+
+    function closeBotSettings() {
+        if (botModal) botModal.style.display = 'none';
+        selectedBot = null;
+    }
+
+    function openBotSettingsAt(cx, cy) {
+        if (activeTool === 'erase' || !botModal) return false;
+        const { wx, wy } = toWorld(cx, cy);
+        const bot = meObjects.find(obj => (obj.type === 'enemy' || obj.type === 'ally') &&
+            wx >= obj.x && wx < obj.x + obj.w && wy >= obj.y && wy < obj.y + obj.h);
+        if (!bot) return false;
+        selectedBot = bot;
+        isDrawing = false; isPanning = false;
+        botTitle.textContent = bot.type === 'enemy' ? 'Танк врага' : 'Танк союзника';
+        botTankSelect.value = isCustomMapTankType(bot.tankType) ? bot.tankType : '';
+        botModal.style.display = 'flex';
+        botTankSelect.focus();
+        return true;
+    }
+
+    function applyBotTank() {
+        const type = botTankSelect.value;
+        if (type && !isCustomMapTankType(type)) return;
+        if (selectedBot && meObjects.includes(selectedBot) && (selectedBot.tankType || '') !== type) {
+            pushUndo();
+            if (type) selectedBot.tankType = type;
+            else delete selectedBot.tankType;
+            updateHUD(); render();
+        }
+        closeBotSettings();
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // STORAGE
@@ -102,6 +154,8 @@
 
         for (const obj of data.objects) {
             if (!OBJ_TYPES[obj.type]) return `Неизвестный тип объекта: ${obj.type}`;
+            if ((obj.type === 'enemy' || obj.type === 'ally') && obj.tankType !== undefined && obj.tankType !== '' &&
+                !isCustomMapTankType(obj.tankType)) return 'Неизвестный танк у бота';
             if (!Number.isFinite(obj.x) || !Number.isFinite(obj.y)) return 'Некорректные координаты';
             if (!Number.isFinite(obj.w) || !Number.isFinite(obj.h) || obj.w <= 0 || obj.h <= 0) return 'Некорректный размер';
             if (obj.x < 0 || obj.y < 0 || obj.x + obj.w > ww + 50 || obj.y + obj.h > wh + 50)
@@ -246,7 +300,7 @@
             ctx.font         = `bold ${Math.max(10, 16 / zoom)}px 'Courier New'`;
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('E', ex, ey);
+            if (!drawSpawnTank(obj, ex, ey)) ctx.fillText('E', ex, ey);
             ctx.textBaseline = 'alphabetic';
         }
 
@@ -263,7 +317,7 @@
             ctx.font         = `bold ${Math.max(10, 16 / zoom)}px 'Courier New'`;
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('A', ax, ay);
+            if (!drawSpawnTank(obj, ax, ay)) ctx.fillText('A', ax, ay);
             ctx.textBaseline = 'alphabetic';
         }
 
@@ -381,7 +435,6 @@
         const placementY = gy + (gridSize - placementSize) / 2;
         if (placementX + placementSize > curWorldW || placementY + placementSize > curWorldH) return;
 
-        // Check for duplicate on same cell
         if (meObjects.some(occupiesCell)) return;
         if (['wall', 'woodenWall', 'box', 'barrel'].includes(activeTool) &&
             meObjects.some(o => ['wall', 'woodenWall', 'box', 'barrel'].includes(o.type) &&
@@ -413,7 +466,8 @@
             }
         }
 
-        meObjects.push({ type: activeTool, x: placementX, y: placementY, w: placementSize, h: placementSize });
+        const placed = { type: activeTool, x: placementX, y: placementY, w: placementSize, h: placementSize };
+        meObjects.push(placed);
         updateHUD();
         render();
     }
@@ -706,9 +760,10 @@
             e.preventDefault();
             return;
         }
+        const { cx, cy } = getCanvasPos(e);
+        if (openBotSettingsAt(cx, cy)) return;
         isDrawing = true;
         pushUndo();
-        const { cx, cy } = getCanvasPos(e);
         placeAt(cx, cy);
     }
 
@@ -723,7 +778,12 @@
         }
 
         const { wx, wy } = toWorld(cx, cy);
-        if (coordsEl) coordsEl.textContent = `X: ${Math.floor(wx)}  Y: ${Math.floor(wy)}`;
+        if (coordsEl) {
+            const bot = meObjects.find(obj => (obj.type === 'enemy' || obj.type === 'ally') &&
+                wx >= obj.x && wx < obj.x + obj.w && wy >= obj.y && wy < obj.y + obj.h);
+            coordsEl.textContent = `X: ${Math.floor(wx)}  Y: ${Math.floor(wy)}` +
+                (bot ? ` · ${OBJ_TYPES[bot.type].label}: ${spawnTankName(bot.tankType)}` : '');
+        }
 
         if (wx >= 0 && wy >= 0 && wx < curWorldW && wy < curWorldH) {
             hoverCell = snapToGrid(wx, wy);
@@ -751,9 +811,11 @@
 
     function onTouchStart(e) {
         if (e.touches.length === 1) {
+            e.preventDefault();
+            const { cx, cy } = getCanvasPos(e);
+            if (openBotSettingsAt(cx, cy)) return;
             isDrawing = true;
             pushUndo();
-            const { cx, cy } = getCanvasPos(e);
             placeAt(cx, cy);
         }
     }
@@ -788,6 +850,7 @@
     // ─────────────────────────────────────────────────────────────────────────────
 
     function openEditor() {
+        closeBotSettings();
         // On mobile: show only import/load view
         if (window.deviceModeMobile) {
             modal.style.display = 'flex';
@@ -824,6 +887,7 @@
     }
 
     function closeEditor() {
+        closeBotSettings();
         modal.style.display = 'none';
         // Return to main menu properly (works on mobile too)
         if (typeof window.goToMenuNoReload === 'function') {
@@ -848,6 +912,21 @@
         nameInput       = document.getElementById('meMapName');
         mapSizeSelect   = document.getElementById('meMapSize');
         enemyModeSelect = document.getElementById('meEnemyMode');
+        botModal = document.getElementById('meBotModal');
+        botTankSelect = document.getElementById('meBotTank');
+        botTitle = document.getElementById('meBotTitle');
+        const botTankTypes = [...Object.keys(tankMaxHpByType), ...Object.keys(window.mechMaxHpByType || {})].filter(isCustomMapTankType);
+        if (botTankSelect) {
+            for (const type of botTankTypes) {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = spawnTankName(type);
+                botTankSelect.appendChild(option);
+            }
+        }
+        document.getElementById('meBotApply')?.addEventListener('click', applyBotTank);
+        document.getElementById('meBotCancel')?.addEventListener('click', closeBotSettings);
+        botModal?.addEventListener('click', e => { if (e.target === botModal) closeBotSettings(); });
         winMsgInput     = document.getElementById('meWinMsg');
         loseMsgInput    = document.getElementById('meLoseMsg');
         objectCountEl   = document.getElementById('meObjectCount');
@@ -995,7 +1074,11 @@
         // Keyboard shortcut: Ctrl+Z
         document.addEventListener('keydown', (e) => {
             if (modal.style.display === 'none') return;
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (botModal && botModal.style.display !== 'none') {
+                if (e.key === 'Escape') { e.preventDefault(); closeBotSettings(); }
+                return;
+            }
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
             if (e.key === 'Escape') closeEditor();
             if (e.key === '1') setTool('wall');

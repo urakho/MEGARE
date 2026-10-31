@@ -27,6 +27,14 @@ function getEntityTankType(entity) {
     return entity.tankType || 'normal';
 }
 
+function getTankEffectHullAngle(unit) {
+    if (typeof GameTerrain !== 'undefined' && typeof GameTerrain.getMotion === 'function') {
+        const motion = GameTerrain.getMotion(unit);
+        if (Number.isFinite(motion.angle)) return motion.angle;
+    }
+    return unit.baseAngle || 0;
+}
+
 function isEgyptianTank(entity) {
     return getEntityTankType(entity) === 'egyptian';
 }
@@ -728,7 +736,7 @@ function applyPharaohSwarmDamage(entity, damage) {
 
     const centerX = entity.x + (entity.w || 0) / 2;
     const centerY = entity.y + (entity.h || 0) / 2;
-    spawnExplosion(centerX, centerY, entity === tank ? 70 : 65);
+    spawnExplosion(centerX, centerY, entity === tank ? 70 : 65, 'tank', entity);
 
     if (typeof tank !== 'undefined' && entity === tank) {
         if (currentMode === 'war') {
@@ -941,10 +949,10 @@ function createElectricChain(startX, startY, angle, baseDamage = 2, ownerTeam = 
             if (currentMode === 'war') {
                 targetE.alive = false;
                 targetE.respawnTimer = 600;
-                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65);
+                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65, 'tank', targetE);
             } else {
                 enemies.splice(firstHit, 1);
-                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65);
+                spawnExplosion(targetE.x + targetE.w/2, targetE.y + targetE.h/2, 65, 'tank', targetE);
             }
         }
     }
@@ -970,7 +978,7 @@ function updateIlluminatMarkDamage() {
             const dealt = dealDamageToEntity(tank, damagePerTick * shieldFactor);
             if (dealt > 0 && (window.frameCount || 0) % 10 === 0) tank.hitFlashTime = Date.now();
             if (dealt > 0 && tank.hp <= 0) {
-                spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65);
+                spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65, 'tank', tank);
                 if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                 else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
             }
@@ -983,7 +991,7 @@ function updateIlluminatMarkDamage() {
                 const dealt = dealDamageToEntity(target, damagePerTick);
                 if (dealt > 0 && (window.frameCount || 0) % 10 === 0) target.hitFlashTime = Date.now();
                 if (dealt <= 0 || target.hp > 0) continue;
-                spawnExplosion(target.x + target.w / 2, target.y + target.h / 2, 65);
+                spawnExplosion(target.x + target.w / 2, target.y + target.h / 2, 65, 'tank', target);
                 if (currentMode === 'war') { target.alive = false; target.respawnTimer = 600; }
                 else group.splice(index, 1);
             }
@@ -1017,7 +1025,7 @@ function updateNovaZones() {
                 if (dealt > 0) {
                     tank.hitFlashTime = Date.now();
                     if (tank.hp <= 0 && gameState === 'playing') {
-                        spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65);
+                        spawnExplosion(tank.x + tank.w / 2, tank.y + tank.h / 2, 65, 'tank', tank);
                         if (currentMode === 'war') {
                             tank.alive = false;
                             tank.respawnTimer = 600;
@@ -1036,7 +1044,7 @@ function updateNovaZones() {
                 dealDamageToEntity(ally, zone.damage);
                 ally.hitFlashTime = Date.now();
                 if (ally.hp <= 0) {
-                    spawnExplosion(ally.x + ally.w / 2, ally.y + ally.h / 2, 65);
+                    spawnExplosion(ally.x + ally.w / 2, ally.y + ally.h / 2, 65, 'tank', ally);
                     if (currentMode === 'war') { ally.alive = false; ally.respawnTimer = 600; }
                     else allies.splice(i, 1);
                 }
@@ -1058,10 +1066,10 @@ function updateNovaZones() {
                         if (currentMode === 'war') {
                             e.alive = false;
                             e.respawnTimer = 600;
-                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
+                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65, 'tank', e);
                         } else {
                             enemies.splice(i, 1);
-                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
+                            spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65, 'tank', e);
                         }
                     }
                 }
@@ -1363,7 +1371,7 @@ function explodeBarrel(obj) {
         dealDamageToEntity(unit, Math.max(50, Math.round((1 - distance / radius) * 300)));
         if (unit.hp > 0) return;
         unit.alive = false;
-        spawnExplosion(unit.x + unit.w / 2, unit.y + unit.h / 2, unit === tank ? 70 : 65);
+        spawnExplosion(unit.x + unit.w / 2, unit.y + unit.h / 2, unit === tank ? 70 : 65, 'tank', unit);
         if (currentMode === 'war') unit.respawnTimer = 600;
         else if (unit === tank) { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
         else if (group) { const i = group.indexOf(unit); if (i >= 0) group.splice(i, 1); }
@@ -1385,6 +1393,12 @@ function updateBarrelFuses() {
     }
 }
 
+function recordBuratinoImmersion(previousHp, attackerTeam) {
+    if (attackerTeam === undefined || attackerTeam === tank.team || !(tank.hp < previousHp)) return;
+    const frame = window.frameCount || 0;
+    if (!Number.isFinite(tank._immersionBarrageFrame) || frame - tank._immersionBarrageFrame >= 12) tank._immersionBarrageFrame = frame;
+}
+
 // Rocket splash shares cover damage and barrel detonation with other explosions.
 function explodeRocket(bullet) {
     // visual explosion — radius matches damage radius R=80
@@ -1402,9 +1416,11 @@ function explodeRocket(bullet) {
             // Roman shield: full immunity to rocket splash
             if (t === tank && t.romanShieldActive) return;
             const damage = Math.max(50, Math.round((1 - dist / R) * 300));
+            const previousHp = t.hp;
             dealDamageToEntity(t, damage);
+            if (t === tank) recordBuratinoImmersion(previousHp, bullet.team);
             if (t === tank && t.hp <= 0) {
-                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70);
+                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 70, 'tank', t);
                 gameState = 'lose'; 
                 loseModeTrophies();
                 syncResultOverlay('lose');
@@ -1417,14 +1433,14 @@ function explodeRocket(bullet) {
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i]; applyDamageToTank(a);
         if (a.hp <= 0) {
-            allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65);
+            allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 65, 'tank', a);
         }
     }
     // enemies
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i]; applyDamageToTank(e);
         if (e.hp <= 0) {
-            enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65);
+            enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 65, 'tank', e);
         }
     }
     damageDronesInRadius(bullet.x, bullet.y, R, 300, bullet.team, 50);
@@ -1451,7 +1467,7 @@ function explodeMechRocket(bullet, directHit = null) {
                 : Math.max(Math.round(dmgMax * 0.4), Math.round((1 - dist / R) * dmgMax));
             dealDamageToEntity(t, damage);
             if (t === tank && t.hp <= 0) {
-                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 60);
+                spawnExplosion(t.x + t.w/2, t.y + t.h/2, 60, 'tank', t);
                 gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
             }
         }
@@ -1461,12 +1477,12 @@ function explodeMechRocket(bullet, directHit = null) {
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i];
         if (bullet.team !== (a.team ?? 0)) applyDmg(a);
-        if (a.hp <= 0) { allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 55); }
+        if (a.hp <= 0) { allies.splice(i, 1); spawnExplosion(a.x + a.w/2, a.y + a.h/2, 55, 'tank', a); }
     }
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         if (bullet.team !== (e.team ?? 1)) applyDmg(e);
-        if (e.hp <= 0) { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 55); }
+        if (e.hp <= 0) { enemies.splice(i, 1); spawnExplosion(e.x + e.w/2, e.y + e.h/2, 55, 'tank', e); }
     }
     damageDronesInRadius(bullet.x, bullet.y, R, dmgMax, bullet.team, Math.round(dmgMax * 0.4));
     damageTerrainInRadius(bullet.x, bullet.y, R, dmgMax, { impactVisualMultiplier: 2.5 });
@@ -1635,7 +1651,7 @@ function romanMeleeStrike(unit, target, context) {
     }
     if (!isDrone && target.hp <= 0 && target.alive !== false) {
         target.alive = false;
-        spawnExplosion(tx, ty, target === tank ? 70 : 55);
+        spawnExplosion(tx, ty, target === tank ? 70 : 55, 'tank', target);
         if (currentMode === 'war') target.respawnTimer = 600;
         else if (target === tank) { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
         else for (const group of [allies, enemies]) {
@@ -2126,7 +2142,7 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
             dealDamageToEntity(t, damage);
             t.hitFlashTime = Date.now();
             if (t === tank && t.hp <= 0) {
-                spawnExplosion(t.x+t.w/2, t.y+t.h/2, 70);
+                spawnExplosion(t.x+t.w/2, t.y+t.h/2, 70, 'tank', t);
                 if (currentMode === 'war') { t.alive = false; t.respawnTimer = 600; }
                 else { 
                     gameState = 'lose'; 
@@ -2140,15 +2156,15 @@ function applyDamage(x, y, R = 30, coef = 1, attackerTeam = undefined) {
     for (let i = allies.length - 1; i >= 0; i--) {
         const a = allies[i]; applyDamageToTank(a);
         if (a.hp <= 0) {
-            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65); }
-            else { allies.splice(i, 1); spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65); }
+            if (currentMode === 'war') { a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a); }
+            else { allies.splice(i, 1); spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a); }
         }
     }
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i]; applyDamageToTank(e);
         if (e.hp <= 0) {
-            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65); }
-            else { enemies.splice(i, 1); spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65); }
+            if (currentMode === 'war') { e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e); }
+            else { enemies.splice(i, 1); spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e); }
         }
     }
     damageDronesInRadius(x, y, R, coef, attackerTeam);
@@ -2280,8 +2296,10 @@ function updateKamikazeDash(unit, steeringAngle = unit.kamikazeDashAngle) {
             else for (let i = 0; i < 3; i++) spawnParticle(obj.x + obj.w / 2, obj.y + obj.h / 2, '#ae7956');
         }
         for (const group of [[tank], allies, enemies, playerDrones, enemyDrones]) {
-            if (group.some(target => target && target !== unit && target.alive !== false && target.hp > 0 &&
-                target.team !== unit.team && !isBurovoyBurrowActive(target) && checkRectCollision(unit, target))) {
+            const target = group.find(target => target && target !== unit && target.alive !== false && target.hp > 0 &&
+                target.team !== unit.team && !isBurovoyBurrowActive(target) && checkRectCollision(unit, target));
+            if (target) {
+                if (target === tank && !isPlayerDamageProtected()) tank._immersionImpactFrame = window.frameCount || 0;
                 finishKamikazeDash(unit);
                 return;
             }
@@ -2308,7 +2326,7 @@ function canPlaceAt(entity, nx, ny) {
 // Попытаться сдвинуть entity на расстояние dist в направлении angle малыми шагами.
 // Если на пути ящик — предпринять попытку безопасно его толкнуть (только если у ящика есть куда сдвинуться).
 
-function spawnExplosion(cx, cy, radius, style = 'tank') {
+function spawnExplosion(cx, cy, radius, style = 'tank', destroyedTank = null) {
     if (window.effectsEnabled === false) return;
     const r = radius || 80;
     if (style !== 'tank') {
@@ -2317,10 +2335,23 @@ function spawnExplosion(cx, cy, radius, style = 'tank') {
             life: duration, maxLife: duration, seed: Math.random() * Math.PI * 2 });
         return;
     }
-    // Main fire visual
-    objects.push({ type: 'explosion', x: cx, y: cy, radius: r, life: 28, maxLife: 28 });
+    // Wrecks are scenery only; keep a small cap in long battles.
+    const oldWrecks = objects.filter(obj => obj.type === 'tankWreck');
+    if (oldWrecks.length >= 20) objects.splice(objects.indexOf(oldWrecks[0]), 1);
+    objects.push({ type: 'tankWreck', x: cx, y: cy,
+        radius: destroyedTank ? Math.max(destroyedTank.w || 38, destroyedTank.h || 38) * 0.55 : Math.min(38, r * 0.35),
+        color: destroyedTank?.color || '#68725e',
+        tankType: getEntityTankType(destroyedTank) || 'normal',
+        isBoss: !!destroyedTank?.isBoss,
+        width: destroyedTank?.w || 38, height: destroyedTank?.h || 38,
+        hullAngle: destroyedTank ? getTankEffectHullAngle(destroyedTank) : 0,
+        turretAngle: destroyedTank?.turretAngle || 0,
+        seed: Math.random(), age: 0 });
+    // Only the presentation lasts longer; this object never applies damage.
+    objects.push({ type: 'explosion', explosionStyle: 'tank', x: cx, y: cy, radius: r,
+        life: 54, maxLife: 54, seed: Math.random() * Math.PI * 2 });
     // Shockwave ring
-    objects.push({ type: 'shockwave', x: cx, y: cy, radius: r * 0.18, speed: r * 0.075, life: 18, maxLife: 18 });
+    objects.push({ type: 'shockwave', tankBlast: true, x: cx, y: cy, radius: r * 0.18, speed: r * 0.075, life: 18, maxLife: 18 });
     // Fire sparks
     const fireRgb = ['255,210,40','255,140,0','255,60,0','255,245,90','210,90,0'];
     for (let i = 0; i < 28; i++) {
@@ -2457,7 +2488,9 @@ function updateBuratinoBarrage(barrage) {
                     life: 28 - (i % 3) * 2, maxLife: 28 });
             }
         }
+        const previousHp = tank.hp;
         applyDamage(barrage.x, barrage.y, barrage.radius, barrage.damage, barrage.team);
+        recordBuratinoImmersion(previousHp, barrage.team);
         barrage.wavesFired++;
     }
     const endTime = barrage.warningTicks + (barrage.waveCount - 1) * barrage.waveInterval + 15;
@@ -3006,7 +3039,9 @@ function updateSpecialProjectiles() {
                 if (typeof applyDamage === 'function') {
                     let explosionDamage = proj.damage;
                     if (typeof godMode !== 'undefined' && godMode) explosionDamage = explosionDamage * 1000;
+                    const previousHp = tank.hp;
                     applyDamage(proj.x, proj.y, proj.explosionRadius, explosionDamage, proj.team);
+                    recordBuratinoImmersion(previousHp, proj.team);
                 } else {
                     // Damage enemies in explosion radius
                     for (let e of enemies) {
@@ -3075,11 +3110,14 @@ function updateSpecialProjectiles() {
                 const pdx = proj.x - (tank.x + tank.w/2);
                 const pdy = proj.y - (tank.y + tank.h/2);
                 if (pdx*pdx + pdy*pdy < (proj.radius + tank.w/2)*(proj.radius + tank.w/2)) {
-                    if (!isPlayerDamageProtected()) tank.hp -= proj.damage;
+                    if (!isPlayerDamageProtected()) {
+                        tank.hp -= proj.damage;
+                        if (proj.damage > 0) tank._immersionMusicFrame = window.frameCount || 0;
+                    }
                     tank.confused = 30;
                     spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
                     if (tank.hp <= 0) {
-                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                         if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                         else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
                     }
@@ -3099,7 +3137,7 @@ function updateSpecialProjectiles() {
                     dealDamageToEntity(enemy, proj.damage);
                     spawnParticle(proj.x, proj.y, '#00ffff', 0.7);
                     if (enemy.hp <= 0) {
-                        spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65);
+                        spawnExplosion(enemy.x+enemy.w/2, enemy.y+enemy.h/2, 65, 'tank', enemy);
                         enemies.splice(ei, 1);
                     }
                     const ang = Math.atan2(dy, dx);
@@ -3131,8 +3169,79 @@ function updateSpecialProjectiles() {
     }
 }
 
+function updateTankDamageEffects() {
+    for (const unit of [tank, ...allies, ...enemies]) {
+        const health = unit ? unit.hp / (unit.maxHp || 300) : 1;
+        if (!unit || unit.alive === false || !(unit.hp > 0) || health >= 0.5 ||
+            unit.burovoyBurrowActive || window.effectsEnabled === false) {
+            if (unit) { unit._damageEffectTick = 0; unit._oilTrailX = undefined; unit._oilPool = null; }
+            continue;
+        }
+        const stage = health < 0.1 ? 3 : health < 0.3 ? 2 : 1;
+        const size = Math.max(unit.w, unit.h);
+        const angle = getTankEffectHullAngle(unit);
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const x = unit.x + unit.w / 2 - unit.w * 0.27 * cos - unit.h * 0.18 * sin;
+        const y = unit.y + unit.h / 2 - unit.w * 0.27 * sin + unit.h * 0.18 * cos;
+        unit._damageEffectTick = (unit._damageEffectTick || 0) + 1;
+        if (unit._damageEffectTick % (stage === 3 ? 5 : stage === 2 ? 8 : 14) === 1) {
+            const smoke = objects.filter(obj => obj.type === 'tankDamageSmoke');
+            if (smoke.length >= 180) objects.splice(objects.indexOf(smoke[0]), 1);
+            objects.push({ type: 'tankDamageSmoke', x, y, radius: size * 0.8, size, stage,
+                vx: 0.1 + (Math.random() - 0.5) * 0.18, vy: -0.7 - Math.random() * 0.2,
+                seed: Math.random() * Math.PI * 2, life: 90, maxLife: 90, source: unit });
+        }
+        if (health >= 0.2) {
+            unit._oilTrailX = undefined;
+            unit._oilPool = null;
+            unit._oilDripTicks = 0;
+            continue;
+        }
+        unit._oilDripTicks = (unit._oilDripTicks || 0) + 1;
+        const oilX = unit.x + unit.w / 2 - unit.w * 0.43 * cos - unit.h * 0.25 * sin;
+        const oilY = unit.y + unit.h / 2 - unit.w * 0.43 * sin + unit.h * 0.25 * cos;
+        const dx = oilX - unit._oilTrailX, dy = oilY - unit._oilTrailY;
+        const distance = Math.hypot(dx, dy);
+        if (!Number.isFinite(distance) || distance > 80) {
+            unit._oilTrailX = oilX; unit._oilTrailY = oilY; unit._oilDripTicks = 0;
+            unit._oilPool = null;
+            continue;
+        }
+        const moving = distance >= 6;
+        if ((!moving || unit._oilDripTicks < 3) && unit._oilDripTicks < 35) continue;
+        if (!moving && unit._oilPool && objects.includes(unit._oilPool)) {
+            unit._oilPool.radius = Math.sqrt(Math.min((size * 0.24) ** 2, unit._oilPool.radius ** 2 + size * size * 0.003));
+            unit._oilPool.life = unit._oilPool.maxLife;
+            if (typeof GameTerrain !== 'undefined' && typeof GameTerrain.addOilToWater === 'function') {
+                GameTerrain.addOilToWater(oilX, oilY, 12);
+            }
+        } else {
+            unit._oilPool = null;
+            const drops = moving ? Math.min(3, Math.ceil(distance / 7)) : 1;
+            for (let i = 1; i <= drops; i++) {
+                const oldOil = objects.filter(obj => obj.type === 'tankOilTrail');
+                if (oldOil.length >= 500) objects.splice(objects.indexOf(oldOil[0]), 1);
+                const oil = { type: 'tankOilTrail',
+                    x: moving ? unit._oilTrailX + dx * i / drops + (Math.random() - 0.5) * 3 : oilX,
+                    y: moving ? unit._oilTrailY + dy * i / drops + (Math.random() - 0.5) * 3 : oilY,
+                    radius: size * (moving ? 0.012 + Math.pow(Math.random(), 1.5) * 0.05 : 0.09),
+                    stretch: moving ? 1.1 + Math.random() * 1.5 : 1,
+                    angle: moving ? Math.atan2(dy, dx) : angle,
+                    seed: Math.random() * Math.PI * 2, life: 2100, maxLife: 2100 };
+                if (typeof GameTerrain !== 'undefined' && typeof GameTerrain.addOilToWater === 'function') {
+                    oil.inWater = GameTerrain.addOilToWater(oil.x, oil.y, moving ? oil.radius ** 2 : 12);
+                }
+                objects.push(oil);
+                if (!moving) unit._oilPool = oil;
+            }
+        }
+        unit._oilTrailX = oilX; unit._oilTrailY = oilY; unit._oilDripTicks = 0;
+    }
+}
+
 function updatePhysics() {
     updateBarrelFuses();
+    updateTankDamageEffects();
     updateEmbeddedProjectiles(tank);
     for (const unit of allies) updateEmbeddedProjectiles(unit);
     for (const unit of enemies) updateEmbeddedProjectiles(unit);
@@ -3557,7 +3666,7 @@ function updatePhysics() {
                 if (Math.sqrt(mdx*mdx + mdy*mdy) < 40) {
                     if (!isPlayerDamageProtected()) tank.hp = Math.max(0, tank.hp - (b.damage || 75));
                     if (tank.hp <= 0 && gameState === 'playing') {
-                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                         gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose');
                     }
                     mHit = true;
@@ -3595,7 +3704,7 @@ function updatePhysics() {
                     }
                     bullets.splice(i, 1);
                     if (tank.hp <= 0) {
-                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                         if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                         else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
                     }
@@ -3608,13 +3717,13 @@ function updatePhysics() {
                     const pid = -1;
                     if (!b.hitChain.includes(pid)) {
                         if (!tank.mirrorShieldActive) {
-                            dealDamageToEntity(tank, b.damage || 150);
+                            if (dealDamageToEntity(tank, b.damage || 150) > 0) tank._immersionElectricFrame = window.frameCount || 0;
                             b.hitChain.push(pid);
                             for (let k = 0; k < 6; k++) spawnParticle(tank.x + tank.w/2 + (Math.random()-0.5)*tank.w, tank.y + tank.h/2 + (Math.random()-0.5)*tank.h, '#00d4ff', 0.7);
                         }
                     }
                     if (tank.hp <= 0) {
-                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                        spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                         if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                         else { gameState = 'lose'; loseModeTrophies(); syncResultOverlay('lose'); }
                     }
@@ -3722,7 +3831,12 @@ function updatePhysics() {
                 } else {
                      let dmg = (b.damage || (b.type === 'fire' ? 22 : b.type === 'rocket' ? 200 : 100));
                      dmg = Math.round(dmg * _shieldMult);
-                     dealDamageToEntity(tank, dmg);
+                     const dealt = dealDamageToEntity(tank, dmg);
+                     if (dealt > 0 && b.type === 'musical') tank._immersionMusicFrame = window.frameCount || 0;
+                     if (dealt > 0 && b.type === 'airBullet') {
+                         tank._immersionAirFrame = window.frameCount || 0;
+                         tank._immersionAirAngle = Math.atan2(b.vy, b.vx);
+                     }
                      if (b.type === 'ice' && tankType !== 'ice') { tank.iceSlowed = true; tank.iceSlowedTime = 240; }
                      if (b.type === 'pyroBullet') { tank.burning = true; tank.burnTimer = 300; tank.burnDps = 10; }
                      // Air bullet: apply smooth wind knockback to player
@@ -3740,7 +3854,7 @@ function updatePhysics() {
                 addEmbeddedProjectile(tank, b);
                 if (b.type !== 'toxic' && b.type !== 'megabomb') tank.hitFlashTime = Date.now();
                 if (tank.hp <= 0) {
-                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                     if (currentMode === 'war') {
                         if (tank.respawnCount >= 2) {
                             gameState = 'lose';
@@ -3775,10 +3889,10 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                         if (a.hp <= 0) {
                             if (currentMode === 'war') {
-                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                             } else {
                                 allies.splice(j, 1);
-                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                             }
                         }
                         break;
@@ -3810,10 +3924,10 @@ function updatePhysics() {
                         }
                         if (a.hp <= 0) {
                             if (currentMode === 'war') {
-                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                                a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                             } else {
                                 allies.splice(j, 1);
-                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                                spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                             }
                         }
                         break;
@@ -3856,10 +3970,10 @@ function updatePhysics() {
                     addEmbeddedProjectile(a, b);
                     if (a.hp <= 0) {
                         if (currentMode === 'war') {
-                            a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                         } else {
                             allies.splice(j, 1);
-                            spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                         }
                     }
                     break;
@@ -3883,10 +3997,10 @@ function updatePhysics() {
                         bullets.splice(i, 1);
                         if (e.hp <= 0) {
                             if (currentMode === 'war') {
-                                e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                                e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                             } else {
                                 enemies.splice(j, 1);
-                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                                spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                             }
                         }
                         break;
@@ -4017,10 +4131,10 @@ function updatePhysics() {
                     if (b.type !== 'toxic' && b.type !== 'megabomb') e.hitFlashTime = Date.now();
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
-                            e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                         } else {
                             enemies.splice(j, 1);
-                            spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                         }
                     }
                     break;
@@ -4086,7 +4200,7 @@ function updatePhysics() {
                 dealDamageToEntity(tank, sw.damage);
                 tank.confused = 30;
                 if (tank.hp <= 0) {
-                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                     spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                      if (currentMode === 'war') { tank.alive = false; tank.respawnTimer = 600; }
                      else { 
                          gameState = 'lose'; 
@@ -4110,7 +4224,7 @@ function updatePhysics() {
                 e.confused = 30; // 0.5 seconds confusion
                 if (e.hp <= 0) {
                     enemies.splice(j, 1);
-                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                    spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                 }
             }
         }
@@ -4133,7 +4247,7 @@ function updatePhysics() {
                 a.confused = 30;
                 if (a.hp <= 0) {
                     allies.splice(j, 1);
-                    spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                    spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                 }
             }
         }
@@ -4187,7 +4301,7 @@ function updatePhysics() {
                     e.disoriented = 36; // 0.6 seconds
                     if (e.hp <= 0) {
                         enemies.splice(j, 1);
-                        spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                        spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                     }
                 }
             }
@@ -4261,10 +4375,10 @@ function updatePhysics() {
                     tank.lastHitProjectileSize = null;
                 }
 
-                dealDamageToEntity(tank, f.damage);
+                if (dealDamageToEntity(tank, f.damage) > 0) tank._immersionHeatFrame = window.frameCount || 0;
                 flames.splice(i, 1);
                 if (tank.hp <= 0) {
-                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70);
+                    spawnExplosion(tank.x+tank.w/2, tank.y+tank.h/2, 70, 'tank', tank);
                     if (currentMode === 'war') {
                         if (tank.respawnCount >= 2) {
                             gameState = 'lose';
@@ -4291,10 +4405,10 @@ function updatePhysics() {
                     flames.splice(i, 1);
                     if (a.hp <= 0) {
                         if (currentMode === 'war') {
-                            a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            a.alive = false; a.respawnTimer = 600; spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                         } else {
                             allies.splice(j, 1);
-                            spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                            spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                         }
                     }
                     break;
@@ -4310,10 +4424,10 @@ function updatePhysics() {
                     flames.splice(i, 1);
                     if (e.hp <= 0) {
                         if (currentMode === 'war') {
-                            e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            e.alive = false; e.respawnTimer = 600; spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                         } else {
                             enemies.splice(j, 1);
-                            spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                            spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                         }
                     }
                     break;
@@ -4373,7 +4487,20 @@ function updatePhysics() {
                 }
                 objects.splice(i, 1);
             }
-        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris') {
+        } else if (obj.type === 'tankWreck') {
+            obj.age = (obj.age || 0) + 1;
+        } else if (obj.type === 'tankDamageSmoke') {
+            obj.x += obj.vx;
+            obj.y += obj.vy;
+            obj.vx *= 0.995;
+            obj.vy -= 0.001;
+            obj.life--;
+            if (obj.life <= 0) objects.splice(i, 1);
+        } else if (obj.type === 'explosion' || obj.type === 'terrainDebris' || obj.type === 'tankOilTrail') {
+            if (obj.type === 'tankOilTrail') {
+                obj.age = (obj.age || 0) + 1;
+                if (Number.isFinite(obj.radius)) obj.visualRadius = (obj.visualRadius ?? obj.radius) + (obj.radius - (obj.visualRadius ?? obj.radius)) * 0.06;
+            }
             obj.life--;
             if (obj.life <= 0) objects.splice(i, 1);
         } else if (obj.type === 'shockwave') {
@@ -4626,7 +4753,7 @@ function updatePhysics() {
                 ent.hp = 0;
                 ent.alive = false;
                 if (ent === tank) {
-                    spawnExplosion(ent.x+ent.w/2, ent.y+ent.h/2, 65);
+                    spawnExplosion(ent.x+ent.w/2, ent.y+ent.h/2, 65, 'tank', ent);
                     if (currentMode !== 'war') { 
                         gameState = 'lose'; 
                         loseModeTrophies();
@@ -4646,11 +4773,11 @@ function updatePhysics() {
              if (currentMode === 'war') {
                  if (!a.respawnTimer) {
                      a.respawnTimer = 600;
-                     spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                     spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
                  }
              } else {
                  allies.splice(i, 1);
-                 spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65);
+                 spawnExplosion(a.x+a.w/2, a.y+a.h/2, 65, 'tank', a);
              }
         }
     }
@@ -4663,11 +4790,11 @@ function updatePhysics() {
              if (currentMode === 'war') {
                  if (!e.respawnTimer) {
                      e.respawnTimer = 600;
-                     spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                     spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
                  }
              } else {
                  enemies.splice(i, 1);
-                 spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65);
+                 spawnExplosion(e.x+e.w/2, e.y+e.h/2, 65, 'tank', e);
              }
         }
     }
@@ -4702,6 +4829,15 @@ function updatePhysics() {
                          tank.x = sp.x; tank.y = sp.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     }
                     // Reset all effects on respawn
+                    tank._immersionHeatFrame = undefined;
+                    tank._immersionIlluminatFrame = undefined;
+                    tank._immersionElectricFrame = undefined;
+                    tank._immersionWaterFrame = undefined;
+                    tank._immersionImpactFrame = undefined;
+                    tank._immersionMusicFrame = undefined;
+                    tank._immersionBarrageFrame = undefined;
+                    tank._immersionAirFrame = undefined;
+                    tank._immersionAirAngle = undefined;
                     tank.paralyzed = false;
                     tank.paralyzedTime = 0;
                     tank.frozenEffect = 0;

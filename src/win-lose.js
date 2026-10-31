@@ -11,6 +11,35 @@ const resultToMenu = document.getElementById('resultToMenu');
 const resultEditor = document.getElementById('resultEditor');
 let lastResultState = null;
 
+let immersionDeath = null;
+
+function delayImmersionDefeat(state) {
+    if (state !== 'lose' || !window.immersionEnabled || typeof tank === 'undefined' ||
+        (tank.alive !== false && !(tank.hp <= 0))) {
+        immersionDeath = null;
+        return false;
+    }
+    const session = typeof battleSessionId === 'undefined' ? 0 : battleSessionId;
+    if (!immersionDeath || immersionDeath.session !== session) {
+        immersionDeath = { session, elapsed: 0, duration: 1000, lastTime: performance.now(),
+            outcomeType: determineOutcomeType(false), blast: null };
+    }
+    return immersionDeath.elapsed < immersionDeath.duration;
+}
+
+function advanceImmersionDeath(now) {
+    const session = typeof battleSessionId === 'undefined' ? 0 : battleSessionId;
+    if (!immersionDeath) return null;
+    if (!window.immersionEnabled || gameState !== 'lose' || immersionDeath.session !== session) {
+        immersionDeath = null;
+        return null;
+    }
+    // Presentation time continues after combat stops; hidden pages do not skip the blast.
+    if (!document.hidden) immersionDeath.elapsed += Math.max(0, Math.min(50, now - immersionDeath.lastTime));
+    immersionDeath.lastTime = now;
+    return immersionDeath;
+}
+
 // Determine outcome type based on battle metrics
 function determineOutcomeType(isWin) {
     if (isWin) {
@@ -522,6 +551,11 @@ function syncResultOverlay(state = gameState) {
         return;
     }
 
+    if (delayImmersionDefeat(state)) {
+        resultOverlay.style.display = 'none';
+        return;
+    }
+
     if (state === 'win' || state === 'lose') {
         console.log('Showing result overlay for:', state);
         const isWin = state === 'win';
@@ -609,7 +643,8 @@ function syncResultOverlay(state = gameState) {
         }
 
         // Determine outcome type ONCE at the start (before time changes)
-        const outcomeType = determineOutcomeType(isWin);
+        const outcomeType = !isWin && typeof immersionDeath !== 'undefined' && immersionDeath
+            ? immersionDeath.outcomeType : determineOutcomeType(isWin);
         console.log('Outcome type:', outcomeType);
         
         // Update message with outcome type

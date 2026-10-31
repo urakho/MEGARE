@@ -87,6 +87,7 @@ test('damage protection prevents lethal hits and special projectiles update inde
     const ctx = vm.createContext({
         tank: { x: 100, y: 100, w: 20, h: 20, hp: 10, team: 0, kamikazeInvincible: true },
         tankType: 'kamikaze', currentMode: 'single', gameState: 'playing',
+        window: { frameCount: 100 },
         objects: [], enemies: [], allies: [], worldWidth: 1000, worldHeight: 1000,
         buratinoBarrages: [{ x: 300, y: 300, vx: 3, vy: 0, life: 5, radius: 5 }],
         musicalSoundWaves: [{ x: 110, y: 110, vx: 0, vy: 0, life: 5, radius: 5, damage: 50, team: 1, bounces: 0, maxBounces: 5 }],
