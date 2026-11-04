@@ -171,6 +171,8 @@ test('bot target selection uses night sight instead of tracking hidden tanks', (
     vm.runInNewContext(source, context);
     context.GameTerrain = context.window.GameTerrain;
     const bot = fs.readFileSync(path.join(__dirname, '..', 'src', 'bot.js'), 'utf8');
+    const combat = fs.readFileSync(path.join(__dirname, '..', 'src', 'physics.js'), 'utf8');
+    vm.runInNewContext(combat.slice(combat.indexOf('function combatTeamsMatch('), combat.indexOf('function isPlayerDamageProtected(')), context);
     vm.runInNewContext(bot.slice(0, bot.indexOf('function pathClearFor(')), context);
     const observer = { x: 0, y: 0, w: 38, h: 38 };
     const visible = { x: 0, y: 150, w: 38, h: 38 };

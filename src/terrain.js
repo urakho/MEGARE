@@ -526,6 +526,44 @@
         ctx.drawImage(coating.image, obj.x, obj.y, obj.w, obj.h);
     }
 
+    function drawWall(ctx, obj, type = current()) {
+        ctx.save();
+        const wx = obj.x, wy = obj.y, ww = obj.w, wh = obj.h;
+        // Metallic/Industrial Block
+        const grad = ctx.createLinearGradient(wx, wy, wx + ww, wy + wh);
+        grad.addColorStop(0, '#555');
+        grad.addColorStop(0.5, '#333');
+        grad.addColorStop(1, '#222');
+        ctx.fillStyle = grad;
+        ctx.fillRect(wx, wy, ww, wh);
+
+        // Inner bevel
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#666';
+        ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.stroke();
+        ctx.strokeStyle = '#111';
+        ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx+ww, wy+wh); ctx.lineTo(wx, wy+wh); ctx.stroke();
+
+        // Rivets on corners
+        ctx.fillStyle = '#111';
+        const m = 4;
+        ctx.fillRect(wx+m, wy+m, 2, 2);
+        ctx.fillRect(wx+ww-m-2, wy+m, 2, 2);
+        ctx.fillRect(wx+m, wy+wh-m-2, 2, 2);
+        ctx.fillRect(wx+ww-m-2, wy+wh-m-2, 2, 2);
+
+        // Simple X brace pattern in center for industrial feel
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(wx + 4, wy + 4); ctx.lineTo(wx + ww - 4, wy + wh - 4);
+        ctx.moveTo(wx + ww - 4, wy + 4); ctx.lineTo(wx + 4, wy + wh - 4);
+        ctx.stroke();
+
+        drawWallCover(ctx, obj, type);
+        ctx.restore();
+    }
+
     const boxPalettes = {
         // Oak, northern spruce, mesquite and baldcypress heartwood.
         forest: { face: '#9b7043', light: '#c29a62', dark: '#533922', grain: '#715135', trim: '#473d33', accent: '#617b42' },
@@ -1757,7 +1795,7 @@
     }
 
     window.GameTerrain = { normalize, current, randomType, label, speedFactor, reloadFactor, movementSpeed, canSee, NIGHT_VISION_RADIUS,
-        groundColor, drawGround, addOilToWater, drawWallCover, drawWoodenWall, drawWoodenWallBurn, drawWoodenWallRot, drawBox, drawBarrel, visibilityPolygon, drawAtmosphere,
+        groundColor, drawGround, addOilToWater, drawWall, drawWallCover, drawWoodenWall, drawWoodenWallBurn, drawWoodenWallRot, drawBox, drawBarrel, visibilityPolygon, drawAtmosphere,
         resetBattle, updateMovement, drawMovement, movementStats, getMotion, forEachIlluminatMark, activateIlluminatSuper,
         isIlluminatSuperActive, illuminatSuperStrength };
     window.currentTerrain = normalize(window.currentTerrain);

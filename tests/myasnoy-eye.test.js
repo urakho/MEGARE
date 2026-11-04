@@ -33,6 +33,8 @@ test('myasnoy eye only damages targets inside the area already swept by its visi
         forEachHostileDrone: () => {},
         spawnParticle: () => {}
     });
+    const combat = fs.readFileSync(path.join(__dirname, '..', 'src', 'physics.js'), 'utf8');
+    vm.runInContext(combat.slice(combat.indexOf('function combatTeamsMatch('), combat.indexOf('function isPlayerDamageProtected(')), context);
     vm.runInContext(main.slice(start, end), context);
 
     context.updateMyasnoyEyeAttackSweep(unit);

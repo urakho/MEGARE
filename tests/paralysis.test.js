@@ -148,6 +148,7 @@ test('paralyzed bot retreats from an opponent while its weapon logic is skipped'
         GameTerrain: { movementSpeed: speed => speed },
         moveSmallSteps(unit, angle, speed) { unit.x += Math.cos(angle) * speed; return true; }
     };
+    vm.runInNewContext(sourceBetween(physics, 'function combatTeamsMatch(', 'function isPlayerDamageProtected('), context);
     vm.runInNewContext(sourceBetween(bot, 'function moveParalyzedUnit(', 'function updateEnemyAI()'), context);
     const branch = sourceBetween(bot, '        if (enemy.paralyzed) {', '        // Ice slow:');
     vm.runInNewContext(`function updateProbe() { for (let i = 0; i < 1; i++) { ${branch} shots++; } }`, context);

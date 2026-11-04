@@ -38,7 +38,7 @@ Profiles keep separate local progression and identity data. They are browser-sid
 
 ### Custom scenarios
 
-The map editor extends play beyond generated battles. Players can choose map sizes, place obstacles and player/enemy/ally spawns, configure enemy grouping, and write custom result messages. Maps can be saved locally and imported or exported as `.meg` files to exchange scenarios. Touch mode exposes map loading/import instead of the full editor.
+The map editor extends play beyond generated battles. Players can choose map sizes and biomes, place obstacles and player/enemy/ally spawns, configure enemy grouping and four allied groups, and write custom result messages. Up to 50 allies can be placed; rival allied groups fight each other while remaining friendly to the player. Biome selection saves immediately; victory and defeat messages use separate editable variant cards. Individual or selected groups of bots can receive vehicles, health, names, captions, and sides. Each bot has a starting-state slot and four optional timed changes; saving these slots immediately saves the map locally. Maps can also be imported or exported as `.meg` files to exchange scenarios. Touch mode exposes map loading/import instead of the full editor.
 
 ## Current implementation
 

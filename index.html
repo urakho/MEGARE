@@ -840,16 +840,20 @@
 
     <!-- Header bar -->
     <div class="me-header">
-      <span class="me-title">🗺️ Редактор карт</span>
-      <div class="me-header-actions">
-        <button id="meNewBtn"    class="btn me-btn me-btn-green">➕ Новая</button>
-        <button id="meSaveBtn"   class="btn me-btn me-btn-gold">💾 Сохранить</button>
+      <div class="me-header-top">
+        <div class="me-heading"><span class="me-title">Редактор карт</span><span id="meMapSummary" class="me-subtitle">my_map · 900×700</span></div>
+        <div class="me-primary-actions">
+          <button id="meSaveBtn" class="btn me-btn me-btn-gold">Сохранить</button>
+          <button id="mePlayBtn" class="btn me-btn me-btn-green">▶ Испытать</button>
+          <button id="meCloseBtn" class="btn me-btn me-btn-gray me-close-desktop" title="Закрыть редактор" aria-label="Закрыть редактор">✕</button>
+        </div>
+      </div>
+      <div class="me-header-actions" aria-label="Файлы карты">
+        <button id="meNewBtn"    class="btn me-btn me-btn-gray">➕ Новая</button>
         <button id="meMapsBtn"   class="btn me-btn me-btn-blue">📂 Мои карты</button>
         <button id="meImportBtn" class="btn me-btn me-btn-gold">📥 Импорт .meg</button>
         <button id="meCloseBtnMobile" class="btn me-btn me-btn-gray" style="display:none;">✕ Закрыть</button>
         <button id="meExportBtn" class="btn me-btn me-btn-orange">📤 Экспорт .meg</button>
-        <button id="mePlayBtn"   class="btn me-btn me-btn-red">▶ Играть</button>
-        <button id="meCloseBtn"  class="btn me-btn me-btn-gray me-close-desktop">✕</button>
       </div>
     </div>
 
@@ -858,36 +862,57 @@
 
       <!-- Left panel: tools -->
       <div class="me-tools-panel">
-        <div class="me-panel-title">Инструменты</div>
-        <button class="me-tool-btn active" data-tool="wall">🧱 Стена · 1</button>
-        <button class="me-tool-btn" data-tool="woodenWall">🪵 Дер. стена · W</button>
-        <button class="me-tool-btn" data-tool="box">📦 Ящик · 2</button>
-        <button class="me-tool-btn" data-tool="barrel">🚨 Бочка · 3</button>
-        <button class="me-tool-btn" data-tool="enemy">💀 Враг · 4</button>
-        <button class="me-tool-btn" data-tool="ally">🤝 Союзник · 5</button>
-        <div class="me-label" style="font-size:10px; margin:4px 0;">Нажмите на врага или союзника на карте, чтобы выбрать его танк.</div>
-        <button class="me-tool-btn" data-tool="player">🟢 Игрок · 6</button>
-        <button class="me-tool-btn" data-tool="erase">🗑️ Стереть · 7</button>
+        <div class="me-panel-title">Препятствия</div>
+        <div class="me-tool-grid" role="group" aria-label="Препятствия">
+          <button class="me-tool-btn active" data-tool="wall" aria-pressed="true"><span><canvas class="me-tool-art" data-obstacle="wall" width="32" height="32" aria-hidden="true"></canvas>Стена</span><kbd>1</kbd></button>
+          <button class="me-tool-btn" data-tool="woodenWall" aria-pressed="false"><span><canvas class="me-tool-art" data-obstacle="woodenWall" width="32" height="32" aria-hidden="true"></canvas>Дерево</span><kbd>2</kbd></button>
+          <button class="me-tool-btn" data-tool="box" aria-pressed="false"><span><canvas class="me-tool-art" data-obstacle="box" width="32" height="32" aria-hidden="true"></canvas>Ящик</span><kbd>3</kbd></button>
+          <button class="me-tool-btn" data-tool="barrel" aria-pressed="false"><span><canvas class="me-tool-art" data-obstacle="barrel" width="32" height="32" aria-hidden="true"></canvas>Бочка</span><kbd>4</kbd></button>
+        </div>
+        <div class="me-panel-title">Участники боя</div>
+        <div class="me-tool-grid" role="group" aria-label="Участники боя">
+          <button class="me-tool-btn" data-tool="player" aria-pressed="false"><span>Игрок</span><kbd>5</kbd></button>
+          <button class="me-tool-btn" data-tool="enemy" aria-pressed="false"><span>Враг</span><kbd>6</kbd></button>
+          <button class="me-tool-btn" data-tool="ally" aria-pressed="false"><span>Союзник</span><kbd>7</kbd></button>
+        </div>
         <hr class="me-sep">
-        <div class="me-panel-title">Режим врагов</div>
-        <select id="meEnemyMode" class="me-input me-select">
-          <option value="group">🤝 Все вместе</option>
-          <option value="solo">⚔️ Каждый за себя</option>
-        </select>
+        <div class="me-panel-title">Выделение ботов</div>
+        <button class="me-tool-btn" data-tool="select" aria-pressed="false"><span>▧ Выделить рамкой</span><kbd>8</kbd></button>
+        <div class="me-selection-actions" role="group" aria-label="Выбрать ботов">
+          <button id="meSelectAll" class="me-view-btn">Все</button>
+          <button id="meSelectEnemies" class="me-view-btn">Враги</button>
+          <button id="meSelectAllies" class="me-view-btn">Союзники</button>
+        </div>
+        <button id="meEditSelection" class="me-tool-btn" disabled>Настроить выбранных (0)</button>
         <hr class="me-sep">
-        <div class="me-panel-title">Действия</div>
-        <button id="meUndoBtn" class="me-tool-btn">↩ Отмена</button>
-        <button id="meClearBtn" class="me-tool-btn">🗑️ Очистить</button>
-        <hr class="me-sep">
-        <button id="meSettingsBtn" class="me-tool-btn">⚙️ Настройки</button>
-        <hr class="me-sep">
-        <div id="meObjectCount" class="me-label" style="font-size:11px;opacity:.7;">Объектов: 0 / 300</div>
-        <div id="meCoords"      class="me-label" style="font-size:11px;opacity:.7;">X: 0  Y: 0</div>
+        <div class="me-panel-title">Правка</div>
+        <div class="me-tool-grid" role="group" aria-label="Правка и настройки">
+          <button class="me-tool-btn" data-tool="erase" aria-pressed="false"><span>Ластик</span><kbd>9</kbd></button>
+          <button id="meUndoBtn" class="me-tool-btn" disabled title="Отменить (Ctrl Z)"><span>Отменить</span><kbd>↶</kbd></button>
+          <button id="meSettingsBtn" class="me-tool-btn"><span>Настройки</span></button>
+          <button id="meClearBtn" class="me-tool-btn me-danger"><span>Очистить</span></button>
+        </div>
       </div>
 
       <!-- Canvas -->
-      <div class="me-canvas-wrap" id="meCanvasWrap">
-        <canvas id="meCanvas"></canvas>
+      <div class="me-stage">
+        <div class="me-stage-bar">
+          <div class="me-current-tool"><strong id="meToolName">Стена</strong><span id="meToolHint">Зажми левую кнопку мыши, чтобы рисовать стены.</span></div>
+          <div class="me-view-actions" role="group" aria-label="Масштаб карты">
+            <button id="meZoomOut" class="me-view-btn" title="Уменьшить масштаб" aria-label="Уменьшить масштаб">−</button>
+            <output id="meZoomLevel" aria-label="Текущий масштаб">100%</output>
+            <button id="meZoomIn" class="me-view-btn" title="Увеличить масштаб" aria-label="Увеличить масштаб">+</button>
+            <button id="meFitBtn" class="me-view-btn" title="Показать всю карту">⛶ Вся карта</button>
+          </div>
+        </div>
+        <div class="me-canvas-wrap" id="meCanvasWrap">
+          <canvas id="meCanvas" aria-label="Поле редактирования карты"></canvas>
+        </div>
+        <div class="me-statusbar">
+          <div id="meObjectCount" class="me-counts"></div>
+          <span id="meCoords">X: — · Y: —</span>
+        </div>
+        <div class="me-help"><span><b>ЛКМ</b> — разместить / рисовать</span><span><b>ПКМ + движение</b> — сдвинуть карту</span><span><b>Колесо</b> — масштаб</span></div>
       </div>
 
     </div><!-- /me-workspace -->
@@ -898,14 +923,42 @@
 <!-- Per-bot vehicle selection -->
 <div id="meBotModal" class="modal-overlay" style="display:none; z-index:420;">
   <div class="modal-box">
-    <h2 id="meBotTitle" class="modal-title">Танк бота</h2>
-    <label for="meBotTank" class="me-label">Выберите технику для этого бота</label>
-    <select id="meBotTank" class="me-input me-select" style="margin-top:12px;">
-      <option value="">Случайный</option>
-    </select>
+    <h2 id="meBotTitle" class="modal-title">Настройки бота</h2>
+    <div class="me-trigger-slots" role="group" aria-label="Пять триггеров танка">
+      <button class="me-trigger-slot" data-trigger-slot="0" aria-pressed="true">1<span>Начало боя</span></button>
+      <button class="me-trigger-slot" data-trigger-slot="1" aria-pressed="false">2<span>Выключен</span></button>
+      <button class="me-trigger-slot" data-trigger-slot="2" aria-pressed="false">3<span>Выключен</span></button>
+      <button class="me-trigger-slot" data-trigger-slot="3" aria-pressed="false">4<span>Выключен</span></button>
+      <button class="me-trigger-slot" data-trigger-slot="4" aria-pressed="false">5<span>Выключен</span></button>
+    </div>
+    <p id="meTriggerSlotHint" class="me-panel-hint">Триггер 1 задаёт состояние танка в начале боя.</p>
+    <div id="meTriggerTimeField" style="display:none;">
+      <label class="me-trigger-enabled"><input id="meTriggerEnabled" type="checkbox">Включить этот триггер</label>
+      <label for="meTriggerTime" class="me-label">Через сколько секунд от начала боя</label>
+      <input id="meTriggerTime" class="me-input" type="number" min="0.1" max="3600" step="0.1" value="10">
+    </div>
+    <p class="me-panel-hint me-batch-help">Отметь поля, которые нужно изменить у всех выбранных ботов. Остальные настройки сохранятся.</p>
+    <div class="me-bot-fields">
+      <div><div class="me-field-heading"><input id="meUseTank" class="me-batch-toggle" type="checkbox" aria-label="Изменить технику"><label for="meBotTank">Техника</label></div>
+        <select id="meBotTank" class="me-input"><option value="">Случайная</option></select></div>
+      <div><div class="me-field-heading"><input id="meUseHealth" class="me-batch-toggle" type="checkbox" aria-label="Изменить здоровье"><label for="meBotHealth">Здоровье</label></div>
+        <input id="meBotHealth" class="me-input" type="number" min="1" max="100000" step="1" placeholder="Стандартное для выбранной техники"></div>
+      <div><div class="me-field-heading"><input id="meUseName" class="me-batch-toggle" type="checkbox" aria-label="Изменить имя"><label for="meBotName">Имя танка</label></div>
+        <input id="meBotName" class="me-input" maxlength="32" placeholder="Например: Командир"></div>
+      <div><div class="me-field-heading"><input id="meUseLabel" class="me-batch-toggle" type="checkbox" aria-label="Изменить подпись"><label for="meBotLabel">Подпись над танком</label></div>
+        <input id="meBotLabel" class="me-input" maxlength="64" placeholder="Например: Охраняет базу"></div>
+      <div><div class="me-field-heading"><input id="meUseSide" class="me-batch-toggle" type="checkbox" aria-label="Изменить сторону"><label for="meBotSide">Сторона</label></div>
+        <select id="meBotSide" class="me-input"><option value="enemy">Враг</option><option value="ally">Союзник игрока</option></select></div>
+      <div id="meBotTeamField"><div class="me-field-heading"><input id="meUseTeam" class="me-batch-toggle" type="checkbox" aria-label="Изменить команду"><label for="meBotTeam">Команда врага</label></div>
+        <select id="meBotTeam" class="me-input"><option value="1">Красная</option><option value="2">Синяя</option><option value="3">Жёлтая</option><option value="4">Зелёная</option></select>
+        <p class="me-panel-hint">Работает в режиме «Настраивать отдельно». Цвет — только обозначение команды, окраска танка не меняется.</p></div>
+      <div id="meBotAllyTeamField"><div class="me-field-heading"><input id="meUseAllyTeam" class="me-batch-toggle" type="checkbox" aria-label="Изменить команду союзника"><label for="meBotAllyTeam">Команда союзника</label></div>
+        <select id="meBotAllyTeam" class="me-input"><option value="1">Красная</option><option value="2">Синяя</option><option value="3">Жёлтая</option><option value="4">Зелёная</option></select>
+        <p class="me-panel-hint">Разные команды союзников сражаются между собой. Для игрока все они дружественные.</p></div>
+    </div>
     <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:20px;">
-      <button id="meBotApply" class="btn btn-primary">Применить</button>
-      <button id="meBotCancel" class="btn btn-secondary">Отмена</button>
+      <button id="meBotApply" class="btn me-btn me-btn-gold">Сохранить все слоты</button>
+      <button id="meBotCancel" class="btn me-btn me-btn-gray">Отмена</button>
     </div>
   </div>
 </div>
@@ -918,12 +971,12 @@
     <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
 
       <div>
-        <label class="me-label" style="display:block; margin-bottom:4px;">Название карты</label>
+        <label for="meMapName" class="me-label" style="display:block; margin-bottom:4px;">Название карты</label>
         <input id="meMapName" type="text" class="me-input" maxlength="32" placeholder="my_map" value="my_map" style="width:100%; box-sizing:border-box;">
       </div>
 
       <div>
-        <label class="me-label" style="display:block; margin-bottom:4px;">Размер карты</label>
+        <label for="meMapSize" class="me-label" style="display:block; margin-bottom:4px;">Размер карты</label>
         <select id="meMapSize" class="me-input me-select" style="width:100%; box-sizing:border-box;">
           <option value="small" selected>Маленькая (900×700)</option>
           <option value="medium">Средняя (1350×900)</option>
@@ -933,22 +986,43 @@
         </select>
       </div>
 
+      <div>
+        <label for="meBiome" class="me-label">Биом</label>
+        <select id="meBiome" class="me-input">
+          <option value="forest">Лес</option><option value="snow">Снег</option><option value="desert">Пустыня</option><option value="swamp">Болото</option><option value="rain">Дождь</option><option value="night">Ночь</option><option value="lava">Лавовая арена</option>
+        </select>
+      </div>
+      <div>
+        <label for="meEnemyMode" class="me-label">Как сражаются враги</label>
+        <select id="meEnemyMode" class="me-input" aria-describedby="meEnemyHint">
+          <option value="group">Все вместе</option><option value="solo">Каждый за себя</option><option value="custom">Настраивать отдельно</option>
+        </select>
+        <p id="meEnemyHint" class="me-panel-hint">Все враги в одной команде против игрока и союзников.</p>
+      </div>
+      <div>
+        <div class="me-panel-title">Триггеры во время боя</div>
+        <p class="me-panel-hint">У танка 5 слотов: начало боя и 4 таймера. Открой танк или выдели группу, настрой слоты и нажми «Сохранить все слоты».</p>
+        <div id="meTriggersList"></div>
+      </div>
       <hr class="me-sep">
 
       <div>
-        <label class="me-label" style="display:block; margin-bottom:4px;">🏆 Сообщение при победе</label>
-        <textarea id="meWinMsg" class="me-input" maxlength="200" placeholder="Поздравляю, ты выиграл!" rows="3" style="resize:vertical; width:100%; box-sizing:border-box;"></textarea>
+        <div class="me-label">🏆 Сообщения при победе</div>
+        <div id="meWinMessages" class="me-message-list"></div>
+        <button id="meAddWinMessage" class="me-view-btn" type="button">+ Добавить сообщение</button>
       </div>
 
       <div>
-        <label class="me-label" style="display:block; margin-bottom:4px;">☠️ Сообщение при поражении</label>
-        <textarea id="meLoseMsg" class="me-input" maxlength="200" placeholder="Попробуй ещё раз!" rows="3" style="resize:vertical; width:100%; box-sizing:border-box;"></textarea>
+        <div class="me-label">☠️ Сообщения при поражении</div>
+        <div id="meLoseMessages" class="me-message-list"></div>
+        <button id="meAddLoseMessage" class="me-view-btn" type="button">+ Добавить сообщение</button>
       </div>
+      <p class="me-panel-hint">Каждая карточка — отдельный вариант. В конце боя выбирается случайное сообщение для нужного исхода. До 20 вариантов по 200 символов; пустой список использует обычные сообщения игры.</p>
 
     </div>
 
     <div style="text-align:center; margin-top:18px;">
-      <button id="meSettingsClose" class="btn btn-secondary">Готово</button>
+      <button id="meSettingsClose" class="btn me-btn me-btn-gold">Готово</button>
     </div>
   </div>
 </div>

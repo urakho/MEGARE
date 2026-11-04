@@ -279,6 +279,7 @@ test('immersion statuses follow cold, cloud contact, drill contact and distinct 
 test('new immersion reactions track hostile swarms, overload and water without leaking between battles', () => {
     const start = drawing.indexOf('let immersionPresentation = null;'), end = drawing.indexOf('function getImmersionEdgeArt(', start);
     const context = vm.createContext({ window: { immersionEnabled: true }, gameState: 'playing', battleSessionId: 1, objects: [] });
+    vm.runInContext(physics.slice(physics.indexOf('function combatTeamsMatch('), physics.indexOf('function isPlayerDamageProtected(')), context);
     vm.runInContext(drawing.slice(start, end), context);
     const unit = { x: 0, y: 0, w: 38, h: 38, hp: 100, maxHp: 100, alive: true, team: 0 };
     let frame = 0, state;
@@ -381,6 +382,10 @@ test('explosion rendering restores canvas state, caches sprites and leaves simul
         GameTerrain: { current: () => 'forest', drawWallCover() {}, drawWoodenWall() {}, drawWoodenWallBurn() {}, drawWoodenWallRot() {} },
         document: { createElement: () => { surfaces++; return { getContext: () => spriteContext }; } } });
     const start = drawing.indexOf('const ordnanceExplosionArt');
+    const terrainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'terrain.js'), 'utf8');
+    const wallStart = terrainSource.indexOf('    function drawWall(ctx, obj, type = current())');
+    const wallEnd = terrainSource.indexOf('    const boxPalettes', wallStart);
+    vm.runInContext(`(() => { const current = () => 'forest', drawWallCover = () => {}; ${terrainSource.slice(wallStart, wallEnd)} GameTerrain.drawWall = drawWall; })();`, context);
     const end = drawing.indexOf('function drawWorldGrid(', start);
     vm.runInContext(drawing.slice(start, end), context);
     const marker = drawing.indexOf('const rad = (obj.radius || 0) *');

@@ -51,6 +51,8 @@ No compilation, package installation, or backend process is needed. You can also
 
 Movement and turret aiming are separate controls. A touch-control mode provides on-screen movement, aiming/attack, and ability controls.
 
+In the desktop map editor, left-click or drag to place objects, right/middle drag to pan, and use the wheel or zoom buttons to change scale. **Вся карта** shows the whole map. Add a player and at least one bot before **Испытать**. Bots can be enemies or player allies (up to 50). Enemy and ally team settings are separate: rival allied groups fight each other, while every allied group stays friendly to the player. Teams use red, blue, yellow, and green labels. Each bot has five slots: its starting state and four optional timers, including changes of side/team. **Сохранить все слоты** immediately saves the map in the browser. **Выделить рамкой** (V) and the group selection buttons support batch edits; Ctrl/Shift-click adjusts selection and Ctrl/Cmd+Z undoes edits. Map settings include biomes, enemy grouping, and the trigger list. Biome selection saves immediately, including empty drafts. Map settings also provide separate victory/defeat message cards; Enter stays inside one message.
+
 Progress, local profiles, settings, and saved maps use browser `localStorage`. Keep using the same browser and origin/location to access the same saves. Clearing browser storage can remove them; local profiles are not online accounts and have no cloud synchronization. Switching between opening the file directly and serving it over HTTP can expose different storage areas.
 
 The published GitHub Pages game also saves progress in your browser. Saves from a local copy do not automatically transfer to the published game.

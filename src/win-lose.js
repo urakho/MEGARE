@@ -775,7 +775,7 @@ if (resultRestart) resultRestart.addEventListener('click', () => {
     if (window._customMapActive && window._customMapParams) {
         // Restart the custom map
         const p = window._customMapParams;
-        window.startCustomMapMode(p.customObjects, p.worldW, p.worldH, p.enemySpawns, p.allySpawns, p.playerSpawn, p.enemyMode, p.customWinMsg, p.customLoseMsg);
+        window.startCustomMapMode(p.customObjects, p.worldW, p.worldH, p.enemySpawns, p.allySpawns, p.playerSpawn, p.enemyMode, p.customWinMsg, p.customLoseMsg, p.terrainType, p.triggers);
     } else {
         startGame(currentMode);
     }

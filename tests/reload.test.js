@@ -227,6 +227,7 @@ test('waterjet damages and pushes a target without disabling its weapons', () =>
         stopWaterjetBurst(unit) { unit.waterjetActive = false; unit.fireCooldown = 90; unit.waterjetBeamLen = 0; },
         getPlayerDmgMult: () => 1
     };
+    vm.runInNewContext(section(read('physics.js'), 'function combatTeamsMatch(', 'function isPlayerDamageProtected('), context);
     vm.runInNewContext(section(bot, '    function updateUnitWaterjet(unit, targets) {', '    // Waterjet: Player'), context);
     for (let frame = 0; frame < 90; frame++) context.updateUnitWaterjet(tank, [target, drone]);
     assert.ok(target.hp < 1000);

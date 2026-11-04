@@ -55,6 +55,12 @@ Use the relevant existing regression tests when changing these systems:
 
 Shared mechanics should be checked for the player, AI allies and AI opponents as applicable, including hostile/friendly drones or summons when targeted. Exercise both `startGame` and `window.startCustomMapMode` when changing per-battle state, cooldowns or effects; a standard restart test does not establish that custom-map restart also resets them.
 
+For editor changes, also exercise rectangle/additive selection, selective group edits, `.meg` round-tripping, chosen biomes, and both custom restart paths. Check biome storage immediately on selection, before closing settings. Finish map settings with **Готово** and Escape, reload the page, and verify biome persistence for populated maps and empty drafts. Playing another saved map must keep the draft's biome unchanged; storage failures must leave settings open. Check all five bot slots, switching unsaved drafts, saving/reloading without using the map Save button, replacing a timer without duplicating it, disabled timer persistence, Cancel, undo persistence, and storage failures. Check four sequential timers, pause, one-shot execution, and continued targeting after a vehicle transformation. Legacy death triggers still require side-change/victory checks. `bug-fixes.test.js` covers these core settings and trigger behaviors; browser checks are still needed for layout, real input, and material previews.
+
+For legacy map compatibility, verify that loading and importing a map removes neutral markers and their related trigger actions while preserving other objects, rules, biome, and messages. Verify saved maps are not rewritten until saved. Check separate message add/edit/delete, multiline text remaining one variant, legacy string import, and the correct victory/defeat pool after reload and transfer.
+
+For custom factions, verify 50-ally placement/import limits, side-specific team controls, and saved/restarted `allyTeam` values. Use `combat-targets.test.js` for cross-group projectile/area damage. Check rival allies in actual AI combat and ensure every allied group spares the player; include projectiles, beams, flames, clouds, mines, healing, and summons when changing team relations. Check ally-only free play and victory after all enemies are defeated.
+
 When adding a regression test:
 
 1. Use or extend the relevant existing `*.test.js` file; use the existing built-in Node pattern without dependencies.

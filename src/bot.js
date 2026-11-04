@@ -26,7 +26,7 @@ function isBurovoyHiddenFromAI(target) {
 }
 
 function filterTargetsByVision(unit, targets) {
-    const visibleTargets = targets.filter(target => !isBurovoyHiddenFromAI(target) && GameTerrain.canSee(unit, target, objects));
+    const visibleTargets = targets.filter(target => isCombatTargetHostile(unit, target) && !isBurovoyHiddenFromAI(target) && GameTerrain.canSee(unit, target, objects));
     if (!unit || (unit.sandBlindTimer || 0) <= 0) return visibleTargets;
     const ux = unit.x + (unit.w || 0) / 2;
     const uy = unit.y + (unit.h || 0) / 2;
@@ -144,7 +144,7 @@ function tryDodgeIncoming(entity) {
     // Find the most urgent (closest in time) incoming bullet
     for (const b of bullets) {
         if (!b || b.team === undefined) continue;
-        if (b.team === entity.team) continue;
+        if (combatTeamsMatch(b.team, entity.team)) continue;
         if (Math.random() > accuracy) continue;
         const bvx = b.vx, bvy = b.vy;
         const rx = ex - b.x, ry = ey - b.y;
@@ -464,7 +464,7 @@ function drawDebugLines() {
 
 function moveParalyzedUnit(unit, candidates, speedFactor = 1) {
     if (speedFactor === 1 && tryDodgeIncoming(unit)) return;
-    const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && target.team !== unit.team));
+    const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && !combatTeamsMatch(target.team, unit.team)));
     let nearest = null;
     let nearestDistance = Infinity;
     const centerX = unit.x + unit.w / 2;
@@ -499,7 +499,7 @@ function handleBotKamikazeMovement(unit, candidates) {
         if (unit.iceSlowedTime <= 0) unit.iceSlowed = false;
     }
     if (unit.kamikazeUltActive) {
-        const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && target.team !== unit.team));
+        const targets = filterTargetsByVision(unit, candidates.filter(target => target && target !== unit && target.alive !== false && !combatTeamsMatch(target.team, unit.team)));
         let nearest = null, distance = Infinity;
         const x = unit.x + unit.w / 2, y = unit.y + unit.h / 2;
         for (const target of targets) {
@@ -547,7 +547,7 @@ function createBotBasicProjectile(unit, owner) {
         w: width, h: height,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life, owner, team: unit.team,
+        life, owner, team: unit.team, sourceUnit: unit,
         type: projectileType, damage
     };
     if (type === 'mechRocket') projectile.explodeRadius = 50;
@@ -562,7 +562,7 @@ function createBotMirrorProjectile(unit, owner) {
         x: unit.x + unit.w / 2 + Math.cos(angle) * 25,
         y: unit.y + unit.h / 2 + Math.sin(angle) * 25,
         vx: Math.cos(angle) * 6, vy: Math.sin(angle) * 6,
-        life: 100, owner, team: unit.team,
+        life: 100, owner, team: unit.team, sourceUnit: unit,
         type: recentType, w: 8, h: 8, damage: 100
     };
     if (recentType === 'plasma' || recentType === 'purple') {
@@ -647,9 +647,8 @@ function updateEnemyAI() {
             }
         }
         
-        // Try dodge incoming projectiles first (all enemy types should dodge)
         if (tryDodgeIncoming(enemy)) continue;
-        
+
         // Handle Inverted Controls (AI) and disorientation affecting movement
         let invertAI = false;
         if (enemy.invertedControls > 0) {
@@ -680,7 +679,7 @@ function updateEnemyAI() {
                     createIceNova(cx, cy, 220, enemy.team);
                     for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#d6f4ff', 0.9);
                 } else if (typeof createElectricNova === 'function') {
-                    createElectricNova(cx, cy, 200, 200, enemy.team);
+                    createElectricNova(cx, cy, 200, 200, enemy.team, enemy);
                     for (let p = 0; p < 40; p++) spawnParticle(cx + (Math.random()-0.5)*120, cy + (Math.random()-0.5)*120, '#00f2ff', 0.9);
                 }
                 enemy.iceUltimate = false;
@@ -738,7 +737,7 @@ function updateEnemyAI() {
         const otherEnemies = enemies.filter(e => e !== enemy && e.alive);
         const potentialTargets = [tank, ...allies, ...otherEnemies, ...illusions.filter(i => i.life > 0), ...playerDrones.filter(d => d && d.alive && d.romanSummon !== 'banner'), ...enemyDrones.filter(d => d && d.alive && d.romanSummon !== 'banner')];
         if ((enemy.lastSeenPlayerTimer || 0) > 0) enemy.lastSeenPlayerTimer--;
-        const visibleTargets = filterTargetsByVision(enemy, potentialTargets.filter(t => t && (t.team === undefined || t.team !== enemy.team)));
+        const visibleTargets = filterTargetsByVision(enemy, potentialTargets.filter(t => t && (t.team === undefined || !combatTeamsMatch(t.team, enemy.team))));
         const playerVisibleToEnemy = visibleTargets.includes(tank);
         if (playerVisibleToEnemy && tank && tank.alive !== false) {
             enemy.lastSeenPlayerX = tank.x + tank.w / 2;
@@ -864,7 +863,7 @@ function updateEnemyAI() {
                 const ang = enemy.turretAngle;
                 const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 25;
                 const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 25;
-                bullets.push({ x: sx, y: sy, w: 10, h: 10, vx: Math.cos(ang) * 10, vy: Math.sin(ang) * 10, life: 300, owner: 'enemy', team: enemy.team, type: 'plasmaBlast', damage: 600, piercing: true, destroysWalls: true });
+                bullets.push({ x: sx, y: sy, w: 10, h: 10, vx: Math.cos(ang) * 10, vy: Math.sin(ang) * 10, life: 300, owner: 'enemy', team: enemy.team, sourceUnit: enemy, type: 'plasmaBlast', damage: 600, piercing: true, destroysWalls: true });
                 enemy.plasmaBlastUsed = (enemy.plasmaBlastUsed || 0) + 1;
                 enemy.fireCooldown = 60;
             }
@@ -879,7 +878,7 @@ function updateEnemyAI() {
                 // Affect player and allies
                 const targetsToInvert = [tank, ...allies];
                 for (const t of targetsToInvert) {
-                    if (!t || t.team === enemy.team) continue;
+                    if (!t || combatTeamsMatch(t.team, enemy.team)) continue;
                     const ex = t.x + (t.w||0)/2, ey = t.y + (t.h||0)/2;
                     if (Math.hypot(ex - cx, ey - cy) <= range) {
                         t.invertedControls = 120;
@@ -942,7 +941,7 @@ function updateEnemyAI() {
             if (enemy.tankType === 'kvant' && enemy.kvantUltCooldown <= 0 && distToNearest < 300 && Math.random() < 0.02) {
                 const _kEx = enemy.x + enemy.w/2, _kEy = enemy.y + enemy.h/2;
                 objects.push({ type: 'shockwave', x: _kEx, y: _kEy, radius: 10, speed: 18, life: 14, maxLife: 14, color: '#00e5ff' });
-                if (typeof tank !== 'undefined' && tank.alive && tank.team !== enemy.team) {
+                if (typeof tank !== 'undefined' && tank.alive && !combatTeamsMatch(tank.team, enemy.team)) {
                     const _kTx = tank.x + tank.w/2, _kTy = tank.y + tank.h/2;
                     if (Math.hypot(_kTx - _kEx, _kTy - _kEy) <= 250) {
                         tank._kvantOverload = true;
@@ -970,7 +969,7 @@ function updateEnemyAI() {
                 for (let ai = 0; ai < allies.length; ai++) {
                     const a = allies[ai];
                     if (!a || !a.alive) continue;
-                    if (a.team !== enemy.team) continue;
+                    if (!combatTeamsMatch(a.team, enemy.team)) continue;
                     const aDistance = Math.hypot((a.x + a.w/2) - (enemy.x + enemy.w/2), (a.y + a.h/2) - (enemy.y + enemy.h/2));
                     if (aDistance < 250 && (a.hp || 300) < (a.maxHp || 300)) {
                         hasHurtAlly = true;
@@ -986,7 +985,7 @@ function updateEnemyAI() {
                         life: 300,  // 5 seconds
                         maxLife: 300,
                         healRate: 1.5,
-                        team: enemy.team
+                        team: enemy.team, sourceUnit: enemy
                     });
                     enemy.medicalZoneCooldown = 720; // 12 second cooldown
                     enemy.fireCooldown = 60;
@@ -1000,7 +999,7 @@ function updateEnemyAI() {
                     if (typeof mines === 'undefined') mines = [];
                     const mineX = enemy.x + enemy.w / 2, mineY = enemy.y + enemy.h / 2;
                     if (canPlaceMineAt(mineX, mineY, 18)) {
-                        mines.push({ x: mineX, y: mineY, radius: 18, team: enemy.team, damage: 150 });
+                        mines.push({ x: mineX, y: mineY, radius: 18, team: enemy.team, sourceUnit: enemy, damage: 150 });
                         enemy.mineCooldown = 120; // 2s cooldown between mines
                         enemy.fireCooldown = 30;  // Brief pause before logic re-evaluates
                     }
@@ -1034,7 +1033,7 @@ function updateEnemyAI() {
                             radius: 6,
                             life: 300,
                             maxLife: 300,
-                            team: enemy.team,
+                            team: enemy.team, sourceUnit: enemy,
                             damage: 75,
                             bounces: 0,
                             maxBounces: 8
@@ -1062,8 +1061,8 @@ function updateEnemyAI() {
                         life: 600, maxLife: 600,
                         fireCooldown: 0, turretAngle: 0, wanderAngle: Math.random() * Math.PI * 2,
                         alive: true,
-                        team: enemy.team,
-                        owner: enemy,
+                        team: enemy.team, sourceUnit: enemy,
+                        owner: enemy, commander: enemy,
                         isEnemyDrone: true
                     });
                 }
@@ -1168,7 +1167,7 @@ function updateEnemyAI() {
                         w: 10, h: 10,
                         vx: Math.cos(enemy.turretAngle) * 10,
                         vy: Math.sin(enemy.turretAngle) * 10,
-                        life: 80, owner: 'enemy', team: enemy.team,
+                        life: 80, owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                         type: 'mechDiy', damage: 40
                     });
                     enemy.mechBurstShots--;
@@ -1205,7 +1204,7 @@ function updateEnemyAI() {
             const ex = enemy.x + enemy.w / 2;
             const ey = enemy.y + enemy.h / 2;
             for (const bb of bullets) {
-                if (bb.team === enemy.team) continue;
+                if (combatTeamsMatch(bb.team, enemy.team)) continue;
                 const dist = Math.hypot(bb.x - ex, bb.y - ey);
                 if (dist < 400) {
                     const dot = bb.vx * (ex - bb.x) + bb.vy * (ey - bb.y);
@@ -1401,7 +1400,7 @@ function updateEnemyAI() {
             for (const other of enemies) {
                 if (other === enemy || !other || !other.alive) continue;
                 // Only separate from same-team enemies (adjust if you want cross-team separation)
-                if (other.team !== enemy.team) continue;
+                if (!combatTeamsMatch(other.team, enemy.team)) continue;
                 const dx = enemy.x - other.x;
                 const dy = enemy.y - other.y;
                 const dist = Math.hypot(dx, dy);
@@ -1438,7 +1437,7 @@ function updateEnemyAI() {
         })(enemy);
 
         // Стрелять по ближайшей цели; если цель враждебна (другая команда), стрелять чаще
-        const shootProb = (nearest.team !== undefined && nearest.team !== enemy.team) ? 0.12 : 0.04;
+        const shootProb = (nearest.team !== undefined && !combatTeamsMatch(nearest.team, enemy.team)) ? 0.12 : 0.04;
         const enemyDisarmed = (enemy.sandNoShootTimer || 0) > 0;
         
         // --- AI MACHINEGUN HEAT LOGIC (exact same as player) ---
@@ -1481,9 +1480,9 @@ function updateEnemyAI() {
 
             let b = null;
             if (tt === 'plasma') {
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:219, owner:'enemy', team: enemy.team, type:'plasma', damage:350, piercing:true };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:10, h:10, vx:Math.cos(enemy.turretAngle)*8, vy:Math.sin(enemy.turretAngle)*8, life:219, owner:'enemy', team: enemy.team, sourceUnit: enemy, type:'plasma', damage:350, piercing:true };
             } else if (tt === 'toxic') {
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:6, h:6, vx:Math.cos(enemy.turretAngle)*7, vy:Math.sin(enemy.turretAngle)*7, life:500, owner:'enemy', team: enemy.team, type:'toxic', explodeTimer:45, spawned:5 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w:6, h:6, vx:Math.cos(enemy.turretAngle)*7, vy:Math.sin(enemy.turretAngle)*7, life:500, owner:'enemy', team: enemy.team, sourceUnit: enemy, type:'toxic', explodeTimer:45, spawned:5 };
             } else if (tt === 'fire') {
                 // Fire-type enemy uses flamethrower cone: spawn multiple flame particles
                 const flameCountE = 14;
@@ -1495,7 +1494,7 @@ function updateEnemyAI() {
                     const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 18;
                     const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 18;
                     const speed = 3.5 + Math.random() * 1.2;
-                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: enemy.team, owner: 'enemy' });
+                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: enemy.team, sourceUnit: enemy, owner: 'enemy' });
                 }
             } else if (tt === 'buratino') {
                 createBuratinoBarrage(enemy);
@@ -1527,7 +1526,7 @@ function updateEnemyAI() {
                         vy: Math.sin(pelletAngle) * speed,
                         life: life,
                         owner: 'enemy',
-                        team: enemy.team,
+                        team: enemy.team, sourceUnit: enemy,
                         type: 'buckshot',
                         damage: BUCKSHOT_PELLET_DAMAGE
                     });
@@ -1547,7 +1546,7 @@ function updateEnemyAI() {
                         y: enemy.y + enemy.h / 2 + Math.sin(angle) * 18,
                         w: 5, h: 5,
                         vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-                        life: 42, owner: 'enemy', team: enemy.team,
+                        life: 42, owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                         type: 'myasnoyBio', damage: 2,
                         veinSeed: Math.random() * Math.PI * 2,
                         veinTwist: 0.8 + Math.random() * 0.9
@@ -1559,17 +1558,17 @@ function updateEnemyAI() {
                 const speed = 7;
                 const life = 80;
                 const ang = enemy.turretAngle + (Math.random() - 0.5) * 0.05;
-                b = { x: enemy.x + enemy.w/2 + Math.cos(ang) * 35, y: enemy.y + enemy.h/2 + Math.sin(ang) * 35, w:7, h:7, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, life:life, owner:'enemy', team: enemy.team, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(ang) * 35, y: enemy.y + enemy.h/2 + Math.sin(ang) * 35, w:7, h:7, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, life:life, owner:'enemy', team: enemy.team, sourceUnit: enemy, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
             } else if (tt === 'musical') {
                 // Enemy musical: sound wave projectile that ricochets
                 const speed = 6;
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 167, team: enemy.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(enemy.turretAngle) * speed, vy: Math.sin(enemy.turretAngle) * speed, life: 167, team: enemy.team, sourceUnit: enemy, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
             } else if (tt === 'time') {
                 // Time tank: regular high-damage shot
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 14, h: 14, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'time', damage: 100 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 14, h: 14, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, sourceUnit: enemy, type: 'time', damage: 100 };
             } else if (tt === 'imitator') {
                 // Imitator base form: same 100-damage shot as the player
-                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, type: 'imitator', damage: 100 };
+                b = { x: enemy.x + enemy.w/2 + Math.cos(enemy.turretAngle) * 25, y: enemy.y + enemy.h/2 + Math.sin(enemy.turretAngle) * 25, w: 9, h: 9, vx:Math.cos(enemy.turretAngle)*5, vy:Math.sin(enemy.turretAngle)*5, life:100, owner:'enemy', team: enemy.team, sourceUnit: enemy, type: 'imitator', damage: 100 };
             } else if (tt === 'electric') {
                 // Enemy electric: fire electric homing ball
                 b = {
@@ -1581,7 +1580,7 @@ function updateEnemyAI() {
                     life: 180,
                     maxLife: 180,
                     owner: 'enemy',
-                    team: enemy.team,
+                    team: enemy.team, sourceUnit: enemy,
                     type: 'electricBall',
                     damage: 150,
                     homingStrength: 0.15,
@@ -1597,7 +1596,7 @@ function updateEnemyAI() {
                     vy: Math.sin(enemy.turretAngle) * 18,
                     life: 70,
                     owner: 'enemy',
-                    team: enemy.team,
+                    team: enemy.team, sourceUnit: enemy,
                     type: 'railgun',
                     damage: 65,
                     piercing: true
@@ -1615,7 +1614,7 @@ function updateEnemyAI() {
                     vy: Math.sin(enemy.turretAngle) * 5,
                     life: 120,
                     owner: 'enemy',
-                    team: enemy.team,
+                    team: enemy.team, sourceUnit: enemy,
                     type: 'medicalPulse',
                     damage: 75
                 };
@@ -1628,7 +1627,7 @@ function updateEnemyAI() {
                     vx: Math.cos(enemy.turretAngle) * 6.5,
                     vy: Math.sin(enemy.turretAngle) * 6.5,
                     life: 130,
-                    owner: 'enemy', team: enemy.team,
+                    owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                     type: 'romanBlade',
                     damage: 125,
                     bounces: 0, maxBounces: 1, spinAngle: 0
@@ -1639,7 +1638,7 @@ function updateEnemyAI() {
                 const _kSX = enemy.x + enemy.w/2 + Math.cos(_kAng)*24;
                 const _kSY = enemy.y + enemy.h/2 + Math.sin(_kAng)*24;
                 const _kFcd = enemy._kvantOverload ? 130 : 65;
-                bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'enemy', team:enemy.team, type:'kvantMain', damage:100, morphTimer:90 });
+                bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'enemy', team:enemy.team, sourceUnit: enemy, type:'kvantMain', damage:100, morphTimer:90 });
                 enemy.fireCooldown = _kFcd;
                 b = null;
             } else if (tt === 'pyro') {
@@ -1651,7 +1650,7 @@ function updateEnemyAI() {
                     vx: Math.cos(enemy.turretAngle) * 5.5,
                     vy: Math.sin(enemy.turretAngle) * 5.5,
                     life: 90,
-                    owner: 'enemy', team: enemy.team,
+                    owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                     type: 'pyroBullet',
                     damage: 70
                 };
@@ -1664,7 +1663,7 @@ function updateEnemyAI() {
                     vx: Math.cos(enemy.turretAngle) * 6,
                     vy: Math.sin(enemy.turretAngle) * 6,
                     life: 125,
-                    owner: 'enemy', team: enemy.team,
+                    owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                     type: 'airBullet',
                     damage: 80
                 };
@@ -1679,7 +1678,7 @@ function updateEnemyAI() {
                         w: 14, h: 14,
                         vx: Math.cos(enemy.turretAngle) * 5.5,
                         vy: Math.sin(enemy.turretAngle) * 5.5,
-                        life: 110, owner: 'enemy', team: enemy.team,
+                        life: 110, owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                         type: 'mechShield', damage: 120
                     };
                 } else {
@@ -1696,7 +1695,7 @@ function updateEnemyAI() {
                         w: 12, h: 12,
                         vx: Math.cos(enemy.turretAngle) * 5.5,
                         vy: Math.sin(enemy.turretAngle) * 5.5,
-                        life: 110, owner: 'enemy', team: enemy.team,
+                        life: 110, owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                         type: 'mechRocketBullet', damage: 150, explodeRadius: 50
                     };
                 } else {
@@ -1711,7 +1710,7 @@ function updateEnemyAI() {
                     vx: Math.cos(enemy.turretAngle) * 8,
                     vy: Math.sin(enemy.turretAngle) * 8,
                     life: 130,
-                    owner: 'enemy', team: enemy.team,
+                    owner: 'enemy', team: enemy.team, sourceUnit: enemy,
                     type: 'spartanSpear',
                     damage: 80,
                     hitEntities: []
@@ -1801,7 +1800,8 @@ function updateAllyAI() {
             continue;
         }
         if (ally.ultimateCooldown > 0) ally.ultimateCooldown--;
-        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...enemyDrones.filter(d => d && d.alive && d.romanSummon !== 'banner' && d.team !== ally.team), ...illusions.filter(i => i.life > 0)]);
+        const targets = filterTargetsByVision(ally, [...enemies.filter(e => e && e.alive), ...allies.filter(a => a && a !== ally && a.alive),
+            ...enemyDrones.filter(d => d && d.alive && d.romanSummon !== 'banner'), ...playerDrones.filter(d => d && d.alive && d.romanSummon !== 'banner'), ...illusions.filter(i => i.life > 0)]);
         if (targets.length === 0) {
             if (ally.tankType === 'burovoy' && typeof updateBurovoyDrillAttack === 'function') {
                 updateBurovoyDrillAttack(ally, false, { damagePerSecond: 40 });
@@ -1878,7 +1878,7 @@ function updateAllyAI() {
             const ax = ally.x + ally.w / 2, ay = ally.y + ally.h / 2;
             let threat = false;
             for (const b of bullets) {
-                if (b.team === ally.team) continue;
+                if (combatTeamsMatch(b.team, ally.team)) continue;
                 if (Math.hypot(b.x - ax, b.y - ay) < 350) {
                     const dot = b.vx * (ax - b.x) + b.vy * (ay - b.y);
                     if (dot > 0) { threat = true; break; }
@@ -2078,7 +2078,7 @@ function updateAllyAI() {
                 const mineX = ally.x + ally.w / 2;
                 const mineY = ally.y + ally.h / 2;
                 if (canPlaceMineAt(mineX, mineY, 18)) {
-                    mines.push({ x: mineX, y: mineY, radius: 18, team: ally.team, damage: 150 });
+                    mines.push({ x: mineX, y: mineY, radius: 18, team: ally.team, sourceUnit: ally, damage: 150 });
                     ally.fireCooldown = getTankShotCooldown('mine');
                 }
             }
@@ -2100,7 +2100,7 @@ function updateAllyAI() {
                             x: ally.x + ally.w / 2 + Math.cos(angle) * 22 + Math.cos(angle + Math.PI / 2) * offset,
                             y: ally.y + ally.h / 2 + Math.sin(angle) * 22 + Math.sin(angle + Math.PI / 2) * offset,
                             w: 10, h: 10, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10,
-                            life: 80, owner: 'ally', team: ally.team, type: 'mechDiy', damage: 40
+                            life: 80, owner: 'ally', team: ally.team, sourceUnit: ally, type: 'mechDiy', damage: 40
                         });
                         ally.mechBurstShots--;
                         ally.mechBurstCannon = (cannon + 1) % 2;
@@ -2147,18 +2147,18 @@ function updateAllyAI() {
 
                 let b = null;
                 if (tt === 'plasma') {
-                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:219, owner:'ally', team: ally.team, type:'plasma', damage:350, piercing:true };
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:10, h:10, vx:Math.cos(ally.turretAngle)*8, vy:Math.sin(ally.turretAngle)*8, life:219, owner:'ally', team: ally.team, sourceUnit: ally, type:'plasma', damage:350, piercing:true };
                 } else if (tt === 'time' || tt === 'imitator') {
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25,
                         w: tt === 'time' ? 14 : 9, h: tt === 'time' ? 14 : 9,
                         vx: Math.cos(ally.turretAngle)*5, vy: Math.sin(ally.turretAngle)*5,
-                        life: 100, owner: 'ally', team: ally.team, type: tt, damage: 100 };
+                        life: 100, owner: 'ally', team: ally.team, sourceUnit: ally, type: tt, damage: 100 };
                 } else if (tt === 'robot') {
                     b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*28, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*28,
                         w:6, h:6, vx:Math.cos(ally.turretAngle)*18, vy:Math.sin(ally.turretAngle)*18,
-                        life:70, owner:'ally', team:ally.team, type:'railgun', damage:65, piercing:true };
+                        life:70, owner:'ally', team:ally.team, sourceUnit: ally, type:'railgun', damage:65, piercing:true };
                 } else if (tt === 'toxic') {
-                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*7, vy:Math.sin(ally.turretAngle)*7, life:500, owner:'ally', team: ally.team, type:'toxic', explodeTimer:45, spawned:5 };
+                    b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle)*25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle)*25, w:6, h:6, vx:Math.cos(ally.turretAngle)*7, vy:Math.sin(ally.turretAngle)*7, life:500, owner:'ally', team: ally.team, sourceUnit: ally, type:'toxic', explodeTimer:45, spawned:5 };
                 } else if (tt === 'fire') {
                     // Ally fire-type uses flamethrower: spawn flame particles
                         const flameCountA = 14;
@@ -2170,14 +2170,14 @@ function updateAllyAI() {
                         const sx = ally.x + ally.w/2 + Math.cos(ang) * 18;
                         const sy = ally.y + ally.h/2 + Math.sin(ang) * 18;
                         const speed = 3.5 + Math.random() * 1.2;
-                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: ally.team, owner: 'ally' });
+                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: ally.team, sourceUnit: ally, owner: 'ally' });
                     }
                 } else if (tt === 'buratino') {
                     createBuratinoBarrage(ally);
                 } else if (tt === 'musical') {
                         // Ally musical: sound wave projectile that ricochets
                         const speed = 6;
-                        b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 167, team: ally.team, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
+                        b = { x: ally.x + ally.w/2 + Math.cos(ally.turretAngle) * 25, y: ally.y + ally.h/2 + Math.sin(ally.turretAngle) * 25, w: 12, h: 12, vx: Math.cos(ally.turretAngle) * speed, vy: Math.sin(ally.turretAngle) * speed, life: 167, team: ally.team, sourceUnit: ally, type: 'musical', damage: 200, bounces: 0, maxBounces: 3 };
                     } else if (tt === 'illuminat') {
                         // Ally illuminat: activate beam
                         if (!ally.beamActive && (!ally.beamCooldown || ally.beamCooldown <= 0)) {
@@ -2196,7 +2196,7 @@ function updateAllyAI() {
                             life: 180,
                             maxLife: 180,
                             owner: 'ally',
-                            team: ally.team,
+                            team: ally.team, sourceUnit: ally,
                             type: 'electricBall',
                             damage: 150,
                             homingStrength: 0.15,
@@ -2207,7 +2207,7 @@ function updateAllyAI() {
                         const speedA = 7;
                         const lifeA = 80;
                         const angA = ally.turretAngle + (Math.random() - 0.5) * 0.05;
-                        b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
+                        b = { x: ally.x + ally.w/2 + Math.cos(angA) * 35, y: ally.y + ally.h/2 + Math.sin(angA) * 35, w:7, h:7, vx:Math.cos(angA)*speedA, vy:Math.sin(angA)*speedA, life:lifeA, owner:'ally', team: ally.team, sourceUnit: ally, type: 'machinegun', damage: MACHINEGUN_BULLET_DAMAGE };
                     } else if (tt === 'waterjet') {
                         startWaterjetBurst(ally);
                     } else if (tt === 'buckshot') {
@@ -2221,7 +2221,7 @@ function updateAllyAI() {
                         
                         for (let i = 0; i < 5; i++) {
                             const pelletAngle = baseAng + (i - 2) * (spreadAngle / 4) + (Math.random() - 0.5) * 0.08;
-                            b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, type: 'buckshot', damage: BUCKSHOT_PELLET_DAMAGE };
+                            b = { x: startXA + Math.cos(pelletAngle) * 2 * i, y: startYA + Math.sin(pelletAngle) * 2 * i, w: 6, h: 6, vx: Math.cos(pelletAngle) * speed, vy: Math.sin(pelletAngle) * speed, life: life, owner: 'ally', team: ally.team, sourceUnit: ally, type: 'buckshot', damage: BUCKSHOT_PELLET_DAMAGE };
                             if (b) bullets.push(b);
                         }
                         ally.fireCooldown = getTankShotCooldown(tt);
@@ -2236,7 +2236,7 @@ function updateAllyAI() {
                             vy: Math.sin(ally.turretAngle) * 5,
                             life: 120,
                             owner: 'ally',
-                            team: ally.team,
+                            team: ally.team, sourceUnit: ally,
                             type: 'medicalPulse',
                             damage: 75
                         };
@@ -2249,7 +2249,7 @@ function updateAllyAI() {
                             vx: Math.cos(ally.turretAngle) * 6.5,
                             vy: Math.sin(ally.turretAngle) * 6.5,
                             life: 130,
-                            owner: 'ally', team: ally.team,
+                            owner: 'ally', team: ally.team, sourceUnit: ally,
                             type: 'romanBlade',
                             damage: 125,
                             bounces: 0, maxBounces: 1, spinAngle: 0
@@ -2259,7 +2259,7 @@ function updateAllyAI() {
                         const _kAng = ally.turretAngle, _kSpd = 5.5;
                         const _kSX = ally.x + ally.w/2 + Math.cos(_kAng)*24;
                         const _kSY = ally.y + ally.h/2 + Math.sin(_kAng)*24;
-                        bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'ally', team:ally.team, type:'kvantMain', damage:120, morphTimer:90 });
+                        bullets.push({ x:_kSX, y:_kSY, w:12, h:12, vx:Math.cos(_kAng)*_kSpd, vy:Math.sin(_kAng)*_kSpd, life:220, owner:'ally', team:ally.team, sourceUnit: ally, type:'kvantMain', damage:120, morphTimer:90 });
                         ally.fireCooldown = 65;
                         b = null;
                     } else if (tt === 'spartan') {
@@ -2271,7 +2271,7 @@ function updateAllyAI() {
                             vx: Math.cos(ally.turretAngle) * 8,
                             vy: Math.sin(ally.turretAngle) * 8,
                             life: 130,
-                            owner: 'ally', team: ally.team,
+                            owner: 'ally', team: ally.team, sourceUnit: ally,
                             type: 'spartanSpear',
                             damage: 80,
                             hitEntities: []
@@ -2290,7 +2290,7 @@ function updateAllyAI() {
                                 y: ally.y + ally.h/2 + Math.sin(ang)*18,
                                 w: 5, h: 5,
                                 vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-                                life: 42, owner: 'ally', team: ally.team,
+                                life: 42, owner: 'ally', team: ally.team, sourceUnit: ally,
                                 type: 'myasnoyBio', damage: _myasnoyBodyDmg,
                                 veinSeed: Math.random() * Math.PI * 2,
                                 veinTwist: 0.8 + Math.random() * 0.9
@@ -2308,7 +2308,7 @@ function updateAllyAI() {
                             vx: Math.cos(ally.turretAngle) * 6,
                             vy: Math.sin(ally.turretAngle) * 6,
                             life: 125,
-                            owner: 'ally', team: ally.team,
+                            owner: 'ally', team: ally.team, sourceUnit: ally,
                             type: 'airBullet',
                             damage: 80
                         };
@@ -2434,7 +2434,7 @@ function updateAllyAI() {
             for (let j = checkList.length - 1; j >= 0; j--) {
                 const e = checkList[j];
                 // Skip invalid, dead, or same team
-                if (!e || e.romanSummon === 'banner' || (e.alive === false && e !== tank) || (e.team !== undefined && e.team === unit.team)) continue;
+                if (!e || e.romanSummon === 'banner' || (e.alive === false && e !== tank) || (e.team !== undefined && combatTeamsMatch(e.team, unit.team))) continue;
 
                 // Mirror Shield Protection from Beams (works for any tank)
                 if (e.mirrorShieldActive) continue;
@@ -2451,7 +2451,7 @@ function updateAllyAI() {
                     const _beamUpgMult = (unit === tank && typeof getPlayerDmgMult === 'function') ? getPlayerDmgMult() : 1;
                     const dmg = damagePerTick * unit.beamIntensity * _beamUpgMult;
                     const isDrone = playerDrones.includes(e) || enemyDrones.includes(e);
-                    const dealt = isDrone ? damageCombatDrone(e, dmg) : dealDamageToEntity(e, dmg);
+                    const dealt = isDrone ? damageCombatDrone(e, dmg) : dealDamageToEntity(e, dmg, unit.team, unit);
                     if (dealt <= 0) continue;
                     e.hitFlashTime = Date.now();
                     // Apply strong disorientation/inversion + confusion so AI reacts
@@ -2503,7 +2503,7 @@ function updateAllyAI() {
     // Illuminat beam logic for allies
     for (let i = allies.length - 1; i >= 0; i--) {
         const ally = allies[i];
-        if (ally.tankType === 'illuminat') updateUnitBeam(ally, [...enemies, ...enemyDrones]);
+        if (ally.tankType === 'illuminat') updateUnitBeam(ally, [...enemies, ...allies.filter(a => a !== ally), ...playerDrones, ...enemyDrones]);
     }
 
     // Illuminat beam logic for enemies
@@ -2586,7 +2586,7 @@ function updateAllyAI() {
         for (let j = targets.length - 1; j >= 0; j--) {
             const e = targets[j];
             if (!e || e.romanSummon === 'banner' || (e.alive === false && e !== tank)) continue;
-            if (e.team === unit.team) continue;
+            if (combatTeamsMatch(e.team, unit.team)) continue;
             if (e.mirrorShieldActive) continue;
             // Roman shield blocks waterjet beam damage
             if (e.romanShieldActive) continue;
@@ -2599,7 +2599,7 @@ function updateAllyAI() {
 
             // Damage per frame (1.5/tick), boosted by upgrade if player
             const isDrone = playerDrones.includes(e) || enemyDrones.includes(e);
-            const dealt = isDrone ? damageCombatDrone(e, 1.5 * _wjMult) : dealDamageToEntity(e, 1.5 * _wjMult);
+            const dealt = isDrone ? damageCombatDrone(e, 1.5 * _wjMult) : dealDamageToEntity(e, 1.5 * _wjMult, unit.team, unit);
             if (dealt <= 0) continue;
             if (e === tank) {
                 tank._immersionWaterFrame = window.frameCount || 0;
@@ -2656,7 +2656,7 @@ function updateAllyAI() {
     if (tankType === 'waterjet') updateUnitWaterjet(tank, [...enemies, ...enemyDrones]);
     // Waterjet: Allies
     for (let i = allies.length - 1; i >= 0; i--) {
-        if (allies[i].tankType === 'waterjet') updateUnitWaterjet(allies[i], [...enemies, ...enemyDrones]);
+        if (allies[i].tankType === 'waterjet') updateUnitWaterjet(allies[i], [...enemies, ...allies.filter((_, j) => j !== i), ...playerDrones, ...enemyDrones]);
     }
     // Waterjet: Enemies
     for (let i = enemies.length - 1; i >= 0; i--) {

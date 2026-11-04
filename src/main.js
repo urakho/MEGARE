@@ -994,7 +994,7 @@ function updateMyasnoyEyeAttackSweep(unit) {
         const enemy = enemies[index];
         if (!enemy || !enemy.alive || hitTargets.has(enemy) || !withinSweep(enemy)) continue;
         hitTargets.add(enemy);
-        if (!(enemy.kamikazeUltActive && enemy.kamikazeInvincible)) enemy.hp -= damage;
+        if (!(enemy.kamikazeUltActive && enemy.kamikazeInvincible)) { enemy.hp -= damage; }
         enemy.hitFlashTime = Date.now();
         for (let particle = 0; particle < 6; particle++) {
             spawnParticle(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, '#cc0000', 0.9);
@@ -1967,6 +1967,7 @@ function startGame(mode) {
     }
     if (mode === 'leaderhunt') mode = 'bossfight';
     battleSessionId++;
+    window._customMapTriggerState = null;
     window.currentTerrain = mode === 'bossfight' ? 'lava' : GameTerrain.randomType();
     GameTerrain.resetBattle();
 
@@ -2254,13 +2255,19 @@ function startGame(mode) {
 
 // ─── Custom Map Mode (Map Editor → Play) ────────────────────────────────────
 // Loads player-created map objects and starts a single-player game with no rewards.
-window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns, allySpawns, playerSpawn, enemyMode, customWinMsg, customLoseMsg) {
+window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns, allySpawns, playerSpawn, enemyMode, customWinMsg, customLoseMsg, terrainType, triggers = []) {
+    const cleanMap = removeNeutralMapData({ objects: [...(enemySpawns || []), ...(allySpawns || [])], triggers });
+    const enemyCount = (enemySpawns || []).filter(spawn => spawn?.type !== 'neutral').length;
+    if (Array.isArray(enemySpawns)) enemySpawns = cleanMap.objects.slice(0, enemyCount);
+    if (Array.isArray(allySpawns)) allySpawns = cleanMap.objects.slice(enemyCount);
+    triggers = cleanMap.triggers;
+
     battleSessionId++;
-    window.currentTerrain = GameTerrain.randomType();
+    window.currentTerrain = terrainType ? GameTerrain.normalize(terrainType) : GameTerrain.randomType();
     GameTerrain.resetBattle();
-    // Store custom messages for result overlay (split by newlines into array)
-    window._customMapWinMsg  = (customWinMsg  || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
-    window._customMapLoseMsg = (customLoseMsg || '').split('\n').map(m => m.trim()).filter(m => m.length > 0);
+    // Keep separate message variants; newline-separated strings are supported for older maps.
+    window._customMapWinMsg = normalizeCustomMapMessages(customWinMsg);
+    window._customMapLoseMsg = normalizeCustomMapMessages(customLoseMsg);
     
     // Store all params needed to restart the custom map
     window._customMapParams = {
@@ -2270,14 +2277,17 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         allySpawns: JSON.parse(JSON.stringify(allySpawns)),
         playerSpawn: JSON.parse(JSON.stringify(playerSpawn)),
         enemyMode,
-        customWinMsg,
-        customLoseMsg
+        customWinMsg: normalizeCustomMapMessages(customWinMsg),
+        customLoseMsg: normalizeCustomMapMessages(customLoseMsg),
+        terrainType,
+        triggers: JSON.parse(JSON.stringify(triggers))
     };
     // Reset game state the same way startGame does
     if (tank.imitatorActive && tank.originalTankType) tankType = tank.originalTankType;
     else if (tank.imitatorActive) tankType = 'imitator';
 
     tank.turretAngle = 0;
+    tank.team = 0;
     setTankHP(tankType); setTankSpeed(tankType);
     resetTankBattleEffects(tank);
     tank.artilleryMode = false; tank.artilleryTimer = 0;
@@ -2370,7 +2380,7 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         electric:'#f39c12', burovoy:'#8b1e13', robot:'#2c3e50',   medical:'#27ae60', mine:'#8e44ad',
         time:'#16a085',     imitator:'#7f8c8d', roman:'#c0392b'
     };
-    const spawnPositions = (enemySpawns && enemySpawns.length > 0)
+    const spawnPositions = Array.isArray(enemySpawns)
         ? enemySpawns.map(o => _spawnMarkerToTankPos(o, 38, 38, o.x + 6, o.y + 6))
         : [
             { x: worldWidth - 80,  y: 80 },
@@ -2379,17 +2389,24 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
             { x: worldWidth / 2,   y: 80 },
         ];
     enemies = spawnPositions.map((pos, i) => {
-        const selectedType = enemySpawns?.[i]?.tankType;
+        const spawn = enemySpawns?.[i] || {};
+        const selectedType = spawn.tankType;
         const tt = isCustomMapTankType(selectedType) ? selectedType
             : _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         // In 'solo' mode each enemy gets its own team (2, 3, 4...) so they fight each other
-        const teamId = (enemyMode === 'solo') ? (i + 2) : 1;
+        const teamId = enemyMode === 'custom' && Number.isInteger(spawn.team) && spawn.team >= 1 && spawn.team <= 4
+            ? spawn.team : (enemyMode === 'solo' ? i + 2 : 1);
+        const health = Number.isInteger(spawn.health) && spawn.health >= 1 && spawn.health <= 100000
+            ? spawn.health : (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300);
         return {
             x: pos.x, y: pos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#e74c3c',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
-            maxHp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+            hp: health, maxHp: health,
+            customName: typeof spawn.customName === 'string' ? spawn.customName.slice(0, 32) : '',
+            customLabel: typeof spawn.customLabel === 'string' ? spawn.customLabel.slice(0, 64) : '',
+            editorId: spawn.id, customTeam: spawn.team || 1,
+            allyTeam: spawn.allyTeam || 1,
             turretAngle: 0, baseAngle: 0,
             speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2),
             trackOffset: 0, alive: true, team: teamId,
@@ -2405,15 +2422,20 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
         const tt = isCustomMapTankType(spawn.tankType) ? spawn.tankType
             : _allEnemyTypes[Math.floor(Math.random() * _allEnemyTypes.length)];
         const spawnPos = _spawnMarkerToTankPos(spawn, 38, 38, tank.x + 50 + i * 44, tank.y);
+        const health = Number.isInteger(spawn.health) && spawn.health >= 1 && spawn.health <= 100000
+            ? spawn.health : (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300);
         return {
             x: spawnPos.x, y: spawnPos.y, w: 38, h: 38,
             color: _typeColorMap[tt] || '#2ecc71',
             tankType: tt,
-            hp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
-            maxHp: (tankMaxHpByType[tt] || window.mechMaxHpByType?.[tt] || 300),
+            hp: health, maxHp: health,
+            customName: typeof spawn.customName === 'string' ? spawn.customName.slice(0, 32) : '',
+            customLabel: typeof spawn.customLabel === 'string' ? spawn.customLabel.slice(0, 64) : '',
+            editorId: spawn.id, customTeam: spawn.team || 1,
+            allyTeam: spawn.allyTeam || 1,
             turretAngle: 0, baseAngle: 0,
             speed: (tankMaxSpeedByType[tt] || window.mechMaxSpeedByType?.[tt] || 3.2),
-            trackOffset: 0, alive: true, team: 0,  // Team 0 = player team (allies)
+            trackOffset: 0, alive: true, team: -(spawn.allyTeam || 1),
             stuckCount: 0, fireCooldown: 0,
             dodgeAccuracy: 0.7 + Math.random() * 0.25,
             paralyzed: false, paralyzedTime: 0,
@@ -2423,6 +2445,13 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     
     // Add allied tanks to allies array (they fight alongside the player)
     allies = allies.concat(alliedTanks);
+
+    window._customMapTriggerState = {
+        ticks: 0, enemyMode, nextTeam: enemies.length + 2, fired: new Set(),
+        hadHostiles: enemies.length > 0,
+        rules: validateCustomMapTriggers(triggers, [...(enemySpawns || []), ...(allySpawns || [])]) ? [] : JSON.parse(JSON.stringify(triggers)),
+        units: new Map([...enemies, ...allies].filter(unit => unit.editorId).map(unit => [unit.editorId, unit]))
+    };
 
     sanitizeBattleSpawns();
 
@@ -2450,6 +2479,127 @@ window.startCustomMapMode = function(customObjects, worldW, worldH, enemySpawns,
     navNeedsRebuild = true;
     if (typeof draw === 'function') draw();
 };
+
+function validateCustomMapTriggers(rules, markers) {
+    if (!Array.isArray(rules) || rules.length > 500) return 'Слишком много триггеров на карте';
+    const ids = new Set();
+    const counts = new Map(), slots = new Map();
+    for (const marker of markers) {
+        if (!marker || marker.id === undefined) continue;
+        if (typeof marker.id !== 'string' || !marker.id || marker.id.length > 64 || ids.has(marker.id)) return 'Некорректный или повторяющийся ID бота';
+        if (['enemy', 'ally'].includes(marker.type) || marker.type === undefined) ids.add(marker.id);
+    }
+    for (const rule of rules) {
+        if (!rule || !['timer', 'destroyed'].includes(rule.when) || !Array.isArray(rule.targets) ||
+            !rule.targets.length || rule.targets.length > 125 || new Set(rule.targets).size !== rule.targets.length || rule.targets.some(id => !ids.has(id))) return 'Триггер ссылается на удалённого бота';
+        if (rule.when === 'timer' && (!Number.isFinite(rule.seconds) || rule.seconds < 0 || rule.seconds > 3600)) return 'Некорректное время триггера';
+        if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') return 'Некорректное состояние триггера';
+        if (rule.slot !== undefined && (rule.when !== 'timer' || !Number.isInteger(rule.slot) || rule.slot < 2 || rule.slot > 5 || rule.seconds < 0.1)) return 'Слоты 2–5 доступны только для таймеров от 0,1 секунды';
+        for (const id of rule.targets) {
+            counts.set(id, (counts.get(id) || 0) + 1);
+            if (counts.get(id) > 4) return 'У танка может быть только 4 триггера после начала боя';
+            if (rule.slot !== undefined) {
+                const key = id + ':' + rule.slot;
+                if (slots.has(key)) return 'У танка повторяется слот триггера';
+                slots.set(key, true);
+            }
+        }
+        if (rule.when === 'destroyed' && !ids.has(rule.sourceId)) return 'Не выбран бот для условия триггера';
+        if (!rule.changes || typeof rule.changes !== 'object' || Array.isArray(rule.changes) || !Object.keys(rule.changes).length) return 'В триггере нет изменений';
+        for (const [key, value] of Object.entries(rule.changes)) {
+            if (key === 'tankType' && (value === '' || isCustomMapTankType(value))) continue;
+            if (key === 'health' && (value === null || (Number.isInteger(value) && value >= 1 && value <= 100000))) continue;
+            if (key === 'customName' && typeof value === 'string' && value.length <= 32) continue;
+            if (key === 'customLabel' && typeof value === 'string' && value.length <= 64) continue;
+            if (key === 'type' && ['enemy', 'ally'].includes(value)) continue;
+            if (key === 'team' && Number.isInteger(value) && value >= 1 && value <= 4) continue;
+            if (key === 'allyTeam' && Number.isInteger(value) && value >= 1 && value <= 4) continue;
+            return 'Некорректное действие триггера';
+        }
+    }
+    return null;
+}
+
+function normalizeCustomMapMessages(value) {
+    return (Array.isArray(value) ? value : typeof value === 'string' ? value.split('\n') : [])
+        .filter(message => typeof message === 'string').map(message => message.trim().slice(0, 200)).filter(Boolean).slice(0, 20);
+}
+
+function removeNeutralMapData(map) {
+    if (!map || typeof map !== 'object' || !Array.isArray(map.objects)) return map;
+    const removed = new Set(map.objects.filter(object => object?.type === 'neutral').map(object => object.id).filter(Boolean));
+    const objects = map.objects.filter(object => object?.type !== 'neutral').map(object => {
+        if (!object || typeof object !== 'object' || !Object.hasOwn(object, 'neutralSettings')) return object;
+        const copy = { ...object }; delete copy.neutralSettings; return copy;
+    });
+    const result = { ...map, objects };
+    if (Array.isArray(map.triggers)) result.triggers = map.triggers.flatMap(rule => {
+        if (!rule || typeof rule !== 'object' || !Array.isArray(rule.targets) || !rule.changes || typeof rule.changes !== 'object') return [rule];
+        if (rule.when === 'destroyed' && removed.has(rule.sourceId)) return [];
+        const targets = rule.targets.filter(id => !removed.has(id));
+        const changes = { ...rule.changes };
+        delete changes.neutralSettings;
+        if (changes.type === 'neutral') delete changes.type;
+        return targets.length && Object.keys(changes).length ? [{ ...rule, targets, changes }] : [];
+    });
+    return result;
+}
+
+function updateCustomMapTriggers() {
+    const state = window._customMapTriggerState;
+    if (currentMode !== 'custom' || gameState !== 'playing' || !state || (typeof window.isPaused === 'function' && window.isPaused())) return;
+    state.ticks++;
+    state.rules.forEach((rule, index) => {
+        if (state.fired.has(index) || rule.enabled === false) return;
+        const source = state.units.get(rule.sourceId);
+        const ready = rule.when === 'timer' ? state.ticks >= rule.seconds * 60
+            : source && (source.hp <= 0 || source.alive === false || (!enemies.includes(source) && !allies.includes(source)));
+        if (!ready) return;
+        state.fired.add(index);
+        for (const id of rule.targets) {
+            let unit = state.units.get(id);
+            if (!unit || unit.hp <= 0 || unit.alive === false || (!enemies.includes(unit) && !allies.includes(unit))) continue;
+            const changes = rule.changes;
+            if (Object.hasOwn(changes, 'tankType')) {
+                const types = [...Object.keys(tankMaxHpByType), ...Object.keys(window.mechMaxHpByType || {})].filter(isCustomMapTankType);
+                const type = changes.tankType || types[Math.floor(Math.random() * types.length)];
+                const hp = tankMaxHpByType[type] || window.mechMaxHpByType?.[type] || 300;
+                const replacement = { x: unit.x, y: unit.y, w: unit.w, h: unit.h, color: unit.color,
+                    team: unit.team, editorId: id, customTeam: unit.customTeam, customName: unit.customName, customLabel: unit.customLabel,
+                    allyTeam: unit.allyTeam,
+                    tankType: type, hp, maxHp: hp, speed: tankMaxSpeedByType[type] || window.mechMaxSpeedByType?.[type] || 3.2,
+                    turretAngle: unit.turretAngle || 0, baseAngle: unit.baseAngle || 0, trackOffset: 0,
+                    alive: true, stuckCount: 0, fireCooldown: 0, dodgeAccuracy: 0.8, robotDroneCooldown: 0 };
+                for (const group of [enemies, allies]) {
+                    const position = group.indexOf(unit);
+                    if (position >= 0) group[position] = replacement;
+                }
+                for (const drone of [...playerDrones, ...enemyDrones]) if (drone.commander === unit) drone.commander = replacement;
+                unit = replacement; state.units.set(id, unit);
+            }
+            if (Object.hasOwn(changes, 'health')) {
+                unit.hp = unit.maxHp = changes.health ?? (tankMaxHpByType[unit.tankType] || window.mechMaxHpByType?.[unit.tankType] || 300);
+            }
+            if (Object.hasOwn(changes, 'customName')) unit.customName = changes.customName;
+            if (Object.hasOwn(changes, 'customLabel')) unit.customLabel = changes.customLabel;
+            if (Object.hasOwn(changes, 'team')) unit.customTeam = changes.team;
+            if (Object.hasOwn(changes, 'allyTeam')) unit.allyTeam = changes.allyTeam;
+            const wasAlly = allies.includes(unit);
+            const toAlly = changes.type ? changes.type === 'ally' : wasAlly;
+            if (toAlly !== wasAlly) {
+                const from = wasAlly ? allies : enemies, to = toAlly ? allies : enemies;
+                from.splice(from.indexOf(unit), 1); to.push(unit);
+                unit.path = []; unit.pathIndex = 0; unit.pathRecalc = 0;
+            }
+            unit.team = toAlly ? -(unit.allyTeam || 1) : state.enemyMode === 'custom' ? unit.customTeam || 1
+                : state.enemyMode === 'solo' ? (wasAlly ? state.nextTeam++ : unit.team) : 1;
+            if (!toAlly) state.hadHostiles = true;
+            for (const drone of [...playerDrones, ...enemyDrones]) {
+                if (drone.commander === unit) { drone.team = unit.team; drone.owner = toAlly ? 'player' : 'enemy'; drone.target = null; }
+            }
+        }
+    });
+}
 
                 // very large world (6x single)
                 worldWidth = 900 * 6; worldHeight = 700 * 6;
@@ -5055,7 +5205,7 @@ function update() {
             if (zone.life <= 0) { medicalZones.splice(zi, 1); continue; }
 
             // Heal player if in range and same team
-            if (zone.team === tank.team) {
+            if (combatTeamsMatch(zone.team, tank.team)) {
                 const dx = (tank.x + tank.w/2) - zone.x;
                 const dy = (tank.y + tank.h/2) - zone.y;
                 const dist = Math.hypot(dx, dy);
@@ -5067,7 +5217,7 @@ function update() {
             // Heal allies in zone
             for (const a of allies) {
                 if (!a.alive) continue;
-                if (a.team !== zone.team) continue; // Don't heal enemies
+                if (!combatTeamsMatch(a.team, zone.team)) continue; // Don't heal enemies
                 const dx = (a.x + a.w/2) - zone.x;
                 const dy = (a.y + a.h/2) - zone.y;
                 const dist = Math.hypot(dx, dy);
@@ -5079,7 +5229,7 @@ function update() {
             // Heal player drones in zone
             for (const d of playerDrones) {
                 if (!d.alive) continue;
-                if (d.team !== zone.team) continue;
+                if (!combatTeamsMatch(d.team, zone.team)) continue;
                 const dx = (d.x + d.w/2) - zone.x;
                 const dy = (d.y + d.h/2) - zone.y;
                 const dist = Math.hypot(dx, dy);
@@ -5174,50 +5324,18 @@ function update() {
             const mine = mines[mi];
             let triggered = false;
 
-            if (mine.team === 0) {
-                // Player's mines: trigger on enemy contact
-                for (const e of enemies) {
-                    if (!e.alive) continue;
-                    const dx = (e.x + e.w / 2) - mine.x;
-                    const dy = (e.y + e.h / 2) - mine.y;
-                    if (Math.hypot(dx, dy) < mine.radius + e.w / 2) {
-                        spawnExplosion(mine.x, mine.y, 55, 'blast');
-                        let dmgMine = mine.damage;
-                        if (mine.owner === 'player' || (!mine.team || mine.team === 'player')) dmgMine = applyPlayerDamage(dmgMine);
-                        if (!(e.kamikazeUltActive && e.kamikazeInvincible)) e.hp -= dmgMine;
-                        if (e.hp <= 0) e.alive = false;
-                        for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
-                        triggered = true;
-                        break;
-                    }
-                }
-            } else {
-                // Enemy mines: trigger on player or ally contact
-                if (tank.alive) {
-                    const dx = (tank.x + tank.w / 2) - mine.x;
-                    const dy = (tank.y + tank.h / 2) - mine.y;
-                    if (Math.hypot(dx, dy) < mine.radius + tank.w / 2) {
-                        spawnExplosion(mine.x, mine.y, 55, 'blast');
-                        if (!isPlayerDamageProtected()) tank.hp -= mine.damage;
-                        for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
-                        triggered = true;
-                    }
-                }
-                if (!triggered) {
-                    for (const a of allies) {
-                        if (!a.alive || a.team === mine.team) continue;
-                        const dx = (a.x + a.w / 2) - mine.x;
-                        const dy = (a.y + a.h / 2) - mine.y;
-                        if (Math.hypot(dx, dy) < mine.radius + a.w / 2) {
-                            spawnExplosion(mine.x, mine.y, 55, 'blast');
-                            if (!(a.kamikazeUltActive && a.kamikazeInvincible)) a.hp -= mine.damage;
-                            if (a.hp <= 0) a.alive = false;
-                            for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
-                            triggered = true;
-                            break;
-                        }
-                    }
-                }
+            for (const target of [tank, ...allies, ...enemies]) {
+                if (!target || !target.alive || combatTeamsMatch(target.team, mine.team)) continue;
+                const distance = Math.hypot(target.x + target.w / 2 - mine.x, target.y + target.h / 2 - mine.y);
+                if (distance >= mine.radius + target.w / 2) continue;
+                spawnExplosion(mine.x, mine.y, 55, 'blast');
+                const protectedTarget = target === tank ? isPlayerDamageProtected() : target.kamikazeUltActive && target.kamikazeInvincible;
+                const damage = mine.team === 0 ? applyPlayerDamage(mine.damage) : mine.damage;
+                if (!protectedTarget) { target.hp -= damage; }
+                if (target !== tank && target.hp <= 0) target.alive = false;
+                for (let p = 0; p < 20; p++) spawnParticle(mine.x + (Math.random() - 0.5) * 80, mine.y + (Math.random() - 0.5) * 80, '#ff6600', 0.9);
+                triggered = true;
+                break;
             }
 
             if (!triggered) {
@@ -5262,8 +5380,8 @@ function update() {
                 // Find nearest enemy
                 let nearestEnemy = null;
                 let nearestDist = Infinity;
-                for (const e of enemies) {
-                    if (!e.alive || !GameTerrain.canSee(d, e, objects)) continue;
+                for (const e of [...enemies, ...allies]) {
+                    if (!e.alive || !isCombatTargetHostile(d, e) || !GameTerrain.canSee(d, e, objects)) continue;
                     const dist = Math.hypot((e.x + e.w/2) - (d.x + d.w/2), (e.y + e.h/2) - (d.y + d.h/2));
                     if (dist < nearestDist) { nearestDist = dist; nearestEnemy = e; }
                 }
@@ -5353,9 +5471,9 @@ function update() {
                 // Find nearest target (player or allies)
                 let nearestTarget = null;
                 let nearestDist = Infinity;
-                const potentialTargets = [tank, ...allies];
+                const potentialTargets = [tank, ...allies, ...enemies];
                 for (const t of potentialTargets) {
-                    if (!t || !t.alive || !GameTerrain.canSee(d, t, objects)) continue;
+                    if (!t || !t.alive || !isCombatTargetHostile(d, t) || !GameTerrain.canSee(d, t, objects)) continue;
                     const dist = Math.hypot((t.x + t.w/2) - (d.x + d.w/2), (t.y + t.h/2) - (d.y + d.h/2));
                     if (dist < nearestDist) { nearestDist = dist; nearestTarget = t; }
                 }
@@ -5422,7 +5540,7 @@ function update() {
                             w: 6, h: 6,
                             damage: 25,
                             type: 'droneBullet',
-                            team: d.team,
+                            team: d.team, sourceUnit: d.commander || d,
                             owner: 'drone',
                             life: 90
                         });

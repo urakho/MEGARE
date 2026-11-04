@@ -79,7 +79,7 @@
         closePause();
         if (window._customMapActive && window._customMapParams && typeof window.startCustomMapMode === 'function') {
             const p = window._customMapParams;
-            window.startCustomMapMode(p.customObjects, p.worldW, p.worldH, p.enemySpawns, p.allySpawns, p.playerSpawn, p.enemyMode, p.customWinMsg, p.customLoseMsg);
+            window.startCustomMapMode(p.customObjects, p.worldW, p.worldH, p.enemySpawns, p.allySpawns, p.playerSpawn, p.enemyMode, p.customWinMsg, p.customLoseMsg, p.terrainType, p.triggers);
             return;
         }
         if (typeof startGame === 'function') startGame(typeof currentMode === 'string' && currentMode ? currentMode : 'single');

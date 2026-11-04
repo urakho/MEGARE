@@ -10,12 +10,65 @@ function loadTerrain(context) {
     context.window ||= {};
     vm.runInNewContext(read('terrain.js'), context);
     context.GameTerrain = context.window.GameTerrain;
+    loadMapRules(context);
+}
+function loadMapRules(context) {
+    vm.runInNewContext(section(main, 'function validateCustomMapTriggers(', 'function updateCustomMapTriggers()'), context);
+}
+function editorBotForm(context) {
+    const fields = vm.runInNewContext(section(editor, '    const BOT_FIELDS = {', '    // Preset map sizes') + '\nBOT_FIELDS;');
+    const elements = {};
+    const element = id => elements[id] ||= { value: '', checked: false, style: { display: 'none' },
+        focus() {}, replaceChildren() {}, appendChild() {}, querySelector: () => ({}), classList: { toggle() {} } };
+    context.BOT_FIELDS = fields;
+    context.botInputs = {}; context.botChecks = {};
+    for (const [key, [input, check]] of Object.entries(fields)) {
+        context.botInputs[key] = element(input); context.botChecks[key] = element(check);
+    }
+    context.botTankSelect = element('meBotTank');
+    context.document = { getElementById: element, createElement: () => ({}), querySelectorAll: () => [] };
+    context.botModal.classList = { toggle() {} };
+    context.editingBots = []; context.selectedBots = []; context.meTriggers = [];
+    context.botTriggerDrafts = []; context.activeTriggerSlot = 0;
+    context.onMouseUp = () => {};
+    context.editorTerrain = 'forest';
+    context.spawnTankName = type => type || 'Случайный';
+    context.OBJ_TYPES = { enemy: { label: 'Враг' }, ally: { label: 'Союзник' } };
+    context.nameInput ||= { value: 'Test map' };
+    context.STORAGE_KEY = 'me_maps'; context.MEG_VERSION = 1;
+    context.curWorldW ||= 900; context.curWorldH ||= 700;
+    context.enemyMode ||= 'group'; context.customWinMsg ||= ''; context.customLoseMsg ||= '';
+    const stored = {};
+    context.localStorage ||= { getItem: key => stored[key] || null, setItem: (key, value) => { stored[key] = value; } };
+    loadMapRules(context);
+    vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
+    return elements;
 }
 function section(source, first, last) {
     const start = source.indexOf(first), end = source.indexOf(last, start + first.length);
     assert.ok(start >= 0 && end > start, `Missing section ${first}`);
     return source.slice(start, end);
 }
+
+test('legacy maps lose neutral bots and only their related trigger actions', () => {
+    const context = {}; loadMapRules(context);
+    const original = { name: 'Arena', terrainType: 'snow', objects: [
+        { id: 'n', type: 'neutral', x: 1 }, { id: 'e', type: 'enemy', health: 300 },
+        { id: 'a', type: 'ally', neutralSettings: { role: 'guard' } }
+    ], triggers: [
+        { when: 'timer', targets: ['n', 'e'], changes: { health: 500, neutralSettings: { role: 'wander' } } },
+        { when: 'destroyed', sourceId: 'n', targets: ['e'], changes: { health: 200 } },
+        { when: 'timer', targets: ['a'], changes: { type: 'neutral', customName: 'Friend' } }
+    ] };
+    const cleaned = context.removeNeutralMapData(original);
+    assert.deepEqual(JSON.parse(JSON.stringify(cleaned.objects)), [{ id: 'e', type: 'enemy', health: 300 }, { id: 'a', type: 'ally' }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(cleaned.triggers)), [
+        { when: 'timer', targets: ['e'], changes: { health: 500 } },
+        { when: 'timer', targets: ['a'], changes: { customName: 'Friend' } }
+    ]);
+    assert.equal(cleaned.terrainType, 'snow');
+    assert.equal(original.objects.length, 3, 'reading a map does not mutate the caller data');
+});
 
 test('duel zone deals 100 HP per simulated second independent of wall clock timing', () => {
     const context = {
@@ -84,21 +137,264 @@ test('custom map restart resets mech combat state and preserves placed obstacles
     assert.equal(context.enemies[0].speed, 2.3);
     context.tankMaxHpByType.pyro = 420;
     context.tankMaxSpeedByType = { pyro: 2.75 };
-    const enemy = { x: 500, y: 300, w: 50, h: 50, tankType: 'pyro' };
-    const ally = { x: 300, y: 200, w: 50, h: 50, tankType: 'mechDiy' };
+    const enemy = { id: 'guard', type: 'enemy', x: 500, y: 300, w: 50, h: 50, tankType: 'pyro', health: 1200, customName: 'Guard', customLabel: 'Hold position', team: 3 };
+    const ally = { id: 'friend', type: 'ally', x: 300, y: 200, w: 50, h: 50, tankType: 'mechDiy', allyTeam: 3 };
+    const neutral = { id: 'neutral', type: 'neutral', x: 600, y: 400, w: 50, h: 50, tankType: 'ice' };
+    const rules = [{ when: 'timer', seconds: 5, targets: ['guard'], changes: { type: 'ally' } }];
     for (let restart = 0; restart < 2; restart++) {
-        window.startCustomMapMode([box], 900, 700, [enemy], [ally], spawn, 'solo', '', '');
+        window.startCustomMapMode([box], 900, 700, [enemy, neutral], [ally], spawn, 'custom', '', '', 'snow', rules);
+        assert.equal(context.enemies.length, 1, 'legacy neutral spawn is discarded');
         assert.equal(context.enemies[0].tankType, 'pyro');
-        assert.equal(context.enemies[0].hp, 420);
+        assert.equal(context.enemies[0].hp, 1200);
+        assert.equal(context.enemies[0].maxHp, 1200);
         assert.equal(context.enemies[0].speed, 2.75);
-        assert.equal(context.enemies[0].team, 2);
+        assert.equal(context.enemies[0].team, 3);
+        assert.equal(context.enemies[0].customName, 'Guard');
+        assert.equal(context.enemies[0].customLabel, 'Hold position');
+        assert.equal(window.currentTerrain, 'snow');
+        assert.equal(window._customMapParams.terrainType, 'snow');
+        assert.equal(window._customMapTriggerState.ticks, 0);
+        assert.equal(window._customMapTriggerState.fired.size, 0);
+        assert.equal(window._customMapTriggerState.units.get('guard'), context.enemies[0]);
+        window._customMapTriggerState.fired.add(0);
+        assert.equal(window._customMapParams.triggers[0].seconds, 5);
         assert.equal(context.allies[0].tankType, 'mechDiy');
         assert.equal(context.allies[0].hp, 420);
         assert.equal(context.allies[0].speed, 2.4);
-        assert.equal(context.allies[0].team, 0);
+        assert.equal(context.allies[0].team, -3);
         assert.equal(window._customMapParams.enemySpawns[0].tankType, 'pyro');
         assert.equal(window._customMapParams.allySpawns[0].tankType, 'mechDiy');
     }
+});
+
+test('bot team controls follow enemy and ally sides', () => {
+    const context = { meObjects: [{ type: 'enemy' }, { type: 'ally', allyTeam: 2 }],
+        botModal: { style: {} }, botTitle: {}, updateHUD() {}, render() {} };
+    const form = editorBotForm(context);
+    vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
+    for (const bot of context.meObjects) {
+        context.openBotSettings([bot]);
+        assert.equal(form.meBotTeamField.style.display, bot.type === 'enemy' ? 'block' : 'none');
+        assert.equal(form.meBotAllyTeamField.style.display, bot.type === 'ally' ? 'block' : 'none');
+    }
+    context.openBotSettings(context.meObjects);
+    assert.equal(form.meBotTeamField.style.display, 'block');
+    assert.equal(form.meBotAllyTeamField.style.display, 'block');
+});
+
+test('editor places at most fifty allies', () => {
+    const context = { meObjects: [], activeTool: 'ally', gridSize: 50, curWorldW: 900, curWorldH: 700,
+        toWorld: (x, y) => ({ wx: x, wy: y }), snapToGrid: (x, y) => ({ gx: Math.floor(x / 50) * 50, gy: Math.floor(y / 50) * 50 }),
+        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 50, MAX_OBJECTS: 750 };
+    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo('), context);
+    vm.runInNewContext(section(editor, '    function placeAt(canvasX, canvasY)', '    function showEditorToast('), context);
+    for (let i = 0; i < 50; i++) context.placeAt(i % 15 * 50 + 5, Math.floor(i / 15) * 50 + 5);
+    assert.equal(context.meObjects.length, 50);
+    context.placeAt(805, 605); assert.equal(context.meObjects.length, 50);
+});
+
+test('bulk bot edits change only checked fields and undo includes trigger creation', () => {
+    const enemy = { type: 'enemy', x: 0, y: 0, w: 50, h: 50, tankType: 'pyro' };
+    const ally = { type: 'ally', x: 100, y: 0, w: 50, h: 50, tankType: 'ice' };
+    const other = { type: 'enemy', x: 200, y: 0, w: 50, h: 50, tankType: 'normal' };
+    const context = { window: {}, meObjects: [enemy, ally, other], undoStack: [], activeTool: 'select',
+        botModal: { style: {} }, botTitle: {}, updateHUD() {}, render() {}, showEditorToast() {},
+        MAX_ENEMIES: 75, MAX_ALLIES: 50, isCustomMapTankType: type => ['normal', 'pyro', 'ice'].includes(type) };
+    const form = editorBotForm(context);
+    vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
+    vm.runInNewContext(section(editor, '    function pushUndo(', '    function updateHUD()'), context);
+    context.openBotSettings([enemy, ally]);
+    form.meUseHealth.checked = true; form.meBotHealth.value = '850';
+    form.meUseName.checked = true; form.meBotName.value = 'Squad';
+    context.applyBotTank();
+    assert.equal(enemy.health, 850); assert.equal(ally.health, 850);
+    assert.equal(enemy.tankType, 'pyro'); assert.equal(ally.tankType, 'ice');
+    assert.equal(enemy.type, 'enemy'); assert.equal(ally.type, 'ally');
+    assert.equal(other.customName, undefined);
+    context.openBotSettings([enemy, ally]);
+    form.meUseSide.checked = true; form.meBotSide.value = 'ally';
+    context.applyBotTank();
+    assert.equal(enemy.type, 'ally'); assert.equal(other.type, 'enemy');
+    context.undo();
+    assert.equal(context.meObjects[0].type, 'enemy');
+    context.openBotSettings(context.meObjects.slice(0, 2));
+    context.switchBotTriggerSlot(1);
+    context.document.getElementById('meTriggerEnabled').checked = true;
+    context.document.getElementById('meTriggerTime').value = '5';
+    form.meUseLabel.checked = true; form.meBotLabel.value = 'Reinforcements';
+    context.applyBotTank();
+    assert.equal(context.meTriggers.length, 2);
+    assert.equal(new Set(context.meTriggers.flatMap(rule => rule.targets)).size, 2);
+    assert.deepEqual(Object.keys(context.meTriggers[0].changes), ['customLabel']);
+    assert.equal(context.meObjects[0].customLabel, undefined, 'a trigger does not apply during editing');
+    context.undo(); assert.equal(context.meTriggers.length, 0);
+    assert.equal(context.meObjects[0].id, undefined, 'undo restores IDs and rules together');
+});
+
+test('custom map triggers pause, fire once, retain dead sources and move bots between sides', () => {
+    const guard = { editorId: 'guard', tankType: 'normal', customTeam: 1, team: 1, alive: true, hp: 300, maxHp: 300 };
+    const enemy = { editorId: 'enemy', tankType: 'normal', customTeam: 3, team: 3, alive: true, hp: 300, maxHp: 300 };
+    const ally = { editorId: 'ally', tankType: 'normal', customTeam: 4, team: 0, alive: true, hp: 300, maxHp: 300 };
+    const rules = [
+        { when: 'timer', seconds: 1, targets: ['enemy'], changes: { type: 'ally', health: 900, customName: 'Friend' } },
+        { when: 'destroyed', sourceId: 'guard', targets: ['ally'], changes: { type: 'enemy', team: 2, tankType: 'mechRocket', health: 1500, customLabel: 'Boss' } }
+    ];
+    let paused = false;
+    const state = { ticks: 0, enemyMode: 'custom', nextTeam: 5, rules, fired: new Set(), units: new Map([['guard', guard], ['enemy', enemy], ['ally', ally]]) };
+    const context = { currentMode: 'custom', gameState: 'playing', window: { _customMapTriggerState: state, isPaused: () => paused,
+        mechMaxHpByType: { mechRocket: 600 }, mechMaxSpeedByType: { mechRocket: 2.5 } },
+        enemies: [guard, enemy], allies: [ally], playerDrones: [], enemyDrones: [],
+        tankMaxHpByType: { normal: 300 }, tankMaxSpeedByType: { normal: 3.2 }, isCustomMapTankType: type => ['normal', 'mechRocket'].includes(type) };
+    vm.runInNewContext(section(main, 'function updateCustomMapTriggers()', '                // very large world'), context);
+    for (let i = 0; i < 59; i++) context.updateCustomMapTriggers();
+    assert.equal(context.enemies.length, 2);
+    paused = true; context.updateCustomMapTriggers(); assert.equal(state.ticks, 59);
+    paused = false; context.updateCustomMapTriggers();
+    assert.equal(context.enemies.includes(enemy), false); assert.equal(context.allies.includes(enemy), true);
+    assert.equal(enemy.team, -1); assert.equal(enemy.hp, 900); assert.equal(enemy.customName, 'Friend');
+    enemy.hp = 800; context.updateCustomMapTriggers(); assert.equal(enemy.hp, 800, 'one-shot trigger does not heal again');
+    guard.hp = 0; context.enemies.splice(context.enemies.indexOf(guard), 1);
+    context.updateCustomMapTriggers();
+    const transformed = state.units.get('ally');
+    assert.equal(context.enemies.includes(transformed), true);
+    assert.equal(context.allies.includes(ally), false);
+    assert.equal(transformed.tankType, 'mechRocket'); assert.equal(transformed.speed, 2.5);
+    assert.equal(transformed.hp, 1500); assert.equal(transformed.maxHp, 1500);
+    assert.equal(transformed.team, 2); assert.equal(transformed.customLabel, 'Boss');
+    assert.equal(state.fired.size, 2);
+    const ticks = state.ticks; context.currentMode = 'single'; context.updateCustomMapTriggers(); assert.equal(state.ticks, ticks);
+});
+
+test('all five bot slots survive switching, saving and reopening from local storage', () => {
+    const stored = {};
+    const context = { window: {}, meObjects: [{ type: 'enemy', x: 100, y: 100, w: 50, h: 50 }], undoStack: [],
+        botModal: { style: {} }, botTitle: {}, updateHUD() {}, render() {}, showEditorToast() {},
+        MAX_ENEMIES: 75, MAX_ALLIES: 50, isCustomMapTankType: type => type === 'normal',
+        STORAGE_KEY: 'me_maps', MEG_VERSION: 1, curWorldW: 900, curWorldH: 700,
+        enemyMode: 'group', customWinMsg: '', customLoseMsg: '', nameInput: { value: 'Persistent' },
+        localStorage: { getItem: key => stored[key] || null, setItem: (key, value) => { stored[key] = value; } } };
+    const form = editorBotForm(context);
+    vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
+    vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
+    vm.runInNewContext(section(editor, '    function pushUndo(', '    function updateHUD()'), context);
+    context.openBotSettings(context.meObjects);
+    form.meBotHealth.value = '400';
+    for (let slot = 1; slot <= 4; slot++) {
+        context.switchBotTriggerSlot(slot);
+        context.document.getElementById('meTriggerEnabled').checked = true;
+        context.document.getElementById('meTriggerTime').value = String(slot * 10);
+        form.meUseHealth.checked = true; form.meBotHealth.value = String(700 + slot);
+    }
+    context.switchBotTriggerSlot(0);
+    assert.equal(form.meBotHealth.value, '400', 'switching slots must retain the first draft');
+    context.applyBotTank();
+    assert.ok(stored.me_maps, 'Save in the bot dialog must persist without another click on the map Save button');
+    const saved = JSON.parse(stored.me_maps).Persistent;
+    assert.equal(saved.objects[0].health, 400);
+    assert.equal(saved.triggers.length, 4);
+    assert.deepEqual(saved.triggers.map(rule => rule.slot), [2, 3, 4, 5]);
+    context.meObjects = saved.objects; context.meTriggers = saved.triggers;
+    context.openBotSettings(context.meObjects);
+    for (let slot = 1; slot <= 4; slot++) {
+        context.switchBotTriggerSlot(slot);
+        assert.equal(form.meBotHealth.value, String(700 + slot));
+        assert.equal(form.meUseHealth.checked, true);
+        assert.equal(Number(context.document.getElementById('meTriggerTime').value), slot * 10);
+        assert.equal(context.document.getElementById('meTriggerEnabled').checked, true);
+    }
+    context.switchBotTriggerSlot(2); form.meBotHealth.value = '999'; context.applyBotTank();
+    assert.equal(context.meTriggers.length, 4, 'editing a slot must replace it rather than append another trigger');
+    assert.equal(context.meTriggers.find(rule => rule.slot === 3).changes.health, 999);
+    assert.equal(context.meTriggers.find(rule => rule.slot === 5).changes.health, 704);
+    context.undo();
+    assert.equal(JSON.parse(stored.me_maps).Persistent.triggers.find(rule => rule.slot === 3).changes.health, 702, 'undo must update the saved map too');
+    context.openBotSettings(context.meObjects, 4);
+    context.document.getElementById('meTriggerEnabled').checked = false;
+    context.applyBotTank();
+    context.openBotSettings(context.meObjects, 4);
+    assert.equal(context.document.getElementById('meTriggerEnabled').checked, false);
+    assert.equal(form.meBotHealth.value, '704', 'disabled slots must keep their configuration');
+    form.meBotHealth.value = '1234'; context.switchBotTriggerSlot(1); context.closeBotSettings();
+    context.openBotSettings(context.meObjects, 4);
+    assert.equal(form.meBotHealth.value, '704', 'Cancel must discard all unsaved slot drafts');
+});
+
+test('a storage failure leaves trigger drafts open and does not claim they were saved', () => {
+    const messages = [];
+    const context = { window: {}, meObjects: [{ type: 'enemy', x: 0, y: 0, w: 50, h: 50, health: 100 }], undoStack: [],
+        botModal: { style: {} }, botTitle: {}, updateHUD() {}, render() {}, showEditorToast: msg => messages.push(msg),
+        MAX_ENEMIES: 75, MAX_ALLIES: 50, isCustomMapTankType: () => true };
+    const form = editorBotForm(context);
+    context.localStorage.setItem = () => { throw new Error('Storage full'); };
+    vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
+    vm.runInNewContext(section(editor, '    function pushUndo(', '    function updateHUD()'), context);
+    context.openBotSettings(context.meObjects);
+    form.meBotHealth.value = '900'; context.applyBotTank();
+    assert.equal(context.meObjects[0].health, 100);
+    assert.equal(context.undoStack.length, 0);
+    assert.equal(context.botModal.style.display, 'flex');
+    assert.equal(form.meBotHealth.value, '900');
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /Не удалось сохранить/);
+});
+
+test('editing one bot slot preserves the other targets of a shared trigger', () => {
+    const context = { window: {}, meObjects: [{ type: 'enemy', id: 'a' }, { type: 'ally', id: 'b' }], undoStack: [],
+        botModal: { style: {} }, botTitle: {}, updateHUD() {}, render() {}, showEditorToast() {},
+        MAX_ENEMIES: 75, MAX_ALLIES: 50, isCustomMapTankType: () => true };
+    const form = editorBotForm(context);
+    vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
+    vm.runInNewContext(section(editor, '    function pushUndo(', '    function updateHUD()'), context);
+    context.meTriggers = [{ when: 'timer', slot: 2, seconds: 10, targets: ['a', 'b'], changes: { health: 800, customName: 'Shared' } }];
+    context.openBotSettings([context.meObjects[0]], 1);
+    form.meBotHealth.value = '900'; context.applyBotTank();
+    assert.equal(context.meTriggers.length, 2);
+    assert.equal(context.meTriggers.find(rule => rule.targets.includes('a')).changes.health, 900);
+    assert.equal(context.meTriggers.find(rule => rule.targets.includes('b')).changes.health, 800);
+    context.undo();
+    assert.equal(context.meTriggers.length, 1);
+    assert.deepEqual(Array.from(context.meTriggers[0].targets), ['a', 'b']);
+});
+
+test('four timed bot slots run once in simulation time and keep targeting a transformed tank', () => {
+    const bot = { editorId: 'bot', tankType: 'normal', x: 100, y: 100, w: 38, h: 38, team: 1, hp: 400, maxHp: 400, alive: true };
+    const rules = [
+        { when: 'timer', slot: 2, seconds: 1, targets: ['bot'], changes: { health: 500 } },
+        { when: 'timer', slot: 3, seconds: 2, targets: ['bot'], changes: { tankType: 'ice', health: 600 } },
+        { when: 'timer', slot: 4, seconds: 3, targets: ['bot'], changes: { customName: 'Later' } },
+        { when: 'timer', slot: 5, seconds: 4, targets: ['bot'], changes: { type: 'ally', health: 700 } }
+    ];
+    let paused = false;
+    const state = { ticks: 0, enemyMode: 'group', nextTeam: 2, rules, fired: new Set(), units: new Map([['bot', bot]]) };
+    const context = { currentMode: 'custom', gameState: 'playing', window: { _customMapTriggerState: state, isPaused: () => paused },
+        enemies: [bot], allies: [], playerDrones: [], enemyDrones: [], tankMaxHpByType: { normal: 300, ice: 350 },
+        tankMaxSpeedByType: { normal: 3.2, ice: 3 }, isCustomMapTankType: type => ['normal', 'ice'].includes(type) };
+    vm.runInNewContext(section(main, 'function updateCustomMapTriggers()', '                // very large world'), context);
+    const advance = steps => { for (let i = 0; i < steps; i++) context.updateCustomMapTriggers(); };
+    advance(59); assert.equal(bot.hp, 400);
+    paused = true; advance(60); assert.equal(state.ticks, 59);
+    paused = false; advance(1); assert.equal(bot.hp, 500);
+    advance(60); const transformed = state.units.get('bot');
+    assert.notEqual(transformed, bot); assert.equal(transformed.tankType, 'ice'); assert.equal(transformed.hp, 600);
+    advance(60); assert.equal(transformed.customName, 'Later');
+    advance(60); assert.equal(transformed.team, -1); assert.equal(transformed.hp, 700); assert.equal(context.allies[0], transformed);
+    transformed.hp = 650; advance(60); assert.equal(transformed.hp, 650); assert.equal(state.fired.size, 4);
+    rules[3].enabled = false; state.fired.clear(); state.ticks = 239;
+    transformed.team = 1; context.allies = []; context.enemies = [transformed];
+    advance(1); assert.equal(state.units.get('bot').team, 1, 'a disabled timer cannot change sides');
+    assert.equal(state.fired.has(3), false);
+});
+
+test('a bot accepts four timed triggers and rejects a fifth', () => {
+    const context = { isCustomMapTankType: () => true };
+    loadMapRules(context);
+    const markers = [{ id: 'bot', type: 'enemy' }];
+    const rules = Array.from({ length: 5 }, (_, index) => ({ when: 'timer', seconds: index + 1, targets: ['bot'], changes: { health: 500 } }));
+    assert.equal(context.validateCustomMapTriggers(rules.slice(0, 4), markers), null);
+    assert.equal(typeof context.validateCustomMapTriggers(rules, markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rules[0], slot: 2, seconds: 0 }], markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rules[0], slot: 1 }], markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rules[0], slot: 2 }, { ...rules[1], slot: 2 }], markers), 'string');
 });
 
 test('editor assigns, replaces, undoes and saves each bot vehicle independently', () => {
@@ -107,13 +403,15 @@ test('editor assigns, replaces, undoes and saves each bot vehicle independently'
         botModal: { style: { display: 'none' } }, botTankSelect: { value: '', focus() {} }, botTitle: {}, selectedBot: null,
         isDrawing: false, isPanning: false, tankMaxHpByType: { pyro: 420, ice: 300, mechRocket: 600 },
         toWorld: (x, y) => ({ wx: x, wy: y }), snapToGrid: (x, y) => ({ gx: Math.floor(x / 50) * 50, gy: Math.floor(y / 50) * 50 }),
-        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 40, MAX_OBJECTS: 750,
+        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 50, MAX_OBJECTS: 750,
         STORAGE_KEY: 'me_maps', MEG_VERSION: 1, enemyMode: 'group', customWinMsg: '', customLoseMsg: '',
         localStorage: { getItem: key => saved[key] || null, setItem: (key, value) => { saved[key] = value; } } };
-    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo()'), context);
+    editorBotForm(context);
+    context.validateMegData = () => null;
+    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo('), context);
     vm.runInNewContext(section(main, 'function isCustomMapTankType(type)', 'function setTankHP(type)'), context);
     vm.runInNewContext(section(editor, '    function closeBotSettings()', '    function listMaps()'), context);
-    vm.runInNewContext(section(editor, '    function pushUndo()', '    function updateHUD()'), context);
+    vm.runInNewContext(section(editor, '    function pushUndo(', '    function updateHUD()'), context);
     vm.runInNewContext(section(editor, '    function placeAt(canvasX, canvasY)', '    function showEditorToast('), context);
     vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
     context.placeAt(25, 25);
@@ -142,11 +440,15 @@ test('editor assigns, replaces, undoes and saves each bot vehicle independently'
     let exported;
     context.Blob = class { constructor(parts) { exported = JSON.parse(parts[0]); } };
     context.URL = { createObjectURL: () => 'blob:map', revokeObjectURL() {} };
-    context.document = { createElement: () => ({ click() {} }) };
+    const createElement = context.document.createElement;
+    context.document.createElement = () => ({ click() {} });
     context.nameInput = { value: 'Typed map' };
     vm.runInNewContext(section(editor, '    function exportMeg()', '    function importMeg(file)'), context);
     context.exportMeg();
+    context.document.createElement = createElement;
     assert.equal(exported.v, 1, 'typed markers remain compatible with the map file version');
+    assert.equal(exported.terrainType, 'forest');
+    assert.equal(exported.triggers.length, 0);
     assert.equal(exported.objects[0].tankType, 'pyro'); assert.equal(exported.objects[1].tankType, 'ice');
     context.openBotSettingsAt(25, 25); context.botTankSelect.value = ''; context.applyBotTank();
     assert.equal(context.meObjects[0].tankType, undefined, 'random choice removes the fixed type');
@@ -157,12 +459,64 @@ test('editor assigns, replaces, undoes and saves each bot vehicle independently'
     assert.equal(context.meObjects[0].type, 'ally');
 });
 
+test('editor fits large maps and keeps the zoom anchor at the same world position', () => {
+    const context = { canvas: { width: 800, height: 500 }, curWorldW: 3600, curWorldH: 1800,
+        zoom: 1, camX: 0, camY: 0, hoverCell: { gx: 50, gy: 50 }, render() {} };
+    vm.runInNewContext(section(editor, '    function fitMap()', '    function render()'), context);
+    context.fitMap();
+    assert.ok(context.zoom < 0.3, 'a large map fits even below the usual minimum zoom');
+    assert.ok(context.camX >= 0 && context.camY >= 0);
+    assert.ok(context.camX + context.curWorldW * context.zoom <= context.canvas.width);
+    assert.ok(context.camY + context.curWorldH * context.zoom <= context.canvas.height);
+    assert.equal(context.hoverCell, null);
+    const point = { x: 150, y: 200 };
+    const worldX = (point.x - context.camX) / context.zoom;
+    const worldY = (point.y - context.camY) / context.zoom;
+    const fitZoom = context.zoom;
+    context.zoomAt(1.18, point.x, point.y);
+    assert.ok(Math.abs((point.x - context.camX) / context.zoom - worldX) < 1e-9);
+    assert.ok(Math.abs((point.y - context.camY) / context.zoom - worldY) < 1e-9);
+    context.zoomAt(0.001);
+    assert.equal(context.zoom, fitZoom, 'zooming out cannot jump inward from the fitted view');
+    context.zoomAt(1000);
+    assert.equal(context.zoom, 4);
+});
+
+test('editor shortcuts leave dialogs and text entry in control', () => {
+    let keydown, undos = 0, closes = 0, tool = 'wall', cancels = 0;
+    const dialogs = Object.fromEntries(['meConfirmOverlay', 'meMapsModal', 'meSettingsModal'].map(id => [id, { style: { display: 'none' } }]));
+    dialogs.meConfirmNo = { click() { cancels++; dialogs.meConfirmOverlay.style.display = 'none'; } };
+    dialogs.meMapsClose = { click() { dialogs.meMapsModal.style.display = 'none'; } };
+    dialogs.meSettingsClose = { click() { dialogs.meSettingsModal.style.display = 'none'; } };
+    const context = { modal: { style: { display: 'flex' } }, botModal: { style: { display: 'none' } },
+        document: { getElementById: id => dialogs[id], addEventListener(type, handler) { keydown = handler; } },
+        closeBotSettings() {}, closeEditor() { closes++; }, undo() { undos++; }, setTool(value) { tool = value; } };
+    vm.runInNewContext(section(editor, "        document.addEventListener('keydown', (e) => {", '        updateHUD();'), context);
+    const press = (key, extra = {}) => keydown({ key, target: { tagName: 'BUTTON' }, preventDefault() {}, ...extra });
+    press('4'); assert.equal(tool, 'enemy');
+    for (const id of ['meSettingsModal', 'meMapsModal', 'meConfirmOverlay']) {
+        dialogs[id].style.display = 'flex';
+        press('1'); assert.equal(tool, 'enemy');
+        press('z', { ctrlKey: true }); assert.equal(undos, 0);
+        press('Escape'); assert.equal(dialogs[id].style.display, 'none');
+        assert.equal(closes, 0, 'Escape dismisses the dialog before closing the editor');
+    }
+    assert.equal(cancels, 1);
+    press('1', { target: { tagName: 'INPUT' } }); assert.equal(tool, 'enemy');
+    press('1', { ctrlKey: true }); assert.equal(tool, 'enemy');
+    press('Z', { ctrlKey: true }); assert.equal(undos, 1);
+    context.modal.style.display = 'none';
+    press('4'); press('z', { ctrlKey: true }); assert.equal(undos, 1);
+});
+
 test('map import rejects invalid objects and obstacles overlapping player spawn', () => {
-    const context = { MAX_OBJECTS: 750, MAX_ENEMIES: 75, MAX_ALLIES: 40, MEG_VERSION: 1,
+    const context = { MAX_OBJECTS: 750, MAX_ENEMIES: 75, MAX_ALLIES: 50, MEG_VERSION: 1,
+        BIOMES: ['forest', 'snow', 'desert', 'swamp', 'rain', 'night', 'lava'],
         OBJ_TYPES: { wall: {}, woodenWall: {}, box: {}, barrel: {}, enemy: {}, ally: {}, player: {} },
         tankMaxHpByType: { normal: 300, pyro: 420, boss_hell: 7500 }, window: { mechMaxHpByType: { mechRocket: 600 } } };
     vm.runInNewContext(section(main, 'function isCustomMapTankType(type)', 'function setTankHP(type)'), context);
-    vm.runInNewContext(section(editor, '    function validateMegData(data)', '    function pushUndo()'), context);
+    loadMapRules(context);
+    vm.runInNewContext(section(editor, '    function validateMegData(data)', '    function pushUndo('), context);
     const validate = objects => context.validateMegData({ v: 1, worldW: 900, worldH: 700, objects });
     assert.equal(typeof validate([null]), 'string');
     assert.equal(typeof validate([{ type: 'wall', x: 0, y: 0, w: -10, h: 50 }]), 'string');
@@ -178,7 +532,24 @@ test('map import rejects invalid objects and obstacles overlapping player spawn'
         const marker = { type, x: 100, y: 100, w: 50, h: 50 };
         for (const tankType of [undefined, '', 'normal', 'pyro', 'mechRocket']) assert.equal(validate([{ ...marker, tankType }]), null);
         for (const tankType of ['missing', 'boss_hell', '__proto__', 123, null]) assert.equal(typeof validate([{ ...marker, tankType }]), 'string');
+        assert.equal(validate([{ ...marker, health: 1500, customName: 'Guard', customLabel: 'Hold', team: 4 }]), null);
+        for (const health of [0, -1, 1.5, 100001, '500']) assert.equal(typeof validate([{ ...marker, health }]), 'string');
+        for (const team of [0, 5, '2', 1.1]) assert.equal(typeof validate([{ ...marker, team }]), 'string');
+        assert.equal(validate([{ ...marker, allyTeam: 4 }]), null);
+        for (const allyTeam of [0, 5, '2', 1.1]) assert.equal(typeof validate([{ ...marker, allyTeam }]), 'string');
+        assert.equal(typeof validate([{ ...marker, customName: 'x'.repeat(33) }]), 'string');
+        assert.equal(typeof validate([{ ...marker, customLabel: {} }]), 'string');
     }
+    const allies = Array.from({ length: 50 }, (_, i) => ({ type: 'ally', x: i % 15 * 50, y: Math.floor(i / 15) * 50, w: 50, h: 50 }));
+    assert.equal(validate(allies), null);
+    assert.equal(typeof validate([...allies, { type: 'ally', x: 800, y: 600, w: 50, h: 50 }]), 'string');
+    const markers = [{ id: 'source', type: 'enemy' }, { id: 'target', type: 'ally' }];
+    const rule = { when: 'destroyed', sourceId: 'source', targets: ['target'], changes: { type: 'enemy', health: 700 } };
+    assert.equal(context.validateCustomMapTriggers([rule], markers), null);
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rule, targets: ['missing'] }], markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rule, changes: { hp: -1 } }], markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([{ ...rule, when: 'timer', seconds: Infinity }], markers), 'string');
+    assert.equal(typeof context.validateCustomMapTriggers([rule], [...markers, markers[0]]), 'string');
 });
 
 test('editor prevents placing a block on a player spawn in either order', () => {
@@ -186,9 +557,9 @@ test('editor prevents placing a block on a player spawn in either order', () => 
         toWorld: (x, y) => ({ wx: x, wy: y }),
         snapToGrid: (x, y) => ({ gx: Math.floor(x / 50) * 50, gy: Math.floor(y / 50) * 50 }),
         showEditorToast() {}, updateHUD() {}, render() {},
-        MAX_ENEMIES: 75, MAX_ALLIES: 40, MAX_OBJECTS: 750
+        MAX_ENEMIES: 75, MAX_ALLIES: 50, MAX_OBJECTS: 750
     };
-    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo()'), context);
+    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo('), context);
     vm.runInNewContext(section(editor, '    function placeAt(canvasX, canvasY)', '    function showEditorToast('), context);
     context.placeAt(25, 25);
     context.activeTool = 'wall';
@@ -214,38 +585,125 @@ test('importing a map with an existing name keeps both maps', () => {
     const context = { localStorage: storage, STORAGE_KEY: 'me_maps', MEG_VERSION: 1,
         FileReader: FileReaderMock, Date, MAP_SIZES: { small: { w: 900, h: 700 } },
         nameInput: { value: '' }, mapSizeSelect: { value: '' }, enemyModeSelect: { value: '' },
+        biomeSelect: { value: '' }, editorTerrain: 'forest', meTriggers: [],
         winMsgInput: { value: '' }, loseMsgInput: { value: '' },
         window: { deviceModeMobile: false }, validateMegData: () => null,
-        pushUndo() {}, updateHUD() {}, render() {}, showEditorToast() {}
+        pushUndo() {}, updateHUD() {}, render() {}, fitMap() {}, showEditorToast() {}, renderResultMessages() {}
     };
     loadTerrain(context);
     vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
     vm.runInNewContext(section(editor, '    function importMeg(file)', '    function launchCustomMap('), context);
     context.importMeg(JSON.stringify({ name: 'Arena', objects: [{ type: 'player', x: 50, y: 50, w: 50, h: 50 },
-        { type: 'enemy', x: 300, y: 200, w: 50, h: 50, tankType: 'pyro' },
-        { type: 'ally', x: 100, y: 100, w: 50, h: 50, tankType: 'mechRocket' }],
-        worldW: 900, worldH: 700, enemyMode: 'solo', terrainType: 'snow', customWinMsg: 'Новая победа' }));
+        { type: 'enemy', id: 'guard', x: 300, y: 200, w: 50, h: 50, tankType: 'pyro', health: 2000, customName: 'Guard', team: 3 },
+        { type: 'ally', id: 'friend', x: 100, y: 100, w: 50, h: 50, tankType: 'mechRocket', customLabel: 'Escort' }],
+        worldW: 900, worldH: 700, enemyMode: 'custom', terrainType: 'snow', customWinMsg: 'Новая победа',
+        triggers: [{ when: 'destroyed', sourceId: 'guard', targets: ['friend'], changes: { type: 'enemy' } }] }));
     const maps = JSON.parse(store.get('me_maps'));
     assert.ok(maps.Arena);
     assert.ok(maps['Arena (импорт 2)']);
-    assert.equal(maps['Arena (импорт 2)'].customWinMsg, 'Новая победа');
+    assert.deepEqual(maps['Arena (импорт 2)'].customWinMsg, ['Новая победа']);
     assert.equal(context.nameInput.value, 'Arena (импорт 2)');
-    assert.equal(maps['Arena (импорт 2)'].terrainType, undefined);
+    assert.equal(maps['Arena (импорт 2)'].terrainType, 'snow');
     assert.equal(maps['Arena (импорт 2)'].objects[1].tankType, 'pyro');
     assert.equal(maps['Arena (импорт 2)'].objects[2].tankType, 'mechRocket');
+    assert.equal(maps['Arena (импорт 2)'].objects[1].health, 2000);
+    assert.equal(maps['Arena (импорт 2)'].objects[1].customName, 'Guard');
+    assert.equal(maps['Arena (импорт 2)'].objects[1].team, 3);
+    assert.equal(maps['Arena (импорт 2)'].objects[2].customLabel, 'Escort');
+    assert.equal(maps['Arena (импорт 2)'].triggers[0].sourceId, 'guard');
 });
 
-test('playing a saved map uses that map’s messages', () => {
+test('finishing map settings saves the biome, including empty drafts, and retains the form on storage failure', () => {
+    for (const objects of [[], [{ type: 'player', x: 50, y: 50 }]]) {
+        let done, saved = JSON.stringify({ Arena: { terrainType: 'forest' } }), fail = false;
+        const dialog = { style: { display: 'flex' } }, notices = [];
+        const context = {
+            document: { getElementById: id => id === 'meSettingsClose'
+                ? { addEventListener: (_event, handler) => { done = handler; } } : dialog },
+            localStorage: { getItem: () => saved, setItem: (_key, value) => {
+                if (fail) throw new Error('Storage full');
+                saved = value;
+            } },
+            STORAGE_KEY: 'me_maps', MEG_VERSION: 1, nameInput: { value: 'Arena' },
+            meObjects: objects, meTriggers: [], editorTerrain: 'snow', curWorldW: 900, curWorldH: 700,
+            enemyMode: 'group', customWinMsg: '', customLoseMsg: '', showEditorToast: message => notices.push(message)
+        };
+        vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
+        vm.runInNewContext(section(editor, "        document.getElementById('meSettingsClose')?.addEventListener", "        document.getElementById('meMapsBtn')"), context);
+        done();
+        assert.equal(JSON.parse(saved).Arena.terrainType, 'snow');
+        assert.deepEqual(JSON.parse(saved).Arena.objects, objects);
+        assert.equal(dialog.style.display, 'none');
+        context.editorTerrain = 'desert'; dialog.style.display = 'flex'; fail = true;
+        done();
+        assert.equal(JSON.parse(saved).Arena.terrainType, 'snow');
+        assert.equal(dialog.style.display, 'flex');
+        assert.ok(notices.at(-1).includes('Не удалось'));
+    }
+});
+
+test('playing a saved map uses its biome and messages without changing the draft biome', () => {
     let launched;
     const runtime = { map: { enemyMode: 'solo', terrainType: 'night', customWinMsg: 'Победа карты', customLoseMsg: 'Поражение карты',
             objects: [], worldW: 900, worldH: 700 }, mapsModal: { style: {} },
-        enemyMode: 'group', customWinMsg: 'Старое сообщение', customLoseMsg: 'Старое поражение',
+        enemyMode: 'group', editorTerrain: 'snow', biomeSelect: { value: 'snow' }, customWinMsg: 'Старое сообщение', customLoseMsg: 'Старое поражение',
         playBtn: {} };
     loadTerrain(runtime);
-    runtime.launchCustomMap = () => { launched = [runtime.customWinMsg, runtime.customLoseMsg]; return true; };
+    runtime.launchCustomMap = (_objects, _width, _height, biome, _triggers, settings) => { launched = [settings.customWinMsg, settings.customLoseMsg, biome]; return true; };
     vm.runInNewContext(section(editor, '                playBtn.onclick = () => {', '                const delBtn ='), runtime);
     runtime.playBtn.onclick();
-    assert.deepEqual(launched, ['Победа карты', 'Поражение карты']);
+    assert.deepEqual(launched, ['Победа карты', 'Поражение карты', 'night']);
+    assert.equal(runtime.editorTerrain, 'snow');
+    assert.equal(runtime.biomeSelect.value, 'snow');
+    assert.equal(runtime.customWinMsg, 'Старое сообщение');
+    assert.equal(runtime.enemyMode, 'group');
+});
+
+test('changing a biome saves immediately before finishing the settings dialog', () => {
+    let change, saved;
+    const context = { biomeSelect: { value: 'rain', addEventListener: (_event, handler) => { change = handler; } },
+        document: { getElementById() { return context.biomeSelect; } }, nameInput: { value: 'Weather' },
+        meObjects: [], meTriggers: [], editorTerrain: 'forest', STORAGE_KEY: 'me_maps', MEG_VERSION: 1,
+        curWorldW: 900, curWorldH: 700, enemyMode: 'group', customWinMsg: [], customLoseMsg: [], render() {},
+        localStorage: { getItem: () => saved || null, setItem: (_key, value) => { saved = value; } }, showEditorToast() {} };
+    vm.runInNewContext(section(editor, '    function listMaps()', '    function validateMegData(data)'), context);
+    vm.runInNewContext(section(editor, "        biomeSelect = document.getElementById('meBiome');", "        editSelectionBtn = document.getElementById('meEditSelection');"), context);
+    change();
+    assert.equal(JSON.parse(saved).Weather.terrainType, 'rain');
+});
+
+test('result message cards keep multiline text inside one variant and remove variants independently', () => {
+    const elements = {};
+    const makeElement = () => ({ children: [], value: '', style: {},
+        replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
+        append(...children) { this.children.push(...children); }, setAttribute() {},
+        addEventListener(type, handler) { this[type] = handler; } });
+    const context = { customWinMsg: ['First\nsecond line', 'Other victory'], customLoseMsg: ['Defeat'],
+        document: { getElementById: id => elements[id] ||= makeElement(), createElement: makeElement } };
+    vm.runInNewContext(section(editor, '    function renderResultMessages()', '    function switchBotTriggerSlot('), context);
+    context.renderResultMessages();
+    const first = elements.meWinMessages.children[0].children[1];
+    assert.equal(first.value, 'First\nsecond line');
+    first.value = 'Updated\nstill one'; first.input();
+    assert.deepEqual(context.customWinMsg, ['Updated\nstill one', 'Other victory']);
+    elements.meWinMessages.children[1].children[2].onclick();
+    assert.deepEqual(context.customWinMsg, ['Updated\nstill one']);
+    assert.deepEqual(context.customLoseMsg, ['Defeat']);
+    loadMapRules(context);
+    assert.equal(context.normalizeCustomMapMessages(context.customWinMsg).length, 1);
+    assert.deepEqual(Array.from(context.normalizeCustomMapMessages('Legacy one\nLegacy two')), ['Legacy one', 'Legacy two']);
+});
+
+test('bot labels contain only author supplied names and captions', () => {
+    const context = {};
+    vm.runInNewContext(section(read('tanks.js'), 'function drawCustomBotLabel(', 'function drawReloadBar('), context);
+    const labels = [], ctx = { save() {}, restore() {}, strokeText() {}, fillText: text => labels.push(text) };
+    const unit = { x: 10, y: 10, w: 38, h: 38, team: 1 };
+    context.drawCustomBotLabel(ctx, unit);
+    assert.deepEqual(labels, []);
+    Object.assign(unit, { customName: 'Courier', customLabel: 'Escort' });
+    context.drawCustomBotLabel(ctx, unit);
+    assert.deepEqual(labels, ['Courier', 'Escort']);
 });
 
 test('creating a profile does not change the previous profile title', () => {
@@ -369,8 +827,8 @@ test('replaced chromatic reward stops its canvas animation', () => {
 test('editor places one-cell barrels and keeps cell placement and erasing consistent', () => {
     const context = { meObjects: [], activeTool: 'barrel', gridSize: 50, curWorldW: 900, curWorldH: 700,
         toWorld: (x, y) => ({ wx: x, wy: y }), snapToGrid: (x, y) => ({ gx: Math.floor(x / 50) * 50, gy: Math.floor(y / 50) * 50 }),
-        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 40, MAX_OBJECTS: 750 };
-    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo()'), context);
+        showEditorToast() {}, updateHUD() {}, render() {}, MAX_ENEMIES: 75, MAX_ALLIES: 50, MAX_OBJECTS: 750 };
+    vm.runInNewContext(section(editor, '    function overlaps(a, b)', '    function pushUndo('), context);
     vm.runInNewContext(section(editor, '    function placeAt(canvasX, canvasY)', '    function showEditorToast('), context);
     context.placeAt(25, 25);
     assert.equal(context.meObjects[0].w, 50); assert.equal(context.meObjects[0].h, 50);

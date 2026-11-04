@@ -6035,7 +6035,7 @@ function drawWoodDecay(ctx, obj) {
 
 function drawRomanSummon(ctx, unit, opacity = 1, remnant = null) {
     const cx = unit.x + unit.w / 2, cy = unit.y + unit.h / 2;
-    const friendly = unit.team === tank.team;
+    const friendly = combatTeamsMatch(unit.team, tank.team);
     const teamColor = friendly ? '#98ad72' : '#c37a69';
     const fade = Math.min(1, (unit.age || 1) / 10, Math.max(0, unit.life) / 22) * opacity;
     if (fade <= 0) return;
@@ -6270,6 +6270,26 @@ function drawWorldGrid(viewLeft, viewRight, viewTop, viewBottom) {
     ctx.stroke();
 }
 
+function drawCustomBotLabel(ctx, unit, scale = 1) {
+    const name = unit.customName || '';
+    if (!name && !unit.customLabel) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 * scale;
+    ctx.strokeStyle = 'rgba(12,20,14,0.95)';
+    ctx.fillStyle = '#fff';
+    const lines = [name, unit.customLabel].filter(Boolean);
+    lines.forEach((text, index) => {
+        ctx.font = `${index === 0 ? 'bold ' : ''}${11 * scale}px Arial`;
+        const y = unit.y - 18 * scale - (lines.length - index - 1) * 13 * scale;
+        ctx.strokeText(text, unit.x + unit.w / 2, y, 180 * scale);
+        ctx.fillText(text, unit.x + unit.w / 2, y, 180 * scale);
+    });
+    ctx.restore();
+}
+
 function drawReloadBar(ctx, unit, type, color) {
     if (type === 'mechDiy' || type === 'mechShield' || type === 'mechRocket') return;
     // The machinegun reloads only after its full firing burst overheats.
@@ -6351,7 +6371,7 @@ function updateImmersionPresentation(unit, biome, frame, motionStrength) {
     state.airAge = hitAge(unit._immersionAirFrame);
     state.airAngle = Number.isFinite(unit._immersionAirAngle) ? unit._immersionAirAngle : 0;
     const jet = hitAge(unit._immersionWaterFrame) < 0.14;
-    const inSwarm = typeof objects !== 'undefined' && objects.some(obj => obj.type === 'pharaohSwarm' && obj.life > 0 && obj.team !== unit.team &&
+    const inSwarm = typeof objects !== 'undefined' && objects.some(obj => obj.type === 'pharaohSwarm' && obj.life > 0 && !combatTeamsMatch(obj.team, unit.team) &&
         Math.hypot(obj.x - Math.max(unit.x, Math.min(obj.x, unit.x + unit.w)),
             obj.y - Math.max(unit.y, Math.min(obj.y, unit.y + unit.h))) <= obj.radius);
     for (const [type, target] of [['swarm', inSwarm ? 1 : 0], ['overload', unit._kvantOverload ? 1 : 0], ['water', jet ? 1 : 0]]) {
@@ -6404,7 +6424,7 @@ function updateImmersionPresentation(unit, biome, frame, motionStrength) {
         if (obj.type !== 'gas' || obj.life <= 0 ||
             Math.hypot(unit.x + unit.w / 2 - obj.x, unit.y + unit.h / 2 - obj.y) > obj.radius) continue;
         const sourceTeam = obj.ownerTeam ?? obj.team;
-        const friendly = sourceTeam !== undefined ? sourceTeam === unit.team : obj.owner === 'player' || obj.owner === 'ally';
+        const friendly = sourceTeam !== undefined ? combatTeamsMatch(sourceTeam, unit.team) : obj.owner === 'player' || obj.owner === 'ally';
         gasStrength = Math.max(gasStrength, friendly ? 0.06 : 1);
     }
     for (const [type, target] of [['ice', cold ? 1 : 0], ['frozen', frozen ? 1 : 0],
@@ -7476,41 +7496,9 @@ function renderGameFrame() {
         ctx.save();
         ctx.fillStyle = obj.color;
         if (obj.type === 'wall') {
-            const wx = obj.x, wy = obj.y, ww = obj.w, wh = obj.h;
             const brokenShape = getWallBreakShape(obj);
             if (brokenShape) { ctx.save(); clipWallBreakShape(ctx, obj, brokenShape); }
-            // Metallic/Industrial Block
-            const grad = ctx.createLinearGradient(wx, wy, wx + ww, wy + wh);
-            grad.addColorStop(0, '#555');
-            grad.addColorStop(0.5, '#333');
-            grad.addColorStop(1, '#222');
-            ctx.fillStyle = grad;
-            ctx.fillRect(wx, wy, ww, wh);
-
-            // Inner bevel
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#666';
-            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.stroke();
-            ctx.strokeStyle = '#111';
-            ctx.beginPath(); ctx.moveTo(wx+ww, wy); ctx.lineTo(wx+ww, wy+wh); ctx.lineTo(wx, wy+wh); ctx.stroke();
-
-            // Rivets on corners
-            ctx.fillStyle = '#111';
-            const m = 4;
-            ctx.fillRect(wx+m, wy+m, 2, 2);
-            ctx.fillRect(wx+ww-m-2, wy+m, 2, 2);
-            ctx.fillRect(wx+m, wy+wh-m-2, 2, 2);
-            ctx.fillRect(wx+ww-m-2, wy+wh-m-2, 2, 2);
-
-            // Simple X brace pattern in center for industrial feel
-            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(wx + 4, wy + 4); ctx.lineTo(wx + ww - 4, wy + wh - 4);
-            ctx.moveTo(wx + ww - 4, wy + 4); ctx.lineTo(wx + 4, wy + wh - 4);
-            ctx.stroke();
-
-            GameTerrain.drawWallCover(ctx, obj);
+            GameTerrain.drawWall(ctx, obj);
             if (brokenShape) ctx.restore();
             drawWallBrokenEdges(ctx, obj, brokenShape);
 
@@ -9372,6 +9360,7 @@ function renderGameFrame() {
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(a.hp) + '/' + maxAllyHp, a.x + a.w / 2, a.y - 7);
         drawReloadBar(ctx, a, a.tankType, '#86aebd');
+        drawCustomBotLabel(ctx, a);
     });
 
     // Helper for beam drawing (applied to all)
@@ -9769,6 +9758,7 @@ function renderGameFrame() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.ceil(enemy.hp) + '/' + maxHp, enemy.x + enemy.w / 2, enemy.y - 7);
+        drawCustomBotLabel(ctx, enemy);
         // Draw energy bar for mech enemies
         if ((enemy.tankType === 'mechDiy' || enemy.tankType === 'mechShield' || enemy.tankType === 'mechRocket') && typeof drawMechEnergyBar === 'function') {
             drawMechEnergyBar(ctx, enemy);

@@ -32,6 +32,43 @@ function bullet(team, type = 'normal', damage = 100) {
         life: 20, team, owner: team === 1 ? 'enemy' : 'player', type, damage };
 }
 
+test('allied groups damage other groups while every group stays friendly to the player', () => {
+    for (const team of [0, -1, -2, 1]) {
+        const battle = makeBattle();
+        const ally = { x: 100, y: 100, w: 38, h: 38, hp: 500, maxHp: 500, team: -1, alive: true, tankType: 'normal' };
+        battle.allies = [ally];
+        battle.bullets.push({ ...bullet(team, 'normal', 20), owner: team < 0 ? 'ally' : 'player' });
+        battle.runBulletTick();
+        assert.equal(ally.hp, team === -2 || team === 1 ? 480 : 500, `projectile team ${team}`);
+        battle.applyDamage(119, 119, 50, 100, team);
+        assert.equal(ally.hp, team === -2 || team === 1 ? 380 : 500, `area damage team ${team}`);
+    }
+    for (const team of [-1, -2, -3, -4]) {
+        const battle = makeBattle();
+        Object.assign(battle.tank, { x: 100, y: 100 });
+        battle.bullets.push({ ...bullet(team), owner: 'ally' });
+        battle.runBulletTick();
+        battle.explodeRocket({ x: 119, y: 119, team, damage: 200 });
+        assert.equal(battle.tank.hp, 300, `allied team ${team} cannot hurt the player`);
+    }
+});
+
+test('ally target selection includes rival ally groups and excludes friends', () => {
+    const battle = makeBattle();
+    const ally = { team: -1, alive: true }, friend = { team: -1, alive: true }, rival = { team: -2, alive: true };
+    const enemy = { team: 1, alive: true };
+    battle.allies = [ally, friend, rival]; battle.enemies = [enemy]; battle.ally = ally;
+    battle.GameTerrain = { canSee: () => true };
+    vm.runInContext(bot.slice(0, bot.indexOf('function pathClearFor(')), battle);
+    const start = bot.indexOf('        const targets = filterTargetsByVision(ally,', bot.indexOf('function updateAllyAI()'));
+    const end = bot.indexOf('        if (targets.length === 0)', start);
+    vm.runInContext(`{ ${bot.slice(start, end)} selectedTargets = targets; }`, battle);
+    assert.equal(battle.selectedTargets.includes(rival), true);
+    assert.equal(battle.selectedTargets.includes(enemy), true);
+    assert.equal(battle.selectedTargets.includes(friend), false);
+    assert.equal(battle.isCombatTargetHostile(ally, battle.tank), false);
+});
+
 test('flamethrower hits mark presentation heat only after unblocked damage', () => {
     const start = physics.indexOf('    for (let i = flames.length - 1;');
     const end = physics.indexOf('    // Advance each barrage once', start);
