@@ -54,6 +54,8 @@ Representative implemented mechanics:
 | `roman`, `spartan`, `kvant` | Ricocheting blade and banner-summoned legion; piercing spear and low-health speed change; transforming projectiles and an overload ability. |
 | `kamikaze`, `myasnoy` | Special dash/explosion and ghost behavior; a separation ability with a controlled eye and independently acting body. |
 
+Each flamethrower flame deals 1 base damage for the player, allied bots, and enemy bots. Player damage upgrades still apply. Flames show layered tongues and a glow without spawning lingering decorative trail particles.
+
 `mechDiy`, `mechShield`, and `mechRocket` use regenerating energy as well as HP. Their attacks spend energy; very low energy triggers a temporary power stun that blocks movement and firing. Energy continues regenerating during the stun, and a depleted battery does not repeatedly restart it until rearmed by recovery. Their attack patterns differ: queued cannon bursts, a shield-oriented dense shot, and rockets. Energy capacity and shield behavior are type-specific; upgrades can change energy capacity. See `updateMechPower` and mech attack paths rather than treating energy as ordinary tank heat.
 
 Abilities do not share one universal resource model. Some have cooldowns, some have match-limited uses, and some depend on energy or vehicle state. Effects include burn, poison, freeze/slow, paralysis, blindness/control disruption, shields and knockback; each has attack-specific protection and expiry rules.
@@ -75,6 +77,8 @@ Wooden walls retain localized damage marks instead of uniformly shrinking. Ordin
 Roman blades/pilums, Spartan spears and Egyptian arrows can embed in targets using their original artwork and dimensions. In wooden walls they remain until the wall is destroyed; marks embedded in vehicles expire. Repeated impacts preserve earlier wall damage shapes. Rocket-mech impacts can create larger visible wood damage without increasing the underlying HP damage merely because the effect is larger.
 
 Generated-map barrels occupy one 50-pixel cell; newly placed editor barrels use the selected grid-cell size. A barrel blast ignites nearby barrels with a fuse of 15 simulation steps, or 0.25 simulated seconds at the game's update rate. Overlapping blasts preserve an already burning fuse, and each barrel detonates once. Direct damaging hits can detonate a barrel immediately. Chain processing advances through simulation updates, so it pauses with combat and does not recursively detonate the entire chain at once. Clearing the map clears pending barrels too.
+
+Player and bot tanks can push barrels and boxes, including mixed rows of both. Each additional box applies the existing 10% chain slowdown; every pushed barrel applies a 15% slowdown. Barrels retain their fuse and explosion behavior while being pushed.
 
 Explosion artwork and gameplay hit areas are distinct: a larger fireball or more debris does not by itself imply a larger damage radius or more HP damage. Destruction effects do not become blocking obstacles. Ordinary debris and explosion animations are temporary presentation objects. Relevant handlers include `explodeBarrel`, `updateBarrelFuses`, `damageWoodenWall`, and `addEmbeddedProjectile` in `physics.js`.
 
