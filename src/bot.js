@@ -406,7 +406,7 @@ function moveSmallSteps(entity, angle, dist) {
                         blocked = true;
                         break;
                     }
-                    if (obj.type === 'box' || obj.type === 'barrel') {
+                    if (obj.type === 'box') {
                         if (canPhaseWalls) continue;
                         collider = obj;
                         break;
@@ -417,8 +417,8 @@ function moveSmallSteps(entity, angle, dist) {
         if (blocked) return false;
 
         // Проверяем, не пересекается ли с ящиком — тогда попробуем его сдвинуть
-        if (collider) {
-            if (!pushObstacleChain(entity, dxStep, dyStep, true)) {
+        if (collider && collider.type === 'box') {
+            if (!pushBoxChain(entity, dxStep, dyStep, true)) {
                 // Cannot push box — mark it so AI can shoot to break it
                 entity._blockingBox = collider;
                 entity._blockingBoxTimer = 30;
@@ -1494,7 +1494,7 @@ function updateEnemyAI() {
                     const sx = enemy.x + enemy.w/2 + Math.cos(ang) * 18;
                     const sy = enemy.y + enemy.h/2 + Math.sin(ang) * 18;
                     const speed = 3.5 + Math.random() * 1.2;
-                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 1, team: enemy.team, sourceUnit: enemy, owner: 'enemy' });
+                    flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: enemy.team, sourceUnit: enemy, owner: 'enemy' });
                 }
             } else if (tt === 'buratino') {
                 createBuratinoBarrage(enemy);
@@ -2170,7 +2170,7 @@ function updateAllyAI() {
                         const sx = ally.x + ally.w/2 + Math.cos(ang) * 18;
                         const sy = ally.y + ally.h/2 + Math.sin(ang) * 18;
                         const speed = 3.5 + Math.random() * 1.2;
-                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 1, team: ally.team, sourceUnit: ally, owner: 'ally' });
+                        flames.push({ x: sx, y: sy, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, life: 28 + Math.floor(Math.random() * 17), damage: 0.75, team: ally.team, sourceUnit: ally, owner: 'ally' });
                     }
                 } else if (tt === 'buratino') {
                     createBuratinoBarrage(ally);

@@ -9270,61 +9270,17 @@ function renderGameFrame() {
 
     // 3.6. Огненные частицы
     flames.forEach(f => {
-        if (!isVisible(f.x - 18, f.y - 18, 36, 36)) return;
+        if (!isVisible(f.x, f.y, 8, 8)) return;
+        // Radius is bigger at start of life (fresh flame), shrinks as it dies
         const maxLife = (f.owner === 'enemy' || f.owner === 'ally') ? 45 : 28;
         const lifeRatio = Math.min(1, f.life / maxLife);
-        const phase = f.life * 0.7 + f.x * 0.13 + f.y * 0.17;
-        const flicker = 0.88 + Math.sin(phase) * 0.12;
-        const length = (5 + lifeRatio * 8) * flicker;
-        const width = (2 + lifeRatio * 2.8) * flicker;
-        const sway = Math.sin(phase * 0.65) * width * 0.22;
-        const angle = Math.atan2(f.vy || 0, f.vx || 0);
-        ctx.save();
-        ctx.translate(f.x, f.y);
-        ctx.rotate(angle);
-        ctx.globalAlpha = (0.55 + lifeRatio * 0.45) * Math.min(1, Math.max(0, f.life / 6));
-
-        const glow = ctx.createRadialGradient(-length * 0.15, 0, 0, 0, 0, length * 1.25);
-        glow.addColorStop(0, 'rgba(255,205,54,0.45)');
-        glow.addColorStop(0.45, 'rgba(255,92,12,0.2)');
-        glow.addColorStop(1, 'rgba(185,24,0,0)');
-        ctx.fillStyle = glow;
-        ctx.beginPath(); ctx.ellipse(0, 0, length * 1.1, width * 1.7, 0, 0, Math.PI * 2); ctx.fill();
-
-        const outer = ctx.createLinearGradient(-length, 0, length, 0);
-        outer.addColorStop(0, 'rgba(217,35,0,0.2)');
-        outer.addColorStop(0.45, 'rgba(255,91,5,0.92)');
-        outer.addColorStop(0.82, 'rgba(255,178,25,0.98)');
-        outer.addColorStop(1, 'rgba(255,231,91,0.75)');
-        ctx.fillStyle = outer;
-        ctx.beginPath();
-        ctx.moveTo(length, sway);
-        ctx.bezierCurveTo(length * 0.36, -width * 0.15, length * 0.15, -width, -length * 0.35, -width * 0.65);
-        ctx.quadraticCurveTo(-length * 0.52, -width * 0.48, -length * 0.82, -width * 0.6);
-        ctx.quadraticCurveTo(-length * 0.44, 0, -length * 0.82, width * 0.6);
-        ctx.quadraticCurveTo(-length * 0.52, width * 0.48, -length * 0.35, width * 0.65);
-        ctx.bezierCurveTo(length * 0.15, width, length * 0.36, width * 0.15, length, sway);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255,181,36,0.78)';
-        ctx.beginPath();
-        ctx.moveTo(-length * 0.35, -width * 0.35);
-        ctx.quadraticCurveTo(-length * 0.1, -width * 1.1, length * 0.34, -width * 0.65 + sway);
-        ctx.quadraticCurveTo(length * 0.1, -width * 0.4, length * 0.06, -width * 0.15);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(-length * 0.4, width * 0.35);
-        ctx.quadraticCurveTo(-length * 0.08, width * 1.08, length * 0.25, width * 0.7 + sway);
-        ctx.quadraticCurveTo(length * 0.08, width * 0.38, 0, width * 0.12);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255,244,165,0.94)';
-        ctx.beginPath();
-        ctx.moveTo(length * 0.72, 0);
-        ctx.quadraticCurveTo(length * 0.05, -width * 0.2, -length * 0.38, 0);
-        ctx.quadraticCurveTo(length * 0.05, width * 0.2, length * 0.72, 0);
-        ctx.fill();
-        ctx.restore();
+        const r = 3 + lifeRatio * 5; // 3..8px
+        const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+        grad.addColorStop(0, `rgba(255, 240, 100, ${0.7 + lifeRatio * 0.3})`);
+        grad.addColorStop(0.45, `rgba(255, 100, 0, ${0.5 + lifeRatio * 0.3})`);
+        grad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI*2); ctx.fill();
     });
 
     ctx.shadowBlur = 0;
@@ -10880,7 +10836,7 @@ function showTankDetail(tankType) {
             return '█'.repeat(filled) + '░'.repeat(max - filled);
         };
         const tankDamageByType = {
-            normal: 100, ice: 100, fire: 1, buratino: 300, toxic: 44 / 60,
+            normal: 100, ice: 100, fire: 0.75, buratino: 300, toxic: 44 / 60,
             plasma: 350, musical: 200, waterjet: 1.5, illuminat: 75 / 60,
             mirror: 100, egyptian: 100, time: 100, machinegun: MACHINEGUN_BULLET_DAMAGE, buckshot: BUCKSHOT_PELLET_DAMAGE, imitator: 100, electric: 150, burovoy: 40, robot: 65, medical: 75, mine: 150, roman: 125, pyro: 70, spartan: 80, air: 80, myasnoy: 2, ai: 80
         };

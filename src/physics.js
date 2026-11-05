@@ -2534,7 +2534,7 @@ function shoot() {
                 vx: Math.cos(ang) * speed + tvx,
                 vy: Math.sin(ang) * speed + tvy,
                 life: 20 + Math.floor(Math.random() * 8),
-                damage: 1,
+                damage: 0.75,
                 team: 0
             });
         }
@@ -4330,6 +4330,14 @@ function updatePhysics() {
         f.x += f.vx;
         f.y += f.vy;
         f.life--;
+        // Fire trail particles — more frequent for enemy/ally flames
+        if (window.effectsEnabled !== false) {
+            const trailChance = (f.owner === 'player' || !f.owner) ? 0.4 : 0.6;
+            if (Math.random() < trailChance) {
+                const colors = ['#ff6600', '#ff3300', '#ffaa00', '#ffff00'];
+                spawnParticle(f.x, f.y, colors[Math.floor(Math.random() * colors.length)], 6 + Math.random() * 6);
+            }
+        }
         if (f.life <= 0) {
             flames.splice(i, 1);
             continue;
@@ -5018,35 +5026,34 @@ function sweptBoxPushContact(moving, target, dx, dy) {
     return Math.max(0, entry);
 }
 
-function canPushObstacleInRow(part, obstacle, entity, dx, dy, contact) {
+function canPushBoxInRow(part, box, entity, dx, dy, contact) {
     if (Math.abs(dx) >= Math.abs(dy)) {
         const partY = part.y + dy * contact;
-        const overlap = Math.min(partY + part.h, obstacle.y + obstacle.h) - Math.max(partY, obstacle.y);
+        const overlap = Math.min(partY + part.h, box.y + box.h) - Math.max(partY, box.y);
         if (overlap <= 1e-7) return false;
-        if (dx > 0 ? obstacle.x < part.x + part.w - 1e-7 : obstacle.x + obstacle.w > part.x + 1e-7) return false;
-        return part === entity || overlap + 1e-7 >= Math.min(part.h, obstacle.h) / 10;
+        if (dx > 0 ? box.x < part.x + part.w - 1e-7 : box.x + box.w > part.x + 1e-7) return false;
+        return part === entity || overlap + 1e-7 >= Math.min(part.h, box.h) / 10;
     }
     const partX = part.x + dx * contact;
-    const overlap = Math.min(partX + part.w, obstacle.x + obstacle.w) - Math.max(partX, obstacle.x);
+    const overlap = Math.min(partX + part.w, box.x + box.w) - Math.max(partX, box.x);
     if (overlap <= 1e-7) return false;
-    if (dy > 0 ? obstacle.y < part.y + part.h - 1e-7 : obstacle.y + obstacle.h > part.y + 1e-7) return false;
-    return part === entity || overlap + 1e-7 >= Math.min(part.w, obstacle.w) / 10;
+    if (dy > 0 ? box.y < part.y + part.h - 1e-7 : box.y + box.h > part.y + 1e-7) return false;
+    return part === entity || overlap + 1e-7 >= Math.min(part.w, box.w) / 10;
 }
 
-function pushObstacleChain(entity, dx, dy, botMovement = false) {
+function pushBoxChain(entity, dx, dy, botMovement = false) {
     const moving = [entity];
     const movingSet = new Set(moving);
     const contacts = [];
     const units = [tank, ...allies, ...enemies, ...illusions.filter(il => il && il.life > 0)];
     let boxesMoved = 0;
-    let barrelsMoved = 0;
-    let obstaclesDisplaced = false;
+    let boxesDisplaced = false;
     let budget = 1;
     let blocked = false;
     const epsilon = 1e-7;
 
     while (budget > epsilon) {
-        const speed = Math.pow(0.9, Math.max(0, boxesMoved - 1)) * Math.pow(0.85, barrelsMoved);
+        const speed = Math.pow(0.9, Math.max(0, boxesMoved - 1));
         const moveX = dx * speed * budget;
         const moveY = dy * speed * budget;
         let first = 1;
@@ -5069,14 +5076,14 @@ function pushObstacleChain(entity, dx, dy, botMovement = false) {
             consider(Math.min(limitX, limitY), null, part, true);
             for (const obj of objects) {
                 if (movingSet.has(obj)) continue;
-                // Bots can pass through most objects; pushed boxes and barrels
-                // still collide with other obstacles.
-                if (botMovement && part === entity && obj.type !== 'box' && obj.type !== 'barrel' &&
+                // Bots have always been able to pass through barrels and other
+                // non-wall objects; a pushed box itself still collides with them.
+                if (botMovement && part === entity && obj.type !== 'box' &&
                     obj.type !== 'wall' && obj.type !== 'woodenWall') continue;
                 const contact = sweptBoxPushContact(part, obj, moveX, moveY);
                 if (contact === null) continue;
-                const pushable = obj.type === 'box' || obj.type === 'barrel';
-                const hard = !pushable || !canPushObstacleInRow(part, obj, entity, moveX, moveY, contact);
+                const hard = obj.type !== 'box' ||
+                    !canPushBoxInRow(part, obj, entity, moveX, moveY, contact);
                 consider(contact, obj, part, hard);
             }
             for (const unit of units) {
@@ -5089,10 +5096,10 @@ function pushObstacleChain(entity, dx, dy, botMovement = false) {
 
         const directlyPushed = new Set(hits.filter(hit => !hit.hard).map(hit => hit.target));
         const hardBlock = hits.some(hit => hit.hard && !directlyPushed.has(hit.target));
-        const nextObstacle = hits.find(hit => !hit.hard);
+        const nextBox = hits.find(hit => !hit.hard);
 
         if (first > epsilon) {
-            if (moving.length > 1) obstaclesDisplaced = true;
+            if (moving.length > 1) boxesDisplaced = true;
             for (const part of moving) {
                 part.x += moveX * first;
                 part.y += moveY * first;
@@ -5111,9 +5118,9 @@ function pushObstacleChain(entity, dx, dy, botMovement = false) {
             blocked = true;
             break;
         }
-        if (!nextObstacle) break;
-        const obstruction = nextObstacle.target;
-        const contactParent = nextObstacle.parent;
+        if (!nextBox) break;
+        const obstruction = nextBox.target;
+        const contactParent = nextBox.parent;
         contacts.push({
             parent: contactParent,
             child: obstruction,
@@ -5124,13 +5131,12 @@ function pushObstacleChain(entity, dx, dy, botMovement = false) {
         });
         moving.push(obstruction);
         movingSet.add(obstruction);
-        if (obstruction.type === 'barrel') barrelsMoved++;
-        else boxesMoved++;
+        boxesMoved++;
     }
 
-    if (obstaclesDisplaced) {
-        const obstacle = moving[1];
-        if (Math.random() > 0.5) spawnParticle(obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
+    if (boxesDisplaced) {
+        const box = moving[1];
+        if (Math.random() > 0.5) spawnParticle(box.x + box.w / 2, box.y + box.h / 2);
         if (typeof navNeedsRebuild !== 'undefined') navNeedsRebuild = true;
     }
     return !blocked;
@@ -5169,11 +5175,36 @@ function moveWithCollision(dx, dy) {
             if (canPhaseWalls && isBlockingTerrainObject(obj)) {
                 continue;
             }
-            if (obj.type === 'box' || obj.type === 'barrel') {
+            if (obj.type === 'box') {
                 tank.x -= dx;
                 tank.y -= dy;
-                pushObstacleChain(tank, dx, dy);
+                pushBoxChain(tank, dx, dy);
                 return;
+            }
+            if (obj.type === 'barrel') {
+                // Пытаемся толкать ящик
+                obj.x += dx;
+                obj.y += dy;
+                
+                let boxBlocked = objects.some(o => o !== obj && checkRectCollision(obj, o)) ||
+                                obj.x < 0 || obj.y < 0 || 
+                                obj.x + obj.w > worldWidth || obj.y + obj.h > worldHeight;
+                // Also prevent pushing a box into a tank
+                if (!boxBlocked) {
+                    const boxRect = { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+                    if (typeof tank !== 'undefined' && checkRectCollision(boxRect, tank)) boxBlocked = true;
+                    for (const a of allies) { if (!boxBlocked && a && a.alive !== false && checkRectCollision(boxRect, a)) boxBlocked = true; }
+                    for (const e of enemies) { if (!boxBlocked && e && e.alive !== false && checkRectCollision(boxRect, e)) boxBlocked = true; }
+                    for (const il of illusions) { if (!boxBlocked && il && il.life > 0 && checkRectCollision(boxRect, il)) boxBlocked = true; }
+                }
+                
+                if (boxBlocked) {
+                    obj.x -= dx; obj.y -= dy;
+                    tank.x -= dx; tank.y -= dy;
+                } else if (dx !== 0 || dy !== 0) {
+                    spawnParticle(obj.x + obj.w/2, obj.y + obj.h/2);
+                }
+                break;
             } else if (canPhaseWalls && (obj.type === 'wall' || obj.type === 'woodenWall')) {
                 continue;
             } else {

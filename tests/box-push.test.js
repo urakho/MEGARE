@@ -225,21 +225,6 @@ test('bot uses the same chain speed and only moves boxes it reaches', () => {
     close(boxes[1].x, 49);
 });
 
-test('player and bot push barrel chains with a 15 percent slowdown per barrel', () => {
-    for (const actor of ['player', 'bot']) {
-        for (const types of [['barrel'], ['barrel', 'barrel'], ['box', 'barrel']]) {
-            const obstacles = types.map((type, i) => ({ ...box(20 + i * 20), type }));
-            const game = setup(obstacles, actor === 'bot' ? { tank: { x: 200, y: 200, w: 20, h: 20, alive: true } } : {});
-            const unit = actor === 'bot' ? { x: 0, y: 0, w: 20, h: 20, alive: true } : game.tank;
-            if (actor === 'bot') game.moveSmallSteps(unit, 0, 10);
-            else game.moveWithCollision(10, 0);
-            const distance = 10 * Math.pow(0.85, types.filter(type => type === 'barrel').length);
-            close(unit.x, distance);
-            obstacles.forEach((obstacle, i) => close(obstacle.x, 20 + i * 20 + distance));
-        }
-    }
-});
-
 test('bot movement does not repeat a full step for the remaining fraction', () => {
     const game = setup([], { tank: { x: 200, y: 200, w: 20, h: 20, alive: true } });
     const botTank = { x: 0, y: 0, w: 20, h: 20, alive: true };

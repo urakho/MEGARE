@@ -169,7 +169,7 @@ test('flamethrower and waterjet stop to reload after a finite burst', () => {
     vm.runInNewContext(section(physics, 'function shoot() {', 'function updateSpecialProjectiles()'), context);
     for (let shot = 0; shot < 90; shot++) context.shoot();
     assert.equal(context.tank.fireCooldown, 135);
-    assert.ok(context.flames.every(flame => flame.damage === 1));
+    assert.ok(context.flames.every(flame => flame.damage === 0.75));
     context.tank.fireCooldown = 0;
     context.tankType = 'waterjet';
     context.shoot();

@@ -5751,7 +5751,7 @@ function update() {
                 for (let _i = _prevFLen; _i < flames.length; _i++) {
                     const _f = flames[_i];
                     // Keep fractional flame damage when upgrades are applied.
-                    _f.damage = (_f.damage != null ? _f.damage : 1) * _dMult;
+                    _f.damage = (_f.damage != null ? _f.damage : 0.75) * _dMult;
                 }
             }
         }

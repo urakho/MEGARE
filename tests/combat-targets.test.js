@@ -86,56 +86,6 @@ test('flamethrower hits mark presentation heat only after unblocked damage', () 
     }
 });
 
-test('player, ally and enemy flamethrowers deal 1 damage per flame', () => {
-    const start = physics.indexOf('    for (let i = flames.length - 1;');
-    const end = physics.indexOf('    // Advance each barrage once', start);
-    assert.ok(start >= 0 && end > start);
-    for (const owner of ['player', 'ally', 'enemy']) {
-        const battle = makeBattle();
-        battle.tank.turretAngle = 0;
-        battle.Math = Object.assign(Object.create(Math), { random: () => 0.5 });
-        if (owner === 'player') {
-            battle.tankType = 'fire';
-            battle.shoot();
-            assert.equal(battle.flames.length, 7);
-        } else {
-            const suffix = owner === 'enemy' ? 'E' : 'A';
-            const unit = { x: 100, y: 100, w: 38, h: 38, turretAngle: 0, team: owner === 'enemy' ? 1 : -1 };
-            battle[owner] = unit;
-            const first = bot.indexOf(`const flameCount${suffix} = 14;`);
-            const last = bot.indexOf("} else if (tt === 'buratino')", first);
-            assert.ok(first >= 0 && last > first);
-            vm.runInContext(bot.slice(first, last), battle);
-            assert.equal(battle.flames.length, 14);
-        }
-        assert.ok(battle.flames.every(flame => flame.damage === 1), owner);
-        const flame = battle.flames[0];
-        const target = owner === 'enemy' ? battle.tank
-            : { x: 100, y: 100, w: 38, h: 38, hp: 300, alive: true, team: 1 };
-        if (owner !== 'enemy') battle.enemies = [target];
-        Object.assign(flame, { x: target.x + 19, y: target.y + 19, vx: 0, vy: 0 });
-        battle.flames = [flame];
-        vm.runInContext(`function hitFlame() { ${physics.slice(start, end)} }`, battle);
-        battle.hitFlame();
-        assert.equal(target.hp, 299, owner);
-    }
-});
-
-test('flamethrower flames expire without leaving decorative trail particles', () => {
-    const battle = makeBattle();
-    const start = physics.indexOf('    for (let i = flames.length - 1;');
-    const end = physics.indexOf('    // Advance each barrage once', start);
-    assert.ok(start >= 0 && end > start);
-    battle.window.effectsEnabled = true;
-    let particlesSpawned = 0;
-    battle.spawnParticle = () => { particlesSpawned++; };
-    battle.flames.push({ x: 100, y: 100, vx: 1, vy: 0, life: 3, damage: 1, team: 0 });
-    vm.runInContext(`function advanceFlames() { ${physics.slice(start, end)} }`, battle);
-    for (let tick = 0; tick < 3; tick++) battle.advanceFlames();
-    assert.equal(battle.flames.length, 0);
-    assert.equal(particlesSpawned, 0);
-});
-
 test('own and allied projectiles cannot trigger player attack immersion statuses', () => {
     for (const owner of ['player', 'ally']) for (const type of ['ice', 'pyroBullet', 'electricBall']) {
         const battle = makeBattle();
