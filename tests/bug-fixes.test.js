@@ -493,7 +493,7 @@ test('editor shortcuts leave dialogs and text entry in control', () => {
         closeBotSettings() {}, closeEditor() { closes++; }, undo() { undos++; }, setTool(value) { tool = value; } };
     vm.runInNewContext(section(editor, "        document.addEventListener('keydown', (e) => {", '        updateHUD();'), context);
     const press = (key, extra = {}) => keydown({ key, target: { tagName: 'BUTTON' }, preventDefault() {}, ...extra });
-    press('4'); assert.equal(tool, 'enemy');
+    press('6'); assert.equal(tool, 'enemy');
     for (const id of ['meSettingsModal', 'meMapsModal', 'meConfirmOverlay']) {
         dialogs[id].style.display = 'flex';
         press('1'); assert.equal(tool, 'enemy');
@@ -506,7 +506,7 @@ test('editor shortcuts leave dialogs and text entry in control', () => {
     press('1', { ctrlKey: true }); assert.equal(tool, 'enemy');
     press('Z', { ctrlKey: true }); assert.equal(undos, 1);
     context.modal.style.display = 'none';
-    press('4'); press('z', { ctrlKey: true }); assert.equal(undos, 1);
+    press('6'); press('z', { ctrlKey: true }); assert.equal(undos, 1);
 });
 
 test('map import rejects invalid objects and obstacles overlapping player spawn', () => {
