@@ -58,7 +58,7 @@ The application loads classic scripts directly from [index.html](../index.html);
 | [src/](../src/) | Shared state, gameplay, physics, AI, rendering, UI, persistence |
 | [tests/](../tests/) | Node.js regression tests and existing browser/image artifacts |
 | [music/](../music/) | Audio assets; current music paths use `music/mp3/`; `music/m4a/` also exists |
-| [png/](../png/), [svg/](../svg/) | Raster artwork and vector assets, including currency icons |
+| [pictures/](../pictures/) | Raster artwork and vector assets, including profile and currency icons |
 | [AGENTS.md](../AGENTS.md) | Shared Codex and Copilot working rules and knowledge entry point |
 | [docs/](./) | Current project knowledge and confirmed direction |
 | [.agents/skills/](../.agents/skills/), [plans/](../plans/) | Reusable development skills and space for concrete implementation plans |

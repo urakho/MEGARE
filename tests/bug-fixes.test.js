@@ -713,7 +713,7 @@ test('creating a profile does not change the previous profile title', () => {
         profileEditSave: { addEventListener: (_event, handler) => { saveHandler = handler; } },
         document: { getElementById: id => id === 'profileEditName' ? { value: 'Новый игрок' } : null },
         localStorage: { getItem: key => store.get(key), setItem: (key, value) => store.set(key, value) },
-        _profileEditIdx: -1, _profileEditAvatar: '🎮', _profileEditTitleId: 'unlocked',
+        _profileEditIdx: -1, _profileEditAvatar: '🎮', _profileEditTitleId: 'unlocked', _profileEditBackground: 'default',
         window: { createProfile: () => { created = true; } }, saveProgress() {}
     };
     vm.runInNewContext(section(main, "if (profileEditSave) profileEditSave.addEventListener('click', () => {", '// Edit modal: Cancel'), runtime);
@@ -737,18 +737,25 @@ test('flawless victory has a reachable outcome and boss bonuses match displayed 
         resultEmblem: element(), resultHeadline: element(), resultMessage: element(),
         resultReward: element(), resultEditor: null };
     const game = { ...ui, window: { _customMapActive: false }, currentMode: 'bossfight',
-        gameState: 'win', lastResultState: null, coins: 300, trophies: 25,
+        gameState: 'win', lastResultState: null, coins: 300, tokens: 100, trophies: 25,
         tankType: 'normal', tank: { hp: 300 }, Math, console: { log() {}, error() {} },
         determineOutcomeType: () => 'crushing', describeMode: () => 'Босс',
         getResultMessages: () => ({ bossfight: { win: { crushing: ['Победа'] } } }),
-        addIndividualTankTrophies() {}, saveProgress() {}
+        addIndividualTankTrophies() {}, saveProgress() {},
+        VICTORY_TOKEN_REWARDS: { bossfight: 100 }, BOSS_BONUS_TOKENS: 35,
+        awardVictoryTokens() { game.tokens += 35; }
     };
     vm.runInNewContext(section(results, 'let immersionDeath = null;', '// Determine outcome type'), game);
     vm.runInNewContext(section(results, 'function syncResultOverlay(state = gameState)', 'window.syncResultOverlay = syncResultOverlay;'), game);
     game.syncResultOverlay('win');
-    assert.equal(game.coins, 400);
+    assert.equal(game.coins, 300);
+    assert.equal(game.tokens, 135);
     assert.equal(game.trophies, 35);
-    assert.match(game.resultReward.textContent, /400 монет, \+35 трофеев/);
+    assert.match(game.resultReward.textContent, /\+35 трофеев/);
+    assert.doesNotMatch(game.resultReward.textContent, /монет/);
+    assert.match(game.resultReward.textContent, /\+135 жетонов/);
+    game.syncResultOverlay('win');
+    assert.equal(game.tokens, 135);
 });
 
 test('immersion starts disabled and restores only an explicit saved opt-in', () => {

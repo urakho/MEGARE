@@ -110,10 +110,10 @@ const DODGE_BASE_ACCURACY = 0.8;
 // profile 0 on first load.
 
 const PROFILE_SAVE_KEYS = [
-    'tankCoins','tankGems','tankParts','tankTrophies',
+    'tankCoins','tankTokens','tankGems','tankParts','tankTrophies',
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
-    'tankAvatarUnlocks','tankPromoUsed','tankSelectedAvatars',
+    'tankAvatarUnlocks','tankBackgroundUnlocks','tankPromoUsed','tankSelectedAvatars',
     'playerTitle','playerTitleUnlocks','pendingFreeContainers'
 ];
 
@@ -231,6 +231,13 @@ function _restoreProfileData(data) {
                 if (profile.data.tankSelectedAvatars === undefined || profile.data.tankSelectedAvatars === null) {
                     profile.data.tankSelectedAvatars = '{}';
                 }
+                if (profile.background && profile.background !== 'default') {
+                    let backgrounds;
+                    try { backgrounds = JSON.parse(profile.data.tankBackgroundUnlocks || '[]'); } catch (e) { backgrounds = []; }
+                    if (!Array.isArray(backgrounds)) backgrounds = [];
+                    if (!backgrounds.includes(profile.background)) backgrounds.push(profile.background);
+                    profile.data.tankBackgroundUnlocks = JSON.stringify(backgrounds);
+                }
             }
         });
         _profilesSave(profiles);
@@ -293,7 +300,7 @@ window.switchProfile = function(idx) {
 };
 
 /** Create a new profile with given name and avatar */
-window.createProfile = function(name, avatar) {
+window.createProfile = function(name, avatar, background) {
     if (window._isProfileSwitching) return;
     
     // Save current first BEFORE we set the flag, but we already know _isProfileSwitching is false
@@ -304,12 +311,12 @@ window.createProfile = function(name, avatar) {
     window._isProfileSwitching = true;
     
     // New blank profile — absolutely no resources, only normal tank unlocked
-    const blank = { tankCoins:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
+    const blank = { tankCoins:'0', tankTokens:'0', tankGems:'0', tankParts:'0', tankTrophies:'0',
                     tankClaimedRewards:'[]', tankUnlockedTanks:'["normal"]',
                     tankUpgrades:'{}', tankTrophiesData:'{}',
                     tankSelected:'normal', achievementData:'{}', tankDevUnlocked:'false',
-                    tankAvatarUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
-    profiles.push({ name: name || ('Игрок ' + (profiles.length + 1)), avatar: avatar || '🎮', createdAt: Date.now(), data: blank });
+                    tankAvatarUnlocks:'[]', tankBackgroundUnlocks:'[]', tankPromoUsed:'[]', tankSelectedAvatars:'{}' };
+    profiles.push({ name: name || ('Игрок ' + (profiles.length + 1)), avatar: avatar || '🎮', background: background || 'default', createdAt: Date.now(), data: blank });
     _profilesSave(profiles);
     
     // Aggressive localStorage cleanup: clear ALL keys that might contain game data
@@ -348,11 +355,12 @@ window.createProfile = function(name, avatar) {
 };
 
 /** Edit profile name and/or avatar at index */
-window.editProfile = function(idx, newName, newAvatar) {
+window.editProfile = function(idx, newName, newAvatar, background) {
     const profiles = _profilesLoad() || [];
     if (!profiles[idx]) return;
     if (newName && newName.trim()) profiles[idx].name = newName.trim();
     if (newAvatar)               profiles[idx].avatar = newAvatar;
+    if (background)              profiles[idx].background = background;
     _profilesSave(profiles);
 };
 
@@ -392,6 +400,8 @@ window.getProfileList = function() {
             idx: i,
             name: p.name,
             avatar: p.avatar || '🎮',
+            background: p.background || 'default',
+            backgroundUnlocks: (() => { try { const items = JSON.parse(p.data.tankBackgroundUnlocks || '[]'); return Array.isArray(items) ? items : []; } catch (e) { return []; } })(),
             trophies: parseInt((p.data.tankTrophies) || '0') || 0,
             active: i === activeIdx,
             createdAt: p.createdAt || 0
@@ -412,6 +422,14 @@ window.getActiveProfileName = function() {
 
 // Глобальная валюта
 let coins = parseInt(localStorage.getItem('tankCoins')) || 0;
+let tokens = Math.max(0, parseInt(localStorage.getItem('tankTokens'), 10) || 0);
+const VICTORY_TOKEN_REWARDS = { single: 10, team: 15, duel: 5, onevsall: 25, bossfight: 100 };
+const BOSS_BONUS_TOKENS = 35;
+const CONTAINER_TOKEN_PRICES = { mini: 10, bronze: 40, glitch: 300, legendary: 350, mythic: 600, omega: 1000, alpha: 3000, mechParts: 300 };
+function awardVictoryTokens(mode, bonus = false) {
+    tokens += bonus ? BOSS_BONUS_TOKENS : (VICTORY_TOKEN_REWARDS[mode] || 0);
+}
+
 let gems = parseInt(localStorage.getItem('tankGems')) || 0;
 // Новая валюта: детали (пока недоступны в наградах)
 let parts = parseInt(localStorage.getItem('tankParts')) || 0;
@@ -704,6 +722,7 @@ function loseModeTrophies() {
 function saveProgress() {
     if (window._isProfileSwitching) return;
     localStorage.setItem('tankCoins', coins);
+    localStorage.setItem('tankTokens', tokens);
     localStorage.setItem('tankGems', gems);
     localStorage.setItem('tankParts', parts);
     localStorage.setItem('tankUpgrades', JSON.stringify(tankUpgrades));
@@ -2619,6 +2638,8 @@ const characterBtn = document.getElementById('characterBtn');
 const buyMiniContainer = document.getElementById('buyMiniContainer');
 const buyContainer = document.getElementById('buyContainer');
 const buySuperContainer = document.getElementById('buySuperContainer');
+const buyGlitchContainer = document.getElementById('buyGlitchContainer');
+const buyMythicContainer = document.getElementById('buyMythicContainer');
 const buyOmegaContainer = document.getElementById('buyOmegaContainer');
 const buyAlphaContainer = document.getElementById('buyAlphaContainer');
 const buyMechPartsContainer = document.getElementById('buyMechPartsContainer');
@@ -2731,94 +2752,6 @@ if (shopTabBtns.length) {
     });
 }
 
-// Resource exchange handlers with dynamic calculation
-function _showExchangeResult(msg, ok) {
-    const el = document.getElementById('shopExchangeResult');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.color = ok ? '#2ecc71' : '#e74c3c';
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.textContent = ''; }, 3000);
-}
-
-// Coins → Gems exchange
-const coinsInput = document.getElementById('coinsExchangeInput');
-const coinsResult = document.getElementById('coinsExchangeResult');
-const exchangeCoinsBtn = document.getElementById('exchangeCoinsBtn');
-
-if (coinsInput && coinsResult) {
-    const updateCoinsResult = () => {
-        const coinsAmount = parseInt(coinsInput.value) || 100;
-        const gemsAmount = Math.floor(coinsAmount / 100);
-        coinsResult.querySelector('.exchange-amount').textContent = gemsAmount;
-    };
-    coinsInput.addEventListener('input', updateCoinsResult);
-    updateCoinsResult();
-}
-
-if (exchangeCoinsBtn) {
-    exchangeCoinsBtn.addEventListener('click', () => {
-        const coinsAmount = parseInt(coinsInput.value) || 100;
-        if (coinsAmount < 100) {
-            _showExchangeResult('Минимум 100 монет!', false);
-            return;
-        }
-        if (coinsAmount % 100 !== 0) {
-            _showExchangeResult('Количество должно быть кратно 100!', false);
-            return;
-        }
-        const gemsAmount = coinsAmount / 100;
-        if (coins < coinsAmount) {
-            _showExchangeResult('Недостаточно монет!', false);
-            return;
-        }
-        coins -= coinsAmount;
-        gems += gemsAmount;
-        updateCoinDisplay();
-        saveProgress();
-        _showExchangeResult(`Обмен выполнен! +${gemsAmount} 💎`, true);
-        coinsInput.value = '100';
-        coinsResult.querySelector('.exchange-amount').textContent = '1';
-    });
-}
-
-// Gems → Coins exchange
-const gemsInput = document.getElementById('gemsExchangeInput');
-const gemsResult = document.getElementById('gemsExchangeResult');
-const exchangeGemsBtn = document.getElementById('exchangeGemsBtn');
-
-if (gemsInput && gemsResult) {
-    const updateGemsResult = () => {
-        const gemsAmount = parseInt(gemsInput.value) || 1;
-        const coinsAmount = gemsAmount * 10;  // 1 gem = 10 coins
-        gemsResult.querySelector('.exchange-amount').textContent = coinsAmount;
-    };
-    gemsInput.addEventListener('input', updateGemsResult);
-    updateGemsResult();
-}
-
-if (exchangeGemsBtn) {
-    exchangeGemsBtn.addEventListener('click', () => {
-        const gemsAmount = parseInt(gemsInput.value) || 1;
-        if (gemsAmount < 1) {
-            _showExchangeResult('Минимум 1 гем!', false);
-            return;
-        }
-        const coinsAmount = gemsAmount * 10;  // 1 gem = 10 coins
-        if (gems < gemsAmount) {
-            _showExchangeResult('Недостаточно гемов!', false);
-            return;
-        }
-        gems -= gemsAmount;
-        coins += coinsAmount;
-        updateCoinDisplay();
-        saveProgress();
-        _showExchangeResult(`Обмен выполнен! +${coinsAmount} 💰`, true);
-        gemsInput.value = '1';
-        gemsResult.querySelector('.exchange-amount').textContent = '10';
-    });
-}
-
 if (closeTrophyRoad) closeTrophyRoad.addEventListener('click', () => { if (trophyRoadModal) trophyRoadModal.style.display = 'none'; });
 
 // Command modal handlers (commandExecute/commandCancel/helpClose) are wired in src/admin.js
@@ -2849,9 +2782,16 @@ if (versionModal) {
     });
 }
 
+for (const [type, price] of Object.entries(CONTAINER_TOKEN_PRICES)) {
+    const button = document.querySelector(`[data-container-type="${type}"] .btn-buy`);
+    if (button) button.textContent = `Купить (${price} жетонов)`;
+}
+
 if (buyMiniContainer) buyMiniContainer.addEventListener('click', () => showContainerFlow('mini'));
 if (buyContainer) buyContainer.addEventListener('click', () => showContainerFlow('bronze'));
 if (buySuperContainer) buySuperContainer.addEventListener('click', () => showContainerFlow('legendary'));
+if (buyGlitchContainer) buyGlitchContainer.addEventListener('click', () => showContainerFlow('glitch'));
+if (buyMythicContainer) buyMythicContainer.addEventListener('click', () => showContainerFlow('mythic'));
 if (buyOmegaContainer) buyOmegaContainer.addEventListener('click', () => showContainerFlow('omega'));
 if (buyAlphaContainer) buyAlphaContainer.addEventListener('click', () => showContainerFlow('alpha'));
 if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () => showContainerFlow('mechParts'));
@@ -2859,6 +2799,13 @@ if (buyMechPartsContainer) buyMechPartsContainer.addEventListener('click', () =>
 // ── Promo codes ─────────────────────────────────────────────────────────────
 // Known promo codes: code → { reward function, message }
 const _PROMO_CODES = {
+    'EM5p7#89': { reward: function() { gems += 15; tokens += 50; }, msg: '✅ Промокод активирован! Получено 15 гемов и 50 жетонов' },
+    'ECONOMY2026': { reward: function() {
+        tokens += 100;
+        if (!achievementData.claimed) achievementData.claimed = {};
+        achievementData.claimed.icon_economy_veteran = true;
+        saveAchievements();
+    }, msg: '✅ Промокод активирован! Получено 100 жетонов и иконка «Ветеран экономики»' },
     'gyth6-0%99^#8/*0': { reward: function() { gems += 20; localStorage.setItem('tankGems', gems); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 20 💎' },
     'hypt98yh&|)?pon6':  { reward: function() { coins += 200; localStorage.setItem('tankCoins', coins); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 200 🪙' },
     'megrui89)-+*_}]{':  { reward: function() { parts += 50; localStorage.setItem('tankParts', parts); updateCoinDisplay(); }, msg: '✅ Промокод активирован! Получено 50 🔧' },
@@ -2900,6 +2847,7 @@ function _markPromoUsed(code) {
         entry.reward();
         _markPromoUsed(code);
         if (typeof saveProgress === 'function') saveProgress();
+        updateCoinDisplay();
         input.value = '';
         result.innerHTML = '<span style="color:#2ecc71;">' + entry.msg + '</span>';
     }
@@ -2985,11 +2933,12 @@ const containerFlowCancel = document.getElementById('containerFlowCancel');
 
 let containerFlowType = null;
 let containerDropTimers = [];
+let containerShowingRewards = false;
 let containerDropActive = false;
 let containerQueue = (() => {
     try {
         const saved = JSON.parse(localStorage.getItem('pendingFreeContainers') || '[]');
-        const validTypes = ['mini', 'bronze', 'legendary', 'omega', 'alpha', 'mechParts'];
+        const validTypes = ['mini', 'bronze', 'legendary', 'glitch', 'mythic', 'omega', 'alpha', 'mechParts'];
         return Array.isArray(saved) ? saved.filter(type => validTypes.includes(type)) : [];
     } catch (e) { return []; }
 })();
@@ -3017,6 +2966,19 @@ function clearContainerDropTimers() {
 }
 
 function closeContainerFlow() {
+    containerShowingRewards = false;
+    if (window.rewardRevealTimer) clearTimeout(window.rewardRevealTimer);
+    window.rewardRevealTimer = null;
+    const stage = document.getElementById('containerRewardStage');
+    const card = stage && stage.querySelector('.reward-box');
+    if (card) {
+        if (window.rewardTankAnimId) cancelAnimationFrame(window.rewardTankAnimId);
+        window.rewardTankAnimId = null;
+        document.getElementById('rewardIconContainer').innerHTML = '';
+        document.getElementById('rewardModal').appendChild(card);
+    }
+    if (stage) stage.hidden = true;
+    if (containerFlowModal) { delete containerFlowModal.dataset.stage; delete containerFlowModal.dataset.glitchBurst; }
     if (containerFlowModal) containerFlowModal.style.display = 'none';
     window.ContainerArt?.hideFlow();
     clearContainerDropTimers();
@@ -3029,7 +2991,10 @@ function closeContainerFlow() {
 
 function updateContainerFlowStage(stage) {
     if (!containerFlowType || !containerFlowText || !containerFlowPreview) return;
-    if (containerFlowModal) containerFlowModal.dataset.containerType = containerFlowType;
+    if (containerFlowModal) {
+        containerFlowModal.dataset.containerType = containerFlowType;
+        containerFlowModal.dataset.stage = stage;
+    }
     // Toggle Cancel button visibility based on stage
     if (containerFlowCancel) {
         containerFlowCancel.style.display = (stage === 'intro') ? '' : 'none';
@@ -3039,6 +3004,8 @@ function updateContainerFlowStage(stage) {
         mini: 'Нажми на мини контейнер!',
         bronze: 'Нажми на бронзовый контейнер!',
         legendary: 'Нажми на легендарный контейнер!',
+        glitch: 'Нажми на глючный контейнер!',
+        mythic: 'Нажми на мифический контейнер!',
         omega: 'Нажми на ОМЕГА контейнер!',
         alpha: 'Нажми на АЛЬФА контейнер!',
         mechParts: 'Нажми на ящик деталей!'
@@ -3047,6 +3014,8 @@ function updateContainerFlowStage(stage) {
         mini: 'Мини контейнер раскрывается!',
         bronze: 'Из контейнера высыпаются награды!',
         legendary: 'Легендарный контейнер раскрывается!',
+        glitch: 'Сбой системы наград...',
+        mythic: 'Мифический контейнер раскрывается!',
         omega: 'ОМЕГА контейнер взрывается наградами!',
         alpha: 'АЛЬФА контейнер взрывается наградами!',
         mechParts: 'Ящик деталей раскрывается!'
@@ -3082,30 +3051,18 @@ function animateContainerDrops(rewards, done) {
                 containerDropArea.classList.remove('active');
                 if (hintEl) hintEl.style.display = '';
                 done();
-            }, 900);
+            }, 1000);
             containerDropTimers.push(finishTimer);
             return;
         }
-        const reward = rewards[dropped] || {};
         const item = document.createElement('div');
-        item.className = 'container-drop-item';
-        const currencyKind = { coins: 'coin', gems: 'gem', parts: 'part', trophies: 'trophy' }[reward.type];
-        if (currencyKind) {
-            item.classList.add('container-drop-item--currency', `currency-icon--${currencyKind}`);
-            item.setAttribute('aria-label', reward.desc || reward.type);
-        } else {
-            item.textContent = reward.icon || '🏆';
-        }
-        const label = reward.type === 'tank'
-            ? (reward.tankType ? reward.tankType.toUpperCase() : 'TANK')
-            : reward.amount ? '+' + reward.amount : '';
-        if (label) item.setAttribute('data-label', label);
-        if (reward.desc) item.title = reward.desc;
+        item.className = 'container-drop-item container-drop-item--mystery';
+        item.textContent = '?';
+        item.setAttribute('aria-label', 'Неизвестная награда');
         containerDropArea.appendChild(item);
         requestAnimationFrame(() => item.classList.add('visible'));
         dropped += 1;
-        const nextTimer = setTimeout(spawn, intervalMs);
-        containerDropTimers.push(nextTimer);
+        containerDropTimers.push(setTimeout(spawn, intervalMs));
     };
 
     spawn();
@@ -3114,9 +3071,10 @@ function animateContainerDrops(rewards, done) {
 function showContainerFlow(type) {
     if (containerFlowType) return;
     isFromTrophyRoad = false;
-    const price = type === 'bronze' ? 100 : (type === 'mini' ? 25 : (type === 'mechParts' ? 750 : (type === 'omega' ? 4000 : (type === 'alpha' ? 12000 : 1000))));
-    if (coins < price) {
-        showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
+    const price = CONTAINER_TOKEN_PRICES[type];
+    if (price === undefined) return;
+    if (tokens < price) {
+        showNotification('❌ Недостаточно жетонов! Нужно ' + price, '#e74c3c');
         return;
     }
     containerFlowType = type;
@@ -3139,23 +3097,27 @@ function showFreeContainerFlow(type, count = 1) {
 
 // Free container confirm handler
 function handleFreeContainerConfirm() {
-    if (!containerFlowType || containerDropActive) return;
+    if (!containerFlowType || containerDropActive || containerShowingRewards) return;
     const currentType = containerFlowType;
     const rewards = [];
-    const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0 };
+    const ctx = { randomTanks: 0 };
 
-    if (currentType === 'alpha') {
+    if (currentType === 'glitch') {
+        rewards.push(...openGlitchRewards());
+    } else if (currentType === 'alpha') {
         // Alpha: 1 guaranteed tank slot + (totalSlots-1) regular slots
-        const totalSlots = getRandomInt(5, 7);
+        const totalSlots = getRandomInt(5, 8);
         rewards.push(openAlphaGuaranteedSlot({ suppressRewardModal: true, ctx }));
         for (let i = 1; i < totalSlots; i++) {
             rewards.push(openAlphaContainer({ suppressRewardModal: true, ctx }));
         }
     } else {
-        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'omega' ? getRandomInt(4,7) : (currentType === 'mini' ? getRandomInt(1,2) : getRandomInt(3,5)));
+        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'mythic' ? getRandomInt(4,6) : (currentType === 'omega' ? getRandomInt(4,7) : (currentType === 'mini' ? getRandomInt(1,2) : getRandomInt(3,5))));
         for (let i = 0; i < dropCount; i++) {
             let reward;
-            if (currentType === 'omega') {
+            if (currentType === 'mythic') {
+                reward = openMythicContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'omega') {
                 reward = openOmegaContainer({ suppressRewardModal: true, ctx });
             } else if (currentType === 'bronze') {
                 reward = openContainer({ suppressRewardModal: true, ctx });
@@ -3174,15 +3136,67 @@ function handleFreeContainerConfirm() {
     localStorage.setItem('pendingFreeContainers', JSON.stringify(containerQueue));
     saveProgress();
     updateContainerFlowStage('open');
+    if (containerFlowModal && currentType === 'glitch') containerFlowModal.dataset.glitchBurst = rewards.length >= 8 ? 'strong' : 'normal';
     animateContainerDrops(rewards, () => {
-        closeContainerFlow();
         updateCoinDisplay();
         showContainerRewards(rewards);
     });
 }
 
-function showContainerRewards(rewards, index = 0) {
+function markUpcomingContainerReward(rewards, index) {
+    const area = document.getElementById('containerDropArea');
+    if (!area) return;
+    for (const slot of [index, index + 1]) {
+        const reward = rewards[slot];
+        const item = area.children[slot];
+        if (item && reward && !item.classList.contains('container-drop-item--revealed')) {
+            if (reward.type === 'tank' || reward.jackpot) {
+                item.classList.add('container-drop-item--special');
+                item.classList.add('container-drop-item--fire');
+            } else if (['profileIcon', 'profileBackground'].includes(reward.type)) {
+                item.classList.add('container-drop-item--special');
+            }
+        }
+    }
+}
+
+function revealContainerStripReward(reward, index) {
+    const area = document.getElementById('containerDropArea');
+    const item = area && area.children[index];
+    if (!item) return;
+    item.className = 'container-drop-item container-drop-item--revealed visible';
+    item.textContent = '';
+    item.innerHTML = '';
+    if (reward.rarity) item.classList.add('container-drop-item--' + reward.rarity);
+    const currency = { coins: 'coin', gems: 'gem', parts: 'part' }[reward.type];
+    if (currency) {
+        item.classList.add('container-drop-item--currency', 'currency-icon--' + currency);
+        item.setAttribute('data-label', '+' + reward.amount);
+    } else if (reward.type === 'profileIcon') {
+        item.innerHTML = profileAvatarMarkup(reward.avatar, 36);
+    } else if (reward.type === 'profileBackground') {
+        item.innerHTML = '<span class="container-strip-background profile-background-option profile-bg--' + reward.background + '"></span>';
+    } else if (reward.type === 'tank') {
+        const chromatic = reward.rarity === 'chromatic';
+        const colors = window.tankBgGradients?.[reward.tankType] || ['#34495e', '#192b35'];
+        item.style.background = chromatic
+            ? 'linear-gradient(135deg, #ff0044, #ff9a00, #ffee00, #33ff66, #00ccff, #6a00ff)'
+            : 'linear-gradient(135deg, ' + colors.join(', ') + ')';
+        item.style.borderColor = chromatic ? '#ffe6ff' : colors[0];
+        const preview = document.createElement('canvas');
+        preview.className = 'container-strip-tank';
+        preview.width = preview.height = 80;
+        // Leave room for the barrel and effects inside the circular preview.
+        if (typeof drawTankOn === 'function') drawTankOn(preview.getContext('2d'), 40, 40, 28, 28, window.tankBaseColors?.[reward.tankType] || '#fff', -Math.PI / 2, 1, reward.tankType);
+        item.appendChild(preview);
+    }
+    item.setAttribute('aria-label', reward.desc || reward.type);
+    item.title = reward.desc || '';
+}
+
+function showContainerRewards(rewards, index = 0, revealReal = false) {
     if (!rewards || index >= rewards.length) {
+        closeContainerFlow();
         processNextContainer();
         return;
     }
@@ -3197,13 +3211,122 @@ function showContainerRewards(rewards, index = 0) {
     const btn = document.getElementById('rewardClaimBtn');
     
     if (!modal || !btn) return;
+    containerShowingRewards = true;
+    const flowModal = document.getElementById('containerFlowModal');
+    if (flowModal) {
+        flowModal.dataset.stage = 'rewards';
+        flowModal.style.display = 'flex';
+    }
+    window.ContainerArt?.hideFlow();
+    markUpcomingContainerReward(rewards, index);
+
+    const glitch = flowModal && flowModal.dataset.containerType === 'glitch';
+    const reducedGlitchMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (glitch && !revealReal && !reducedGlitchMotion && Math.random() < 0.2) {
+        const fakes = [
+            { type: 'gems', amount: 5 }, { type: 'gems', amount: 15 },
+            { type: 'coins', amount: 100 }, { type: 'coins', amount: 250 },
+            { type: 'tank', tankType: 'normal' },
+            { type: 'profileIcon', avatar: '⚔️', rarity: 'rare', category: 'Редкая иконка' },
+            { type: 'profileIcon', avatar: '👑', rarity: 'epic', category: 'Эпическая иконка' },
+            { type: 'profileBackground', background: 'steel', category: 'Обычный фон' }
+        ].filter(fake => fake.type !== reward.type || (fake.type === 'profileIcon' && fake.rarity !== reward.rarity));
+        const fake = fakes[Math.floor(Math.random() * fakes.length)];
+        showReward(fake.type, fake.amount || '', '', fake.tankType || null, { inline: true });
+        if (fake.type === 'profileIcon' || fake.type === 'profileBackground') {
+            const title = document.getElementById('rewardTitle');
+            const icon = document.getElementById('rewardIcon');
+            const amount = document.getElementById('rewardAmount');
+            if (title) title.textContent = fake.type === 'profileIcon' ? 'НОВАЯ ИКОНКА!' : 'НОВЫЙ ФОН!';
+            if (amount) amount.textContent = fake.category;
+            if (icon && fake.type === 'profileIcon') {
+                icon.classList.add('cosmetic-reward-icon');
+                icon.innerHTML = profileAvatarMarkup(fake.avatar, 80);
+            }
+            if (icon && fake.type === 'profileBackground') icon.innerHTML = '<span class="profile-background-option profile-bg--steel" style="display:inline-block;width:140px;height:80px"></span>';
+        }
+        const fakeBox = document.querySelector('.reward-box');
+        if (fakeBox) {
+            if (fake.type === 'profileIcon' || fake.type === 'profileBackground') fakeBox.classList.add('reward-cosmetic--' + (fake.rarity || 'common'));
+            fakeBox.classList.add('reward-glitch-fake');
+        }
+        btn.disabled = true;
+        btn.onclick = null;
+        window.rewardRevealTimer = setTimeout(() => {
+            window.rewardRevealTimer = null;
+            if (fakeBox) fakeBox.classList.remove('reward-glitch-fake');
+            showContainerRewards(rewards, index, true);
+        }, 950);
+        return;
+    }
     
     // Show current reward
     const isLast = index === rewards.length - 1;
     if (reward.type === 'tank') {
-        showReward(reward.type, 1, reward.desc || '', reward.tankType);
+        showReward(reward.type, 1, reward.desc || '', reward.tankType, { inline: true });
+        const title = document.getElementById('rewardTitle');
+        const amount = document.getElementById('rewardAmount');
+        const desc = document.getElementById('rewardDesc');
+        const box = document.querySelector('.reward-box');
+        const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (box && title && amount && desc && !reducedMotion) {
+            const finalText = [title.textContent, amount.textContent, desc.textContent];
+            title.textContent = 'НОВЫЙ ТАНК!';
+            amount.textContent = '???';
+            desc.textContent = 'Раскрываем награду...';
+            btn.disabled = true;
+            box.classList.add('reward-tank-reveal');
+            window.rewardRevealTimer = setTimeout(() => {
+                window.rewardRevealTimer = null;
+                box.classList.remove('reward-tank-reveal');
+                [title.textContent, amount.textContent, desc.textContent] = finalText;
+                btn.disabled = false;
+                revealContainerStripReward(reward, index);
+            }, 950);
+        } else revealContainerStripReward(reward, index);
+    } else if (reward.type === 'profileIcon' || reward.type === 'profileBackground') {
+        showReward(reward.type, '', reward.desc || '', null, { inline: true });
+        const title = document.getElementById('rewardTitle');
+        const icon = document.getElementById('rewardIcon');
+        const amount = document.getElementById('rewardAmount');
+        const box = document.querySelector('.reward-box');
+        if (box) box.classList.add('reward-cosmetic--' + reward.rarity);
+        if (box) box.classList.add(reward.type === 'profileIcon' ? 'reward-icon-reveal' : 'reward-background-reveal');
+        if (title) title.textContent = reward.type === 'profileIcon' ? 'НОВАЯ ИКОНКА!' : 'НОВЫЙ ФОН!';
+        if (amount) {
+            amount.textContent = reward.type === 'profileIcon' ? reward.category : PROFILE_BACKGROUNDS[reward.background];
+            amount.style.background = 'none';
+            amount.style.webkitTextFillColor = 'initial';
+        }
+        if (icon && reward.type === 'profileIcon') {
+            icon.classList.add('cosmetic-reward-icon');
+            icon.innerHTML = profileAvatarMarkup(reward.avatar, 80);
+        }
+        if (icon && reward.type === 'profileBackground') icon.innerHTML = '<span class="profile-background-option profile-bg--' + reward.background + '" style="display:inline-block;width:140px;height:80px"></span>';
+        revealContainerStripReward(reward, index);
     } else {
-        showReward(reward.type, reward.amount, reward.desc || '');
+        showReward(reward.type, reward.amount, reward.desc || '', null, { inline: true });
+        const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const amount = document.getElementById('rewardAmount');
+        const desc = document.getElementById('rewardDesc');
+        if (glitch && reward.multiplier > 1 && amount && desc) {
+            amount.classList.add('reward-glitch-multiplier');
+            desc.textContent = reward.baseAmount + ' × ' + reward.multiplier + ' = ' + reward.amount;
+        }
+        if (reward.jackpot && !reducedMotion && amount && desc) {
+            const finalAmount = amount.textContent;
+            const finalDesc = desc.textContent;
+            amount.textContent = '???';
+            desc.textContent = 'Раскрываем награду...';
+            btn.disabled = true;
+            window.rewardRevealTimer = setTimeout(() => {
+                window.rewardRevealTimer = null;
+                amount.textContent = finalAmount;
+                desc.textContent = finalDesc;
+                btn.disabled = false;
+                revealContainerStripReward(reward, index);
+            }, 950);
+        } else revealContainerStripReward(reward, index);
     }
 
     // Update button text to indicate progress if multiple rewards
@@ -3215,6 +3338,7 @@ function showContainerRewards(rewards, index = 0) {
     
     // Override button to show next reward
     const nextHandler = (e) => {
+        if (btn.disabled) return;
         if (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -3224,12 +3348,11 @@ function showContainerRewards(rewards, index = 0) {
         btn.onclick = null;
         
         if (isLast) {
-            // Close if it's the last one
+            // Finish the opening before processing another queued container.
             modal.classList.remove('visible');
-            setTimeout(() => {
-                modal.style.display = 'none';
-                processNextContainer();
-            }, 300);
+            modal.style.display = 'none';
+            closeContainerFlow();
+            processNextContainer();
         } else {
             // Instantly show next reward without closing modal
             showContainerRewards(rewards, index + 1);
@@ -3240,31 +3363,36 @@ function showContainerRewards(rewards, index = 0) {
 }
 
 function handleContainerConfirm() {
-    if (!containerFlowType || containerDropActive) return;
+    if (!containerFlowType || containerDropActive || containerShowingRewards) return;
     const currentType = containerFlowType;
-    const price = currentType === 'bronze' ? 100 : (currentType === 'mini' ? 25 : (currentType === 'mechParts' ? 750 : (currentType === 'omega' ? 4000 : (currentType === 'alpha' ? 12000 : 1000))));
-    if (coins < price) {
-        showNotification('❌ Недостаточно монет! Нужно ' + price + ' 🪙', '#e74c3c');
+    const price = CONTAINER_TOKEN_PRICES[currentType];
+    if (price === undefined) return;
+    if (tokens < price) {
+        showNotification('❌ Недостаточно жетонов! Нужно ' + price, '#e74c3c');
         closeContainerFlow();
         return;
     }
-    coins -= price;
+    tokens -= price;
     const rewards = [];
 
-    if (currentType === 'alpha') {
+    if (currentType === 'glitch') {
+        rewards.push(...openGlitchRewards());
+    } else if (currentType === 'alpha') {
         // Alpha: 1 guaranteed tank slot + (totalSlots-1) regular slots
-        const totalSlots = getRandomInt(5, 7);
-        const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0, alphaContainer: true };
+        const totalSlots = getRandomInt(5, 8);
+        const ctx = { randomTanks: 0 };
         rewards.push(openAlphaGuaranteedSlot({ suppressRewardModal: true, ctx }));
         for (let i = 1; i < totalSlots; i++) {
             rewards.push(openAlphaContainer({ suppressRewardModal: true, ctx }));
         }
     } else {
-        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'mini' ? getRandomInt(1,2) : (currentType === 'mechParts' ? getRandomInt(3,4) : (currentType === 'omega' ? getRandomInt(4,7) : getRandomInt(3,5))));
-        const ctx = { chanceGemsDropped: false, duplicatesInOpening: 0 };
+        const dropCount = currentType === 'bronze' ? getRandomInt(2,3) : (currentType === 'mini' ? getRandomInt(1,2) : (currentType === 'mechParts' ? getRandomInt(3,4) : (currentType === 'mythic' ? getRandomInt(4,6) : (currentType === 'omega' ? getRandomInt(4,7) : getRandomInt(3,5)))));
+        const ctx = { randomTanks: 0 };
         for (let i = 0; i < dropCount; i++) {
             let reward;
-            if (currentType === 'omega') {
+            if (currentType === 'mythic') {
+                reward = openMythicContainer({ suppressRewardModal: true, ctx });
+            } else if (currentType === 'omega') {
                 reward = openOmegaContainer({ suppressRewardModal: true, ctx });
             } else if (currentType === 'bronze') {
                 reward = openContainer({ suppressRewardModal: true, ctx });
@@ -3283,8 +3411,8 @@ function handleContainerConfirm() {
     saveProgress();
     updateCoinDisplay();
     updateContainerFlowStage('open');
+    if (containerFlowModal && currentType === 'glitch') containerFlowModal.dataset.glitchBurst = rewards.length >= 8 ? 'strong' : 'normal';
     animateContainerDrops(rewards, () => {
-        closeContainerFlow();
         updateCoinDisplay();
         showContainerRewards(rewards);
     });
@@ -3292,6 +3420,7 @@ function handleContainerConfirm() {
 
 // Dynamic click handler that chooses between paid and free containers
 function handleContainerClick() {
+    if (containerShowingRewards) return;
     if (isFromTrophyRoad) {
         handleFreeContainerConfirm();
     } else {
@@ -3312,7 +3441,7 @@ if (containerFlowCancel) containerFlowCancel.addEventListener('click', () => {
 });
 if (containerFlowModal) {
     containerFlowModal.addEventListener('click', (e) => {
-        if (e.target === containerFlowModal && !containerDropActive) {
+        if (e.target === containerFlowModal && !containerDropActive && !containerShowingRewards) {
             closeContainerFlow();
         }
     });
@@ -3539,13 +3668,28 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     const btn = document.getElementById('rewardClaimBtn');
 
     if (!modal) return;
+    amountText.classList?.remove('reward-glitch-multiplier');
+
+    if (window.rewardRevealTimer) clearTimeout(window.rewardRevealTimer);
+    window.rewardRevealTimer = null;
+    btn.disabled = false;
 
     // A previous chromatic reward may have been replaced while the modal stayed open.
     if (window.rewardTankAnimId) cancelAnimationFrame(window.rewardTankAnimId);
     window.rewardTankAnimId = null;
 
-    modal.classList.add('visible');
-    modal.style.display = 'flex';
+    const rewardBox = document.querySelector('.reward-box');
+    const inlineStage = options.inline && document.getElementById('containerRewardStage');
+    if (inlineStage && rewardBox) {
+        inlineStage.appendChild(rewardBox);
+        inlineStage.hidden = false;
+        modal.classList.remove('visible');
+        modal.style.display = 'none';
+    } else {
+        if (rewardBox && rewardBox.parentElement && rewardBox.parentElement !== modal) modal.appendChild(rewardBox);
+        modal.classList.add('visible');
+        modal.style.display = 'flex';
+    }
     
     // Reset icon container
     iconContainer.innerHTML = '<div class="reward-icon" id="rewardIcon"></div>';
@@ -3586,7 +3730,6 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     const resolvedIcon = customIcon || iconTextFallback;
 
     // Reset box style for every call
-    const rewardBox = document.querySelector('.reward-box');
     if (rewardBox) {
         rewardBox.style.background = ''; // clear custom tank/gradient backgrounds
         rewardBox.className = 'reward-box'; // reset classes
@@ -3708,7 +3851,7 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
                // Replicate the exact menu animation for Time tank
                const drawFrame = () => {
                  // Check if modal is still open
-                 if (modal.style.display === 'none' || !canvas.isConnected) {
+                 if ((!options.inline && modal.style.display === 'none') || !canvas.isConnected) {
                      window.rewardTankAnimId = null;
                      return;
                  }
@@ -3752,6 +3895,131 @@ function unlockRandomTank(fromSuper = false, options = {}) {
     return unlockRandomTankNew(fromSuper, options);
 }
 
+// Weights are per random slot; exhausted categories are excluded only on reroll.
+const CONTAINER_REWARDS = {
+    bronze: { rewards: [['coins',40,15,25],['coins',30,25,50],['coins',10,50,80],['gems',7.5,1,2],['icon',7.5],['background',5]], icons: [60,35,5], backgrounds: [70,30] },
+    legendary: { rewards: [['coins',35,50,100],['coins',25,100,150],['gems',15,2,4],['icon',10],['background',7.5],['tank',7.5]], icons: [50,40,10], backgrounds: [60,40], tanks: { rare:50, super_rare:30, epic:15, legendary:5 } },
+    glitch: { rewards: [['coins',30,50,100],['coins',20,100,150],['gems',15,3,6],['gems',10,6,10],['icon',10],['background',7.5],['tank',7.5]], icons: [50,37.5,12.5], backgrounds: [52.5,47.5], tanks: { rare:40, super_rare:30, epic:17.5, legendary:7.5, chromatic:2.5, mythic:2.5 } },
+    mythic: { rewards: [['coins',32.25,80,120],['coins',22.5,120,180],['gems',12.5,3,6],['gems',7.5,6,8],['icon',10],['background',7.5],['tank',7.75]], icons: [47.5,40,12.5], backgrounds: [55,45], tanks: { rare:42.5, super_rare:30, epic:17.5, legendary:7.5, mythic:1.25, chromatic:1.25 } },
+    omega: { rewards: [['coins',31,100,150],['coins',21,150,200],['gems',10.5,4,8],['gems',7.5,8,12],['tank',10],['icon',12.5],['background',7.5]], icons: [45,40,15], backgrounds: [50,50], tanks: { rare:40, super_rare:25, epic:15, legendary:10, chromatic:5, mythic:5 } },
+    alpha: { rewards: [['coins',31.25,150,200],['coins',21.25,200,300],['gems',15,6,8],['icon',10],['background',10],['gems',7.5,8,12],['tank',5]], icons: [37.5,37.5,25], backgrounds: [50,50], tanks: { rare:40, super_rare:20, epic:15, legendary:10, chromatic:7.5, mythic:7.5 } }
+};
+const CONTAINER_ORDINARY_BACKGROUNDS = ['steel', 'ice', 'plain-forest', 'plain-desert', 'plain-lava', 'plain-space', 'slate', 'rose', 'ocean', 'moss', 'amber', 'violet'];
+const CONTAINER_RARE_BACKGROUNDS = ['forest', 'desert', 'lava', 'space', 'hangar', 'snowfield', 'laboratory', 'battlefield', 'city', 'harbor', 'canyon', 'arctic'];
+
+function weightedContainerChoice(entries) {
+    const total = entries.reduce((sum, entry) => sum + entry[1], 0);
+    let roll = Math.random() * total;
+    for (const entry of entries) {
+        roll -= entry[1];
+        if (roll < 0) return entry;
+    }
+    return entries[entries.length - 1];
+}
+
+function containerCosmeticPools(type) {
+    if (type === 'icon') return ['rare', 'unique', 'animated'].map(tier => PROFILE_AVATAR_TIERS[tier].filter(av => !_isAvatarUnlocked(av)));
+    const unlocked = _getBackgroundUnlocks();
+    return [CONTAINER_ORDINARY_BACKGROUNDS, CONTAINER_RARE_BACKGROUNDS].map(group => group.filter(name => !unlocked.includes(name)));
+}
+
+function containerCosmeticReward(type, config) {
+    const pools = containerCosmeticPools(type);
+    const weights = type === 'icon' ? config.icons : config.backgrounds;
+    const choices = pools.map((pool, i) => [i, pool.length ? weights[i] : 0]).filter(item => item[1] > 0);
+    if (!choices.length) return null;
+    const group = weightedContainerChoice(choices)[0];
+    const pool = pools[group];
+    const id = pool[getRandomInt(0, pool.length - 1)];
+    if (type === 'icon') {
+        _unlockAvatar(id);
+        const category = ['Редкая иконка', 'Эпическая иконка', 'Анимированная иконка'][group];
+        return { type: 'profileIcon', avatar: id, category, rarity: ['rare', 'epic', 'animated'][group], desc: category + ' профиля', icon: '⭐' };
+    }
+    const unlocked = _getBackgroundUnlocks();
+    unlocked.push(id);
+    localStorage.setItem('tankBackgroundUnlocks', JSON.stringify(unlocked));
+    const category = group === 0 ? 'Обычный фон' : 'Редкий фон';
+    return { type: 'profileBackground', background: id, category, rarity: group === 0 ? 'common' : 'rare', desc: category, icon: '🖼' };
+}
+
+function containerTankReward(chances, onlyNew = false) {
+    const available = allTanksList.filter(t => !onlyNew || !unlockedTanks.includes(t));
+    const rarities = Object.entries(chances).filter(([rarity]) => available.some(t => tankRarityMap[t] === rarity));
+    if (!rarities.length) return null;
+    const rarity = onlyNew ? weightedContainerChoice(rarities)[0] : getRarity(chances);
+    const candidates = available.filter(t => tankRarityMap[t] === rarity);
+    const tankType = candidates[getRandomInt(0, candidates.length - 1)];
+    if (unlockedTanks.includes(tankType)) return null;
+    unlockedTanks.push(tankType);
+    updateTankDetailButton(tankType);
+    const name = tankDescriptions[tankType] ? tankDescriptions[tankType].name : tankType.toUpperCase();
+    return { type: 'tank', tankType, desc: name + ' разблокирован!', icon: '🚜', rarity };
+}
+
+function containerCurrencyReward(type, min, max) {
+    const amount = getRandomInt(min, max);
+    if (type === 'coins') coins += amount;
+    else gems += amount;
+    return { type, amount, desc: (type === 'coins' ? 'Монеты' : 'Гемы') + ' (' + min + '–' + max + ')', icon: type === 'coins' ? '💰' : '💎' };
+}
+
+function rollContainerSlot(type, ctx = {}, excluded = []) {
+    const config = CONTAINER_REWARDS[type];
+    const baseTank = config.rewards.find(entry => entry[0] === 'tank')?.[1] || 0;
+    const tankWeight = baseTank * Math.pow(.75, ctx.randomTanks || 0);
+    const weights = config.rewards.filter(entry => !excluded.includes(entry[0])).map(entry => {
+        const weight = entry[0] === 'tank' ? tankWeight : entry[1] * (baseTank ? (100 - tankWeight) / (100 - baseTank) : 1);
+        return [entry, weight];
+    });
+    const reward = weightedContainerChoice(weights)[0];
+    const kind = reward[0];
+    if (kind === 'tank') {
+        const tank = containerTankReward(config.tanks);
+        if (tank) { ctx.randomTanks = (ctx.randomTanks || 0) + 1; return tank; }
+    } else if (kind === 'icon' || kind === 'background') {
+        const cosmetic = containerCosmeticReward(kind, config);
+        if (cosmetic) return cosmetic;
+    } else return containerCurrencyReward(kind, reward[2], reward[3]);
+    // A duplicate tank or exhausted cosmetic category rerolls once without tanks or exhausted cosmetics.
+    const unavailable = ['tank', ...['icon', 'background'].filter(name => !containerCosmeticPools(name).some(pool => pool.length))];
+    if (kind !== 'tank') unavailable.push(kind);
+    return rollContainerSlot(type, ctx, unavailable);
+}
+
+function openAlphaGuaranteedSlot() {
+    const tank = containerTankReward({ super_rare:45, epic:28, legendary:12, chromatic:7.5, mythic:7.5 }, true)
+        || containerTankReward({ rare: 100 }, true);
+    if (tank) return tank;
+    const entry = weightedContainerChoice([['coins',50,300,500],['coins',25,350,700],['gems',20,10,10],['gems',5,20,20]]);
+    return containerCurrencyReward(entry[0], entry[2], entry[3]);
+}
+
+function openGlitchRewards() {
+    const count = weightedContainerChoice([[2,52.5],[3,30],[4,12.2],[5,4],[8,1],[1,0.2],[10,0.1]])[0];
+    const ctx = { randomTanks: 0 };
+    const rewards = [];
+    for (let i = 0; i < count; i++) {
+        let reward;
+        if (count === 1) {
+            const entry = weightedContainerChoice([['gems',50,5,15],['gems',30,10,35],['coins',20,100,300]]);
+            reward = containerCurrencyReward(entry[0], entry[2], entry[3]);
+        } else reward = rollContainerSlot('glitch', ctx);
+        if (reward.type === 'coins' || reward.type === 'gems') {
+            const multiplier = weightedContainerChoice([[1,85],[2,14],[3,1]])[0];
+            if (multiplier > 1) {
+                reward.baseAmount = reward.amount;
+                reward.multiplier = multiplier;
+                reward.amount *= multiplier;
+                if (reward.type === 'coins') coins += reward.amount - reward.baseAmount;
+                else gems += reward.amount - reward.baseAmount;
+            }
+        }
+        rewards.push(reward);
+    }
+    return rewards;
+}
+
 
 // Open mini container
 function openMiniContainer(options = {}) {
@@ -3780,248 +4048,61 @@ function openMiniContainer(options = {}) {
     return { type: 'coins', amount: val, desc: 'Монеты (60–80)', icon: '💰' };
 }
 
-// Open normal container
-function openContainer(options = {}) {
-    const { suppressRewardModal = false, ctx = null } = options;
-    const r = Math.random() * 100;
-    if (r < 60) { // 60% — coins (20–60)
-        const val = getRandomInt(20, 60);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (20–60)');
-        return { type: 'coins', amount: val, desc: 'Монеты (20–60)', icon: '💰' };
-    } else if (r < 90) { // next 30% — coins (80–120)
-        const val = getRandomInt(80, 120);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (80–120)');
-        return { type: 'coins', amount: val, desc: 'Монеты (80–120)', icon: '💰' };
-    } else if (r < 95) { // next 5% — coins (120–150)
-        const val = getRandomInt(120, 150);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (120–150)');
-        return { type: 'coins', amount: val, desc: 'Монеты (120–150)', icon: '💰' };
-    }
-    // remaining 5% — gems (1–2); limited to once per opening
-    if (ctx && ctx.chanceGemsDropped) {
-        const val = getRandomInt(80, 120);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (80–120)');
-        return { type: 'coins', amount: val, desc: 'Монеты (80–120)', icon: '💰' };
-    }
-    if (ctx) {
-        ctx.chanceGemsDropped = true;
-    }
-    const val = getRandomInt(1, 2);
-    gems += val;
-    if (!suppressRewardModal) showReward('gems', val, 'Гемы (1–2)');
-    return { type: 'gems', amount: val, desc: 'Гемы (1–2)', icon: '💎' };
-}
-
-// Open super container
-function openSuperContainer(options = {}) {
-    const { suppressRewardModal = false, ctx = null } = options;
-    const r = Math.random() * 100;
-    if (r < 50) { // 50% — coins (120–250)
-        const val = getRandomInt(120, 250);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (120–250)');
-        return { type: 'coins', amount: val, desc: 'Монеты (120–250)', icon: '💰' };
-    } else if (r < 85) { // next 35% — coins (250–450)
-        const val = getRandomInt(250, 450);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–450)');
-        return { type: 'coins', amount: val, desc: 'Монеты (250–450)', icon: '💰' };
-    } else if (r < 95) { // next 10% — gems (2–4); limited to once per opening
-        if (ctx && ctx.chanceGemsDropped) {
-            const val = getRandomInt(250, 450);
-            coins += val;
-            if (!suppressRewardModal) showReward('coins', val, 'Монеты (250–450)');
-            return { type: 'coins', amount: val, desc: 'Монеты (250–450)', icon: '💰' };
-        }
-        if (ctx) {
-            ctx.chanceGemsDropped = true;
-        }
-        const val = getRandomInt(2, 4);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (2–4)');
-        return { type: 'gems', amount: val, desc: 'Гемы (2–4)', icon: '💎' };
-    }
-    // remaining 5% — tank
-        return unlockRandomTankNew(true, { suppressRewardModal, ctx, rarityOverride: {
-        'rare': 50,
-        'super_rare': 30,
-        'epic': 15,
-        'legendary': 5
-    } });
-}
+// Open bronze and legendary containers.
+function openContainer(options = {}) { return rollContainerSlot('bronze', options.ctx || {}); }
+function openSuperContainer(options = {}) { return rollContainerSlot('legendary', options.ctx || {}); }
+function openMythicContainer(options = {}) { return rollContainerSlot('mythic', options.ctx || {}); }
 
 // Open Mechanic Parts Container (Ящик деталей)
-// 40% - Coins 50-100
-// 30% - Coins 200-300
-// 15% - Parts 80-100
-// 10% - Parts 100-200
-// 5% - Parts 200-300
+// 25% - Coins 50-100
+// 17.5% - Coins 100-150
+// 27.5% - Parts 80-100
+// 22.5% - Parts 100-200
+// 7% - Parts 200-300
+// 0.5% - Parts 600-1000
 function openMechPartsContainer(options = {}) {
     const { suppressRewardModal = false } = options;
     const r = Math.random() * 100;
-    if (r < 40) { // 40% — coins (50–100)
+    if (r < 25) { // 25% — coins (50–100)
         const val = getRandomInt(50, 100);
         coins += val;
         if (!suppressRewardModal) showReward('coins', val, 'Монеты (50–100)');
         return { type: 'coins', amount: val, desc: 'Монеты (50–100)', icon: '💰' };
-    } else if (r < 70) { // next 30% — coins (200–300)
-        const val = getRandomInt(200, 300);
+    } else if (r < 42.5) { // next 17.5% — coins (100–150)
+        const val = getRandomInt(100, 150);
         coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (200–300)');
-        return { type: 'coins', amount: val, desc: 'Монеты (200–300)', icon: '💰' };
-    } else if (r < 85) { // next 15% — parts (80–100)
+        if (!suppressRewardModal) showReward('coins', val, 'Монеты (100–150)');
+        return { type: 'coins', amount: val, desc: 'Монеты (100–150)', icon: '💰' };
+    } else if (r < 70) { // next 27.5% — parts (80–100)
         const val = getRandomInt(80, 100);
         parts += val;
         localStorage.setItem('tankParts', parts);
         if (!suppressRewardModal) showReward('parts', val, 'Детали (80–100)');
         return { type: 'parts', amount: val, desc: 'Детали (80–100)', icon: '🔧' };
-    } else if (r < 95) { // next 10% — parts (100–200)
+    } else if (r < 92.5) { // next 22.5% — parts (100–200)
         const val = getRandomInt(100, 200);
         parts += val;
         localStorage.setItem('tankParts', parts);
         if (!suppressRewardModal) showReward('parts', val, 'Детали (100–200)');
         return { type: 'parts', amount: val, desc: 'Детали (100–200)', icon: '🔧' };
-    } else { // last 5% — parts (200–300)
+    } else if (r < 99.5) { // next 7% — parts (200–300)
         const val = getRandomInt(200, 300);
         parts += val;
         localStorage.setItem('tankParts', parts);
         if (!suppressRewardModal) showReward('parts', val, 'Детали (200–300)');
         return { type: 'parts', amount: val, desc: 'Детали (200–300)', icon: '🔧' };
     }
+    // remaining 0.5% — parts (600–1000)
+    const val = getRandomInt(600, 1000);
+    parts += val;
+    localStorage.setItem('tankParts', parts);
+    if (!suppressRewardModal) showReward('parts', val, 'Детали (600–1000)');
+    return { type: 'parts', amount: val, desc: 'Детали (600–1000)', icon: '🔧', jackpot: true };
 }
 
-// Open Omega container
-// 40% - Coins (200–400)
-// 35% - Coins (400–500)
-// 10% - Gems (4–7)
-// 7.5% - Gems (7–10)
-// 7.5% - Tank
-function openOmegaContainer(options = {}) {
-    const { suppressRewardModal = false, ctx = null } = options;
-    const r = Math.random() * 100;
-    
-    if (r < 40) { // 40% coins small
-        const val = getRandomInt(200, 400);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (200–400)');
-        return { type: 'coins', amount: val, desc: 'Монеты (200–400)', icon: '💰' };
-    
-    } else if (r < 75) { // 35% coins big (40 + 35 = 75)
-        const val = getRandomInt(400, 500);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
-        return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
-    
-    } else if (r < 85) { // 10% gems small (75 + 10 = 85); limited to once per opening
-        if (ctx && ctx.chanceGemsDropped) {
-            const val = getRandomInt(400, 500);
-            coins += val;
-            if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
-            return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
-        }
-        if (ctx) {
-            ctx.chanceGemsDropped = true;
-        }
-        const val = getRandomInt(4, 7);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (4–7)');
-        return { type: 'gems', amount: val, desc: 'Гемы (4–7)', icon: '💎' };
-    
-    } else if (r < 92.5) { // 7.5% gems big (85 + 7.5 = 92.5); limited to once per opening
-        if (ctx && ctx.chanceGemsDropped) {
-            const val = getRandomInt(400, 500);
-            coins += val;
-            if (!suppressRewardModal) showReward('coins', val, 'Монеты (400–500)');
-            return { type: 'coins', amount: val, desc: 'Монеты (400–500)', icon: '💰' };
-        }
-        if (ctx) {
-            ctx.chanceGemsDropped = true;
-        }
-        const val = getRandomInt(7, 10);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (7–10)');
-        return { type: 'gems', amount: val, desc: 'Гемы (7–10)', icon: '💎' };
-    
-    } else { // Remaining 7.5% (92.5 -> 100) is Tank
-        return unlockRandomTankNew(true, { suppressRewardModal, ctx });
-    }
-}
-
-// ── Alpha Container ──────────────────────────────────────────────────────────
-// Guaranteed tank slot: super_rare 45%, epic 28%, legendary 12%, chromatic 7.5%, mythic 7.5%
-function openAlphaGuaranteedSlot(options = {}) {
-    const { suppressRewardModal = false, ctx = null } = options;
-    return unlockRandomTankNew(true, {
-        suppressRewardModal,
-        ctx,
-        rarityOverride: {
-            'super_rare': 45,
-            'epic': 28,
-            'legendary': 12,
-            'chromatic': 7.5,
-            'mythic': 7.5
-        }
-    });
-}
-
-// Regular slot for Alpha Container
-// 40% coins 300-500, 30% coins 500-700, 20% gems 6-8, 5% gems 8-12, 5% tank
-function openAlphaContainer(options = {}) {
-    const { suppressRewardModal = false, ctx = null } = options;
-    const r = Math.random() * 100;
-    if (r < 40) { // 40% coins 300-500
-        const val = getRandomInt(300, 500);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
-        return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
-    } else if (r < 70) { // 30% coins 500-700
-        const val = getRandomInt(500, 700);
-        coins += val;
-        if (!suppressRewardModal) showReward('coins', val, 'Монеты (500–700)');
-        return { type: 'coins', amount: val, desc: 'Монеты (500–700)', icon: '💰' };
-    } else if (r < 90) { // 20% gems 6-8; limited to once per opening
-        if (ctx && ctx.chanceGemsDropped) {
-            const val = getRandomInt(300, 500);
-            coins += val;
-            if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
-            return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
-        }
-        if (ctx) ctx.chanceGemsDropped = true;
-        const val = getRandomInt(6, 8);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (6–8)');
-        return { type: 'gems', amount: val, desc: 'Гемы (6–8)', icon: '💎' };
-    } else if (r < 95) { // 5% gems 8-12; limited to once per opening
-        if (ctx && ctx.chanceGemsDropped) {
-            const val = getRandomInt(300, 500);
-            coins += val;
-            if (!suppressRewardModal) showReward('coins', val, 'Монеты (300–500)');
-            return { type: 'coins', amount: val, desc: 'Монеты (300–500)', icon: '💰' };
-        }
-        if (ctx) ctx.chanceGemsDropped = true;
-        const val = getRandomInt(8, 12);
-        gems += val;
-        if (!suppressRewardModal) showReward('gems', val, 'Гемы (8–12)');
-        return { type: 'gems', amount: val, desc: 'Гемы (8–12)', icon: '💎' };
-    } else { // 5% tank (any rarity)
-        return unlockRandomTankNew(true, {
-            suppressRewardModal,
-            ctx,
-            rarityOverride: {
-                'rare': 40,
-                'super_rare': 20,
-                'epic': 15,
-                'legendary': 10,
-                'chromatic': 7.5,
-                'mythic': 7.5
-            }
-        });
-    }
-}
+// Open omega and alpha random slots.
+function openOmegaContainer(options = {}) { return rollContainerSlot('omega', options.ctx || {}); }
+function openAlphaContainer(options = {}) { return rollContainerSlot('alpha', options.ctx || {}); }
 
 // Autopilot evasion AI for electric robot tank
 function updateAutopilotEvasion() {
@@ -4943,11 +5024,12 @@ function update() {
                     if (enemies.length === 0 && gameState === 'playing' && currentMode !== 'training' && currentMode !== 'war') {
                         gameState = 'win';
                         if (!window._customMapActive) {
-                            if (currentMode === 'single')   { coins += 30; trophies += 3;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);  }
-                            else if (currentMode === 'team')       { coins += 40; trophies += 5;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 5);  }
-                            else if (currentMode === 'duel')       { coins += 20; trophies += 2;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 2);  }
-                            else if (currentMode === 'onevsall')   { coins += 80; trophies += 10; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10); }
-                            else if (currentMode === 'bossfight')  { coins += 300; trophies += 25; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 25); }
+                            if (currentMode === 'single')   { trophies += 3;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);  }
+                            else if (currentMode === 'team')       { trophies += 5;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 5);  }
+                            else if (currentMode === 'duel')       { trophies += 2;  if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 2);  }
+                            else if (currentMode === 'onevsall')   { trophies += 10; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10); }
+                            else if (currentMode === 'bossfight')  { trophies += 25; if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 25); }
+                            awardVictoryTokens(currentMode);
                             if (typeof saveProgress === 'function') saveProgress();
                         }
                         if (typeof syncResultOverlay === 'function') syncResultOverlay('win');
@@ -5778,7 +5860,7 @@ function update() {
 
 let _lastDisplayedResources = null;
 function updateCoinDisplay() {
-    const resources = `${coins}|${gems}|${trophies}|${parts}`;
+    const resources = `${coins}|${tokens}|${gems}|${trophies}|${parts}`;
     if (resources === _lastDisplayedResources) return;
     _lastDisplayedResources = resources;
     // Optimization: Cache DOM elements
@@ -5792,6 +5874,7 @@ function updateCoinDisplay() {
 
     // Menu Displays (using cached elements)
     _domCache.currencyCoins.forEach(el => el.textContent = coins);
+    _domCache.currencyTokens.forEach(el => el.textContent = tokens);
     _domCache.currencyGems.forEach(el => el.textContent = gems);
     _domCache.currencyTrophies.forEach(el => el.textContent = trophies);
     _domCache.currencyParts.forEach(el => el.textContent = parts);
@@ -6199,6 +6282,7 @@ const _domCache = {
     partDisplay: null,
     trophyBarFill: null,
     currencyCoins: [],
+    currencyTokens: [],
     currencyGems: [],
     currencyTrophies: [],
     currencyParts: []
@@ -6211,6 +6295,7 @@ function _ensureDOMCache() {
     _domCache.trophyBarFill = _domCache.trophyBarFill || document.getElementById('trophyBarFill');
     if (_domCache.currencyCoins.length === 0) {
         _domCache.currencyCoins = Array.from(document.querySelectorAll('.currency-coin'));
+        _domCache.currencyTokens = Array.from(document.querySelectorAll('.currency-token'));
         _domCache.currencyGems = Array.from(document.querySelectorAll('.currency-gem'));
         _domCache.currencyTrophies = Array.from(document.querySelectorAll('.currency-trophy'));
         _domCache.currencyParts = Array.from(document.querySelectorAll('.currency-part'));
@@ -6803,6 +6888,7 @@ function _getUnlockedSpecialIcons() {
     });
     // Direct icon keys set by promo codes (e.g. icon_tank)
     if (achievementData.claimed['icon_tank']) result.push('tank');
+    if (achievementData.claimed.icon_economy_veteran) result.push('economy-veteran');
     return result;
 }
 
@@ -7020,7 +7106,11 @@ function _isSmallEgg(av) {
     return av === 'img:red-egg' || av === 'img:gre-egg' || av === 'img:blu-egg';
 }
 
-// Avatar tiers: common = free, rare = 800 coins, epic = 50 gems
+function profileIconPath(name) {
+    return name === 'economy-veteran' ? 'pictures/svg/economy-veteran.svg' : 'png/icon-png/' + name + '.png';
+}
+
+// Common avatars are free; rare, epic and animated avatars are container rewards.
 const PROFILE_AVATAR_TIERS = {
     common: [
         '🎮','💥','🎲','🎯','⚙️','🔧','💀','👻','👾','🎪',
@@ -7034,9 +7124,123 @@ const PROFILE_AVATAR_TIERS = {
     ],
     unique: [
         '👑','🤖','🦾','😈','🦁','🐉','🕷️','🦂','🐍','🦖',
-        '🦈','👿','🏆','💎','💰','🔮','🪄','🪞','🟣','🟠'
+        '🦈','👿','🏆','💎','💰','🔮','🪄','🪞','🟣','🟠',
+        'portrait:astronaut','portrait:pharaoh','portrait:samurai','portrait:gargoyle','portrait:knight',
+        'portrait:phoenix','portrait:cyclops','portrait:boar','portrait:yeti','portrait:raven',
+        'portrait:armadillo','portrait:dragon-skull','portrait:crystal-skull','portrait:raven-pirate','portrait:bat',
+        'portrait:commander','portrait:laser-cannon','portrait:warlord-crown','portrait:lantern','portrait:treasure'
+    ],
+    animated: [
+        'animated:flame', 'animated:lightning', 'animated:vortex',
+        'animated:crystal', 'animated:robot', 'animated:comet',
+        'animated:lion', 'animated:ghost', 'animated:snowflake',
+        'animated:toxic', 'animated:dragon', 'animated:crown'
     ]
 };
+
+// Small SVG effects animate independently above the illustrated icon.
+const ANIMATED_AVATAR_ART = {
+    'animated:flame': '<g class="avatar-embers" fill="#ffe59a"><path d="M13 19l2-5 2 5-2 3z"/><path d="M51 24l2-5 2 5-2 3z"/><circle cx="20" cy="11" r="1.5"/></g><g class="avatar-embers-late" fill="#ff9b46"><circle cx="12" cy="39" r="1.5"/><circle cx="51" cy="37" r="1.3"/></g>',
+    'animated:lightning': '<path class="avatar-electric" d="M10 29l4-2-2-3 5-4M50 38l4-2-2-3 4-4M45 10l2 3-3 2 2 3" fill="none" stroke="#c8faff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle class="avatar-pulse" cx="15" cy="44" r="1.4" fill="#fff"/>',
+    'animated:vortex': '<g class="avatar-orbit" fill="#f6e7ff"><path d="M32 5l1.4 3.6L37 10l-3.6 1.4L32 15l-1.4-3.6L27 10l3.6-1.4z"/><circle cx="51" cy="39" r="1.7"/><circle cx="13" cy="35" r="1"/></g>',
+    'animated:crystal': '<g class="avatar-crystal-spark" fill="#fff"><path d="M47 12l1.4 4.5L53 18l-4.6 1.5L47 24l-1.4-4.5L41 18l4.6-1.5z"/><path d="M17 39l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></g>',
+    'animated:robot': '<g class="avatar-robot-eyes" fill="#caffff"><ellipse cx="26" cy="31" rx="3" ry="2"/><ellipse cx="39" cy="31" rx="3" ry="2"/></g><circle class="avatar-pulse" cx="48" cy="16" r="2" fill="#ffd27c"/>',
+    'animated:comet': '<g class="avatar-comet-trail" fill="none" stroke="#a8f4ff" stroke-width="2" stroke-linecap="round"><path d="M8 42l9-6M9 51l8-5M14 57l5-3"/></g><g class="avatar-comet-spark" fill="#fff5bf"><path d="M13 15l1.4 4L18 20l-3.6 1.4L13 25l-1.4-3.6L8 20l3.6-1z"/><path d="M49 47l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></g>',
+    'animated:lion': '<g class="avatar-pulse" fill="#ffe899"><path d="M12 16l2-5 2 5-2 5zM51 20l2-4 2 4-2 4z"/></g><g class="avatar-embers-late" fill="#ffbf59"><circle cx="13" cy="42" r="1"/><circle cx="51" cy="39" r="1.3"/></g>',
+    'animated:ghost': '<g class="avatar-wisps" fill="none" stroke="#d4a8ff" stroke-width="1.5" stroke-linecap="round"><path d="M13 29c-3-3 3-5 0-8"/><path d="M51 45c3-3-3-5 0-8"/></g><circle class="avatar-pulse" cx="13" cy="17" r="1.3" fill="#ebd7ff"/>',
+    'animated:snowflake': '<g class="avatar-orbit" fill="#e1faff"><circle cx="12" cy="32" r="1.5"/><circle cx="52" cy="32" r="1.5"/><path d="M32 6l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></g><g class="avatar-frost" fill="#d5faff"><circle cx="16" cy="12" r="1"/><circle cx="48" cy="50" r="1.4"/></g>',
+    'animated:toxic': '<g class="avatar-bubbles" fill="none" stroke="#caff70" stroke-width="1.5"><circle cx="13" cy="28" r="2"/><circle cx="51" cy="37" r="2.5"/></g><g class="avatar-bubbles-late" fill="#caff70"><circle cx="16" cy="39" r="1.3"/><circle cx="50" cy="25" r="1.5"/></g>',
+    'animated:dragon': '<g class="avatar-dragon-sparks" fill="#ffbc52"><path d="M48 45l3-5 1 4 4 1-4 2z"/><circle cx="53" cy="36" r="1.5"/><circle cx="46" cy="50" r="1"/></g>',
+    'animated:crown': '<g class="avatar-crystal-spark" fill="#fff4b3"><path d="M51 12l1.5 4.5L57 18l-4.5 1.5L51 24l-1.5-4.5L45 18l4.5-1.5z"/></g><g class="avatar-crown-glint" fill="#fff8d5"><path d="M12 22l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></g>'
+};
+const ANIMATED_AVATAR_OFFSETS = [[-4.6,-4.6], [0,-4.9], [4.8,-6.7], [-3.9,1], [0.4,2.6], [3.6,2], [-3.3,-1.2], [-0.3,-2.1], [3.3,-1], [-3.1,2.2], [0.3,2], [3.3,2.6]];
+const SPECIAL_AVATAR_NAMES = ['rome', 'time', 'imit', 'tank', 'red-egg', 'gre-egg', 'blu-egg', 'gold-egg', 'fire-egg', 'chik-egg', 'eas-rabbit', 'kulich', 'economy-veteran'];
+const SPECIAL_AVATAR_OFFSETS = [
+    [-2.5,-9.6], [0.9,-7.7], [2.1,-8.3], [5.9,-9.9],
+    [-2.1,-3.5], [0.8,-3.7], [1.9,-3.9], [4.4,-3.5],
+    [-2.5,2.6], [0,3.5], [1.3,5.0], [4.1,3.2], [-1.1,7.7]
+];
+
+// Offsets center the visible artwork within each sprite cell.
+const PROFILE_AVATAR_OFFSETS = [
+    [-4.1,-11.4],[-2.1,-10.5],[0.5,-11.4],[2.8,-12.3],[2.3,-11.3],
+    [-6.6,-6.8],[-2.3,-6.0],[0.4,-6.8],[2.5,-8.0],[2.1,-7.5],
+    [-3.7,-1.8],[0.2,-1.8],[1.1,-0.4],[1.6,-0.7],[2.5,-1.2],
+    [-3.7,3.6],[-1.4,5.7],[0.5,4.1],[2.7,4.6],[-1.1,6.4],
+    [-17.3,-23.4],[-7.8,-22.7],[0.4,-22.9],[12.6,-21.8],[16.4,-21.8],
+    [-16.4,-8.0],[-7.8,-8.2],[1.8,-8.0],[10.9,-9.6],[17.0,-8.9],
+    [-15.9,5.7],[-7.8,6.2],[0.0,6.2],[9.4,7.5],[15.4,6.8],
+    [-16.4,17.5],[-7.8,18.2],[0.4,17.9],[9.3,18.0],[16.2,17.9],
+    [-9.1,-15.5],[-4.8,-15.5],[0.0,-17.0],[8.2,-17.3],[9.8,-17.3],
+    [-10.0,-5.2],[-4.6,-5.0],[1.3,-7.5],[6.0,-3.9],[8.2,-5.3],
+    [-8.9,9.1],[-5.5,8.9],[0.7,9.6],[6.2,9.4],[9.5,8.7],
+    [-10.4,21.1],[-5.0,20.4],[1.3,20.0],[8.9,20.9],[10.7,21.4],
+    [-12.0,-13.6],[-5.9,-12.7],[-1.2,-13.6],[4.6,-13.4],[10.5,-13.4],
+    [-12.0,-3.6],[-5.5,-2.8],[0.0,-3.4],[5.3,-4.4],[12.1,-3.6],
+    [-11.3,10.0],[-6.2,10.1],[-0.2,8.7],[6.2,9.8],[10.9,8.5],
+    [-11.1,21.6],[-4.6,20.7],[0.2,21.8],[6.4,21.8],[11.1,21.6],
+    [-4.6,-12.3],[-0.2,-11.6],[0.5,-11.8],[4.6,-12.5],[4.3,-11.4],
+    [-5.0,-3.4],[-1.6,-3.7],[-0.4,-3.2],[3.6,-3.6],[3.9,-3.2],
+    [-4.1,5.9],[-2.8,6.2],[1.1,5.3],[3.6,6.6],[3.4,5.9],
+    [-3.7,16.1],[-2.1,16.2],[-0.4,15.7],[4.1,17.7],[4.1,16.2]
+];
+
+const NEW_PROFILE_AVATARS = {
+    common: ['wrench', 'target', 'star', 'gear', 'shield', 'bolt'],
+    rare: ['mask', 'helmet', 'shells', 'hawk', 'radar', 'drone'],
+    unique: ['wolf', 'samurai', 'scorpion', 'pirate', 'bear', 'skull'],
+    animated: ['phoenix', 'tiger', 'owl', 'golem', 'serpent', 'eye']
+};
+for (const [tier, names] of Object.entries(NEW_PROFILE_AVATARS)) {
+    PROFILE_AVATAR_TIERS[tier].push(...names.map(name => 'new-icon:' + tier + '-' + name));
+}
+
+// Keep saved avatar identifiers stable while displaying the matching artwork.
+function profileAvatarMarkup(av, size) {
+    if (av && av.startsWith('new-icon:')) {
+        for (const [tier, names] of Object.entries(NEW_PROFILE_AVATARS)) {
+            const index = names.findIndex(name => av === 'new-icon:' + tier + '-' + name);
+            if (index < 0) continue;
+            const position = (index % 3) * 50 + '% ' + Math.floor(index / 3) * 100 + '%';
+            const animation = tier === 'animated' ? ' profile-avatar-animated profile-avatar-new--' + names[index] : '';
+            return '<span class="profile-avatar-art profile-avatar-sprite' + animation + '" role="img" aria-label="Иконка профиля" style="width:' + size + 'px;height:' + size + 'px"><span class="avatar-animation-motion"><span class="profile-avatar-new-image" style="background-image:url(pictures/png/icons-png/profile%20icons/profile-new-' + tier + '.png);background-position:' + position + '"></span></span></span>';
+        }
+    }
+    if (Object.prototype.hasOwnProperty.call(ANIMATED_AVATAR_ART, av)) {
+        const index = PROFILE_AVATAR_TIERS.animated.indexOf(av);
+        const [dx, dy] = ANIMATED_AVATAR_OFFSETS[index];
+        const cell = index % 6;
+        const x = (cell % 3) * 50;
+        const y = Math.floor(cell / 3) * 100;
+        const sheet = index < 6 ? 'pictures/png/icons-png/profile%20icons/profile-animated-icons.png' : 'pictures/png/icons-png/profile%20icons/profile-animated-icons-2.png';
+        const scale = index < 6 ? 1.6 : 1.8;
+        return '<span class="profile-avatar-art profile-avatar-animated profile-avatar-animated--' + av.slice(9) + '" role="img" aria-label="Анимированная иконка профиля" style="width:' + size + 'px;height:' + size + 'px"><span class="avatar-animation-motion"><span class="avatar-animation-image" style="background-image:url(' + sheet + ');background-position:' + x + '% ' + y + '%;transform:scale(' + scale + ') translate(' + dx + '%,' + dy + '%)"></span></span><svg class="avatar-animation-effects" viewBox="0 0 64 64" aria-hidden="true">' + ANIMATED_AVATAR_ART[av] + '</svg></span>';
+    }
+    const index = [...PROFILE_AVATAR_TIERS.common, ...PROFILE_AVATAR_TIERS.rare, ...PROFILE_AVATAR_TIERS.unique].filter(id => !id.startsWith('new-icon:')).indexOf(av);
+    if (index >= 0) {
+        const sheet = Math.floor(index / 20) + 1;
+        const cell = index % 20;
+        const x = (cell % 5) * 25;
+        const y = Math.floor(cell / 5) * 100 / 3;
+        const [dx, dy] = PROFILE_AVATAR_OFFSETS[index];
+        const scale = sheet === 1 ? 1.3 : 1.6;
+        return '<span class="profile-avatar-art profile-avatar-sprite" role="img" aria-label="Иконка профиля" style="width:' + size + 'px;height:' + size + 'px"><span class="profile-avatar-sprite-image" aria-hidden="true" style="background-image:url(pictures/png/icons-png/profile%20icons/profile-icons-' + sheet + '.png);background-position:' + x + '% ' + y + '%;transform:scale(' + scale + ') translate(' + dx + '%,' + dy + '%)"></span></span>';
+    }
+    if (av && av.startsWith('img:')) {
+        const name = av.slice(4);
+        const index = SPECIAL_AVATAR_NAMES.indexOf(name);
+        if (index >= 0) {
+            const [dx, dy] = SPECIAL_AVATAR_OFFSETS[index];
+            const x = (index % 4) * 100 / 3;
+            const y = Math.floor(index / 4) * 100 / 3;
+            const scale = name === 'fire-egg' || name === 'economy-veteran' ? 1.45 : 1.9;
+            return '<span class="profile-avatar-art profile-avatar-sprite" role="img" aria-label="Уникальная иконка профиля" style="width:' + size + 'px;height:' + size + 'px"><span class="profile-avatar-sprite-image profile-avatar-special-image" aria-hidden="true" style="background-position:' + x + '% ' + y + '%;transform:scale(' + scale + ') translate(' + dx + '%,' + dy + '%)"></span></span>';
+        }
+        const imageSize = _isSmallEgg(av) ? Math.round(size * 1.5) : size;
+        return '<img class="profile-avatar-art" src="' + profileIconPath(name) + '" width="' + imageSize + '" height="' + imageSize + '" alt="Иконка профиля">';
+    }
+    return escapeHtml(av || '');
+}
 
 // Get the tier of a preset avatar ('common' | 'rare' | 'unique' | 'special' | null)
 function _getAvatarTier(av) {
@@ -7044,6 +7248,7 @@ function _getAvatarTier(av) {
     if (PROFILE_AVATAR_TIERS.common.includes(av)) return 'common';
     if (PROFILE_AVATAR_TIERS.rare.includes(av))   return 'rare';
     if (PROFILE_AVATAR_TIERS.unique.includes(av)) return 'unique';
+    if (PROFILE_AVATAR_TIERS.animated.includes(av)) return 'animated';
     return null; // custom avatar
 }
 
@@ -7080,6 +7285,22 @@ function _setTankAvatar(tankType, avatar) {
     if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
 }
 
+const PROFILE_BACKGROUNDS = {
+    default: 'Обычный', steel: 'Сталь', ice: 'Лёд',
+    'plain-forest': 'Лес', 'plain-desert': 'Пустыня', 'plain-lava': 'Лава', 'plain-space': 'Космос',
+    slate: 'Графит', rose: 'Роза', ocean: 'Океан', moss: 'Мох', amber: 'Янтарь', violet: 'Сирень',
+    forest: 'Изумруд', desert: 'Золото', lava: 'Магма', space: 'Туманность',
+    hangar: 'Броня', snowfield: 'Мороз', laboratory: 'Реактор', battlefield: 'Искры',
+    city: 'Гроза', harbor: 'Прилив', canyon: 'Кристалл', arctic: 'Сияние'
+};
+
+function _getBackgroundUnlocks() {
+    try { const items = JSON.parse(localStorage.getItem('tankBackgroundUnlocks') || '[]'); return Array.isArray(items) ? items : []; } catch (e) { return []; }
+}
+function profileBackgroundName(name, unlocks = _getBackgroundUnlocks()) {
+    return name && Object.prototype.hasOwnProperty.call(PROFILE_BACKGROUNDS, name) && (name === 'default' || unlocks.includes(name)) ? name : 'default';
+}
+
 function renderProfilesList() {
     const container = document.getElementById('profilesList');
     if (!container) return;
@@ -7087,46 +7308,37 @@ function renderProfilesList() {
     container.innerHTML = '';
     list.forEach(p => {
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:10px;background:' +
-            (p.active ? 'rgba(46,204,113,0.18)' : 'rgba(255,255,255,0.06)') +
-            ';border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.12)') +
-            ';border-radius:12px;padding:10px 14px;';
+        row.className = 'profile-card profile-bg--' + profileBackgroundName(p.background, p.backgroundUnlocks) + (p.active ? ' profile-card--active' : '');
 
-        // Avatar circle
+        // Avatar frame
         const avatar = document.createElement('div');
         avatar.dataset.keepEmoji = 'true';
-        avatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a3a5c,#2c5282);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid ' + (p.active ? '#2ecc71' : 'rgba(255,255,255,0.2)') + ';';
+        avatar.className = 'profile-card-avatar';
         const pAv = p.avatar || '🎮';
-        if (pAv.startsWith('img:')) {
-            const sz = _isSmallEgg(pAv) ? '54px' : '36px';
-            avatar.innerHTML = '<img src="png/icon-png/' + pAv.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
-        } else {
-            avatar.textContent = pAv;
-        }
+        avatar.innerHTML = profileAvatarMarkup(pAv, 48);
         row.appendChild(avatar);
 
         // Name + trophies
         const info = document.createElement('div');
-        info.style.cssText = 'flex:1;min-width:0;';
+        info.className = 'profile-card-info';
         const titleLabel = p.active ? _getTitleLabel(localStorage.getItem('playerTitle') || 'none') : '';
         const titleId = p.active ? (localStorage.getItem('playerTitle') || 'none') : 'none';
         const titleColor = (titleId && titleId !== 'none') ? _getAtmosphericTitleColor(titleId) : '#f1c40f';
-        info.innerHTML = '<div style="font-weight:700;font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-            '<span data-keep-emoji>' + escapeHtml(p.name) + '</span>' + (p.active ? ' <span style="color:#2ecc71;font-size:11px;">(активный)</span>' : '') + '</div>' +
-            '<div style="font-size:12px;color:#aaa;margin-top:2px;">' +
+        info.innerHTML = '<div class="profile-card-name" data-keep-emoji>' + escapeHtml(p.name) + '</div>' +
+            (p.active ? '<span class="profile-active-label">АКТИВНЫЙ</span>' : '') +
+            '<div class="profile-card-stats">' +
             (titleLabel ? '<span style="color:' + titleColor + ';font-size:11px;font-weight:700;text-shadow:0 0 6px ' + titleColor + '88;">' + escapeHtml(titleLabel) + '</span>&nbsp;·&nbsp;' : '') +
             '🏆 ' + p.trophies + ' трофеев</div>';
         row.appendChild(info);
 
         // Buttons
         const btns = document.createElement('div');
-        btns.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+        btns.className = 'profile-card-actions';
 
         if (!p.active) {
             const selBtn = document.createElement('button');
-            selBtn.className = 'btn';
-            selBtn.style.cssText = 'background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;padding:6px 12px;font-size:13px;border-radius:8px;white-space:nowrap;';
-            selBtn.textContent = '▶ Войти';
+            selBtn.className = 'btn profile-card-enter';
+            selBtn.textContent = 'Войти';
             selBtn.onclick = () => { if (typeof saveProgress === 'function') saveProgress(); window.switchProfile(p.idx); };
             btns.appendChild(selBtn);
         }
@@ -7134,9 +7346,8 @@ function renderProfilesList() {
         // Edit button — only for active profile
         if (p.active) {
             const renBtn = document.createElement('button');
-            renBtn.className = 'btn btn-secondary';
-            renBtn.style.cssText = 'padding:6px 10px;font-size:13px;border-radius:8px;';
-            renBtn.textContent = '✏️';
+            renBtn.className = 'btn profile-card-edit';
+            renBtn.textContent = 'Изменить';
             renBtn.title = 'Редактировать профиль';
             renBtn.onclick = () => openProfileEditModal('edit', p.idx);
             btns.appendChild(renBtn);
@@ -7144,9 +7355,8 @@ function renderProfilesList() {
 
         if (list.length > 1) {
             const delBtn = document.createElement('button');
-            delBtn.className = 'btn';
-            delBtn.style.cssText = 'background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;padding:6px 10px;font-size:13px;border-radius:8px;';
-            delBtn.textContent = '🗑';
+            delBtn.className = 'btn profile-card-delete';
+            delBtn.textContent = 'Удалить';
             delBtn.title = 'Удалить профиль';
             delBtn.onclick = () => openProfileDeleteConfirm(p.idx, p.name);
             btns.appendChild(delBtn);
@@ -7165,27 +7375,62 @@ function escapeHtml(s) {
 let _profileEditIdx = -1;  // -1 = create mode
 let _profileEditAvatar = '🎮';
 let _profileEditTankType = 'normal'; // track which tank we're customizing
+let _profileEditBackground = 'default';
+
+function _buildProfileBackgroundOptions() {
+    const options = document.getElementById('profileBackgroundOptions');
+    if (!options) return;
+    options.innerHTML = '';
+    const groups = [
+        { label: 'Обычные', names: ['default', ...CONTAINER_ORDINARY_BACKGROUNDS] },
+        { label: 'Редкие', names: CONTAINER_RARE_BACKGROUNDS }
+    ];
+    groups.forEach(group => {
+        const available = group.names.filter(name => name === 'default' || (_profileEditIdx !== -1 && profileBackgroundName(name) === name));
+        if (!available.length) return;
+        const section = document.createElement('div');
+        section.className = 'profile-background-group';
+        const heading = document.createElement('div');
+        heading.className = 'profile-background-group-title';
+        heading.textContent = group.label;
+        section.appendChild(heading);
+        const row = document.createElement('div');
+        row.className = 'profile-background-options';
+        section.appendChild(row);
+        options.appendChild(section);
+        available.forEach(name => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'profile-background-option profile-bg--' + name;
+            button.title = PROFILE_BACKGROUNDS[name];
+            button.setAttribute('aria-label', button.title);
+            button.setAttribute('aria-pressed', String(name === _profileEditBackground));
+            button.onclick = () => { _profileEditBackground = name; _buildProfileBackgroundOptions(); };
+            row.appendChild(button);
+        });
+    });
+    const preview = document.querySelector('#profileEditModal .profile-preview');
+    if (preview) preview.className = 'profile-preview profile-bg--' + _profileEditBackground;
+}
 
 function openProfileEditModal(mode, idx) {
     const modal = document.getElementById('profileEditModal');
     if (!modal) return;
     _profileEditIdx = (mode === 'edit') ? idx : -1;
     _profileEditTankType = localStorage.getItem('tankSelected') || 'normal';
-    // Hide buy panel
-    const buyPanel = document.getElementById('avatarBuyPanel');
-    if (buyPanel) buyPanel.style.display = 'none';
-    _avatarBuyTarget = null;
-
     const list = window.getProfileList();
     const existing = (mode === 'edit' && list[idx]) ? list[idx] : null;
 
     _profileEditAvatar = existing ? (existing.avatar || '🎮') : '🎮';
+    _profileEditBackground = profileBackgroundName(existing && existing.background);
     _profileEditTitleId = localStorage.getItem('playerTitle') || 'none';
 
     document.getElementById('profileEditTitle').textContent =
-        mode === 'edit' ? '✏️ Редактирование профиля' : '➕ Новый профиль';
+        mode === 'edit' ? 'Редактирование профиля' : 'Новый профиль';
+    document.getElementById('profileSelectedTank').textContent = '🎮 Выбранный танк: ' + _profileEditTankType;
     document.getElementById('profileEditName').value = existing ? existing.name : ('Игрок ' + (list.length + 1));
     _updateEditAvatarPreview(_profileEditAvatar);
+    _buildProfileBackgroundOptions();
     _buildAvatarGrid();
     const titleSection = document.getElementById('profileEditTitleSection');
     if (titleSection) titleSection.style.display = mode === 'edit' ? '' : 'none';
@@ -7200,17 +7445,11 @@ function _updateEditAvatarPreview(av) {
     const el = document.getElementById('profileEditAvatarPreview');
     if (el) {
         const tier = _getAvatarTier(av);
-        if (tier === 'special') {
-            const name = av.slice(4);
-            el.textContent = '';
-            const sz = _isSmallEgg(av) ? '84px' : '56px';
-            el.innerHTML = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
-        } else {
-            el.textContent = av;
-        }
+        el.innerHTML = profileAvatarMarkup(av, 56);
         // Background color reflects tier
         const bg = tier === 'rare'    ? 'linear-gradient(135deg,#1a5c35,#27ae60)'
                  : tier === 'unique'  ? 'linear-gradient(135deg,#4a1a7c,#7d3c98)'
+                 : tier === 'animated' ? 'linear-gradient(135deg,#17445a,#188d9b)'
                  : tier === 'special' ? 'linear-gradient(135deg,#7c4a1a,#c8791f)'
                  :                     'linear-gradient(135deg,#1a3a5c,#2c5282)';
         el.style.background = bg;
@@ -7226,26 +7465,17 @@ function _buildAvatarGrid() {
     const grid = document.getElementById('profileAvatarGrid');
     if (!grid) return;
     grid.innerHTML = '';
-    const lockBadge = '<span style="position:absolute;bottom:1px;right:2px;font-size:9px;line-height:1;">🔒</span>';
-
-    // Show current tank type
-    const tankHeader = document.createElement('div');
-    tankHeader.style.cssText = 'width:100%;font-size:12px;color:#3498db;text-align:center;padding:8px;background:rgba(52,152,219,0.15);border-radius:6px;margin-bottom:8px;font-weight:600;';
-    tankHeader.textContent = '🎮 Выбранный танк: ' + _profileEditTankType;
-    grid.appendChild(tankHeader);
-
     // Tier visual config
     const tierCfg = {
         common: { bg: 'rgba(100,100,100,0.28)', border: 'rgba(180,180,180,0.35)', label: 'Обычные · бесплатно',    labelColor: '#aaa' },
-        rare:   { bg: 'rgba(46,204,113,0.15)',  border: 'rgba(46,204,113,0.45)',  label: 'Редкие · 800 🪙',        labelColor: '#2ecc71' },
-        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Эпические · 25 💎',    labelColor: '#9b59b6' }
+        rare:   { bg: 'rgba(46,204,113,0.15)',  border: 'rgba(46,204,113,0.45)',  label: 'Редкие · из ящиков',        labelColor: '#2ecc71' },
+        unique: { bg: 'rgba(155,89,182,0.2)',   border: 'rgba(155,89,182,0.55)',  label: 'Эпические · из ящиков',    labelColor: '#9b59b6' },
+        animated: { bg: 'rgba(34,167,190,0.16)', border: 'rgba(70,210,225,0.6)', label: 'Анимированные · из ящиков', labelColor: '#53d6e7' }
     };
 
-    ['common', 'rare', 'unique'].forEach(tier => {
-        // Skip rare and unique for new profiles (only show common)
-        if (_profileEditIdx === -1 && tier !== 'common') {
-            return;
-        }
+    ['common', 'rare', 'unique', 'animated'].forEach(tier => {
+        const available = PROFILE_AVATAR_TIERS[tier].filter(av => tier === 'common' || (_profileEditIdx !== -1 && _isAvatarUnlocked(av)));
+        if (!available.length) return;
         
         // Section header
         const cfg = tierCfg[tier];
@@ -7256,32 +7486,15 @@ function _buildAvatarGrid() {
 
         // Row of avatars
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
-        PROFILE_AVATAR_TIERS[tier].forEach(av => {
-            const unlocked = _isAvatarUnlocked(av);
+        row.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:8px;';
+        available.forEach(av => {
             const isSelected = (av === _profileEditAvatar);
             const btn = document.createElement('button');
             btn.className = 'profile-avatar-opt';
             btn.dataset.av = av;
-            btn.style.cssText = 'position:relative;width:40px;height:40px;background:' + cfg.bg + ';border:1px solid ' + cfg.border + ';border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';opacity:' + (unlocked ? '1' : '0.55') + ';overflow:hidden;';
-            if (av.startsWith('img:')) {
-                const name = av.slice(4);
-                const sz = _isSmallEgg(av) ? '42px' : '28px';
-                const imgHtml = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
-                if (unlocked) {
-                    btn.innerHTML = imgHtml;
-                    btn.onclick = () => _updateEditAvatarPreview(av);
-                } else {
-                    btn.innerHTML = imgHtml + lockBadge;
-                    btn.onclick = () => _showAvatarBuyPanel(av, tier);
-                }
-            } else if (unlocked) {
-                btn.innerHTML = '<span style="font-size:22px;">' + av + '</span>';
-                btn.onclick = () => _updateEditAvatarPreview(av);
-            } else {
-                btn.innerHTML = '<span style="font-size:16px;">' + av + '</span>' + lockBadge;
-                btn.onclick = () => _showAvatarBuyPanel(av, tier);
-            }
+            btn.style.cssText = 'position:relative;box-sizing:border-box;padding:0;width:40px;height:40px;background:' + cfg.bg + ';border:1px solid ' + cfg.border + ';border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';overflow:hidden;';
+            btn.innerHTML = profileAvatarMarkup(av, 36);
+            btn.onclick = () => _updateEditAvatarPreview(av);
             row.appendChild(btn);
         });
         grid.appendChild(row);
@@ -7298,16 +7511,16 @@ function _buildAvatarGrid() {
             grid.appendChild(shdr);
 
             const srow = document.createElement('div');
-            srow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
+            srow.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:8px;';
             specialIcons.forEach(name => {
             const av = 'img:' + name;
             const isSelected = (av === _profileEditAvatar);
             const btn = document.createElement('button');
             btn.className = 'profile-avatar-opt';
             btn.dataset.av = av;
-            btn.style.cssText = 'position:relative;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;overflow:hidden;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
-            const sz = _isSmallEgg(av) ? '42px' : '28px';
-            btn.innerHTML = '<img src="png/icon-png/' + name + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;">';
+            if (name === 'economy-veteran') btn.title = 'Ветеран экономики';
+            btn.style.cssText = 'position:relative;box-sizing:border-box;padding:0;width:40px;height:40px;background:linear-gradient(135deg,rgba(241,196,15,0.2),rgba(243,156,18,0.2));border:1px solid rgba(241,196,15,0.55);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;overflow:hidden;outline:' + (isSelected ? '3px solid #2ecc71' : 'none') + ';';
+            btn.innerHTML = profileAvatarMarkup(av, 36);
             btn.onclick = () => _updateEditAvatarPreview(av);
             srow.appendChild(btn);
         });
@@ -7315,9 +7528,6 @@ function _buildAvatarGrid() {
         }
     }
 }
-
-// ── Avatar purchase ───────────────────────────────────────────────────────────
-let _avatarBuyTarget = null;
 
 // Build the title selection section inside profile edit modal
 function _buildTitleSelect() {
@@ -7430,21 +7640,6 @@ function _selectTitle(titleId) {
 }
 window._selectTitle = _selectTitle;
 
-function _showAvatarBuyPanel(av, tier) {
-    _avatarBuyTarget = av;
-    const panel = document.getElementById('avatarBuyPanel');
-    const info  = document.getElementById('avatarBuyInfo');
-    if (!panel || !info) return;
-    // Reset buttons to default state
-    const buyBtn = document.getElementById('avatarBuyConfirmBtn');
-    const cancelBtn = document.getElementById('avatarBuyCancelBtn');
-    if (buyBtn) { buyBtn.style.display = ''; buyBtn.textContent = tier === 'rare' ? '🪙 Купить за 800' : '💎 Купить за 25'; }
-    if (cancelBtn) cancelBtn.textContent = '✕ Отмена';
-    const tierLabel = tier === 'rare' ? 'Редкая · 800 монет 🪙' : 'Эпическая · 25 кристаллов 💎';
-    info.innerHTML = '<span style="font-size:26px;vertical-align:middle;">' + av + '</span>&nbsp; <strong style="color:#fff;">' + tierLabel + '</strong>';
-    panel.style.display = 'block';
-}
-
 function openProfilesModal() {
     const modal = document.getElementById('profilesModal');
     if (!modal) return;
@@ -7474,17 +7669,17 @@ if (profileEditSave) profileEditSave.addEventListener('click', () => {
     if (_profileEditIdx === -1) {
         // Create mode
         if (typeof saveProgress === 'function') saveProgress();
-        window.createProfile(nameVal, finalAvatar);
+        window.createProfile(nameVal, finalAvatar, _profileEditBackground);
     } else {
         // Edit mode
         try { localStorage.setItem('playerTitle', _profileEditTitleId || 'none'); } catch(e) {}
         if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
-        window.editProfile(_profileEditIdx, nameVal, finalAvatar);
+        window.editProfile(_profileEditIdx, nameVal, finalAvatar, _profileEditBackground);
         document.getElementById('profileEditModal').style.display = 'none';
         renderProfilesList();
         // Update header name if editing active profile
         const nameEl = document.getElementById('activeProfileName');
-        if (nameEl) nameEl.textContent = '👤 ' + (window.getActiveProfileName ? window.getActiveProfileName() : '');
+        if (nameEl) nameEl.innerHTML = profileAvatarMarkup(finalAvatar, 38) + '<span>' + escapeHtml(window.getActiveProfileName ? window.getActiveProfileName() : '') + '</span>';
     }
 });
 
@@ -7495,43 +7690,6 @@ if (profileEditCancel) profileEditCancel.addEventListener('click', () => {
 });
 
 // Avatar buy panel
-const avatarBuyConfirmBtn = document.getElementById('avatarBuyConfirmBtn');
-if (avatarBuyConfirmBtn) avatarBuyConfirmBtn.addEventListener('click', () => {
-    if (!_avatarBuyTarget) return;
-    const tier = _getAvatarTier(_avatarBuyTarget);
-    const info = document.getElementById('avatarBuyInfo');
-    if (tier === 'rare') {
-        if (coins < 800) {
-            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно монет! Нужно 800 🪙</span>';
-            const bb = document.getElementById('avatarBuyConfirmBtn');
-            const cb = document.getElementById('avatarBuyCancelBtn');
-            if (bb) bb.style.display = 'none';
-            if (cb) cb.textContent = '✕ Закрыть';
-            return;
-        }
-        coins -= 800;
-        localStorage.setItem('tankCoins', coins);
-    } else if (tier === 'unique') {
-        if (gems < 25) {
-            if (info) info.innerHTML = '<span style="color:#e74c3c;">❌ Недостаточно кристаллов! Нужно 25 💎</span>';
-            const bb = document.getElementById('avatarBuyConfirmBtn');
-            const cb = document.getElementById('avatarBuyCancelBtn');
-            if (bb) bb.style.display = 'none';
-            if (cb) cb.textContent = '✕ Закрыть';
-            return;
-        }
-        gems -= 25;
-        localStorage.setItem('tankGems', gems);
-    }
-    _unlockAvatar(_avatarBuyTarget);
-    _updateEditAvatarPreview(_avatarBuyTarget);
-    const panel = document.getElementById('avatarBuyPanel');
-    if (panel) panel.style.display = 'none';
-    _buildAvatarGrid(); // refresh to remove the lock
-    _avatarBuyTarget = null;
-    if (typeof saveProgress === 'function') saveProgress();
-});
-
 // ── Mobile modal close buttons (X) ─────────────────────────────────────────────
 function _initMobileCloseButtons() {
     const excludeModals = ['modeModal', 'mainMenu', 'settingsModal', 'mapEditorModal', 'meSettingsModal', 'meMapsModal', 'meConfirmOverlay', 'containerFlowModal'];
@@ -7649,17 +7807,6 @@ const originalSetModeMobile = (function() {
     }
 })();
 
-const avatarBuyCancelBtn = document.getElementById('avatarBuyCancelBtn');
-if (avatarBuyCancelBtn) avatarBuyCancelBtn.addEventListener('click', () => {
-    const panel = document.getElementById('avatarBuyPanel');
-    if (panel) panel.style.display = 'none';
-    // Reset buttons for next open
-    const buyBtn = document.getElementById('avatarBuyConfirmBtn');
-    if (buyBtn) buyBtn.style.display = '';
-    avatarBuyCancelBtn.textContent = '✕ Отмена';
-    _avatarBuyTarget = null;
-});
-
 // ── Delete confirmation modal ─────────────────────────────────────────────────
 let _profileDeleteTargetIdx = -1;
 
@@ -7692,7 +7839,6 @@ if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () 
     if (!header) return;
     const nameEl = document.createElement('div');
     nameEl.id = 'activeProfileName';
-    nameEl.style.cssText = 'font-size:11px;color:#aaa;text-align:center;margin-top:4px;cursor:pointer;user-select:none;';
     nameEl.title = 'Сменить профиль';
     nameEl.onclick = openProfilesModal;
     const profiles = _profilesLoad() || [];
@@ -7700,12 +7846,7 @@ if (profileDeleteCancelBtn) profileDeleteCancelBtn.addEventListener('click', () 
     const prof = profiles[idx];
     const av = (prof && prof.avatar) || '🎮';
     const nm = (prof && prof.name) || 'Игрок';
-    if (av.startsWith('img:')) {
-        const sz = _isSmallEgg(av) ? '27px' : '18px';
-        nameEl.innerHTML = '<img src="png/icon-png/' + av.slice(4) + '.png" style="width:' + sz + ';height:' + sz + ';object-fit:contain;vertical-align:middle;margin-right:4px;">' + escapeHtml(nm);
-    } else {
-        nameEl.textContent = av + ' ' + nm;
-    }
+    nameEl.innerHTML = profileAvatarMarkup(av, 38) + '<span>' + escapeHtml(nm) + '</span>';
     header.appendChild(nameEl);
 })();
 // ─────────────────────────────────────────────────────────────────────────────

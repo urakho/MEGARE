@@ -163,6 +163,19 @@ if (ADMIN_ENABLED !== 'on') {
                 if (op === '+') coins += amount; else if (op === '-') coins = Math.max(0, coins - amount); else coins = amount;
                 updateCoinDisplay(); saveProgress(); console.log(`Coins: ${coins}`);
             }
+        } else if (/^\/chips(?:\s|$)/i.test(command)) {
+            const args = command.split(/\s+/).slice(1);
+            let op = '+';
+            if (['+', '-', '='].includes(args[0])) op = args.shift();
+            const amount = Number(args[0]);
+            if (args.length === 1 && /^\d+$/.test(args[0]) && Number.isSafeInteger(amount)) {
+                if (op === '+') tokens += amount;
+                else if (op === '-') tokens = Math.max(0, tokens - amount);
+                else tokens = amount;
+                updateCoinDisplay(); saveProgress(); console.log(`Tokens: ${tokens}`);
+            } else {
+                console.log('Usage: /chips [+|-|=] N');
+            }
         } else if (command.startsWith('/crystal')) {
             const p = command.substring(8).trim().split(/\s+/);
             let op = '+', valStr = p[0];
@@ -204,6 +217,38 @@ if (ADMIN_ENABLED !== 'on') {
                     if (typeof trophyRoadModal!=='undefined' && trophyRoadModal && trophyRoadModal.style.display==='flex') if (typeof generateTrophyRoad==='function') generateTrophyRoad();
                 }
             }
+        } else if (/^\/icons(?:\s|$)/i.test(command)) {
+            const args = command.trim().split(/\s+/).slice(1);
+            const category = (args[0] || 'legacy').toLowerCase();
+            if (args.length > 1 || !['legacy', 'rare', 'epic', 'animated', 'unique', 'all'].includes(category)) {
+                if (typeof showNotification === 'function') showNotification('Категории: rare, epic, animated, unique, all', '#e74c3c');
+                console.log('Usage: /icons rare|epic|animated|unique|all');
+                return;
+            }
+            const special = ['legacy', 'unique', 'all'].includes(category);
+            if (special) {
+                if (!achievementData.claimed) achievementData.claimed = {};
+                for (const id of ['icon_rome', 'icon_time', 'icon_imit', 'icon_tank', 'icon_economy_veteran']) {
+                    achievementData.claimed[id] = true;
+                }
+                for (const name of ['red-egg', 'gre-egg', 'blu-egg', 'gold-egg', 'fire-egg', 'chik-egg', 'eas-rabbit', 'kulich']) {
+                    achievementData.claimed['easter_' + name] = true;
+                }
+                saveAchievements();
+            }
+            const unlocks = _getAvatarUnlocks();
+            const tiers = category === 'all' ? ['rare', 'unique', 'animated']
+                : category === 'legacy' || category === 'epic' ? ['unique']
+                : category === 'rare' || category === 'animated' ? [category] : [];
+            for (const tier of tiers) {
+                for (const avatar of PROFILE_AVATAR_TIERS[tier]) {
+                    if (!unlocks.includes(avatar)) unlocks.push(avatar);
+                }
+            }
+            localStorage.setItem('tankAvatarUnlocks', JSON.stringify(unlocks));
+            saveProgress();
+            if (typeof showNotification === 'function') showNotification('Категория иконок открыта: ' + category, '#f1c40f');
+            console.log('Icons unlocked:', category);
         } else if (command === '/clear t') {
             // Preserve limited tanks (e.g. kamikaze) when clearing
             const _limited = (typeof unlockedTanks !== 'undefined' ? unlockedTanks : []).filter(t => {
@@ -261,12 +306,15 @@ if (ADMIN_ENABLED !== 'on') {
                 '╠══════════════════════════════════════╣',
                 '  /god on|off        Режим бога',
                 '  /cash [+/-/=] N    Монеты',
+                '  /chips [+/-/=] N   Жетоны',
                 '  /crystal [+/-/=] N Гемы',
                 '  /scrap [+/-/=] N   Запчасти',
                 '  /trophy [+/-/=] N  Трофеи',
                 '  /trophy = N t      Трофеи всем танкам',
                 '  /tank <name>       Открыть персонажа',
                 '  /tank list         Названия персонажей',
+                '  /icons <категория> Открыть категорию иконок',
+                '  rare, epic, animated, unique, all',
                 '  ── Отрицательные ──',
                 '  /uncoin N   /ungem N   /unpart N',
                 '  ── Сброс ──',

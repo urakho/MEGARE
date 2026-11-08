@@ -4939,27 +4939,25 @@ function updatePhysics() {
         if (window._customMapActive) {
             syncResultOverlay('win');
         } else if (currentMode === 'single') {
-            coins += 30;
             trophies += 3; // single trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 3);
         } else if (currentMode === 'team') {
-            coins += 40;
             trophies += 5; // team trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 5);
         } else if (currentMode === 'duel') {
-            coins += 20;
             trophies += 2; // duel trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 2);
         } else if (currentMode === 'onevsall') {
-            coins += 80;
             trophies += 10; // one vs all trophy reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 10);
         } else if (currentMode === 'bossfight') {
-            coins += 300;
             trophies += 25; // boss fight win reward
             if (typeof addIndividualTankTrophies === 'function') addIndividualTankTrophies(tankType, 25);
         }
-        if (!window._customMapActive) saveProgress();
+        if (!window._customMapActive) {
+            awardVictoryTokens(currentMode);
+            saveProgress();
+        }
         syncResultOverlay('win');
     } else if (!tank.alive || tank.hp <= 0) {
         gameState = 'lose';

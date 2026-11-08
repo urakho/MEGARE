@@ -11,7 +11,7 @@ The game focuses on trying different fighting styles: holding a firing line, att
 - **Find your fighting style.** Tanks use cannons, machineguns, rockets, flamethrowers, beams, mines, and other weapons. Special abilities include shields, temporary transformations, drones, and summoned legionaries. Three mech types combine health with an energy resource used by their weapons.
 - **Use the surroundings.** Push boxes, break or burn wooden walls, and trigger explosive barrels. Different attacks interact with obstacles in different ways, making positioning and firing angles part of the fight.
 - **Fight across different environments.** Generated battlefields can use forest, snow, desert, swamp, or rain terrain. Swamp slows movement; rain changes movement and reload speed. The boss has a dedicated lava arena.
-- **Develop a collection.** Earn coins and trophies in standard battles, claim progression rewards, open containers, unlock vehicles, and spend parts on upgrades. Ranks, achievements, avatars, and titles add longer-term goals and customization.
+- **Develop a collection.** Earn tokens and trophies in standard battles, spend tokens on containers, claim progression rewards, unlock vehicles, and spend parts on upgrades. Containers also unlock profile avatars and backgrounds; ranks, achievements, and titles add further customization.
 - **Create your own battles.** Place obstacles and player, enemy, and ally spawns in the map editor. Save maps locally and exchange them as `.meg` files. Touch mode offers map loading/import rather than the full editor.
 
 ## Battle modes

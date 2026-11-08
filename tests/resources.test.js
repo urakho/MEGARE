@@ -12,11 +12,11 @@ test('resource display saves only when a resource changes', () => {
     let saves = 0;
     const coinDisplay = { textContent: '' };
     const context = vm.createContext({
-        coins: 10, gems: 2, trophies: 3, parts: 4,
+        coins: 10, tokens: 8, gems: 2, trophies: 3, parts: 4,
         trophyRoadRewards: [],
         _domCache: {
             coinDisplay, gemDisplay: null, trophyDisplay: null, partDisplay: null,
-            currencyCoins: [], currencyGems: [], currencyTrophies: [], currencyParts: [],
+            currencyCoins: [], currencyTokens: [], currencyGems: [], currencyTrophies: [], currencyParts: [],
             trophyBarFill: null
         },
         _ensureDOMCache: () => {},

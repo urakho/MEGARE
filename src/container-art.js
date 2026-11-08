@@ -4,6 +4,8 @@
         mini:      { base: '#9b5d18', light: '#e8ad38', dark: '#493014', metal: '#474951', rim: '#f6c64d', glow: '255,190,56', mark: '◆' },
         bronze:    { base: '#49694d', light: '#82a47b', dark: '#243d31', metal: '#776b47', rim: '#e6bc55', glow: '178,215,115', mark: 'Ⅱ' },
         legendary: { base: '#39454a', light: '#71817b', dark: '#20282c', metal: '#a48143', rim: '#ffc95d', glow: '255,194,67', mark: '✦' },
+        glitch:    { base: '#2c3039', light: '#626b73', dark: '#12131b', metal: '#535465', rim: '#94ff74', glow: '165,74,255', mark: '?' },
+        mythic:    { base: '#59272c', light: '#a44a48', dark: '#291b23', metal: '#8c7772', rim: '#ff7661', glow: '255,82,62', mark: '✦' },
         omega:     { base: '#d5e5ee', light: '#ffffff', dark: '#657e9c', metal: '#a77b3c', rim: '#f9cf70', glow: '102,208,255', mark: 'Ω' },
         alpha:     { base: '#3d444a', light: '#7e8990', dark: '#1a242c', metal: '#87979d', rim: '#ffc34d', glow: '255,180,42', mark: 'Α' },
         mechParts: { base: '#536b35', light: '#859d52', dark: '#27391e', metal: '#9ba4a5', rim: '#e9cf42', glow: '218,207,64', mark: '⚙' },
@@ -108,6 +110,21 @@
         return linear(ctx, y1, y2, [
             [0, '#e1e1ce'], [0.13, theme.metal], [0.52, '#303c40'], [0.87, theme.metal], [1, '#141b21']
         ]);
+    }
+
+    function surfaceWear(ctx, x, y, width, height, type) {
+        // Fixed marks keep the material texture stable while the container animates.
+        const seed = Array.from(type).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, width, height); ctx.clip();
+        for (let i = 0; i < 16; i++) {
+            const px = x + ((i * 37 + seed * 3) % Math.max(1, width - 6));
+            const py = y + ((i * 23 + seed) % Math.max(1, height - 4));
+            const length = 2 + (i * 7 + seed) % 6;
+            line(ctx, px, py, px + length, py - 1, 'rgba(13,19,22,0.32)', 1.4);
+            line(ctx, px + 0.5, py - 1, px + length - 1, py - 2, 'rgba(255,239,205,0.28)', 0.6);
+        }
+        ctx.restore();
     }
 
     function drawLid(ctx, type, theme, open) {
@@ -231,6 +248,7 @@
         polygon(ctx, [[64,121],[83,121],[73,151],[64,151]], 'rgba(255,255,255,0.1)');
         line(ctx, 64, 121, 169, 121, 'rgba(255,255,255,0.25)', 1);
         line(ctx, 64, 152, 169, 152, 'rgba(0,0,0,0.46)', 1.5);
+        surfaceWear(ctx, 63, 120, 108, 32, type);
 
         ctx.fillStyle = '#111b20';
         ctx.fillRect(43, 110, 146, 7);
@@ -390,6 +408,17 @@
             for (const x of [front + 20, front + 37, front + 54]) {
                 roundRect(ctx, x, 119 - (x - front) * 0.19, 4, 5, 1, '#ffd66c', '#5b411e', 0.8);
             }
+        } else if (type === 'glitch') {
+            polygon(ctx, [[front + 4,frontTop + 12],[right - 4,top + 19],[right - 4,backBottom - 10],[front + 4,bottom - 12]], '#171a22', '#77618b', 1.5);
+            for (let i = 0; i < 4; i++) {
+                const flicker = Math.sin(time * (4 + i) + i * 3) > -0.25;
+                line(ctx, front + 8, 111 + i * 10, right - 8, 101 + i * 10, flicker ? ['#ff5768','#b974ff','#65ff9e'][i % 3] : '#30313c', 2);
+            }
+        } else if (type === 'mythic') {
+            polygon(ctx, [[front + 4,frontTop + 12],[right - 4,top + 19],[right - 4,backBottom - 10],[front + 4,bottom - 12]], '#3a2228', '#c76557', 1.5);
+            line(ctx, front + 7, frontTop + 30, right - 7, top + 37, '#ff7865', 3);
+            line(ctx, front + 7, bottom - 22, right - 7, backBottom - 22, '#d44a40', 2);
+            glow(ctx, front + 24, 125, 20, theme.glow, 0.45);
         } else if (type === 'omega') {
             polygon(ctx, [[front + 3,frontTop + 9],[right - 4,top + 17],[right - 4,backBottom - 8],[front + 3,bottom - 10]],
                 '#d4e4ee', '#d8b66c', 1.5);
@@ -416,6 +445,19 @@
             line(ctx, front + 7, frontTop + 18, right - 7, top + 25, '#ffe29a', 1.4);
             line(ctx, front + 7, bottom - 22, right - 8, backBottom - 22, '#e9b45d', 1.5);
         }
+        // Recessed seams and rivets follow the side's perspective.
+        line(ctx, front + 5, frontTop + 6, right - 4, top + 13, 'rgba(255,255,255,0.28)', 1);
+        line(ctx, front + 5, bottom - 8, right - 4, backBottom - 8, 'rgba(0,0,0,0.55)', 2);
+        for (let i = 1; i <= 4; i++) {
+            const t = i / 5;
+            const px = front + (right - front) * t;
+            const py = (bottom - 5) + (backBottom - bottom) * t;
+            ctx.fillStyle = 'rgba(15,21,23,0.8)';
+            ctx.beginPath(); ctx.arc(px, py, 1.3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(232,228,202,0.65)';
+            ctx.beginPath(); ctx.arc(px - 0.3, py - 0.3, 0.55, 0, Math.PI * 2); ctx.fill();
+        }
+        surfaceWear(ctx, front + 5, top + 15, right - front - 10, bottom - top - 25, type);
         ctx.restore();
         line(ctx, front + 2, frontTop + 1, right - 1, top + 8, 'rgba(255,255,255,0.42)', 1.2);
         line(ctx, front + 1, bottom - 3, right - 1, backBottom - 3, '#171d21', 3);
@@ -481,7 +523,7 @@
         }
     }
 
-    function drawCargoDoor(ctx, type, theme, x, width, y, height, hinge, open, side) {
+    function drawCargoDoor(ctx, type, theme, x, width, y, height, hinge, open, side, time) {
         ctx.save();
         ctx.translate(hinge, 0);
         ctx.scale(1 - 0.72 * open, 1);
@@ -509,6 +551,24 @@
             const lockX = side === 'left' ? x + width - 7 : x + 7;
             line(ctx, lockX, y + 7, lockX, y + height - 7, '#ffce67', 3);
             for (const yy of [y + 15, y + height - 15]) bolt(ctx, lockX, yy);
+        } else if (type === 'glitch') {
+            for (let yy = y + 9; yy < y + height - 8; yy += 10) {
+                line(ctx, x + 6, yy, x + width - 6, yy, 'rgba(159,94,221,0.35)', 1);
+            }
+            const lockX = side === 'left' ? x + width - 7 : x + 7;
+            line(ctx, lockX, y + 7, lockX, y + height - 7, '#777a84', 3);
+            roundRect(ctx, x + 9, y + 17, width - 18, 12, 1, '#10171a', '#a96af0', 1);
+            ctx.fillStyle = Math.sin(time * 8) > 0 ? '#75ff9c' : '#ff6270';
+            ctx.fillRect(x + 12, y + 21, Math.max(2, width - 27), 2);
+        } else if (type === 'mythic') {
+            for (let xx = x + 9; xx < x + width - 5; xx += 9) {
+                line(ctx, xx, y + 7, xx, y + height - 7, '#251920', 3);
+                line(ctx, xx + 2, y + 7, xx + 2, y + height - 7, '#b66c60', 1);
+            }
+            line(ctx, x + 7, y + 13, x + width - 7, y + 13, '#f07864', 2);
+            line(ctx, x + 7, y + height - 13, x + width - 7, y + height - 13, '#f07864', 2);
+            const lockX = side === 'left' ? x + width - 7 : x + 7;
+            line(ctx, lockX, y + 7, lockX, y + height - 7, '#d38b77', 3);
         } else if (type === 'omega') {
             for (let xx = x + 9; xx < x + width - 5; xx += 10) {
                 line(ctx, xx, y + 8, xx, y + height - 8, '#8da9b9', 3);
@@ -528,6 +588,9 @@
             roundRect(ctx, x + width / 2 - 4, y + 10, 8, 5, 1, '#60e9ed');
             line(ctx, x + 7, y + height - 12, x + width - 7, y + height - 12, '#ffbe44', 2);
         }
+        line(ctx, x + 3, y + 3, x + width - 3, y + 3, 'rgba(255,255,255,0.25)', 1);
+        line(ctx, x + 3, y + height - 3, x + width - 3, y + height - 3, 'rgba(0,0,0,0.5)', 1.5);
+        surfaceWear(ctx, x + 4, y + 4, width - 8, height - 8, type + side);
         for (const yy of [y + 7, y + height - 7]) bolt(ctx, side === 'left' ? x + 5 : x + width - 5, yy);
         ctx.restore();
     }
@@ -600,15 +663,15 @@
             ctx.restore();
         } else {
             const doorWidth = (doorRight - doorLeft) / 2;
-            drawCargoDoor(ctx, type, theme, doorLeft, doorWidth, doorTop, doorHeight, doorLeft, open, 'left');
+            drawCargoDoor(ctx, type, theme, doorLeft, doorWidth, doorTop, doorHeight, doorLeft, open, 'left', time);
             drawCargoDoor(ctx, type, theme, doorLeft + doorWidth, doorWidth, doorTop, doorHeight,
-                doorRight, open, 'right');
+                doorRight, open, 'right', time);
             if (type !== 'bronze' && open < 0.85) {
                 ctx.save(); ctx.globalAlpha = 1 - open / 0.85;
                 roundRect(ctx, mid - 16, doorTop + doorHeight - 14, 32, 10, 1, '#1a252b', theme.rim, 1.3);
                 ctx.fillStyle = theme.rim; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 7px monospace';
-                ctx.fillText(type === 'legendary' ? 'L-07' : type === 'omega' ? 'O-09' : 'A-01',
+                ctx.fillText(type === 'legendary' ? 'L-07' : type === 'glitch' ? 'ERR-?' : type === 'mythic' ? 'MY-08' : type === 'omega' ? 'O-09' : 'A-01',
                     mid, doorTop + doorHeight - 9);
                 ctx.restore();
             }
@@ -655,6 +718,17 @@
             ctx.scale(1.13, 1.13);
             ctx.translate(-120, -102);
             drawCargoContainer(ctx, type, theme, time, open);
+            ctx.restore();
+        }
+        if (type === 'glitch') {
+            ctx.save();
+            ctx.globalAlpha = 0.5 + 0.3 * Math.sin(time * 9);
+            for (let i = 0; i < 4; i++) {
+                const y = 65 + ((i * 23 + Math.floor(time * 8) * 7) % 85);
+                const x = 48 + ((i * 41 + Math.floor(time * 5) * 9) % 100);
+                ctx.fillStyle = ['#f34a68', '#b975ff', '#65ff9e'][i % 3];
+                ctx.fillRect(x, y, 12 + i * 5, 1.5);
+            }
             ctx.restore();
         }
     }
