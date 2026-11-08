@@ -78,6 +78,7 @@ The arrows show main control paths; the scripts also read and mutate shared stat
 | [src/pause-menu.js](../src/pause-menu.js) | Pause UI and `window.isPaused`, restart/menu actions, optional maintenance overlay. |
 | [src/admin.js](../src/admin.js) | Local developer console and commands controlled by `ADMIN_ENABLED`; directly changes game/progress state. It is not server-side administration. |
 | [src/container-art.js](../src/container-art.js) | `window.ContainerArt` for container shop and opening artwork; reward generation remains in `main.js`. |
+| [src/cosmetic-shop.js](../src/cosmetic-shop.js) | Per-profile daily cosmetic offers, 08:00 UTC refresh, reveal UI, and purchases using existing progression state. |
 | [src/news.js](../src/news.js), [src/ui-icons.js](../src/ui-icons.js) | Local news/version UI; currency text-to-icon conversion and observation of DOM changes. |
 
 Navigation uses a grid plus collision checks, not an external physics engine. Grid rebuilds and A* searches are budgeted in `main.js`. Moving or destroying obstacles affects `navNeedsRebuild`. Physics can build a terrain collision index for busy scenes; this is an optimization of existing collision processing, not a separate simulation service.
@@ -103,7 +104,7 @@ Most UI structure is in `index.html`; styles are in `style.css`. Scripts also co
 
 ## Persistence
 
-`saveProgress()` in `main.js` writes resources, including `tankTokens`, upgrades, trophies, claimed rewards and unlocked vehicles to flat localStorage keys, then snapshots the active profile. Missing token balances in older profiles load as zero. `PROFILE_SAVE_KEYS` defines the profile snapshot set, including avatar and background unlocks; `megare_profiles` stores profile slots and selected backgrounds, and `megare_activeProfile` selects one. Initialization preserves a previously selected background as unlocked and migrates existing flat data or restores the active slot. Some systems write individual keys directly.
+`saveProgress()` in `main.js` writes resources, including `tankTokens`, upgrades, trophies, claimed rewards and unlocked vehicles to flat localStorage keys, then snapshots the active profile. Missing token balances in older profiles load as zero. `PROFILE_SAVE_KEYS` defines the profile snapshot set, including avatar and background unlocks and the current cosmetic-shop offers; `megare_profiles` stores profile slots and selected backgrounds, and `megare_activeProfile` selects one. Initialization preserves a previously selected background as unlocked and migrates existing flat data or restores the active slot. Some systems write individual keys directly.
 
 `updateCoinDisplay()` compares coins, gems, trophies and parts with `_lastDisplayedResources` before updating the resource UI and calling `saveProgress()`. Repeated render-time calls with unchanged resources therefore avoid repeated storage writes. This guard is not a general dirty-state tracker: changes to unlocks, upgrades or other saved data still depend on their explicit save calls.
 

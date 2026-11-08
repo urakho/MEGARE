@@ -6,7 +6,7 @@
 //   'off' → console is fully hidden; button/shortcut do nothing
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ADMIN_ENABLED = 'on'; // ← set to 'off' to completely hide the console
+const ADMIN_ENABLED = 'off'; // ← set to 'off' to completely hide the console
 
 // If admin is disabled, expose a no-op and hide all entry points
 if (ADMIN_ENABLED !== 'on') {
@@ -217,6 +217,11 @@ if (ADMIN_ENABLED !== 'on') {
                     if (typeof trophyRoadModal!=='undefined' && trophyRoadModal && trophyRoadModal.style.display==='flex') if (typeof generateTrophyRoad==='function') generateTrophyRoad();
                 }
             }
+        } else if (/^\/cosmetics$/i.test(command)) {
+            if (window.CosmeticShop) {
+                window.CosmeticShop.refresh();
+                if (typeof showNotification === 'function') showNotification('Ассортимент косметики обновлён', '#2ecc71');
+            }
         } else if (/^\/icons(?:\s|$)/i.test(command)) {
             const args = command.trim().split(/\s+/).slice(1);
             const category = (args[0] || 'legacy').toLowerCase();
@@ -315,6 +320,7 @@ if (ADMIN_ENABLED !== 'on') {
                 '  /tank list         Названия персонажей',
                 '  /icons <категория> Открыть категорию иконок',
                 '  rare, epic, animated, unique, all',
+                '  /cosmetics          Обновить магазин косметики',
                 '  ── Отрицательные ──',
                 '  /uncoin N   /ungem N   /unpart N',
                 '  ── Сброс ──',

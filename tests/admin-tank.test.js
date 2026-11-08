@@ -56,6 +56,17 @@ test('chips command updates and saves a nonnegative token balance', () => {
     assert.equal(saved.length, 4);
 });
 
+test('cosmetics command refreshes the shop without taking arguments', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'admin.js'), 'utf8');
+    let calls = 0;
+    const context = { window: { CosmeticShop: { refresh() { calls++; } } }, document: { getElementById: () => null }, console: { log() {} } };
+    vm.runInNewContext(source, context);
+    context.window.processDevCommand('/cosmetics');
+    context.window.processDevCommand('/COSMETICS');
+    context.window.processDevCommand('/cosmetics extra');
+    assert.equal(calls, 2);
+});
+
 test('icons command unlocks unique icons without losing existing profile progress', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'admin.js'), 'utf8');
     const data = new Map([['tankAvatarUnlocks', JSON.stringify(['rare-owned', 'epic-one'])]]);

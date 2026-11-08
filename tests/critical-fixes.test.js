@@ -24,6 +24,49 @@ function storage() {
     };
 }
 
+test('cosmetic shop provides twenty unique titles without reusing tank titles', () => {
+    const ctx = vm.createContext({ window: {} });
+    vm.runInContext(section(main, 'const COSMETIC_SHOP_TITLES =', '// Trophies threshold'), ctx);
+    const shop = Object.values(ctx.window.COSMETIC_SHOP_TITLES).map(title => title.name);
+    const tanks = Object.values(ctx.window.TANK_ATMOSPHERIC_TITLES).map(title => title.name);
+    assert.equal(shop.length, 20);
+    assert.equal(new Set(shop).size, 20);
+    assert.ok(shop.every(name => !tanks.includes(name)));
+    vm.runInContext(section(main, 'function _getAtmosphericTitle(', '// Unlock the tank-specific title'), ctx);
+    assert.equal(ctx.window._getTitleLabel('shop-steel-storm'), '«Стальной шторм»');
+    assert.equal(ctx.window._getAtmosphericTitleColor('shop-steel-storm'), '#9ebad1');
+});
+
+test('tank titles are restored from trophies and saved for the active profile', () => {
+    const localStorage = storage();
+    localStorage.setItem('tankTrophiesData', JSON.stringify({ normal: 7999, fire: 8000 }));
+    localStorage.setItem('playerTitleUnlocks', JSON.stringify(['shop-steel-storm']));
+    const snapshots = [];
+    const elements = [];
+    const document = {
+        getElementById: id => id === 'profileEditTitleSection' ? elements[0] : null,
+        createElement: () => ({ style: {}, dataset: {}, children: [], appendChild(child) { this.children.push(child); } })
+    };
+    elements.push(document.createElement('div'));
+    const ctx = vm.createContext({ localStorage, document, window: { saveActiveProfile() {
+        snapshots.push(localStorage.getItem('playerTitleUnlocks'));
+    } }, console, escapeHtml: value => value, showNotification() {} });
+    vm.runInContext(section(main, 'const COSMETIC_SHOP_TITLES =', 'function _profilesLoad()'), ctx);
+    vm.runInContext(section(main, 'function _getUnlockedTitles()', 'function addIndividualTankTrophies('), ctx);
+    assert.deepEqual(JSON.parse(localStorage.getItem('playerTitleUnlocks')), ['shop-steel-storm', 'fire']);
+    assert.deepEqual(JSON.parse(snapshots[0]), ['shop-steel-storm', 'fire']);
+
+    localStorage.setItem('tankTrophiesData', JSON.stringify({ normal: 8000, fire: 8000 }));
+    vm.runInContext(section(main, 'function _buildTitleSelect()', '// Handle title selection'), ctx);
+    ctx._buildTitleSelect();
+    assert.deepEqual(JSON.parse(localStorage.getItem('playerTitleUnlocks')), ['shop-steel-storm', 'fire', 'normal']);
+    assert.deepEqual(JSON.parse(snapshots.at(-1)), ['shop-steel-storm', 'fire', 'normal']);
+    const cards = elements[0].children[1].children;
+    assert.ok(cards.some(card => card.dataset.titleId === 'normal' && card.innerHTML.includes('Выживший')));
+    assert.ok(cards.some(card => card.dataset.titleId === 'fire' && card.innerHTML.includes('Испепелитель')));
+    assert.ok(cards.some(card => card.dataset.titleId === 'shop-steel-storm'));
+});
+
 test('profile avatar artwork resolves saved presets and special icons without changing their identifiers', () => {
     const ctx = vm.createContext({ escapeHtml: value => value });
     vm.runInContext(section(main, 'function _isSmallEgg(av)', '// Get the tier of a preset avatar'), ctx);
@@ -112,6 +155,30 @@ test('profile backgrounds stay with their profile across creation, edits and rel
     vm.runInContext(section(main, 'window.createProfile =', '/** Get active profile index'), ctx);
     assert.equal(ctx.window.getProfileList()[0].background, 'forest');
     assert.equal(ctx.window.getProfileList()[1].background, 'arctic');
+});
+
+test('cosmetic offer state and purchased title stay with their profile across switches', () => {
+    const localStorage = storage();
+    localStorage.setItem('megare_profiles', JSON.stringify([
+        { name: 'First', data: { tankCoins: '731', cosmeticShop: '{"period":42,"offers":[],"revealed":true}', playerTitleUnlocks: '["shop-collector"]', playerTitle: 'shop-collector' } },
+        { name: 'Second', data: { tankCoins: '202' } }
+    ]));
+    let ctx = profileContext(localStorage);
+    assert.equal(localStorage.getItem('playerTitle'), 'shop-collector');
+    assert.equal(JSON.parse(localStorage.getItem('cosmeticShop')).period, 42);
+    ctx.window.location = { pathname: '/index.html', replace() {} };
+    vm.runInContext(section(main, 'window.switchProfile =', '/** Create a new profile'), ctx);
+    ctx.window.switchProfile(1);
+    ctx = profileContext(localStorage);
+    assert.equal(localStorage.getItem('cosmeticShop'), null);
+    assert.equal(localStorage.getItem('playerTitleUnlocks'), null);
+    ctx.window.location = { pathname: '/index.html', replace() {} };
+    vm.runInContext(section(main, 'window.switchProfile =', '/** Create a new profile'), ctx);
+    ctx.window.switchProfile(0);
+    profileContext(localStorage);
+    assert.equal(localStorage.getItem('playerTitle'), 'shop-collector');
+    assert.equal(JSON.parse(localStorage.getItem('cosmeticShop')).period, 42);
+    assert.deepEqual(JSON.parse(localStorage.getItem('playerTitleUnlocks')), ['shop-collector']);
 });
 
 test('legacy selected backgrounds migrate without losing resources or moving between profiles', () => {

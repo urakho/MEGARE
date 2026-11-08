@@ -726,6 +726,54 @@ b { color: #ffcc00; }
     padding-right: 5px;
     width: 100%;
 }
+.cosmetic-shop { gap: 12px; padding: 4px 5px 12px; box-sizing: border-box; }
+.cosmetic-shop-timer { color: #d4e8d6; font-size: .85rem; font-weight: bold; text-align: center; }
+.cosmetic-shop-offers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: 100%; }
+.cosmetic-offer { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 180px; padding: 10px; border: 1px solid #726343; border-radius: 10px; color: #fff; background: linear-gradient(145deg,#30363a,#171b1f 75%); box-shadow: inset 0 1px rgba(255,255,255,.09), 0 4px 0 #0d1114; cursor: pointer; font: inherit; }
+.cosmetic-shop-badges { display: inline-flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+.cosmetic-sale { display: inline-block; padding: 3px 5px; border: 1px solid #ffd77b; border-radius: 4px; background: #9e321b; color: #fff3c7; font-size: .6rem; font-weight: 900; white-space: nowrap; text-shadow: 1px 1px #542019; }
+.cosmetic-sale--gift { border-color: #fff49c; background: linear-gradient(135deg,#e54b1c,#e69f1e); color: #fff; box-shadow: 0 0 10px rgba(255,173,40,.7); }
+.cosmetic-offer > .cosmetic-sale { position: absolute; top: 4px; right: 4px; z-index: 2; }
+.cosmetic-offer-price s, .cosmetic-item-price s { color: #b3aaa0; font-size: .8em; }
+.cosmetic-offer:not(.cosmetic-offer--hidden):not(.cosmetic-offer--empty):hover { border-color: #f1c75b; transform: translateY(-2px); }
+.cosmetic-offer strong { font-size: .85rem; overflow-wrap: anywhere; }
+.cosmetic-offer-art { display: flex; align-items: center; justify-content: center; width: 84px; height: 78px; overflow: hidden; border-radius: 7px; background: rgba(0,0,0,.25); }
+.cosmetic-offer-art .profile-avatar-art { max-width: 100%; max-height: 100%; }
+.cosmetic-offer-rarity { color: #a8dabb; font-size: .75rem; }
+.cosmetic-offer-price { color: #ffe075; font-weight: bold; font-size: .8rem; }
+.cosmetic-offer-buy { margin: 2px 0 0; padding: 5px 12px; font-size: .75rem; }
+.cosmetic-offer-buy:disabled { opacity: .6; cursor: default; }
+.cosmetic-offer--epicIcon .cosmetic-offer-rarity { color: #d498ff; }
+.cosmetic-offer--animatedIcon .cosmetic-offer-rarity { color: #69e6f5; }
+.cosmetic-offer--rareBackground .cosmetic-offer-rarity, .cosmetic-offer--rareIcon .cosmetic-offer-rarity { color: #69e58a; }
+.cosmetic-offer--hidden { color: #d8e4e3; font-size: 3rem; font-weight: 900; }
+.cosmetic-offer--next { animation: cosmetic-flicker .45s ease-in-out infinite alternate; text-shadow: 0 0 16px #ffcf72; }
+.cosmetic-offer--arrive { animation: cosmetic-arrive .35s ease-out both; }
+.cosmetic-offer--empty { color: #a5b2b5; font-size: .8rem; }
+.cosmetic-shop-background { display: block; width: 78px; height: 54px; border-radius: 5px; pointer-events: none; }
+.cosmetic-shop-title-art { color: #f1c75b; font-size: 3.4rem; text-shadow: 0 0 12px #b88839; }
+.cosmetic-item-box { gap: 12px; width: min(30rem, 94vw); border: 4px solid #d69c32; border-radius: 12px; background: linear-gradient(145deg,#344149,#1b252d 65%,#11191e); box-shadow: inset 0 2px #71818a, 0 0 25px rgba(0,0,0,.85); }
+.cosmetic-item-title { color: #f1c45c; font-size: 1.25rem; font-weight: 900; letter-spacing: .05em; text-shadow: 2px 2px #000; }
+.cosmetic-item-art { display: flex; align-items: center; justify-content: center; width: min(220px, 70vw); min-height: 150px; border: 2px solid #9e824b; border-radius: 8px; background: radial-gradient(circle, #384d50, #111a1e 80%); box-shadow: inset 0 0 16px #090e10; }
+.cosmetic-item-art .cosmetic-shop-background { width: 190px; max-width: 90%; height: 112px; }
+.cosmetic-item-name { color: #fff; font-size: 1.25rem; font-weight: 800; }
+.cosmetic-item-rarity { color: #b8d5ba; font-weight: bold; }
+.cosmetic-item-price { color: #ffe075; font-weight: bold; }
+.cosmetic-item-box--success:is([data-item-type="rareIcon"],[data-item-type="epicIcon"],[data-item-type="animatedIcon"],[data-item-type="title"]) .cosmetic-item-art { animation: cosmetic-purchase .8s cubic-bezier(.2,.8,.2,1) both; }
+.cosmetic-item-box--success { --cosmetic-receive-color: #f1c75b; --cosmetic-receive-glow: rgba(241,199,91,.48); }
+.cosmetic-item-box--success[data-item-type="rareIcon"], .cosmetic-item-box--success[data-item-type="rareBackground"] { --cosmetic-receive-color: #69e58a; --cosmetic-receive-glow: rgba(36,183,83,.48); }
+.cosmetic-item-box--success[data-item-type="epicIcon"] { --cosmetic-receive-color: #d498ff; --cosmetic-receive-glow: rgba(160,64,219,.5); }
+.cosmetic-item-box--success[data-item-type="animatedIcon"] { --cosmetic-receive-color: #69e6f5; --cosmetic-receive-glow: rgba(40,183,218,.5); }
+.cosmetic-item-box--success[data-item-type="commonBackground"] { --cosmetic-receive-color: #fff; }
+.cosmetic-item-box--success :is(.cosmetic-item-title,.cosmetic-item-rarity) { color: var(--cosmetic-receive-color); }
+.cosmetic-item-box--success .cosmetic-item-title { animation: cosmetic-title-glow 1s ease-in-out infinite alternate; }
+.cosmetic-item-box--success:is([data-item-type="rareIcon"],[data-item-type="epicIcon"],[data-item-type="animatedIcon"]) .cosmetic-item-art { border-color: var(--cosmetic-receive-color); background: radial-gradient(circle, var(--cosmetic-receive-glow), #111d27 78%); }
+@keyframes cosmetic-flicker { from { opacity: .7; border-color: #726343; } to { opacity: 1; border-color: #efbd55; box-shadow: 0 0 14px #ab7428; } }
+@keyframes cosmetic-arrive { 0% { opacity: .15; transform: translateY(12px) scale(.75) rotate(-4deg); filter: brightness(2); } 65% { opacity: 1; transform: translateY(-3px) scale(1.04); } 100% { opacity: 1; transform: none; filter: brightness(1); } }
+@keyframes cosmetic-purchase { 0% { opacity: .4; transform: scale(.7); box-shadow: 0 0 4px #f4b74a; } 65% { opacity: 1; transform: scale(1.06); box-shadow: 0 0 36px #efb544; } 100% { transform: scale(1); box-shadow: 0 0 18px rgba(239,181,68,.45); } }
+@keyframes cosmetic-title-glow { from { text-shadow: 0 0 4px var(--cosmetic-receive-color); } to { text-shadow: 0 0 18px var(--cosmetic-receive-color); } }
+@media (max-width: 480px) { .cosmetic-shop-offers { gap: 5px; } .cosmetic-offer { min-width: 0; min-height: 145px; padding: 5px 2px; } .cosmetic-offer-art { width: 100%; height: 58px; } .cosmetic-offer strong, .cosmetic-offer-rarity, .cosmetic-offer-price { font-size: .65rem; } .cosmetic-offer-buy { padding: 4px; font-size: .62rem; } }
+@media (prefers-reduced-motion: reduce) { .cosmetic-offer--next, .cosmetic-offer--arrive, .cosmetic-item-box--success .cosmetic-item-art, .cosmetic-item-box--success .cosmetic-item-title { animation: none; } }
 #shopTabContainers {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

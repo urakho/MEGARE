@@ -114,8 +114,32 @@ const PROFILE_SAVE_KEYS = [
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
     'tankAvatarUnlocks','tankBackgroundUnlocks','tankPromoUsed','tankSelectedAvatars',
-    'playerTitle','playerTitleUnlocks','pendingFreeContainers'
+    'playerTitle','playerTitleUnlocks','pendingFreeContainers','cosmeticShop'
 ];
+
+const COSMETIC_SHOP_TITLES = {
+    'shop-collector': { name: 'Коллекционер', color: '#e6bf58' },
+    'shop-iron-commander': { name: 'Железный командир', color: '#b9d0db' },
+    'shop-battle-veteran': { name: 'Ветеран сражений', color: '#e9a66a' },
+    'shop-steel-ghost': { name: 'Стальной призрак', color: '#9cdbda' },
+    'shop-arena-legend': { name: 'Легенда арены', color: '#cf9cff' },
+    'shop-front-storm': { name: 'Гроза фронта', color: '#e86a58' },
+    'shop-border-keeper': { name: 'Хранитель рубежа', color: '#8bcd9d' },
+    'shop-armored-fist': { name: 'Броневой кулак', color: '#caa776' },
+    'shop-vanguard': { name: 'Командир авангарда', color: '#e4c56a' },
+    'shop-ash-marshal': { name: 'Пепельный маршал', color: '#d4a38d' },
+    'shop-night-scout': { name: 'Ночной разведчик', color: '#8fb8dc' },
+    'shop-unbroken': { name: 'Неукротимый', color: '#e59776' },
+    'shop-fortress-guard': { name: 'Защитник крепости', color: '#b9c5a1' },
+    'shop-trophy-hunter': { name: 'Охотник за трофеями', color: '#e6c16c' },
+    'shop-wasteland-guard': { name: 'Страж пустошей', color: '#c4ab82' },
+    'shop-last-bastion': { name: 'Последний бастион', color: '#c0d4db' },
+    'shop-armor-master': { name: 'Повелитель брони', color: '#b9b4d9' },
+    'shop-frost-patrol': { name: 'Ледяной дозор', color: '#a0dbf0' },
+    'shop-steel-storm': { name: 'Стальной шторм', color: '#9ebad1' },
+    'shop-desert-storm': { name: 'Гроза пустыни', color: '#e6b87d' }
+};
+window.COSMETIC_SHOP_TITLES = COSMETIC_SHOP_TITLES;
 
 // Atmospheric titles unlocked at 8000 trophies per tank
 const TANK_ATMOSPHERIC_TITLES = {
@@ -632,14 +656,14 @@ function _getUnlockedTitles() {
 
 // Get the atmospheric title name string for a tank type
 function _getAtmosphericTitle(tankType) {
-    const t = window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType];
+    const t = window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
     return t ? t.name : null;
 }
 window._getAtmosphericTitle = _getAtmosphericTitle;
 
 // Get the atmospheric title color for a tank type
 function _getAtmosphericTitleColor(tankType) {
-    const t = window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType];
+    const t = window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
     return t ? t.color : '#f1c40f';
 }
 window._getAtmosphericTitleColor = _getAtmosphericTitleColor;
@@ -664,13 +688,13 @@ function _unlockTankTitle(tankType) {
     if (unlocked.includes(tankType)) return; // already unlocked
     unlocked.push(tankType);
     try { localStorage.setItem('playerTitleUnlocks', JSON.stringify(unlocked)); } catch(e) {}
+    if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
     showNotification('👑 Звание разблокировано: «' + titleName + '»! Выберите его в профиле.', '#f1c40f', 4000);
 }
 window._unlockTankTitle = _unlockTankTitle;
 
-// On startup: scan tankTrophiesData and auto-unlock titles for tanks already at 8000+
-// This handles profiles where trophies were earned before the title system existed.
-(function _autoUnlockExistingTitles() {
+// Restore missing titles for tanks that already reached the threshold.
+function _autoUnlockExistingTitles() {
     try {
         const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData') || '{}');
         const unlocked = _getUnlockedTitles();
@@ -683,9 +707,11 @@ window._unlockTankTitle = _unlockTankTitle;
         }
         if (changed) {
             localStorage.setItem('playerTitleUnlocks', JSON.stringify(unlocked));
+            if (typeof window.saveActiveProfile === 'function') window.saveActiveProfile();
         }
     } catch(e) {}
-})();
+}
+_autoUnlockExistingTitles();
 function addIndividualTankTrophies(tankType, amount) {
     if (window._isProfileSwitching) return;
     try {
@@ -2669,6 +2695,7 @@ if (shopBtn) shopBtn.addEventListener('click', () => {
         const firstBtn = document.querySelector('[data-shop-tab="shopTabContainers"]');
         if (firstBtn) firstBtn.classList.add('shop-tab-active');
         window.ContainerArt?.showShop();
+        window.CosmeticShop?.showShop();
     }
     _renderLimitedShopItems();
     processNextContainer();
@@ -2702,6 +2729,7 @@ if (trophyRoadBtn) trophyRoadBtn.addEventListener('click', () => { if (trophyRoa
 if (shopCancel) shopCancel.addEventListener('click', () => {
     if (shopModal) shopModal.style.display = 'none';
     window.ContainerArt?.hideShop();
+    window.CosmeticShop?.hideShop();
 });
 function closeCharacterModal() {
     if (characterModal) characterModal.style.display = 'none';
@@ -2745,6 +2773,8 @@ if (shopTabBtns.length) {
             if (target) target.style.display = targetId === 'shopTabContainers' ? 'grid' : 'flex';
             if (targetId === 'shopTabContainers') window.ContainerArt?.showShop();
             else window.ContainerArt?.hideShop();
+            if (targetId === 'shopTabCosmetics') window.CosmeticShop?.open();
+            else window.CosmeticShop?.close();
             // Update active button
             shopTabBtns.forEach(b => b.classList.remove('shop-tab-active'));
             btn.classList.add('shop-tab-active');
@@ -7535,6 +7565,7 @@ function _buildTitleSelect() {
     if (!section) return;
     section.innerHTML = '';
 
+    _autoUnlockExistingTitles();
     const unlocked = _getUnlockedTitles();
     const current = localStorage.getItem('playerTitle') || 'none';
 
@@ -7597,7 +7628,7 @@ function _buildTitleSelect() {
         opt.dataset.titleId = tt;
         opt.style.cssText = 'padding:8px 12px;border-radius:8px;border:2px solid ' + (isSelected ? titleColor : 'rgba(255,255,255,0.12)') + ';cursor:pointer;margin-bottom:6px;background:' + (isSelected ? titleColor + '22' : 'rgba(255,255,255,0.03)') + ';transition:all 0.15s;';
         opt.innerHTML = '<div style="font-size:14px;font-weight:700;color:' + (isSelected ? titleColor : '#fff') + ';text-shadow:' + (isSelected ? '0 0 8px ' + titleColor + '88' : 'none') + ';">«' + titleName + '»</div>' +
-            '<div style="font-size:11px;color:#888;margin-top:2px;">Получено за 8000 🏆 на «' + escapeHtml(tankDisplayName) + '»</div>';
+            '<div style="font-size:11px;color:#888;margin-top:2px;">' + (COSMETIC_SHOP_TITLES[tt] ? 'Косметический магазин' : 'Получено за 8000 🏆 на «' + escapeHtml(tankDisplayName) + '»') + '</div>';
         opt.onclick = () => _selectTitle(tt);
         body.appendChild(opt);
     });
