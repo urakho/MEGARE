@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
 const physics = fs.readFileSync(path.join(__dirname, '..', 'src', 'physics.js'), 'utf8');
+const tanks = fs.readFileSync(path.join(__dirname, '..', 'src', 'tanks.js'), 'utf8');
 const pause = fs.readFileSync(path.join(__dirname, '..', 'src', 'pause-menu.js'), 'utf8');
 
 function section(source, start, end) {
@@ -23,6 +24,25 @@ function storage() {
         removeItem: key => data.delete(key)
     };
 }
+
+test('mech health display and war respawns use the actual maximum health', () => {
+    const window = { mechMaxHpByType: { mechDiy: 420, mechShield: 600, mechRocket: 450 } };
+    const tankMaxHpByType = { normal: 300 };
+    const ctx = vm.createContext({ window, tankMaxHpByType });
+    vm.runInContext(section(tanks, 'function getVehicleDisplayMaxHp(', '// Tank descriptions'), ctx);
+    assert.equal(ctx.getVehicleDisplayMaxHp({ tankType: 'mechShield' }), 600);
+    assert.equal(ctx.getVehicleDisplayMaxHp({ tankType: 'mechRocket', maxHp: 800 }), 800);
+    assert.equal(ctx.getVehicleDisplayMaxHp({ tankType: 'normal' }), 300);
+
+    const player = { alive: false, respawnTimer: 1, respawnCount: 0, maxHp: 470, w: 30, h: 30 };
+    const ally = { alive: false, respawnTimer: 1, tankType: 'mechShield', team: 0, w: 30, h: 30 };
+    const enemy = { alive: false, respawnTimer: 1, tankType: 'mechRocket', team: 1, w: 30, h: 30 };
+    Object.assign(ctx, { currentMode: 'war', tank: player, tankType: 'mechDiy', allies: [ally], enemies: [enemy], warTeamSpawns: [{ x: 100, y: 100 }, { x: 300, y: 300 }], worldWidth: 500, worldHeight: 500, teamHasAliveMember: () => true, findFreeSpot: () => ({ x: 100, y: 100 }) });
+    vm.runInContext(section(physics, "    // Respawn timers (War mode)", '    // Training mode:'), ctx);
+    assert.equal(player.hp, 470);
+    assert.equal(ally.hp, 600);
+    assert.equal(enemy.hp, 450);
+});
 
 test('settings cancel restores previewed music and discards edits; save persists them', () => {
     const ids = ['settingsBtn', 'settingsModal', 'settingsClose', 'settingsCancel', 'settingEffects', 'settingImmersion', 'settingMobile', 'settingMusicVolume', 'settingOffline'];

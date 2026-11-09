@@ -4826,7 +4826,7 @@ function updatePhysics() {
                     const sp = (warTeamSpawns[0]) ? warTeamSpawns[0] : { x: 120, y: 120 };
                     const p = findFreeSpot(sp.x - 40 + Math.random()*80, sp.y - 40 + Math.random()*80, tank.w, tank.h, 600, 24);
                     // Mirror tank check for maxHP
-                    const maxHp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || 300;
+                    const maxHp = tank.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[tankType]) || window.mechMaxHpByType?.[tankType] || 300;
                     if (p) {
                          tank.x = p.x; tank.y = p.y; tank.hp = maxHp; tank.alive = true; tank.respawnTimer = 0; tank.respawnCount++;
                     } else {
@@ -4882,7 +4882,7 @@ function updatePhysics() {
                     if (teamHasAliveMember(a.team) && (a.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[a.team] || { x: 120, y: 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, a.w, a.h, 1000, 24);
-                        a.x = p.x; a.y = p.y; a.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || 300; a.alive = true; a.respawnTimer = 0; a.respawnCount = (a.respawnCount || 0) + 1;
+                        a.x = p.x; a.y = p.y; a.hp = a.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || window.mechMaxHpByType?.[a.tankType] || 300; a.alive = true; a.respawnTimer = 0; a.respawnCount = (a.respawnCount || 0) + 1;
                     }
                 }
             }
@@ -4896,7 +4896,7 @@ function updatePhysics() {
                     if (teamHasAliveMember(e.team) && (e.respawnCount || 0) < 2) {
                         const sp = warTeamSpawns[e.team] || { x: worldWidth - 120, y: worldHeight - 120 };
                         const p = findFreeSpot(sp.x + (Math.random()-0.5)*160, sp.y + (Math.random()-0.5)*160, e.w, e.h, 1000, 24);
-                        e.x = p.x; e.y = p.y; e.hp = (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[e.tankType]) || 300; e.alive = true; e.respawnTimer = 0; e.respawnCount = (e.respawnCount || 0) + 1;
+                        e.x = p.x; e.y = p.y; e.hp = e.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[e.tankType]) || window.mechMaxHpByType?.[e.tankType] || 300; e.alive = true; e.respawnTimer = 0; e.respawnCount = (e.respawnCount || 0) + 1;
                     }
                 }
             }

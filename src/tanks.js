@@ -1,6 +1,10 @@
 ﻿
 // --- VISUALS & ABILITIES --- //
 
+function getVehicleDisplayMaxHp(unit) {
+    return unit.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[unit.tankType]) || window.mechMaxHpByType?.[unit.tankType] || 300;
+}
+
 // Tank descriptions for detail modal
 const tankDescriptions = {
     normal: {
@@ -9393,7 +9397,7 @@ function renderGameFrame() {
         ctx.fillStyle = 'blue';
         ctx.fillRect(a.x, a.y - 10, a.w, 5);
         ctx.fillStyle = 'black';
-        const maxAllyHp = a.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[a.tankType]) || 300;
+        const maxAllyHp = getVehicleDisplayMaxHp(a);
         const missingHp = maxAllyHp - a.hp;
         if (missingHp > 0) {
             ctx.fillRect(a.x + a.w * (a.hp / maxAllyHp), a.y - 10, a.w * (missingHp / maxAllyHp), 5);
@@ -9792,7 +9796,7 @@ function renderGameFrame() {
         ctx.fillStyle = 'red';
         ctx.fillRect(enemy.x, enemy.y - 10, enemy.w, 5);
         ctx.fillStyle = 'black';
-        const maxHp = enemy.maxHp || (typeof tankMaxHpByType !== 'undefined' && tankMaxHpByType[enemy.tankType]) || 300;
+        const maxHp = getVehicleDisplayMaxHp(enemy);
         const missingHp = maxHp - enemy.hp;
         if (missingHp > 0) {
             ctx.fillRect(enemy.x + enemy.w * (enemy.hp / maxHp), enemy.y - 10, enemy.w * (missingHp / maxHp), 5);

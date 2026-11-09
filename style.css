@@ -647,7 +647,7 @@ b { color: #ffcc00; }
 .menu-modal-heading { display: contents; }
 #characterModal.mobile-controls-layout .char-tabs {
     position: absolute;
-    right: 0.5rem;
+    left: 0.5rem;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -665,19 +665,33 @@ b { color: #ffcc00; }
 }
 #characterModal.mobile-controls-layout .char-grid {
     width: calc(100% - 6.5rem);
-    align-self: flex-start;
-    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+    align-self: flex-end;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+#characterModal.mobile-controls-layout .char-grid > div {
+    width: 100% !important;
+    min-width: 0;
 }
 #characterModal.mobile-controls-layout .char-grid > div > canvas {
+    width: 100% !important;
     max-width: 100%;
     height: auto !important;
     aspect-ratio: 1;
 }
+#characterModal.mobile-controls-layout .char-grid > div > .btn {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
 #shopModal.mobile-controls-layout .menu-modal-balances {
-    font-size: 0.56rem !important;
-    gap: 0.35rem !important;
-    padding: 0.25rem 0.35rem !important;
+    font-size: 0.9rem !important;
+    gap: 0.6rem !important;
+    padding: 0.3rem 0.5rem !important;
     margin-bottom: 0.45rem !important;
+}
+#shopModal.mobile-controls-layout .menu-modal-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 #characterModal .modal-box {
     width: min(65rem, 97vw);
