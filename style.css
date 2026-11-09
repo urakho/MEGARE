@@ -645,6 +645,40 @@ b { color: #ffcc00; }
 
 /* Character modal: tall grid layout */
 .menu-modal-heading { display: contents; }
+#characterModal.mobile-controls-layout .char-tabs {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 6rem;
+    margin: 0;
+    overflow: visible;
+    z-index: 1;
+}
+#characterModal.mobile-controls-layout .char-tab-btn {
+    width: 100%;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+}
+#characterModal.mobile-controls-layout .char-grid {
+    width: calc(100% - 6.5rem);
+    align-self: flex-start;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+}
+#characterModal.mobile-controls-layout .char-grid > div > canvas {
+    max-width: 100%;
+    height: auto !important;
+    aspect-ratio: 1;
+}
+#shopModal.mobile-controls-layout .menu-modal-balances {
+    font-size: 0.56rem !important;
+    gap: 0.35rem !important;
+    padding: 0.25rem 0.35rem !important;
+    margin-bottom: 0.45rem !important;
+}
 #characterModal .modal-box {
     width: min(65rem, 97vw);
     max-width: 97vw;

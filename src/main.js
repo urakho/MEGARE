@@ -2696,6 +2696,7 @@ function _quickResourceScan() {
 if (shopBtn) shopBtn.addEventListener('click', () => {
     if (_quickResourceScan()) return;
     if (shopModal) {
+        shopModal.classList.toggle('mobile-controls-layout', !!window.deviceModeMobile);
         shopModal.style.display = 'flex';
         // Reset to Containers tab
         document.querySelectorAll('.shop-tab-pane').forEach(p => p.style.display = 'none');
@@ -2713,6 +2714,7 @@ if (shopBtn) shopBtn.addEventListener('click', () => {
 if (characterBtn) characterBtn.addEventListener('click', () => { 
     if (_quickResourceScan()) return;
     if (characterModal) { 
+        characterModal.classList.toggle('mobile-controls-layout', !!window.deviceModeMobile);
         characterModal.style.display = 'flex';
         // Reset to Tanks tab
         const charGridTanks = document.getElementById('charGridTanks');
