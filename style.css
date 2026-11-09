@@ -2044,6 +2044,15 @@ canvas.tank-display {
         max-height: 100vh;
         border-radius: 0;
     }
+}
+
+/* Compact headers also apply when a phone reports a fine pointer. */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (max-height: 600px) {
+    #characterModal .modal-box, #shopModal .modal-box {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
     #characterModal .menu-modal-heading, #shopModal .menu-modal-heading {
         display: flex;
         align-items: center;
@@ -2083,6 +2092,9 @@ canvas.tank-display {
         font-size: 0.75rem;
         padding: 0.3rem 0.7rem;
     }
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
     .modal-title {
         font-size: 0.94rem;
         margin-bottom: 0.375rem;
