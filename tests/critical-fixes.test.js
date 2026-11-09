@@ -24,6 +24,42 @@ function storage() {
     };
 }
 
+test('settings cancel restores previewed music and discards edits; save persists them', () => {
+    const ids = ['settingsBtn', 'settingsModal', 'settingsClose', 'settingsCancel', 'settingEffects', 'settingImmersion', 'settingMobile', 'settingMusicVolume', 'settingOffline'];
+    const elements = Object.fromEntries(ids.map(id => [id, {
+        style: {}, handlers: {}, addEventListener(event, handler) { this.handlers[event] = handler; }
+    }]));
+    const localStorage = storage();
+    const window = { effectsEnabled: true, immersionEnabled: false, deviceModeMobile: false, offlineMode: false, musicVolume: 0.5, dispatchEvent() {} };
+    const tracks = Object.fromEntries(['menuMusic', 'fightMusic', 'duelMusic', 'exfightMusic', 'teamMusic', 'tankMusic'].map(id => [id, { volume: 0.5 }]));
+    let updates = 0;
+    const context = vm.createContext({ window, localStorage, document: { getElementById: id => elements[id] || null }, ...tracks, particles: [], updateMusic() { updates++; }, Event: class {} });
+    vm.runInContext(section(main, '(function initSettings()', '    // --- Offline helpers:'), context);
+    elements.settingsBtn.handlers.click();
+    elements.settingEffects.checked = false;
+    elements.settingMobile.checked = true;
+    elements.settingMusicVolume.value = '0';
+    elements.settingMusicVolume.handlers.input();
+    assert.equal(window.musicVolume, 0);
+    elements.settingsCancel.handlers.click();
+    assert.equal(window.musicVolume, 0.5);
+    assert.equal(tracks.menuMusic.volume, 0.5);
+    assert.equal(window.effectsEnabled, true);
+    assert.equal(localStorage.getItem('settingMobile'), null);
+    assert.equal(elements.settingsModal.style.display, 'none');
+    elements.settingsBtn.handlers.click();
+    assert.equal(elements.settingEffects.checked, true);
+    assert.equal(elements.settingMobile.checked, false);
+    assert.equal(elements.settingMusicVolume.value, 50);
+    elements.settingMobile.checked = true;
+    elements.settingMusicVolume.value = '25';
+    elements.settingsClose.handlers.click();
+    assert.equal(localStorage.getItem('settingMobile'), 'true');
+    assert.equal(localStorage.getItem('settingMusicVolume'), '0.25');
+    assert.equal(window.musicVolume, 0.25);
+    assert.ok(updates >= 2);
+});
+
 test('cosmetic shop provides twenty unique titles without reusing tank titles', () => {
     const ctx = vm.createContext({ window: {} });
     vm.runInContext(section(main, 'const COSMETIC_SHOP_TITLES =', '// Trophies threshold'), ctx);

@@ -1281,6 +1281,7 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     }
     const modal = document.getElementById('settingsModal');
     const closeBtn = document.getElementById('settingsClose');
+    const cancelBtn = document.getElementById('settingsCancel');
     const chkEffects = document.getElementById('settingEffects');
     const chkImmersion = document.getElementById('settingImmersion');
     const chkMobile  = document.getElementById('settingMobile');
@@ -1288,16 +1289,8 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
     const chkOffline = document.getElementById('settingOffline');
     if (!btn || !modal) return;
 
-    // Apply saved values
-    chkEffects.checked = window.effectsEnabled;
-    if (chkImmersion) chkImmersion.checked = window.immersionEnabled;
-    chkMobile.checked  = window.deviceModeMobile;
-    chkMusicVolume.value = Math.round(window.musicVolume * 100);
-    if (chkOffline) chkOffline.checked = !!window.offlineMode;
-
-    // Real-time volume change — set global volume and update music state
-    chkMusicVolume.addEventListener('input', () => {
-        const vol = chkMusicVolume.value / 100;
+    let originalVolume = window.musicVolume;
+    function applyMusicVolume(vol) {
         window.musicVolume = vol;
         menuMusic.volume = vol;
         fightMusic.volume = vol;
@@ -1307,15 +1300,32 @@ window.offlineMode = localStorage.getItem('settingOffline') === 'true';
         tankMusic.volume = vol;
         // Ensure tracks pause/resume immediately according to volume
         if (typeof updateMusic === 'function') updateMusic();
+    }
+
+    // Volume is previewed while editing and restored on cancellation.
+    chkMusicVolume.addEventListener('input', () => applyMusicVolume(chkMusicVolume.value / 100));
+
+    btn.addEventListener('click', () => {
+        originalVolume = window.musicVolume;
+        chkEffects.checked = window.effectsEnabled;
+        if (chkImmersion) chkImmersion.checked = window.immersionEnabled;
+        chkMobile.checked = window.deviceModeMobile;
+        chkMusicVolume.value = Math.round(originalVolume * 100);
+        if (chkOffline) chkOffline.checked = !!window.offlineMode;
+        modal.style.display = 'flex';
     });
 
-    btn.addEventListener('click', () => { modal.style.display = 'flex'; });
+    function cancelSettings() {
+        applyMusicVolume(originalVolume);
+        modal.style.display = 'none';
+    }
+    if (cancelBtn) cancelBtn.addEventListener('click', cancelSettings);
 
     // Commands button inside settings modal (only when admin console is enabled)
     const settingsCommandBtn = document.getElementById('settingsCommandBtn');
     if (settingsCommandBtn && (typeof ADMIN_ENABLED === 'undefined' || ADMIN_ENABLED === 'on')) {
         settingsCommandBtn.addEventListener('click', () => {
-            modal.style.display = 'none';
+            cancelSettings();
             const commandModal = document.getElementById('commandModal');
             if (commandModal) {
                 commandModal.style.display = 'flex';

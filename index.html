@@ -193,12 +193,14 @@
 <!-- Shop modal (hidden by default) -->
 <div id="shopModal" class="modal-overlay">
     <div class="modal-box">
+        <div class="menu-modal-heading">
         <h2 class="modal-title">🛒 Магазин</h2>
-        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
+        <div class="menu-modal-balances" style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span class="currency-total" style="color:#f1c40f" aria-label="Монеты"><span class="currency-icon currency-icon--coin" aria-hidden="true"></span><span class="currency-coin">0</span></span>
             <span class="currency-total" style="color:#64c9ec" aria-label="Жетоны"><span class="currency-icon currency-icon--token" aria-hidden="true"></span><span class="currency-token">0</span></span>
             <span class="currency-total" style="color:#2ecc71" aria-label="Кристаллы"><span class="currency-icon currency-icon--gem" aria-hidden="true"></span><span class="currency-gem">0</span></span>
             <span class="currency-total" style="color:#95a5a6" aria-label="Детали"><span class="currency-icon currency-icon--part" aria-hidden="true"></span><span class="currency-part">0</span></span>
+        </div>
         </div>
         
         <!-- Shop tab buttons -->
@@ -366,11 +368,13 @@
 <!-- Character modal (hidden by default) -->
 <div id="characterModal" class="modal-overlay">
     <div class="modal-box">
+        <div class="menu-modal-heading">
         <h2 class="modal-title">👤 Персонажи</h2>
-        <div style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
+        <div class="menu-modal-balances" style="display:flex; justify-content:center; gap:20px; margin-bottom:15px; font-weight:bold; font-size:18px; background:rgba(0,0,0,0.3); padding:8px; border-radius:8px;">
             <span class="currency-total" style="color:#2ecc71" aria-label="Кристаллы"><span class="currency-icon currency-icon--gem" aria-hidden="true"></span><span class="currency-gem">0</span></span>
             <span class="currency-total" style="color:#95a5a6" aria-label="Детали"><span class="currency-icon currency-icon--part" aria-hidden="true"></span><span class="currency-part">0</span></span>
             </div>
+        </div>
         <!-- Tab bar -->
         <div class="char-tabs">
             <button id="charTabTanks" class="char-tab-btn char-tab-active">🛡️ Танки</button>
@@ -800,6 +804,7 @@
         <div style="text-align:center; margin-top:24px;">
             <button id="settingsCommandBtn" class="btn btn-secondary" style="display:none; min-width:140px; margin-bottom:10px;">💬 Команды</button>
             <button id="settingsClose" class="btn btn-primary" style="min-width:140px;">Сохранить</button>
+            <button id="settingsCancel" class="btn btn-secondary" style="min-width:140px;">Отмена</button>
         </div>
     </div>
 </div>

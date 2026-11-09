@@ -644,6 +644,7 @@ b { color: #ffcc00; }
 }
 
 /* Character modal: tall grid layout */
+.menu-modal-heading { display: contents; }
 #characterModal .modal-box {
     width: min(65rem, 97vw);
     max-width: 97vw;
@@ -2042,6 +2043,45 @@ canvas.tank-display {
         height: 100vh;
         max-height: 100vh;
         border-radius: 0;
+    }
+    #characterModal .menu-modal-heading, #shopModal .menu-modal-heading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        width: 100%;
+        min-height: 2.25rem;
+        padding-right: 3rem;
+        box-sizing: border-box;
+        flex-shrink: 0;
+    }
+    #characterModal .menu-modal-heading .modal-title,
+    #shopModal .menu-modal-heading .modal-title {
+        margin: 0;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+    #characterModal .menu-modal-balances, #shopModal .menu-modal-balances {
+        gap: 0.6rem !important;
+        margin: 0 !important;
+        padding: 0.2rem 0.4rem !important;
+        font-size: 0.8rem !important;
+        overflow-x: auto;
+        justify-content: flex-start !important;
+        min-width: 0;
+    }
+    #characterModal .char-tabs, #shopModal .shop-tabs {
+        gap: 0.35rem;
+        margin: 0.2rem 0 0.35rem;
+        flex-wrap: nowrap;
+        justify-content: safe center;
+        overflow-x: auto;
+        max-width: 100%;
+    }
+    #characterModal .char-tab-btn, #shopModal .shop-tab-btn {
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        padding: 0.3rem 0.7rem;
     }
     .modal-title {
         font-size: 0.94rem;
