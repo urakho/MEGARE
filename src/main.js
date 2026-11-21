@@ -114,7 +114,7 @@ const PROFILE_SAVE_KEYS = [
     'tankClaimedRewards','tankUnlockedTanks','tankUpgrades',
     'tankTrophiesData','tankSelected','achievementData','tankDevUnlocked',
     'tankAvatarUnlocks','tankBackgroundUnlocks','tankPromoUsed','tankSelectedAvatars',
-    'playerTitle','playerTitleUnlocks','pendingFreeContainers','cosmeticShop'
+    'playerTitle','playerTitleUnlocks','pendingFreeContainers','cosmeticShop','tankRoadProgress','secretLeagueVisible','megareAlphaRewardV2'
 ];
 
 const COSMETIC_SHOP_TITLES = {
@@ -532,6 +532,63 @@ const trophyRoadRewards = [
     { trophies: 1650, type: 'coins', amount: 1000, reward: '1000 монет', claimed: false },
     { trophies: 1800, type: 'coins', amount: 3000, reward: '3000 монет', claimed: false }
 ];
+// League boundaries also protect progress when a reward has not been claimed.
+const TROPHY_LEAGUES = [
+    { base: 0, name: 'БЕЗ ЛИГИ', color: '#9eacb5' },
+    { base: 100, name: 'Бронзовая Лига', color: '#cd8a53' },
+    { base: 400, name: 'Серебряная Лига', color: '#c2d0dc' },
+    { base: 900, name: 'Золотая Лига', color: '#efc75e' },
+    { base: 1600, name: 'Сапфировая Лига', color: '#568fed' },
+    { base: 2500, name: 'Алмазная Лига', color: '#72d8e5' },
+    { base: 3500, name: 'Платиновая Лига', color: '#b6e4d6' },
+    { base: 5000, name: 'Титановая Лига', color: '#b7b0df' },
+    { base: 6500, name: 'Лига Легенд', color: '#f38b56' },
+    { base: 8000, name: 'Мифическая Лига', color: '#d787ed' },
+    { base: 10000, name: 'Лига MEGARE', color: '#f4db87' },
+    { base: 50000, name: 'Лига Секрета', color: '#c35b70', secret: true }
+];
+function getTrophyLeague(count) {
+    return TROPHY_LEAGUES.reduce((current, league) => count >= league.base ? league : current, TROPHY_LEAGUES[0]);
+}
+function getVisibleTrophyLeagues() {
+    const discovered = trophies >= 20000 || localStorage.getItem('secretLeagueVisible') === 'true';
+    return TROPHY_LEAGUES.filter(league => !league.secret || discovered);
+}
+
+// Existing reward indices stay stable for older profiles.
+[
+    [2000, 'glitch'], [2250, 'mechParts'],
+    [2500, 'omega'], [2750, 'mythic'],
+    [3000, 'glitch'], [3250, 'omega'],
+    [3500, 'alpha'], [3750, 'mechParts'],
+    [4000, 'mythic'], [4250, 'glitch'],
+    [4500, 'omega'], [4750, 'mythic'],
+    [5000, 'alpha'], [5250, 'mechParts'],
+    [5500, 'omega'], [5750, 'glitch'],
+    [6000, 'mythic'], [6250, 'omega'],
+    [6500, 'alpha'], [6750, 'glitch'],
+    [7000, 'omega'], [7250, 'mechParts'],
+    [7500, 'mythic'], [7750, 'omega'],
+    [8000, 'alpha'], [8250, 'glitch'],
+    [8500, 'omega'], [8750, 'mechParts'],
+    [9000, 'alpha'], [9250, 'mythic'],
+    [9500, 'omega'], [9750, 'glitch'],
+    [10000, 'alpha']
+].forEach(([count, level]) => {
+    const labels = { glitch: 'Глитч-контейнер', mechParts: 'Контейнер деталей', omega: 'Омега-контейнер', mythic: 'Мифический контейнер', alpha: 'Альфа-контейнер' };
+    trophyRoadRewards.push({ trophies: count, type: 'container', level, reward: labels[level] });
+});
+// Additional resource rewards retain stable indices across saved profiles.
+for (let count = 2125; count < 10000; count += 250) {
+    const gemsReward = count % 500 === 125;
+    trophyRoadRewards.push({ trophies: count, type: gemsReward ? 'gems' : 'coins', amount: gemsReward ? 30 : 1000, reward: gemsReward ? '30 гемов' : '1000 монет' });
+}
+// Append cosmetics without shifting any existing claim indices.
+TROPHY_LEAGUES.forEach((league, index) => {
+    if (index) trophyRoadRewards.push({ trophies: league.base, type: 'league', leagueIndex: index, secret: league.secret, reward: 'Уникальные иконка и фон — ' + league.name });
+});
+const megareAlphaReward = trophyRoadRewards.find(reward => reward.trophies === 10000 && reward.level === 'alpha');
+Object.assign(megareAlphaReward, { type: 'containers', amount: 3, reward: '3 альфа-контейнера' });
 // Unlocked tanks list
 let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
 
@@ -573,7 +630,7 @@ const tankGemPrices = {
 
 // Функция для определения минимального уровня трофеев (последняя полученная награда)
 function getMinimumTrophyLevel() {
-    let maxClaimedLevel = 0;
+    let maxClaimedLevel = getTrophyLeague(trophies).base;
     for (const rewardIndex of claimedRewards) {
         const reward = trophyRoadRewards[rewardIndex];
         if (reward && reward.trophies > maxClaimedLevel) {
@@ -611,6 +668,7 @@ function loseIndividualTankTrophies(tType, amount) {
     try {
         const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData')) || {};
         let currentTankTrophies = tankTrophiesData[tType] || 0;
+        if (window.recordTankRoadProgress) window.recordTankRoadProgress(tType, currentTankTrophies);
         let newTankTrophies = Math.max(0, currentTankTrophies - amount);
         
         if (newTankTrophies < currentTankTrophies) {
@@ -656,14 +714,14 @@ function _getUnlockedTitles() {
 
 // Get the atmospheric title name string for a tank type
 function _getAtmosphericTitle(tankType) {
-    const t = window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
+    const t = window.getTankRoadTitle?.(tankType) || window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
     return t ? t.name : null;
 }
 window._getAtmosphericTitle = _getAtmosphericTitle;
 
 // Get the atmospheric title color for a tank type
 function _getAtmosphericTitleColor(tankType) {
-    const t = window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
+    const t = window.getTankRoadTitle?.(tankType) || window.TANK_ATMOSPHERIC_TITLES?.[tankType] || window.COSMETIC_SHOP_TITLES?.[tankType];
     return t ? t.color : '#f1c40f';
 }
 window._getAtmosphericTitleColor = _getAtmosphericTitleColor;
@@ -696,6 +754,7 @@ window._unlockTankTitle = _unlockTankTitle;
 // Restore missing titles for tanks that already reached the threshold.
 function _autoUnlockExistingTitles() {
     try {
+        if (localStorage.getItem('tankRoadProgress') !== null) return;
         const tankTrophiesData = JSON.parse(localStorage.getItem('tankTrophiesData') || '{}');
         const unlocked = _getUnlockedTitles();
         let changed = false;
@@ -720,10 +779,7 @@ function addIndividualTankTrophies(tankType, amount) {
         tankTrophiesData[tankType] = prevTrophies + amount;
         localStorage.setItem('tankTrophiesData', JSON.stringify(tankTrophiesData));
         console.log(`Танку ${tankType} добавлено ${amount} трофеев (всего: ${tankTrophiesData[tankType]})`);
-        // Check if crossed the 8000-trophy title threshold
-        if (prevTrophies < TANK_TITLE_TROPHY_THRESHOLD && tankTrophiesData[tankType] >= TANK_TITLE_TROPHY_THRESHOLD) {
-            _unlockTankTitle(tankType);
-        }
+
     } catch (e) {
         console.error('Error saving tank trophies:', e);
     }
@@ -747,6 +803,7 @@ function loseModeTrophies() {
 
 function saveProgress() {
     if (window._isProfileSwitching) return;
+    if (trophies >= 20000) localStorage.setItem('secretLeagueVisible', 'true');
     localStorage.setItem('tankCoins', coins);
     localStorage.setItem('tankTokens', tokens);
     localStorage.setItem('tankGems', gems);
@@ -5925,9 +5982,10 @@ function updateCoinDisplay() {
     const trophyBarFill = _domCache.trophyBarFill;
     if (trophyBarFill) {
         let prev = 0;
-        let next = trophyRoadRewards.length ? trophyRoadRewards[trophyRoadRewards.length - 1].trophies : 100;
-        for (let i = 0; i < trophyRoadRewards.length; i++) {
-            const tReq = trophyRoadRewards[i].trophies;
+        const visibleRewards = trophyRoadRewards.filter(reward => !reward.secret || trophies >= 20000 || localStorage.getItem('secretLeagueVisible') === 'true');
+        let next = Math.max(100, ...visibleRewards.map(reward => reward.trophies));
+        for (const reward of [...visibleRewards].sort((a, b) => a.trophies - b.trophies)) {
+            const tReq = reward.trophies;
             if (trophies >= tReq) prev = tReq;
             else { next = tReq; break; }
         }
@@ -6119,62 +6177,38 @@ function generateTrophyRoad() {
     
     container.innerHTML = '';
     
-    // Add stage headers
+    const league = getTrophyLeague(trophies);
+    const visibleLeagues = getVisibleTrophyLeagues();
+    const nextLeague = visibleLeagues.find(item => item.base > league.base);
+    const progress = nextLeague ? Math.min(100, (trophies - league.base) / (nextLeague.base - league.base) * 100) : 100;
+    const header = document.createElement('div');
+    header.className = 'trophy-league-summary';
+    header.style.setProperty('--league-color', league.color);
+    header.innerHTML = `<div class="league-emblem">★</div><div class="league-caption">ВАША ЛИГА</div><strong>${league.name}</strong><div>${trophies} / ${nextLeague ? nextLeague.base : Math.max(10000, league.base)} трофеев</div><div class="league-progress"><span style="width:${progress}%"></span></div><small>${nextLeague ? 'Следующая лига: ' + nextLeague.name : 'Высшая лига достигнута'}</small>`;
+    container.appendChild(header);
+    const leagueArt = window.leagueInsignia;
+    if (leagueArt) header.querySelector('.league-emblem').innerHTML = leagueArt(league, TROPHY_LEAGUES.indexOf(league));
+
     let currentStage = '';
-    
-    trophyRoadRewards.forEach((reward, index) => {
-        // Add stage headers for new trophy road (0-1000)
-        if (reward.trophies === 0 && currentStage !== 'stage1') {
-            currentStage = 'stage1';
+    trophyRoadRewards.map((reward, index) => ({ reward, index })).filter(({ reward }) => !reward.secret || visibleLeagues.some(item => item.secret)).sort((a, b) => a.reward.trophies - b.reward.trophies).forEach(({ reward, index }) => {
+        const stage = getTrophyLeague(reward.trophies);
+        if (stage.name !== currentStage) {
+            currentStage = stage.name;
             const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage1';
-            stageDiv.textContent = 'Начальный этап';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 30 && currentStage !== 'stage2') {
-            currentStage = 'stage2';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage2';
-            stageDiv.textContent = 'Ранний этап';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 100 && currentStage !== 'stage3') {
-            currentStage = 'stage3';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage3';
-            stageDiv.textContent = 'Этап развития';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 200 && currentStage !== 'stage4') {
-            currentStage = 'stage4';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage4';
-            stageDiv.textContent = 'Продвинутый этап';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 500 && currentStage !== 'stage5') {
-            currentStage = 'stage5';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage5';
-            stageDiv.textContent = 'Мастерство';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 900 && currentStage !== 'stage6') {
-            currentStage = 'stage6';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage6';
-            stageDiv.textContent = 'Этап истины';
-            container.appendChild(stageDiv);
-        } else if (reward.trophies === 1200 && currentStage !== 'stage7') {
-            currentStage = 'stage7';
-            const stageDiv = document.createElement('div');
-            stageDiv.className = 'trophy-stage stage7';
-            stageDiv.textContent = 'Этап легенд';
+            stageDiv.className = 'trophy-stage trophy-league-stage';
+            stageDiv.style.setProperty('--league-color', stage.color);
+            stageDiv.textContent = stage.name;
+            if (leagueArt) stageDiv.innerHTML = leagueArt(stage, TROPHY_LEAGUES.indexOf(stage)) + '<span>' + stage.name + '</span>';
             container.appendChild(stageDiv);
         }
-        
         const itemDiv = document.createElement('div');
         itemDiv.className = 'trophy-item';
         // attach current stage class so we can style buttons according to stage color
-        if (currentStage) itemDiv.classList.add(currentStage);
+        itemDiv.style.setProperty('--league-color', stage.color);
         
+        const isStart = reward.type === 'start';
         const isClaimed = claimedRewards.includes(index);
-        const isAvailable = trophies >= reward.trophies && !isClaimed;
+        const isAvailable = !isStart && trophies >= reward.trophies && !isClaimed;
         
         if (isClaimed) {
             itemDiv.classList.add('claimed');
@@ -6185,10 +6219,10 @@ function generateTrophyRoad() {
         itemDiv.innerHTML = `
             <div class="trophy-milestone">${reward.trophies} <span class="currency-icon currency-icon--trophy" role="img" aria-label="трофеев"></span></div>
             <div class="trophy-reward">${reward.reward}</div>
-            <button class="trophy-claim" ${!isAvailable || isClaimed ? 'disabled' : ''} 
+            ${isStart ? '' : `<button class="trophy-claim" ${!isAvailable || isClaimed ? 'disabled' : ''}
                 onclick="claimTrophyReward(${index})">
                 ${isClaimed ? 'Получено' : isAvailable ? 'Получить' : 'Заблокировано'}
-            </button>
+            </button>`}
         `;
         
         container.appendChild(itemDiv);
@@ -6198,12 +6232,15 @@ function generateTrophyRoad() {
 // Claim trophy reward
 function claimTrophyReward(index) {
     const reward = trophyRoadRewards[index];
-    if (!reward || claimedRewards.includes(index) || trophies < reward.trophies) return;
+    if (!reward || reward.type === 'start' || claimedRewards.includes(index) || trophies < reward.trophies) return;
     
     claimedRewards.push(index);
     
     // Process reward
     switch (reward.type) {
+        case 'league':
+            if (window.claimLeagueCosmetics) window.claimLeagueCosmetics(reward.leagueIndex);
+            break;
         case 'coins':
             coins += reward.amount;
             showNotification(`+${reward.amount} монет!`, '#f1c40f');
@@ -6224,15 +6261,15 @@ function claimTrophyReward(index) {
                 showFreeContainerFlow('bronze');
             } else if (reward.level === 'super') {
                 showFreeContainerFlow('legendary');
-            } else if (reward.level === 'omega') {
-                showFreeContainerFlow('omega');
+            } else if (['omega', 'glitch', 'mythic', 'alpha', 'mechParts'].includes(reward.level)) {
+                showFreeContainerFlow(reward.level);
             }
             showNotification(`Получен ${reward.reward}!`, '#9b59b6');
             break;
         case 'containers':
             showNotification(`Получено ${reward.amount} контейнеров!`, '#9b59b6');
             {
-                const types = { mini: 'mini', normal: 'bronze', super: 'legendary', omega: 'omega' };
+                const types = { mini: 'mini', normal: 'bronze', super: 'legendary', omega: 'omega', alpha: 'alpha' };
                 if (types[reward.level]) showFreeContainerFlow(types[reward.level], reward.amount);
             }
             break;
@@ -7239,6 +7276,8 @@ for (const [tier, names] of Object.entries(NEW_PROFILE_AVATARS)) {
 
 // Keep saved avatar identifiers stable while displaying the matching artwork.
 function profileAvatarMarkup(av, size) {
+    if (av && av.startsWith('league:') && window.leagueAvatarMarkup) return window.leagueAvatarMarkup(av, size);
+    if (av && av.startsWith('tank-road:') && window.tankRoadAvatarMarkup) return window.tankRoadAvatarMarkup(av, size);
     if (av && av.startsWith('new-icon:')) {
         for (const [tier, names] of Object.entries(NEW_PROFILE_AVATARS)) {
             const index = names.findIndex(name => av === 'new-icon:' + tier + '-' + name);
@@ -7286,6 +7325,8 @@ function profileAvatarMarkup(av, size) {
 
 // Get the tier of a preset avatar ('common' | 'rare' | 'unique' | 'special' | null)
 function _getAvatarTier(av) {
+    if (av && av.startsWith('league:')) return 'special';
+    if (av && av.startsWith('tank-road:')) return 'special';
     if (av && av.startsWith('img:'))              return 'special';
     if (PROFILE_AVATAR_TIERS.common.includes(av)) return 'common';
     if (PROFILE_AVATAR_TIERS.rare.includes(av))   return 'rare';
@@ -7425,7 +7466,8 @@ function _buildProfileBackgroundOptions() {
     options.innerHTML = '';
     const groups = [
         { label: 'Обычные', names: ['default', ...CONTAINER_ORDINARY_BACKGROUNDS] },
-        { label: 'Редкие', names: CONTAINER_RARE_BACKGROUNDS }
+        { label: 'Редкие', names: CONTAINER_RARE_BACKGROUNDS },
+        { label: 'Уникальные', names: globalThis.UNIQUE_LEAGUE_BACKGROUNDS || [] }
     ];
     groups.forEach(group => {
         const available = group.names.filter(name => name === 'default' || (_profileEditIdx !== -1 && profileBackgroundName(name) === name));
@@ -7542,6 +7584,27 @@ function _buildAvatarGrid() {
         grid.appendChild(row);
     });
 
+    const tankRoadIcons = _profileEditIdx !== -1 && typeof _getAvatarUnlocks === 'function' ? _getAvatarUnlocks().filter(av => av.startsWith('tank-road:') || av.startsWith('league:')) : [];
+    if (tankRoadIcons.length) {
+        const heading = document.createElement('div');
+        heading.className = 'tank-road-avatar-heading';
+        heading.textContent = 'Уникальные · лиги и мастерство техники';
+        grid.appendChild(heading);
+        const row = document.createElement('div');
+        row.className = 'tank-road-avatar-grid';
+        tankRoadIcons.forEach(av => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'profile-avatar-opt tank-road-avatar-option';
+            button.dataset.av = av;
+            button.innerHTML = profileAvatarMarkup(av, 40);
+            button.style.outline = av === _profileEditAvatar ? '3px solid #2ecc71' : 'none';
+            button.onclick = () => _updateEditAvatarPreview(av);
+            row.appendChild(button);
+        });
+        grid.appendChild(row);
+    }
+
     // Special (unique) icons — unlocked via achievements or promo codes
     // Only show for existing profiles (not for new ones)
     if (_profileEditIdx !== -1) {
@@ -7578,6 +7641,7 @@ function _buildTitleSelect() {
     section.innerHTML = '';
 
     _autoUnlockExistingTitles();
+    if (window.syncTankRoadProgress) window.syncTankRoadProgress();
     const unlocked = _getUnlockedTitles();
     const current = localStorage.getItem('playerTitle') || 'none';
 
@@ -7633,8 +7697,10 @@ function _buildTitleSelect() {
         const titleName = _getAtmosphericTitle(tt);
         if (!titleName) return;
         const titleColor = _getAtmosphericTitleColor(tt);
-        const tankDisplayName = (window.tankDescriptions && window.tankDescriptions[tt])
-            ? window.tankDescriptions[tt].name : tt;
+        const roadTitle = window.getTankRoadTitle?.(tt);
+        const titleTank = roadTitle ? roadTitle.tank : tt;
+        const tankDisplayName = (window.tankDescriptions && window.tankDescriptions[titleTank])
+            ? window.tankDescriptions[titleTank].name : (window.mechDescriptions?.[titleTank]?.name || titleTank);
         const isSelected = (current === tt);
         const opt = document.createElement('div');
         opt.dataset.titleId = tt;

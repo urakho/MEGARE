@@ -4160,7 +4160,8 @@ function drawPreview() {
     const now = performance.now();
     const previewKey = [tankType, tank.color, tank.turretAngle,
         previewCanvas.width, previewCanvas.height].join(':');
-    if (previewKey === lastPreviewDrawKey && now - lastPreviewDrawAt < 1000 / 30) return;
+    if (previewKey === lastPreviewDrawKey &&
+        (tankType === 'normal' || now - lastPreviewDrawAt < 1000 / 30)) return;
     lastPreviewDrawAt = now;
     lastPreviewDrawKey = previewKey;
     previewCtx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
@@ -4854,6 +4855,7 @@ function drawCharacterPreviews() {
     };
 
     const renderAnimatedCharacterPreviews = () => {
+        if (document.getElementById('rankModal')) return;
         const tanksGrid = document.getElementById('charGridTanks');
         const mechsGrid = document.getElementById('charGridMechs');
         if (!tanksGrid || getComputedStyle(tanksGrid).display !== 'none') {
@@ -10732,52 +10734,14 @@ function showTankDetail(tankType) {
         }
     }
 
-    // Rank badge based on per-tank trophies
+    // The vehicle road tracks its own trophy record and earned rewards.
     if (rankEl) {
-        const tt = (typeof getTankTrophies === 'function') ? getTankTrophies(tankType) : 0;
-        const info = getRankInfo(tt, tankType);
-        const filled = info.isAtmospheric ? '👑👑👑' : '★'.repeat(info.stars);
-        const empty  = (info.perStar > 0 && !info.isAtmospheric) ? '☆'.repeat(3 - info.stars) : '';
-        // Progress to next star or next rank
-        let progressText = '';
-        if (info.isAtmospheric) {
-            progressText = `${tt} 🏆 (макс.)`;
-        } else if (info.name === 'Маршал') {
-            // Show progress to 8000 title threshold
-            const TITLE_THRESHOLD = 8000;
-            const td = window.TANK_ATMOSPHERIC_TITLES && window.TANK_ATMOSPHERIC_TITLES[tankType];
-            const titleName = td ? td.name : null;
-            if (tt >= TITLE_THRESHOLD) {
-                progressText = titleName ? `👑 «${titleName}»` : `${tt} 🏆 (макс.)`;
-            } else {
-                progressText = `${tt}/${TITLE_THRESHOLD} 🏆`;
-            }
-        } else if (info.perStar > 0 && info.stars < 3) {
-            const next = info.base + (info.stars + 1) * info.perStar;
-            progressText = `${tt}/${next} 🏆`;
-        } else if (info.perStar === 0) {
-            progressText = `${tt} 🏆`;
-        } else {
-            // 3 stars reached, show progress to next rank if exists
-            const idx = TANK_RANKS.findIndex(r => r.name === info.name);
-            const nextRank = TANK_RANKS[idx + 1];
-            if (nextRank) progressText = `${tt}/${nextRank.base} 🏆`;
-            else progressText = `${tt} 🏆`;
-        }
-        rankEl.style.borderColor = info.color;
+        const count = typeof getTankTrophies === 'function' ? getTankTrophies(tankType) : 0;
+        const next = [1000, 2500, 5000, 10000].find(value => value > count);
         rankEl.style.cursor = 'pointer';
-        rankEl.title = 'Нажми, чтобы увидеть подробности звания';
-        rankEl.innerHTML = `
-            <div style="font-size:13px; font-weight:bold; color:${info.color}; line-height:1; display:flex; align-items:center; gap:4px;">
-                <span>${info.icon}</span><span>${info.name}</span>
-            </div>
-            <div style="font-size:14px; color:#f1c40f; letter-spacing:2px; line-height:1;">${filled}<span style="color:#555;">${empty}</span></div>
-            <div style="font-size:10px; color:#bbb; line-height:1;">${progressText}</div>
-        `;
-        // Open rank detail modal on click
-        rankEl.onclick = () => {
-            if (typeof showRankModal === 'function') showRankModal(tankType);
-        };
+        rankEl.title = 'Открыть дорогу мастерства';
+        rankEl.innerHTML = `<div style="font-weight:bold;color:#f1c40f;">Дорога мастерства</div><div style="font-size:12px;color:#ddd;">${count} / ${next || 10000} 🏆</div>`;
+        rankEl.onclick = () => { if (typeof showRankModal === 'function') showRankModal(tankType); };
         if (useCompactCard) rankEl.style.display = 'none';
     }
 
@@ -11033,6 +10997,10 @@ function showTankDetail(tankType) {
                 window.tankDetailAnimId = null;
                 return;
             }
+            if (document.getElementById('rankModal')) {
+                window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+                return;
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const t = Date.now() * 0.00012;
             const pixel = Math.max(20, Math.floor(Math.min(canvas.width, canvas.height) / 12));
@@ -11067,6 +11035,10 @@ function showTankDetail(tankType) {
                 window.tankDetailAnimId = null;
                 return;
             }
+            if (document.getElementById('rankModal')) {
+                window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+                return;
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Red gradient background
@@ -11093,6 +11065,10 @@ function showTankDetail(tankType) {
                 window.tankDetailAnimId = null;
                 return;
             }
+            if (document.getElementById('rankModal')) {
+                window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+                return;
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -11116,6 +11092,10 @@ function showTankDetail(tankType) {
                 window.tankDetailAnimId = null;
                 return;
             }
+            if (document.getElementById('rankModal')) {
+                window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+                return;
+            }
 
             const bg = tankBgGradients.burovoy;
             const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -11137,6 +11117,10 @@ function showTankDetail(tankType) {
         const drawFrame = () => {
             if (modal.style.display === 'none') {
                 window.tankDetailAnimId = null;
+                return;
+            }
+            if (document.getElementById('rankModal')) {
+                window.tankDetailAnimId = requestAnimationFrame(drawFrame);
                 return;
             }
 

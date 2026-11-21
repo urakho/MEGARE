@@ -13,15 +13,19 @@ GitHub Pages serves the static game at [urakho.github.io/MEGARE](https://urakho.
 3. `src/mode-map.js`
 4. `src/admin.js`
 5. `src/container-art.js`
-6. `src/main.js`
-7. `src/mechs.js`
-8. `src/rank.js`
-9. `src/tanks.js`
-10. `src/physics.js`
-11. `src/bot.js`
-12. `src/news.js`
-13. `src/win-lose.js`
-14. `src/mapeditor.js`
+6. `src/progression-art.js`
+7. `src/main.js`
+8. `src/cosmetic-shop.js`
+9. `src/mechs.js`
+10. `src/rank.js`
+11. `src/tanks.js`
+12. `src/tank-road.js`
+13. `src/league-rewards.js`
+14. `src/physics.js`
+15. `src/bot.js`
+16. `src/news.js`
+17. `src/win-lose.js`
+18. `src/mapeditor.js`
 
 Inline scripts then manage animated menu particles and the random favicon/info icon. `src/ui-icons.js` loads last. These are classic scripts, without `type="module"`, imports, or a bundler. Order matters: some earlier scripts declare functions that use state or functions defined by later scripts when eventually called.
 
@@ -74,7 +78,9 @@ The arrows show main control paths; the scripts also read and mutate shared stat
 | [src/mechs.js](../src/mechs.js) | Mech renderers, projectiles, previews, detail presentation, energy and shield visuals. Mech simulation also lives in other scripts. |
 | [src/win-lose.js](../src/win-lose.js) | `determineOutcomeType`, `syncResultOverlay`, result messages, bonus rewards, achievement callbacks, restart/menu/editor buttons. Result presentation can mutate progress. |
 | [src/mapeditor.js](../src/mapeditor.js) | Editor-local state in an IIFE, map validation, group selection, bot/trigger editing, save/load, `.meg` import/export; exposes `window.openMapEditor` and launches through `window.startCustomMapMode`. |
-| [src/rank.js](../src/rank.js) | `getRankInfo`, rank presentation and rank modal. |
+| [src/rank.js](../src/rank.js) | Legacy `getRankInfo` and rank presentation helpers. The vehicle detail entry opens the mastery road supplied by `tank-road.js`. |
+| [src/tank-road.js](../src/tank-road.js), [src/progression-art.js](../src/progression-art.js) | Per-profile vehicle best scores, reward claims, milestone titles, mastery road/reveal UI, and shared ImageGen atlas markup. Progression avatar markup is available before `main.js` renders the saved profile header. `tankRoadProgress` belongs to `PROFILE_SAVE_KEYS`; original title IDs and global reward indices remain valid. |
+| [src/league-rewards.js](../src/league-rewards.js) | League-only avatar/background catalogue, unique background patterns, and one-time compensation for the expanded MEGARE alpha reward. Uses existing avatar/background unlock keys and the road's sequential reward presentation. `secretLeagueVisible` and `megareAlphaRewardV2` are profile snapshot keys. |
 | [src/pause-menu.js](../src/pause-menu.js) | Pause UI and `window.isPaused`, restart/menu actions, optional maintenance overlay. |
 | [src/admin.js](../src/admin.js) | Local developer console and commands controlled by `ADMIN_ENABLED`; directly changes game/progress state. It is not server-side administration. |
 | [src/container-art.js](../src/container-art.js) | `window.ContainerArt` for container shop and opening artwork; reward generation remains in `main.js`. |
@@ -89,11 +95,11 @@ Navigation uses a grid plus collision checks, not an external physics engine. Gr
 
 Existing optimizations preserve this architecture:
 
-- World rendering skips off-screen objects and reuses an unchanged menu backdrop. Terrain textures and effect sprites are cached rather than regenerated for every draw.
+- World rendering skips off-screen objects and reuses an unchanged menu backdrop. The standard tank's menu preview is redrawn when its appearance or canvas size changes; other tank previews retain their animation updates. Terrain textures and effect sprites are cached rather than regenerated for every draw.
 - Vehicle damage presentation advances in `updateTankDamageEffects` and the shared object cleanup in `physics.js`. Fire follows `GameTerrain.getMotion`'s smoothed hull angle. Oil accumulation in rain/swamp puddles belongs to `GameTerrain.addOilToWater`; it keeps per-world-puddle volume separate from cached repeating ground textures and clears it in `resetBattle`.
 - Tank death blasts use shared cached turbulent fire, ember, smoke, and dust sprites in `tanks.js`; world blast lifetimes advance only in physics. The same renderer supplies the immersion death blast, using its separate presentation clock.
 - Optional screen immersion is drawn by `drawImmersionEffects` in `tanks.js` through the existing battlefield loop. Its session-bound presentation state advances rain beads, merging, weather fades, and screen-fire smoke from simulation frame deltas. Status immersion reads ice/slow, pyro burn, drill contact, and actual poison-cloud overlap. Enemy Illuminat ultimate contact, damaging electric/flamethrower/waterjet hits, and direct hostile Kamikaze dash contact record simulation-frame stamps on the player. Damaging musical/air hits and Buratino blast paths also record presentation stamps; Air stores its incoming angle. `resetTankBattleEffects` and war respawn clear them. Ice suppresses all immersion thermal layers and removes lingering smoke. Granular frost masks, crystal veins and connected drill-fracture artwork are cached for the current viewport. Drill contact transitions choose a presentation seed; the renderer retains only the current full-screen crack variant, without rerolling geometry while drawing. Pyro uses three cached turbulent plume textures animated in edge-local coordinates toward the viewport interior, with roots outside the view; its bounded smoke particles retain buoyancy. The Illuminat silhouette reuses vehicle artwork in a cached sprite, with presentation-only eased motion and afterimages. Frost/mud textures are cached for the current viewport; rain, smoke, swarm flies, and waterjet droplets are bounded and reset between battles. Fly flight/crawling transitions advance with the presentation state; eight small wing/leg frames are reused. Waterjet spray has a continuous simulation-time phase and stable seed during sustained contact. A local refracted impact feeds short-lived water webs and 130 analytic ballistic spray droplets using one cached 32-by-64 Canvas sprite. It does not load an external splash image or retain a full-screen film mask. Poison immersion checks cloud ownerTeam, matching combat ownership, with 6% mist for friendly clouds and full intensity for hostile clouds. Only the latest hit's seeded lightning geometry is retained, and drawing reveals and pulses its branches without rerolling them. `drawImmersionCombatEffects` uses one reusable Canvas snapshot for Kamikaze/Buratino screen recoil, musical vibration/wavefront refraction, Kvant edge/scan-band displacement and clipped water-droplet refraction, and Canvas difference compositing for partial color inversion. `drawImmersionMusic` draws pressure arcs, echoes and the lower-edge spectrum; `drawImmersionMusicDistortion` clips refraction from the existing scene snapshot to the two newest wavefronts. Musical hit pulses are capped at four; Buratino stamp coalescing and a separate grouped recoil clock prevent frequent blasts from sustaining strong shake. `drawImmersionImpactReactions` draws the musical layer, peripheral barrage dust/debris and directional Air gust with existing cached dust art. It reads overload and live hostile swarm overlap without mutating combat state. `win-lose.js` owns a separate death presentation clock because combat has already stopped, deferring the defeat window until its one-second blast completes. No delayed callbacks or additional animation loop are used. `settingImmersion` is off unless explicitly saved as `true`.
-- Character cards use visibility tracking and a shared preview animation loop; closing the character menu calls `stopCharacterPreviewAnimations`. The mech card preview functions draw a single frame rather than starting separate perpetual loops. Detail/reward previews have separate lifecycles and must also stop when dismissed or replaced.
+- Character cards use visibility tracking and a shared preview animation loop; closing the character menu calls `stopCharacterPreviewAnimations`. The mech card preview functions draw a single frame rather than starting separate perpetual loops. Character and detail previews skip drawing while the vehicle mastery road covers them, then resume when it closes. Detail/reward previews have separate lifecycles and must also stop when dismissed or replaced.
 - Inline menu particles stop scheduling frames when the menu or page is hidden. `ContainerArt` animates visible shop cards or the active opening flow and stops scheduling when neither is visible or the page is hidden. These presentation loops are separate from the one battlefield loop.
 
 Container shop/opening artwork is drawn through Canvas in `container-art.js`, rather than loaded from container PNGs. Currency artwork uses local SVG files referenced from CSS; `ui-icons.js` replaces currency symbols beside amounts. Preset and special profile avatars use PNG sprite sheets in `pictures/png/icons-png/profile icons/` that also work when the game is opened as a local file. Additional avatars use separate sheets by rarity so existing saved avatar identifiers and sprite positions remain unchanged. Animated profile avatars use local illustration sheets, inline SVG effects where applicable, and CSS animations, with reduced-motion support. Ordinary profile backgrounds use CSS artwork; rare backgrounds use local PNG illustrations in `pictures/png/rare-backgrounds/`, with CSS weather and light overlays. Existing background identifiers remain unchanged. Saved avatar identifiers remain unchanged; unknown legacy image avatars retain their original image path. Other interface symbols remain emoji.
@@ -115,7 +121,7 @@ The main settings dialog saves changes only when confirmed. Music volume is prev
 ## Limitations and future direction
 
 - Shared state and cross-script calls couple simulation, rendering, UI, storage and audio; filenames do not define strict subsystem boundaries.
-- Battle resets, type-specific behavior and reward paths are distributed. In particular, results UI awards bonuses in addition to base combat rewards.
+- Trophy-road reward indices are persisted in profiles, so existing entries must retain their order when adding rewards. The global loss floor is the higher of the current league threshold and highest claimed milestone. Battle resets, type-specific behavior and reward paths are distributed. In particular, results UI awards bonuses in addition to base combat rewards.
 - Browser globals, timers and storage prevent running the full game as an independent Node.js simulation. Existing tests isolate functions or source fragments with mocks.
 - Runtime branches for `war` remain, but the current `startGame` dispatcher and mode menu do not provide a dedicated War launch path. Do not treat every branch as a supported mode.
 - Some explanatory UI text is stale: the boss description says two phases, while `updateBossFight` implements three. Verify behavior in code and tests.

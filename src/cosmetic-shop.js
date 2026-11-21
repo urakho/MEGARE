@@ -45,7 +45,7 @@
         'new-icon:animated-golem': 'Лавовый голем', 'new-icon:animated-serpent': 'Киберзмей', 'new-icon:animated-eye': 'Космическое око'
     });
     const dayMs = 86400000, resetOffset = 8 * 3600000, offerCount = 8;
-    let ticker = null, badgeTicker = null, revealTimer = null, visible = false, state = null, shown = 0, selected = -1;
+    let ticker = null, badgeTicker = null, revealTimer = null, visible = false, state = null, shown = 0, selected = -1, renderedOwnership = '';
 
     function periodAt(now) { return Math.floor((now - resetOffset) / dayMs); }
     function remainingAt(now) { return Math.max(0, (periodAt(now) + 1) * dayMs + resetOffset - now); }
@@ -141,6 +141,9 @@
         if (offer.type.endsWith('Background')) return _getBackgroundUnlocks().includes(offer.id);
         return _getUnlockedTitles().includes(offer.id);
     }
+    function ownershipKey() {
+        return state.offers.map(offer => offer && (offer.purchased || owned(offer)) ? '1' : '0').join('');
+    }
     function nameOf(offer) {
         if (offer.type === 'title') return COSMETIC_SHOP_TITLES[offer.id].name;
         if (offer.type.endsWith('Background')) return 'Фон ' + (PROFILE_BACKGROUNDS[offer.id] || offer.id);
@@ -198,8 +201,9 @@
         const grid = document.getElementById('cosmeticShopOffers');
         if (!grid || !state) return;
         grid.innerHTML = '';
+        renderedOwnership = ownershipKey();
         state.offers.forEach((offer, index) => {
-            if (offer && offer.purchased) return;
+            if (offer && (offer.purchased || owned(offer))) return;
             const card = document.createElement('div');
             card.className = 'cosmetic-offer';
             if (index >= shown) {
@@ -237,7 +241,7 @@
     }
     function openItem(index) {
         const offer = state && state.offers[index];
-        if (!offer || offer.purchased || index >= shown) return;
+        if (!offer || offer.purchased || owned(offer) || index >= shown) return;
         selected = index;
         const modal = document.getElementById('cosmeticItemModal');
         const box = document.getElementById('cosmeticItemBox');
@@ -300,6 +304,7 @@
         if (!visible) return;
         const now = Date.now();
         if (!state || state.period !== periodAt(now)) { closeItem(); getState(now); begin(); }
+        if (ownershipKey() !== renderedOwnership) { closeItem(); render(); updateBadge(); }
         const timer = document.getElementById('cosmeticShopTimer');
         if (timer) timer.textContent = 'Новые предложения через ' + formatRemaining(remainingAt(now));
     }

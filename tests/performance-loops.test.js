@@ -38,6 +38,27 @@ test('mech previews draw one frame and the shared stop cancels existing preview 
     assert.deepEqual(cancelled, [4, 1, 2, 3]);
 });
 
+test('mech detail stops drawing behind the mastery road and resumes afterward', () => {
+    let roadOpen = false, draws = 0, nextFrame;
+    const gradient = { addColorStop() {} };
+    const canvas = { width: 100, height: 100 };
+    const paint = { clearRect() {}, fillRect() {}, createLinearGradient: () => gradient };
+    const ctx = vm.createContext({
+        window: {}, document: { getElementById: id => id === 'rankModal' && roadOpen ? {} : null },
+        requestAnimationFrame: fn => { nextFrame = fn; return 1; }, cancelAnimationFrame() {},
+        drawTankOn: () => { draws++; }
+    });
+    vm.runInContext(section(mechs, 'function showMechDiyModal(', '// Make globally accessible'), ctx);
+    ctx.showMechDiyModal(paint, canvas, { style: {} });
+    assert.equal(draws, 1);
+    roadOpen = true;
+    for (let i = 0; i < 60; i++) nextFrame();
+    assert.equal(draws, 1);
+    roadOpen = false;
+    nextFrame();
+    assert.equal(draws, 2);
+});
+
 test('one loop renders and catches up after a slow frame, without simulating paused time', () => {
     let updates = 0, renders = 0, hudUpdates = 0, paused = false, now = 0;
     const frames = [], listeners = {};
@@ -85,6 +106,26 @@ test('cached menu rendering does not schedule a second world loop', () => {
     ctx.renderGameFrame();
     assert.equal(previews, 1);
     assert.equal(frames, 0);
+});
+
+test('unchanged standard tank preview is drawn once, while animated previews keep updating', () => {
+    let now = 0, draws = 0;
+    const ctx = vm.createContext({
+        gameState: 'menu', tankType: 'normal', tank: { color: 'green', turretAngle: 0 },
+        previewCanvas: { width: 200, height: 200 }, previewCtx: { clearRect() {} },
+        performance: { now: () => now }, drawTankOn: () => { draws++; }
+    });
+    vm.runInContext(section(tanks, 'let lastPreviewDrawAt =', 'function stopCharacterPreviewAnimations()'), ctx);
+    for (let i = 0; i < 60; i++) { now = i * 1000 / 60; ctx.drawPreview(); }
+    assert.equal(draws, 1);
+    ctx.previewCanvas.width = 220;
+    ctx.drawPreview();
+    assert.equal(draws, 2);
+    ctx.tankType = 'time';
+    ctx.drawPreview();
+    now += 40;
+    ctx.drawPreview();
+    assert.equal(draws, 4);
 });
 
 test('drawing starts and renders again when window is the global object', () => {

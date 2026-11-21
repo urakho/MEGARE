@@ -108,6 +108,34 @@ test('insufficient balance, external unlocks and exhausted collections are safe'
     assert.deepEqual(Array.from(all.shop.getState().offers), Array(8).fill(null));
 });
 
+test('owned icons and backgrounds disappear from saved offers without rerolling other items', () => {
+    const period = Math.floor((Date.UTC(2026, 0, 1, 9) - 8 * 3600000) / 86400000);
+    const offers = [
+        { type: 'rareIcon', id: 'r0', price: 250, basePrice: 500, discount: 50 },
+        { type: 'commonBackground', id: 'b0', price: 400, discount: 0 },
+        { type: 'epicIcon', id: 'e0', price: 1200, discount: 0 },
+        { type: 'rareBackground', id: 'rb0', price: 1500, discount: 0 },
+        { type: 'animatedIcon', id: 'a0', price: 2500, discount: 0 },
+        { type: 'title', id: 't0', price: 2000, discount: 0 }, null, null
+    ];
+    const env = setup({ cosmeticShop: JSON.stringify({ period, offers, revealed: true, pricingVersion: 2 }),
+        tankAvatarUnlocks: '["r0","e0"]', tankBackgroundUnlocks: '["b0"]' });
+    env.shop.open();
+    assert.equal(env.nodes.cosmeticShopOffers.children.length, 5);
+    assert.ok(env.nodes.cosmeticShopOffers.children.every(card => !/Получено/.test(card.innerHTML)));
+    assert.equal(env.shop.purchase(0), 'owned');
+    assert.equal(env.shop.purchase(1), 'owned');
+    env.data.set('tankBackgroundUnlocks', '["b0","rb0"]');
+    [...env.intervals.values()][0]();
+    assert.equal(env.nodes.cosmeticShopOffers.children.length, 4);
+    assert.deepEqual(JSON.parse(env.data.get('cosmeticShop')).offers, offers);
+    env.shop.close();
+    env.shop.open();
+    assert.equal(env.nodes.cosmeticShopOffers.children.length, 4);
+    assert.deepEqual(JSON.parse(env.data.get('cosmeticShop')).offers, offers);
+    env.shop.close();
+});
+
 test('a purchase at the reset cannot buy a replacement offer', () => {
     const env = setup({ tankCoins: '1500' }, Date.UTC(2026, 0, 1, 7, 59, 59));
     env.shop.open();

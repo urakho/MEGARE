@@ -3213,3 +3213,87 @@ canvas.tank-display {
 #profileEditModal .profile-edit-panel > * { flex-shrink: 0; }
 #profileEditModal #profileAvatarGrid { flex: none; min-height: 120px; max-height: 200px; }
 #profileEditModal .profile-actions .btn { width: auto; margin: 0; }
+
+/* Trophy roads share the game's modal panels, typography and buttons. */
+#trophyRoadModal .modal-box { width:min(800px,95vw); align-items:stretch; overflow-x:hidden; }
+#trophyRoadContainer { box-sizing:border-box; min-width:0; }
+.trophy-league-summary { text-align:center; padding:18px; margin-bottom:20px; border:2px solid #f39c12; border-radius:10px; background:rgba(0,0,0,.25); }
+.trophy-league-summary strong { display:block; color:var(--league-color); font-size:28px; margin:5px 0 12px; }
+.league-caption { color:#f39c12; font-weight:bold; }
+.trophy-league-summary small { color:#d1d6da; }
+.league-emblem { width:120px; height:120px; margin:0 auto 10px; }
+.league-progress,.tank-road-progress { height:12px; border:1px solid #b17b28; border-radius:5px; overflow:hidden; background:#0008; margin:14px auto; }
+.league-progress span,.tank-road-progress span { display:block; height:100%; background:linear-gradient(#ffd577,#e88b14); }
+.trophy-league-stage { display:flex; align-items:center; gap:12px; margin-top:24px; color:#f39c12; font-size:20px; }
+.trophy-league-stage::before { display:none; }
+.trophy-league-stage .progression-sprite { width:62px !important; height:62px !important; flex:none; }
+#trophyRoadModal .trophy-item { box-sizing:border-box; gap:12px; background:rgba(0,0,0,.25); border:2px solid #58636d; box-shadow:0 4px 0 #0005; border-radius:8px; padding:14px; }
+#trophyRoadModal .trophy-item.available { border-color:#f39c12; }
+#trophyRoadModal .trophy-item.claimed { opacity:.6; }
+#trophyRoadModal .trophy-reward { flex:1; min-width:0; text-align:left; }
+#trophyRoadModal .trophy-claim { flex:none; font:700 13px 'Courier New',monospace; }
+.tank-road-overlay { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:12px; background:rgba(0,0,0,.85); }
+.tank-road-box.modal-box { width:min(820px,95vw); max-height:90dvh; padding:22px; align-items:stretch; overflow:hidden; }
+.tank-road-header { flex:none; position:relative; padding:8px 28px 16px; border-bottom:2px solid #f39c12; text-align:center; }
+.tank-road-header h2 { margin:8px 0; font-size:25px; }
+.tank-road-header p { font-size:13px; color:#d6d6d6; }
+.tank-road-kicker { font-size:13px; color:#f39c12; font-weight:bold; }
+.tank-road-close { position:absolute; top:-8px; right:-10px; width:34px; height:34px; background:#0008; border:2px solid #f39c12; color:#fff; border-radius:6px; font-size:20px; cursor:pointer; }
+.tank-road-list { min-height:0; overflow-y:auto; padding:18px 4px 8px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.tank-road-row { display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:10px; padding:16px 12px; border:2px solid #59616a; border-radius:8px; background:rgba(0,0,0,.25); text-align:center; }
+.tank-road-row.is-open { border-color:#e79b2c; }
+.tank-road-row.is-major { background:linear-gradient(135deg,rgba(243,156,18,.18),rgba(0,0,0,.3)); border-color:#f39c12; }
+.tank-road-row.is-claimed { opacity:.65; }
+.tank-road-reward-icon { width:90px; height:90px; display:grid; place-items:center; }
+.tank-road-reward-icon .currency-icon { width:58px; height:58px; }
+.tank-road-reward-text { display:flex; flex-direction:column; gap:7px; }
+.tank-road-reward-text strong { color:#f39c12; font-size:17px; }
+.tank-road-reward-text small { color:#ffe0a1; line-height:1.4; }
+.tank-road-row .btn { font-size:13px; padding:10px 16px; margin:4px 0; }
+.tank-road-row button:disabled { background:#46515b; color:#bfc6cb; box-shadow:0 4px 0 #26313a; border-color:#6b737a; cursor:default; transform:none; filter:none; }
+.progression-sprite { display:block; background-repeat:no-repeat; background-size:600% 500%; }
+#activeProfileName > .progression-sprite { flex:none; }
+.vehicle-insignia { display:inline-block; vertical-align:middle; box-sizing:border-box; }
+.vehicle-insignia.mastery-5000, .vehicle-insignia.mastery-10000 { border:0; background-color:transparent; }
+.tank-road-avatar-heading { width:100%; color:#f39c12; font-size:12px; }
+.tank-road-avatar-grid { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; width:100%; }
+.tank-road-avatar-option { display:flex; align-items:center; justify-content:center; box-sizing:border-box; width:44px; height:44px; padding:0; border:1px solid #f39c12; background:#0005; border-radius:6px; cursor:pointer; }
+.mastery-reveal { position:fixed; inset:0; z-index:11000; display:grid; place-items:center; background:#000e; padding:16px; }
+.mastery-reveal-card.modal-box { width:min(480px,95vw); overflow:hidden; }
+.mastery-reveal-art { position:relative; animation:mastery-arrive .7s cubic-bezier(.2,.8,.2,1) both; }
+.mastery-reveal-rays { display:none; }
+.mastery-reveal p { color:#f39c12; font-weight:bold; }
+.mastery-reveal h2 { font-size:24px; color:#f39c12; }
+.mastery-reveal button { position:relative; margin-top:22px; }
+@keyframes mastery-arrive { from { opacity:0; transform:translateY(30px) scale(.45); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media(prefers-reduced-motion:reduce) { .mastery-reveal-art { animation:none; } }
+@media(max-width:480px) { .tank-road-box.modal-box { padding:12px; } .tank-road-list { gap:10px; } .tank-road-header { padding:8px 20px; } .tank-road-row { padding:12px 6px; } .tank-road-row .btn { font-size:11px; } #trophyRoadModal .trophy-item { flex-wrap:wrap; } }
+/* Unique backgrounds are league-only heraldic patterns, separate from rare art backgrounds. */
+:is(.profile-card,.profile-preview,.profile-background-option)[class*="profile-bg--league-"] { position:relative; isolation:isolate; overflow:hidden; background:repeating-linear-gradient(var(--unique-league-angle),transparent 0 var(--unique-league-spacing),#ffffff0a var(--unique-league-spacing) calc(var(--unique-league-spacing) + 2px)),radial-gradient(ellipse at 90% 50%,color-mix(in srgb,var(--unique-league-color) 32%,#101720),#101720 75%); border-color:var(--unique-league-color); }
+:is(.profile-card,.profile-preview,.profile-background-option)[class*="profile-bg--league-"]::after { content:''; position:absolute; right:4px; top:50%; transform:translateY(-50%); width:90px; height:90px; z-index:-1; background-image:url('pictures/png/progression/leagues-v3.png'); background-size:400% 300%; background-repeat:no-repeat; opacity:.32; pointer-events:none; }
+.profile-background-option[class*="profile-bg--league-"]::after { width:40px; height:40px; opacity:.65; }
+.profile-background-option.unique-league-reveal { width:250px; height:145px; cursor:default; }
+.profile-background-option.unique-league-reveal::after { width:105px; height:105px; }
+
+/* Keep long reward roads cheap to paint when cards are offscreen. */
+.tank-road-row, .trophy-item { content-visibility:auto; contain-intrinsic-size:auto 220px; }
+.mastery-reveal-card.modal-box { position:relative; width:min(530px,95vw); padding:0 0 30px; border:4px solid #f39c12; border-radius:12px; background:linear-gradient(165deg,#25394a,#101923 62%,#1d2933); box-shadow:0 20px 55px #000, inset 0 1px #ffffff32; }
+.mastery-reveal-topline { align-self:stretch; display:flex; justify-content:space-between; gap:12px; padding:12px 20px; border-bottom:2px solid #ae6e17; background:linear-gradient(#684817,#352717); color:#ffe1a1; font:bold 12px 'Courier New',monospace; letter-spacing:.05em; }
+.mastery-reveal-caption { margin:24px 12px 12px; color:#f39c12; font-weight:bold; letter-spacing:.12em; }
+.mastery-reveal-display { position:relative; width:220px; height:220px; display:grid; place-items:center; border:2px solid #a16d2b; border-radius:12px; background:radial-gradient(circle,#71502366,#1a2835 66%); box-shadow:inset 0 0 25px #0009,0 4px 0 #0005; }
+.mastery-reveal-display::before,.mastery-reveal-display::after { content:''; position:absolute; width:7px; height:7px; border-radius:50%; background:#e8b357; box-shadow:0 0 0 2px #513817; top:9px; }
+.mastery-reveal-display::before { left:9px; } .mastery-reveal-display::after { right:9px; }
+.mastery-reveal-art { display:grid; place-items:center; }
+.mastery-reveal-card h2 { margin:20px 18px 12px; color:#fff0c9; text-shadow:2px 2px #000; }
+.mastery-reveal-divider { height:2px; width:70%; background:linear-gradient(90deg,transparent,#d49131,transparent); }
+.mastery-reveal-hint { color:#a8b1b5 !important; font:11px 'Courier New',monospace !important; letter-spacing:.08em; margin:12px; }
+.mastery-reveal-card .btn { min-width:210px; }
+/* League profile backgrounds have their own artwork, independent of league badges. */
+:is(.profile-card,.profile-preview,.profile-background-option)[class*="profile-bg--league-"]::after { inset:0; width:auto; height:auto; top:0; right:0; transform:none; background-image:url('pictures/png/progression/league-backgrounds.png'); background-size:400% 300%; background-repeat:no-repeat; opacity:.8; }
+.profile-background-option[class*="profile-bg--league-"]::after,.profile-background-option.unique-league-reveal::after { width:auto; height:auto; }
+
+/* Profile background rewards use a landscape frame matching profile cards. */
+.mastery-reveal-display--background { width:min(340px,85%); height:auto; aspect-ratio:16 / 9; padding:8px; box-sizing:border-box; }
+.mastery-reveal-display--background .mastery-reveal-art { width:100%; height:100%; }
+.mastery-reveal-display--background .profile-background-option.unique-league-reveal { width:100%; height:100%; box-sizing:border-box; border:1px solid #d6a04e; border-radius:6px; }
+:is(.profile-card,.profile-preview,.profile-background-option)[class*="profile-bg--league-"]::after { background-size:400% auto; }

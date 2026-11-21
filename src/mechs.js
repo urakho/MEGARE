@@ -423,6 +423,10 @@ function showMechDiyModal(ctx, canvas, modal) {
             window.tankDetailAnimId = null;
             return;
         }
+        if (document.getElementById('rankModal')) {
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+            return;
+        }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         // Green rarity background
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -803,6 +807,10 @@ function showMechShieldModal(ctx, canvas, modal) {
             window.tankDetailAnimId = null;
             return;
         }
+        if (document.getElementById('rankModal')) {
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
+            return;
+        }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         // Rare rarity background
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -1061,6 +1069,10 @@ function showMechRocketModal(ctx, canvas, modal) {
     const drawFrame = () => {
         if (modal.style.display === 'none') {
             window.tankDetailAnimId = null;
+            return;
+        }
+        if (document.getElementById('rankModal')) {
+            window.tankDetailAnimId = requestAnimationFrame(drawFrame);
             return;
         }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
