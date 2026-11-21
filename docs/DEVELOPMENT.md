@@ -92,6 +92,7 @@ Preserve the existing resource-change guard, navigation budget/indexing, cached 
 
 ## Working conventions and assets
 
+- CodeGraph is an optional global code-navigation tool for agents. Install `@colbymchenry/codegraph` globally, configure its `serve --mcp` command in Codex, and run `codegraph init --yes --local-only` in the repository to build a local, untracked index. Use `codegraph status` to inspect it; restart Codex after changing its MCP configuration.
 - Inspect Git status first and preserve existing tracked and untracked work. Existing browser profile directories, screenshots and an icon archive under `tests/` are artifacts, not the test runner or dependencies; do not clean them up as an unrelated task.
 - Keep existing script order and global naming conventions unless an intentional change requires otherwise. Inspect both standard and custom-map reset paths, and all player/enemy/ally paths when changing a shared mechanic.
 - Prefer small JavaScript/HTML/CSS changes. No formatter, linter, package manager, build configuration, CI workflow or desktop packaging procedure is configured.

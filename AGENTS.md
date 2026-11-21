@@ -31,6 +31,7 @@ Reusable development workflows are available in `.agents/skills/`; choose the re
 
 ## Development rules
 
+- Use CodeGraph to search and explore game code and its relationships when available; verify relevant source and use other search tools when needed.
 - Inspect the actual code and Git status before editing. Preserve pre-existing modifications, untracked work, and test artifacts; avoid unrelated changes.
 - Follow existing conventions unless there is a concrete reason to improve them. Understand script order, shared state, callers, and subsystem dependencies before refactoring.
 - Check implementations and tests before documenting behavior. Distinguish implemented functionality, known limitations, and future goals. Filenames, UI descriptions, and old chat assessments are not sufficient evidence by themselves.
