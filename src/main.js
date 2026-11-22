@@ -589,6 +589,19 @@ TROPHY_LEAGUES.forEach((league, index) => {
 });
 const megareAlphaReward = trophyRoadRewards.find(reward => reward.trophies === 10000 && reward.level === 'alpha');
 Object.assign(megareAlphaReward, { type: 'containers', amount: 3, reward: '3 альфа-контейнера' });
+// Append rewards so saved claim indices from earlier versions stay unchanged.
+[
+    { trophies: 2200, type: 'choice', options: ['medical', 'musical'], reward: 'Медицинский или Музыкальный танк на выбор' },
+    { trophies: 4000, type: 'choice', options: ['robot', 'egyptian'], reward: 'Танк-робот или Танк-фараон на выбор' },
+    { trophies: 6000, type: 'choice', options: ['electric', 'burovoy'], reward: 'Электрический или Буровой танк на выбор' },
+    { trophies: 8500, type: 'choice', options: ['illuminat', 'plasma'], reward: 'Иллюминат или Плазменный танк на выбор' },
+    ...[[750, 50], [2000, 100], [4000, 150], [6500, 200], [9000, 300]].map(([trophies, amount]) =>
+        ({ trophies, type: 'tokens', amount, reward: `${amount} жетонов` })),
+    { trophies: 1200, type: 'avatar', avatar: 'new-icon:rare-helmet', reward: 'Иконка профиля «Бронешлем»' },
+    { trophies: 3000, type: 'avatar', avatar: 'new-icon:rare-hawk', reward: 'Иконка профиля «Боевой орёл»' },
+    { trophies: 5500, type: 'avatar', avatar: 'new-icon:unique-wolf', reward: 'Иконка профиля «Бронированный волк»' },
+    { trophies: 8000, type: 'avatar', avatar: 'new-icon:animated-phoenix', reward: 'Иконка профиля «Солнечный феникс»' }
+].forEach(reward => trophyRoadRewards.push(reward));
 // Unlocked tanks list
 let unlockedTanks = JSON.parse(localStorage.getItem('tankUnlockedTanks')) || ['normal'];
 
@@ -3038,7 +3051,9 @@ let containerQueue = (() => {
     try {
         const saved = JSON.parse(localStorage.getItem('pendingFreeContainers') || '[]');
         const validTypes = ['mini', 'bronze', 'legendary', 'glitch', 'mythic', 'omega', 'alpha', 'mechParts'];
-        return Array.isArray(saved) ? saved.filter(type => validTypes.includes(type)) : [];
+        if (!Array.isArray(saved)) return [];
+        return saved.filter(entry => validTypes.includes(typeof entry === 'string' ? entry : entry?.type))
+            .map(entry => typeof entry === 'string' || /^#[0-9a-f]{6}$/i.test(entry.leagueColor || '') ? entry : entry.type);
     } catch (e) { return []; }
 })();
 let isFromTrophyRoad = false; // Track if container is from trophy road
@@ -3047,14 +3062,20 @@ let isFromTrophyRoad = false; // Track if container is from trophy road
 function processNextContainer() {
     if (containerFlowType || containerDropActive || !containerQueue.length) return;
     isFromTrophyRoad = true;
-    containerFlowType = containerQueue[0];
+    const entry = containerQueue[0];
+    containerFlowType = typeof entry === 'string' ? entry : entry.type;
+    const leagueColor = typeof entry === 'object' ? entry.leagueColor : null;
+    if (containerFlowModal && leagueColor) {
+        containerFlowModal.dataset.leagueReward = 'true';
+        containerFlowModal.style.setProperty('--league-color', leagueColor);
+    }
     updateContainerFlowStage('intro');
     if (containerDropArea) {
         containerDropArea.innerHTML = '';
         containerDropArea.classList.remove('active');
     }
     if (containerFlowModal) containerFlowModal.style.display = 'flex';
-    window.ContainerArt?.showFlow(containerFlowType);
+    window.ContainerArt?.showFlow(containerFlowType, leagueColor);
 }
 
 function clearContainerDropTimers() {
@@ -3077,7 +3098,12 @@ function closeContainerFlow() {
         document.getElementById('rewardModal').appendChild(card);
     }
     if (stage) stage.hidden = true;
-    if (containerFlowModal) { delete containerFlowModal.dataset.stage; delete containerFlowModal.dataset.glitchBurst; }
+    if (containerFlowModal) {
+        delete containerFlowModal.dataset.stage;
+        delete containerFlowModal.dataset.glitchBurst;
+        delete containerFlowModal.dataset.leagueReward;
+        containerFlowModal.style.removeProperty('--league-color');
+    }
     if (containerFlowModal) containerFlowModal.style.display = 'none';
     window.ContainerArt?.hideFlow();
     clearContainerDropTimers();
@@ -3187,11 +3213,11 @@ function showContainerFlow(type) {
 }
 
 // Free version for trophy road rewards
-function showFreeContainerFlow(type, count = 1) {
-    for (let i = 0; i < count; i++) containerQueue.push(type);
+function showFreeContainerFlow(type, count = 1, defer = false, leagueColor = null) {
+    for (let i = 0; i < count; i++) containerQueue.push(leagueColor ? { type, leagueColor } : type);
     localStorage.setItem('pendingFreeContainers', JSON.stringify(containerQueue));
     saveProgress();
-    processNextContainer();
+    if (!defer) processNextContainer();
 }
 
 // Free container confirm handler
@@ -3767,6 +3793,9 @@ function showReward(type, amount, desc, tankType = null, options = {}) {
     const btn = document.getElementById('rewardClaimBtn');
 
     if (!modal) return;
+    modal.classList.toggle('trophy-reward-overlay', !!options.leagueColor && !options.inline);
+    if (options.leagueColor && !options.inline) modal.style.setProperty('--league-color', options.leagueColor);
+    else modal.style.removeProperty('--league-color');
     amountText.classList?.remove('reward-glitch-multiplier');
 
     if (window.rewardRevealTimer) clearTimeout(window.rewardRevealTimer);
@@ -6178,6 +6207,8 @@ function generateTrophyRoad() {
     container.innerHTML = '';
     
     const league = getTrophyLeague(trophies);
+    const roadModal = document.getElementById('trophyRoadModal');
+    if (roadModal) roadModal.style.setProperty('--league-color', league.color);
     const visibleLeagues = getVisibleTrophyLeagues();
     const nextLeague = visibleLeagues.find(item => item.base > league.base);
     const progress = nextLeague ? Math.min(100, (trophies - league.base) / (nextLeague.base - league.base) * 100) : 100;
@@ -6229,6 +6260,12 @@ function generateTrophyRoad() {
     });
 }
 
+function showTrophyRoadReward(reward, label, art, onComplete, hint) {
+    const item = { title: 'НАГРАДА ДОРОГИ', label, art, hint, leagueColor: getTrophyLeague(reward.trophies).color };
+    if (window.showProgressionRewards) window.showProgressionRewards([item], onComplete);
+    else { showNotification(label, item.leagueColor); if (onComplete) onComplete(); }
+}
+
 // Claim trophy reward
 function claimTrophyReward(index) {
     const reward = trophyRoadRewards[index];
@@ -6243,34 +6280,37 @@ function claimTrophyReward(index) {
             break;
         case 'coins':
             coins += reward.amount;
-            showNotification(`+${reward.amount} монет!`, '#f1c40f');
+            showTrophyRoadReward(reward, `+${reward.amount} монет`, '<span class="currency-icon currency-icon--coin" style="width:120px;height:120px"></span>');
             break;
         case 'gems':
             gems += reward.amount;
-            showNotification(`+${reward.amount} гемов!`, '#2ecc71');
+            showTrophyRoadReward(reward, `+${reward.amount} гемов`, '<span class="currency-icon currency-icon--gem" style="width:120px;height:120px"></span>');
+            break;
+        case 'tokens':
+            tokens += reward.amount;
+            showTrophyRoadReward(reward, `+${reward.amount} жетонов`, '<span class="currency-icon currency-icon--token" style="width:120px;height:120px"></span>');
+            break;
+        case 'avatar':
+            if (_isAvatarUnlocked(reward.avatar)) {
+                gems += 50;
+                showTrophyRoadReward(reward, 'Иконка уже открыта · 50 гемов', '<span class="currency-icon currency-icon--gem" style="width:120px;height:120px"></span>');
+            } else {
+                _unlockAvatar(reward.avatar);
+                showTrophyRoadReward(reward, reward.reward, profileAvatarMarkup(reward.avatar, 190));
+            }
             break;
         case 'bundle':
             if (reward.coins) { coins += reward.coins; showNotification(`+${reward.coins} монет!`, '#f1c40f'); }
             if (reward.gems) { gems += reward.gems; showNotification(`+${reward.gems} гемов!`, '#2ecc71'); }
             break;
         case 'container':
-            // Show container modal like in shop
-            if (reward.level === 'mini') {
-                showFreeContainerFlow('mini');
-            } else if (reward.level === 'normal') {
-                showFreeContainerFlow('bronze');
-            } else if (reward.level === 'super') {
-                showFreeContainerFlow('legendary');
-            } else if (['omega', 'glitch', 'mythic', 'alpha', 'mechParts'].includes(reward.level)) {
-                showFreeContainerFlow(reward.level);
-            }
-            showNotification(`Получен ${reward.reward}!`, '#9b59b6');
-            break;
         case 'containers':
-            showNotification(`Получено ${reward.amount} контейнеров!`, '#9b59b6');
             {
-                const types = { mini: 'mini', normal: 'bronze', super: 'legendary', omega: 'omega', alpha: 'alpha' };
-                if (types[reward.level]) showFreeContainerFlow(types[reward.level], reward.amount);
+                const types = { mini: 'mini', normal: 'bronze', super: 'legendary', omega: 'omega', alpha: 'alpha', glitch: 'glitch', mythic: 'mythic', mechParts: 'mechParts' };
+                const type = types[reward.level];
+                if (type) {
+                    showFreeContainerFlow(type, reward.amount || 1, false, getTrophyLeague(reward.trophies).color);
+                }
             }
             break;
         case 'choice':
@@ -6282,12 +6322,12 @@ function claimTrophyReward(index) {
             if (unlockedTanks.includes(reward.tank)) {
                 // Already has tank, give gems as compensation
                 gems += reward.compensation;
-                showNotification(`У вас уже есть этот танк! +${reward.compensation} гемов в качестве компенсации`, '#2ecc71');
+                showTrophyRoadReward(reward, `Танк уже открыт · ${reward.compensation} гемов`, '<span class="currency-icon currency-icon--gem" style="width:120px;height:120px"></span>');
             } else {
                 unlockedTanks.push(reward.tank);
                 // Show tank reward modal like in shop
                 const tankName = (window.tankDescriptions && window.tankDescriptions[reward.tank]) ? window.tankDescriptions[reward.tank].name : reward.tank;
-                showReward('tank', 1, `Новый танк разблокирован!`, reward.tank);
+                showReward('tank', 1, `Новый танк разблокирован!`, reward.tank, { leagueColor: getTrophyLeague(reward.trophies).color });
                 showNotification(`Разблокирован ${tankName}!`, '#e74c3c');
             }
             break;
@@ -6732,17 +6772,18 @@ function openChoiceModal(reward, index) {
     
     const choiceModal = document.getElementById('choiceModal');
     if (!choiceModal) return;
+    if (choiceModal.style.setProperty) choiceModal.style.setProperty('--league-color', getTrophyLeague(reward.trophies).color);
     
     choiceModal.style.display = 'flex';
     document.getElementById('choiceConfirmation').style.display = 'none';
     const cancelCont = document.getElementById('choiceCancelContainer');
     if (cancelCont) cancelCont.style.display = 'block';
     
-    // Reset styles
     const opt1El = document.getElementById('choiceOption1');
     const opt2El = document.getElementById('choiceOption2');
-    if (opt1El) opt1El.style.border = '2px solid transparent';
-    if (opt2El) opt2El.style.border = '2px solid transparent';
+    for (const option of [opt1El, opt2El]) {
+        if (option) { option.classList.remove('is-selected'); option.setAttribute('aria-pressed', 'false'); }
+    }
 
     const opt1 = reward.options[0];
     const opt2 = reward.options[1];
@@ -6755,33 +6796,37 @@ function openChoiceModal(reward, index) {
     if (name1El) name1El.textContent = t1.name;
     const name2El = document.getElementById('choiceName2');
     if (name2El) name2El.textContent = t2.name;
+    for (const [number, tankId] of [[1, opt1], [2, opt2]]) {
+        const status = document.getElementById('choiceStatus' + number);
+        if (status) status.textContent = unlockedTanks.includes(tankId) ? 'Уже открыт · 50 гемов вместо танка' : 'Новая техника';
+    }
     
     // Draw previews
     const cvs1 = document.getElementById('choiceCanvas1');
     if (cvs1) {
         const ctx1 = cvs1.getContext('2d');
         ctx1.clearRect(0,0,cvs1.width,cvs1.height);
-        if (typeof drawTankOn === 'function') drawTankOn(ctx1, 50, 50, 38, 38, '#3498db', -Math.PI/2, 1, opt1);
+        if (typeof drawTankOn === 'function') drawTankOn(ctx1, cvs1.width / 2, cvs1.height / 2, 48, 48, (typeof tankBaseColors !== 'undefined' && tankBaseColors[opt1]) || '#3498db', 0, 1, opt1);
     }
     
     const cvs2 = document.getElementById('choiceCanvas2');
     if (cvs2) {
         const ctx2 = cvs2.getContext('2d');
         ctx2.clearRect(0,0,cvs2.width,cvs2.height);
-        if (typeof drawTankOn === 'function') drawTankOn(ctx2, 50, 50, 38, 38, '#3498db', -Math.PI/2, 1, opt2);
+        if (typeof drawTankOn === 'function') drawTankOn(ctx2, cvs2.width / 2, cvs2.height / 2, 48, 48, (typeof tankBaseColors !== 'undefined' && tankBaseColors[opt2]) || '#3498db', 0, 1, opt2);
     }
 }
 
 window.selectChoiceOption = function(idx) {
-    if (!choiceRewardData) return;
+    if (!choiceRewardData || (idx !== 0 && idx !== 1)) return;
     
     selectedChoiceIdx = idx;
     
-    // Highlight
     const opt1El = document.getElementById('choiceOption1');
     const opt2El = document.getElementById('choiceOption2');
-    if (opt1El) opt1El.style.border = (idx === 0) ? '2px solid #f1c40f' : '2px solid transparent';
-    if (opt2El) opt2El.style.border = (idx === 1) ? '2px solid #f1c40f' : '2px solid transparent';
+    [opt1El, opt2El].forEach((option, index) => {
+        if (option) { option.classList.toggle('is-selected', idx === index); option.setAttribute('aria-pressed', String(idx === index)); }
+    });
     
     // Show confirmation
     document.getElementById('choiceConfirmation').style.display = 'block';
@@ -6791,20 +6836,25 @@ window.selectChoiceOption = function(idx) {
     const tankId = choiceRewardData.options[idx];
     const tData = (window.tankDescriptions && window.tankDescriptions[tankId]) ? window.tankDescriptions[tankId] : {name: tankId, description: ''};
     
-    document.getElementById('choiceConfirmTitle').textContent = 'Вы уверены, что хотите выбрать ' + tData.name + '?'; // Fixed string
-    document.getElementById('choiceConfirmDesc').textContent = tData.description || 'Нет описания';
+    document.getElementById('choiceConfirmTitle').textContent = 'Выбрать «' + tData.name + '»?';
+    document.getElementById('choiceConfirmDesc').textContent = unlockedTanks.includes(tankId)
+        ? 'Этот танк уже открыт. Вместо него вы получите 50 гемов.'
+        : (tData.description || 'После подтверждения второй вариант будет недоступен.');
 }
 
 window.cancelChoiceSelection = function() {
     selectedChoiceIdx = -1;
-    document.getElementById('choiceOption1').style.border = '2px solid transparent';
-    document.getElementById('choiceOption2').style.border = '2px solid transparent';
+    for (const id of ['choiceOption1', 'choiceOption2']) {
+        const option = document.getElementById(id);
+        option.classList.remove('is-selected');
+        option.setAttribute('aria-pressed', 'false');
+    }
     document.getElementById('choiceConfirmation').style.display = 'none';
     document.getElementById('choiceCancelContainer').style.display = 'block';
 }
 
 window.confirmChoice = function() {
-    if (selectedChoiceIdx === -1 || !choiceRewardData) return;
+    if (selectedChoiceIdx === -1 || !choiceRewardData || claimedRewards.includes(choiceRewardIndex)) return;
 
     const chosenOption = choiceRewardData.options[selectedChoiceIdx];
 
@@ -6819,6 +6869,7 @@ window.confirmChoice = function() {
             saveProgress();
         }
         document.getElementById('choiceModal').style.display = 'none';
+        choiceRewardData = null;
         generateTrophyRoad();
         return;
     }
@@ -6832,11 +6883,12 @@ window.confirmChoice = function() {
     // Process as a tank reward by default
     if (unlockedTanks.includes(chosenOption)) {
          gems += 50; // Compensation
-         showNotification('У вас уже есть этот танк! +50 гемов', '#f1c40f');
+         showTrophyRoadReward(choiceRewardData, 'Танк уже открыт · 50 гемов', '<span class="currency-icon currency-icon--gem" style="width:120px;height:120px"></span>');
     } else {
          unlockedTanks.push(chosenOption);
          const tData = (window.tankDescriptions && window.tankDescriptions[chosenOption]) ? window.tankDescriptions[chosenOption] : {name: chosenOption};
-         showNotification('Вы получили ' + tData.name + '!', '#2ecc71');
+         if (typeof showReward === 'function') showReward('tank', 1, 'Выбранная техника', chosenOption, { leagueColor: getTrophyLeague(choiceRewardData.trophies).color });
+         else showNotification('Вы получили ' + tData.name + '!', '#2ecc71');
     }
 
     // Mark as claimed
@@ -6849,6 +6901,8 @@ window.confirmChoice = function() {
 
     // Close modal
     document.getElementById('choiceModal').style.display = 'none';
+    choiceRewardData = null;
+    updateCoinDisplay();
     generateTrophyRoad();
 }
 

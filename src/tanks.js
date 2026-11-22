@@ -4734,6 +4734,7 @@ function drawCharacterPreviews() {
 
     const characterModal = document.getElementById('characterModal');
     if (!characterModal || getComputedStyle(characterModal).display === 'none') return;
+    const detailModal = document.getElementById('tankDetailModal');
     const visiblePreviews = new Set();
     const renderedStaticPreviews = new Set();
     const isPreviewVisible = canvas => !!canvas && visiblePreviews.has(canvas);
@@ -4855,7 +4856,8 @@ function drawCharacterPreviews() {
     };
 
     const renderAnimatedCharacterPreviews = () => {
-        if (document.getElementById('rankModal')) return;
+        if ((detailModal && getComputedStyle(detailModal).display !== 'none') ||
+            document.getElementById('rankModal')) return;
         const tanksGrid = document.getElementById('charGridTanks');
         const mechsGrid = document.getElementById('charGridMechs');
         if (!tanksGrid || getComputedStyle(tanksGrid).display !== 'none') {

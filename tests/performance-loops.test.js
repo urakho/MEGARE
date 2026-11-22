@@ -59,6 +59,39 @@ test('mech detail stops drawing behind the mastery road and resumes afterward', 
     assert.equal(draws, 2);
 });
 
+test('character previews pause behind tank details and resume after closing them', () => {
+    let draws = 0, nextFrame;
+    const detail = { style: { display: 'none' } };
+    const canvas = { width: 100, height: 100 };
+    const gradient = { addColorStop() {} };
+    const paint = { canvas, clearRect() {}, fillRect() {}, save() {}, restore() {}, createLinearGradient: () => gradient };
+    const grid = { style: { display: 'grid' } };
+    const modal = { style: { display: 'flex' }, querySelectorAll: () => [canvas] };
+    const elements = { characterModal: modal, tankDetailModal: detail, charGridTanks: grid };
+    const ctx = vm.createContext({
+        window: {}, document: { getElementById: id => elements[id] || null },
+        getComputedStyle: element => element.style,
+        requestAnimationFrame: fn => { nextFrame = fn; return 1; }, cancelAnimationFrame() {},
+        tankBgGradients: { air: ['green', 'blue'] }, unlockedTanks: ['air'],
+        drawTankOn: () => { draws++; }, getPreviewTankTurretAngle: () => 0,
+        getPreviewTankHeatState: () => null
+    });
+    for (const name of new Set(tanks.match(/\b\w+Tank(?:Ctx|Preview)\b/g))) ctx[name] = null;
+    ctx.airTankCtx = paint;
+    ctx.airTankPreview = canvas;
+    vm.runInContext(section(tanks, 'function stopCharacterPreviewAnimations()', 'function drawFrozenOverlay('), ctx);
+    vm.runInContext(section(tanks, 'function drawCharacterPreviews()', 'let menuBackdropWidth'), ctx);
+    ctx.drawCharacterPreviews();
+    nextFrame(40);
+    assert.equal(draws, 2);
+    detail.style.display = 'flex';
+    for (let i = 2; i <= 10; i++) nextFrame(i * 40);
+    assert.equal(draws, 2);
+    detail.style.display = 'none';
+    nextFrame(440);
+    assert.equal(draws, 3);
+});
+
 test('one loop renders and catches up after a slow frame, without simulating paused time', () => {
     let updates = 0, renders = 0, hudUpdates = 0, paused = false, now = 0;
     const frames = [], listeners = {};

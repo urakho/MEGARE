@@ -22,6 +22,7 @@
     let shopActive = false;
     let flowActive = false;
     let flowType = 'bronze';
+    let flowLeagueTheme = null;
     let flowStage = 'intro';
     let openedAt = 0;
     let animationId = null;
@@ -697,10 +698,10 @@
         ctx.restore();
     }
 
-    function paint(canvas, type, now, open = 0) {
+    function paint(canvas, type, now, open = 0, leagueTheme = null) {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        const theme = themes[type] || themes.bronze;
+        const theme = leagueTheme || themes[type] || themes.bronze;
         const time = now / 1000;
         ctx.setTransform(canvas.width / 240, 0, 0, canvas.height / 200, 0, 0);
         ctx.clearRect(0, 0, 240, 200);
@@ -741,7 +742,7 @@
             const open = flowStage === 'open'
                 ? (reduceMotion ? 1 : Math.min(1, Math.max(0, (now - openedAt) / 750)))
                 : 0;
-            paint(flow, flowType, now, open);
+            paint(flow, flowType, now, open, flowLeagueTheme);
         }
     }
 
@@ -801,14 +802,21 @@
         update();
     }
 
-    function showFlow(type) {
+    function showFlow(type, leagueColor = null) {
         flowActive = true;
         flowType = themes[type] ? type : 'bronze';
+        flowLeagueTheme = null;
+        if (/^#[0-9a-f]{6}$/i.test(leagueColor || '')) {
+            const rgb = [1, 3, 5].map(start => parseInt(leagueColor.slice(start, start + 2), 16));
+            const shade = factor => '#' + rgb.map(channel => Math.round(channel * factor).toString(16).padStart(2, '0')).join('');
+            flowLeagueTheme = { ...themes[flowType], base: shade(.48), light: shade(.85), dark: shade(.22), rim: leagueColor, glow: rgb.join(',') };
+        }
         update();
     }
 
     function hideFlow() {
         flowActive = false;
+        flowLeagueTheme = null;
         if (!shopActive && animationId !== null) cancelAnimationFrame(animationId);
         if (!shopActive) animationId = null;
         else update();

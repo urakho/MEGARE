@@ -804,7 +804,7 @@ test('immersive defeat finishes its blast before showing results and cannot leak
 test('replaced chromatic reward stops its canvas animation', () => {
     const items = Object.fromEntries(['rewardModal', 'rewardTitle', 'rewardIconContainer',
         'rewardAmount', 'rewardDesc', 'rewardClaimBtn', 'rewardIcon'].map(id => [id,
-        { style: {}, classList: { add() {}, remove() {} }, appendChild() {}, setAttribute() {}, isConnected: true }]));
+        { style: { setProperty() {}, removeProperty() {} }, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, setAttribute() {}, isConnected: true }]));
     let nextId = 0, draws = 0, rewardCanvas;
     const frames = new Map(), cancelled = [];
     const context = {

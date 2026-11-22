@@ -110,18 +110,25 @@
         if (thresholds.includes(step)) items.push({ title: 'НОВОЕ ЗВАНИЕ', label: titles[type][thresholds.indexOf(step)], art: '<span class="currency-icon currency-icon--trophy" style="width:120px;height:120px"></span>' });
         showRewards(items);
     }
-    function showRewards(items, index = 0) {
-        if (!items.length || index >= items.length) return;
+    function showRewards(items, index = 0, onComplete) {
+        if (!items.length || index >= items.length) { if (onComplete) onComplete(); return; }
         const old = document.getElementById('tankRoadReveal');
         if (old) old.remove();
         const overlay = document.createElement('div');
         overlay.id = 'tankRoadReveal';
         overlay.className = 'mastery-reveal';
+        if (items[index].leagueColor) {
+            overlay.classList.add('trophy-reveal');
+            overlay.style.setProperty('--league-color', items[index].leagueColor);
+        }
         const displayClass = items[index].background ? ' mastery-reveal-display--background' : '';
         overlay.innerHTML = `<div class="modal-box mastery-reveal-card"><div class="mastery-reveal-topline"><span>MEGARE • НАГРАДА</span><span>${index + 1} / ${items.length}</span></div><p class="mastery-reveal-caption"></p><div class="mastery-reveal-display${displayClass}"><div class="mastery-reveal-art">${items[index].art}</div></div><h2></h2><div class="mastery-reveal-divider"></div><p class="mastery-reveal-hint">НАГРАДА ДОБАВЛЕНА В ПРОФИЛЬ</p><button type="button" class="btn btn-gold">ПРОДОЛЖИТЬ</button></div>`;
         overlay.querySelector('.mastery-reveal-caption').textContent = items[index].title;
+        const hint = overlay.querySelector('.mastery-reveal-hint');
+        hint.textContent = items[index].hint ?? 'НАГРАДА ДОБАВЛЕНА В ПРОФИЛЬ';
+        hint.hidden = !hint.textContent;
         overlay.querySelector('h2').textContent = items[index].label;
-        const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); showRewards(items, index + 1); };
+        const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); showRewards(items, index + 1, onComplete); };
         const onKey = event => { if (event.key === 'Escape') { event.stopImmediatePropagation(); close(); } };
         overlay.querySelector('button').onclick = close;
         document.addEventListener('keydown', onKey, true);
@@ -156,7 +163,17 @@
             row.querySelector('button').onclick = () => claim(type, step);
             list.appendChild(row);
         }
-        box.appendChild(list); modal.appendChild(box); document.body.appendChild(modal);
+        box.appendChild(list);
+        const footer = document.createElement('div');
+        footer.className = 'road-footer tank-road-footer';
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn btn-secondary';
+        closeButton.textContent = 'Закрыть';
+        closeButton.onclick = () => modal.remove();
+        footer.appendChild(closeButton);
+        box.appendChild(footer);
+        modal.appendChild(box); document.body.appendChild(modal);
         modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     }
     window.getTankRoadTitle = titleInfo;
@@ -164,6 +181,6 @@
     window.syncTankRoadProgress = sync;
     window.tankRoadAvatarMarkup = avatarMarkup;
     window.showRankModal = show;
-    window.showProgressionRewards = showRewards;
+    window.showProgressionRewards = (items, onComplete) => showRewards(items, 0, onComplete);
     sync();
 })();

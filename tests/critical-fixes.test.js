@@ -306,7 +306,7 @@ test('avatar picker shows only owned icons and omits empty tiers', () => {
 function containerContext(localStorage) {
     const ctx = profileContext(localStorage);
     Object.assign(ctx, {
-        containerFlowType: null, containerFlowModal: { style: {}, dataset: {} },
+        containerFlowType: null, containerFlowModal: { style: { setProperty(name, value) { this[name] = value; }, removeProperty(name) { delete this[name]; } }, dataset: {} },
         containerFlowText: { textContent: '' }, containerFlowPreview: {}, containerFlowCancel: { style: {} },
         containerDropArea: null,
         document: { querySelector: () => null, getElementById: () => null }, setTimeout: () => 1, clearTimeout: () => {},
@@ -331,6 +331,26 @@ test('free containers survive cancellation and reload, and paid opening costs to
     vm.runInContext('processNextContainer(); handleContainerClick()', ctx);
     assert.deepEqual(JSON.parse(localStorage.getItem('pendingFreeContainers')), ['mini']);
     assert.equal(JSON.parse(localStorage.getItem('megare_profiles'))[0].data.tankCoins, '120');
+});
+
+test('league container colors survive reload and do not leak to ordinary containers', () => {
+    const localStorage = storage();
+    let ctx = containerContext(localStorage);
+    vm.runInContext("showFreeContainerFlow('mini', 2, true, '#c35b70')", ctx);
+    assert.deepEqual(JSON.parse(localStorage.getItem('pendingFreeContainers')), [
+        { type: 'mini', leagueColor: '#c35b70' }, { type: 'mini', leagueColor: '#c35b70' }
+    ]);
+    ctx = containerContext(localStorage);
+    vm.runInContext('processNextContainer()', ctx);
+    assert.equal(ctx.containerFlowModal.style['--league-color'], '#c35b70');
+    assert.equal(ctx.containerFlowModal.dataset.leagueReward, 'true');
+    vm.runInContext('closeContainerFlow()', ctx);
+    assert.equal(ctx.containerFlowModal.dataset.leagueReward, undefined);
+    vm.runInContext("showFreeContainerFlow('mini')", ctx);
+    assert.equal(ctx.containerFlowModal.style['--league-color'], '#c35b70');
+    vm.runInContext('handleContainerClick(); closeContainerFlow(); processNextContainer(); handleContainerClick(); closeContainerFlow(); processNextContainer()', ctx);
+    assert.equal(ctx.containerFlowModal.dataset.leagueReward, undefined);
+    assert.equal(ctx.containerFlowModal.style['--league-color'], undefined);
 });
 
 test('legacy profiles start without tokens and preserve other progress', () => {

@@ -146,6 +146,26 @@ test('glitch artwork renders in the shop and opening flow', () => {
     ctx.window.ContainerArt.hideShop();
 });
 
+test('league container art uses its league color and the next normal opening resets it', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'container-art.js'), 'utf8');
+    const colors = [];
+    const drawing = new Proxy({}, { get(target, key) {
+        if (key === 'createLinearGradient' || key === 'createRadialGradient') return () => ({ addColorStop: (_, color) => colors.push(color) });
+        return () => {};
+    }, set(target, key, value) { if (key === 'fillStyle' || key === 'strokeStyle') colors.push(value); target[key] = value; return true; } });
+    const canvas = { width: 240, height: 200, dataset: { containerArt: 'mini' }, getContext: () => drawing };
+    const ctx = vm.createContext({ window: { matchMedia: () => ({ matches: true }) },
+        document: { querySelectorAll: () => [canvas], getElementById: () => canvas, addEventListener() {}, hidden: false },
+        performance: { now: () => 1000 }, requestAnimationFrame() {}, cancelAnimationFrame() {} });
+    vm.runInContext(source, ctx);
+    ctx.window.ContainerArt.showFlow('mini', '#c35b70');
+    assert.ok(colors.includes('#c35b70'));
+    ctx.window.ContainerArt.hideFlow();
+    colors.length = 0;
+    ctx.window.ContainerArt.showFlow('mini');
+    assert.ok(!colors.includes('#c35b70'));
+});
+
 test('glitch false reveal never awards the false resource', () => {
     const nodes = Object.fromEntries(['rewardModal','rewardClaimBtn','rewardAmount','rewardDesc','rewardTitle'].map(id => [id, { style: {}, classList: { add() {}, remove() {} } }]));
     nodes.containerFlowModal = { dataset: { containerType: 'glitch' }, style: {} };
@@ -366,7 +386,7 @@ test('tank reward remains hidden until the reveal completes', () => {
 
 test('container reward card stays inline and strip reveals only the viewed rewards', () => {
     function node() {
-        const item = { style: {}, dataset: {}, children: [], attrs: {},
+        const item = { style: { setProperty() {}, removeProperty() {} }, dataset: {}, children: [], attrs: {},
             appendChild(child) {
                 if (child.parentElement) child.parentElement.children = child.parentElement.children.filter(value => value !== child);
                 this.children.push(child); child.parentElement = this;
@@ -375,7 +395,8 @@ test('container reward card stays inline and strip reveals only the viewed rewar
         };
         let classes = new Set();
         Object.defineProperty(item, 'className', { get: () => [...classes].join(' '), set: value => { classes = new Set(value.split(' ')); } });
-        item.classList = { add: value => classes.add(value), remove: value => classes.delete(value), contains: value => classes.has(value) };
+        item.classList = { add: value => classes.add(value), remove: value => classes.delete(value), contains: value => classes.has(value),
+            toggle: (value, enabled) => enabled ? classes.add(value) : classes.delete(value) };
         return item;
     }
     const ids = Object.fromEntries(['rewardModal','rewardTitle','rewardIconContainer','rewardIcon','rewardAmount','rewardDesc','rewardClaimBtn','containerRewardStage','containerDropArea','containerFlowModal'].map(id => [id,node()]));

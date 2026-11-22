@@ -108,6 +108,8 @@ Container shop/opening artwork is drawn through Canvas in `container-art.js`, ra
 
 Most UI structure is in `index.html`; styles are in `style.css`. Scripts also construct markup, set styles, and attach handlers. Container rewards temporarily mount the shared reward card in `containerRewardStage`; finishing restores it to the standalone reward overlay and clears reveal timers and previews. Music uses browser `Audio` objects pointing to `music/mp3/`, with mode-based selection, saved volume, and retry after user interaction when autoplay is blocked.
 
+The free-container queue accepts legacy type strings and trophy-road entries containing a type and league color. Trophy colors persist with queued containers across profile reloads and apply only to that opening; ordinary free and paid containers retain their own artwork colors.
+
 ## Persistence
 
 `saveProgress()` in `main.js` writes resources, including `tankTokens`, upgrades, trophies, claimed rewards and unlocked vehicles to flat localStorage keys, then snapshots the active profile. Missing token balances in older profiles load as zero. `PROFILE_SAVE_KEYS` defines the profile snapshot set, including avatar and background unlocks and the current cosmetic-shop offers; `megare_profiles` stores profile slots and selected backgrounds, and `megare_activeProfile` selects one. Initialization preserves a previously selected background as unlocked and migrates existing flat data or restores the active slot. Some systems write individual keys directly.

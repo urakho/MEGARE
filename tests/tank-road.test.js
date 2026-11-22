@@ -9,7 +9,7 @@ function game(initial = {}) {
     const elements = [];
     function element(tag) {
         const queries = {};
-        const node = { tag, children: [], style: {}, dataset: {}, classList: { add() {} }, appendChild(child) { this.children.push(child); }, remove() { this.removed = true; }, addEventListener() {}, focus() {},
+        const node = { tag, children: [], style: { setProperty(name, value) { this[name] = value; } }, dataset: {}, classList: { add() {} }, appendChild(child) { this.children.push(child); }, remove() { this.removed = true; }, addEventListener() {}, focus() {},
             querySelector(selector) { return queries[selector] ||= element(selector); },
             getContext() { return { fillRect() {}, beginPath() {}, arc() {}, stroke() {}, fillText() {} }; },
             toDataURL() { return 'data:image/png;base64,test'; } };
@@ -24,6 +24,43 @@ function game(initial = {}) {
     vm.runInContext(code, ctx);
     return { ctx, data, storage, elements };
 }
+test('league reveal keeps its color through both windows and finishes once', () => {
+    const { ctx, elements } = game();
+    let done = 0;
+    ctx.window.showProgressionRewards([
+        { title: 'Иконка', label: 'Лига', art: '', leagueColor: '#c35b70' },
+        { title: 'Фон', label: 'Лига', art: '', leagueColor: '#c35b70' }
+    ], () => { done++; });
+    let overlay = elements.findLast(node => node.id === 'tankRoadReveal' && !node.removed);
+    assert.equal(overlay.style['--league-color'], '#c35b70');
+    overlay.querySelector('button').onclick();
+    overlay = elements.findLast(node => node.id === 'tankRoadReveal' && !node.removed);
+    assert.equal(overlay.style['--league-color'], '#c35b70');
+    overlay.querySelector('button').onclick();
+    assert.equal(done, 1);
+});
+test('container reward reveal has no profile-added message', () => {
+    const { ctx, elements } = game();
+    ctx.window.showProgressionRewards([{ title: 'Ящик', label: 'Контейнер', art: '', leagueColor: '#9eacb5', hint: '' }]);
+    const overlay = elements.findLast(node => node.id === 'tankRoadReveal' && !node.removed);
+    assert.equal(overlay.querySelector('.mastery-reveal-hint').textContent, '');
+    assert.equal(overlay.querySelector('.mastery-reveal-hint').hidden, true);
+});
+test('vehicle road footer closes and the road can be opened again', () => {
+    const { ctx, elements } = game({ tankTrophiesData: '{"normal":1000}' });
+    ctx.window.showRankModal('normal');
+    let modal = elements.findLast(node => node.id === 'rankModal' && !node.removed);
+    const box = modal.children[0];
+    const footer = box.children.find(node => node.className === 'road-footer tank-road-footer');
+    assert.ok(footer);
+    assert.equal(footer.children[0].textContent, 'Закрыть');
+    footer.children[0].onclick();
+    assert.equal(modal.removed, true);
+    ctx.window.showRankModal('normal');
+    modal = elements.findLast(node => node.id === 'rankModal' && !node.removed);
+    assert.ok(modal);
+    assert.equal(JSON.parse(ctx.localStorage.getItem('tankRoadProgress')).normal.best, 1000);
+});
 test('vehicle milestones unlock distinct titles and keep the best score after losses and reload', () => {
     const { ctx, storage, data } = game({ tankTrophiesData: JSON.stringify({ ice: 2500 }) });
     let unlocked = JSON.parse(storage.getItem('playerTitleUnlocks'));

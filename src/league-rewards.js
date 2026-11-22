@@ -29,15 +29,16 @@
         if (!unlocks.includes(id)) unlocks.push(id);
         localStorage.setItem('tankBackgroundUnlocks', JSON.stringify(unlocks));
         window.showProgressionRewards([
-            { title: 'УНИКАЛЬНАЯ ИКОНКА', label: league.name, art: window.leagueAvatarMarkup('league:' + index, 150) },
-            { title: 'УНИКАЛЬНЫЙ ФОН', label: league.name, background: true, art: `<div class="profile-background-option profile-bg--${id} unique-league-reveal"></div>` }
+            { title: 'УНИКАЛЬНАЯ ИКОНКА', label: league.name, leagueColor: league.color, art: window.leagueAvatarMarkup('league:' + index, 150) },
+            { title: 'УНИКАЛЬНЫЙ ФОН', label: league.name, leagueColor: league.color, background: true, art: `<div class="profile-background-option profile-bg--${id} unique-league-reveal"></div>` }
         ]);
     };
     // Older profiles already claimed one alpha at 10000; queue the two missing ones.
     if (localStorage.getItem('megareAlphaRewardV2') !== 'true') {
         const index = trophyRoadRewards.findIndex(reward => reward.trophies === 10000 && reward.level === 'alpha');
         if (claimedRewards.includes(index)) {
-            containerQueue.push('alpha', 'alpha');
+            const leagueColor = TROPHY_LEAGUES.find(league => league.base === 10000).color;
+            containerQueue.push({ type: 'alpha', leagueColor }, { type: 'alpha', leagueColor });
             localStorage.setItem('pendingFreeContainers', JSON.stringify(containerQueue));
         }
         localStorage.setItem('megareAlphaRewardV2', 'true');
