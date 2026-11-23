@@ -50,6 +50,42 @@ function section(source, first, last) {
     return source.slice(start, end);
 }
 
+test('mobile close buttons invoke each menu’s existing close action', () => {
+    const actions = { modeModal: 'modeCancel', settingsModal: 'settingsCancel', tankDetailModal: 'tankDetailClose',
+        characterModal: 'characterCancel', meSettingsModal: 'meSettingsClose', meMapsModal: 'meMapsClose', meConfirmOverlay: 'meConfirmNo' };
+    const calls = [];
+    const modals = Object.entries(actions).map(([id, action]) => {
+        const cancel = { id: action, style: {}, click() { calls.push(action); } };
+        const box = { firstChild: null, button: null, querySelector: () => box.button,
+            insertBefore(button) { box.button = button; } };
+        return { id, style: { display: 'flex' }, cancel, box,
+            querySelector(selector) {
+                if (selector === '.modal-box, .container-flow-box') return box;
+                if (selector === '.modal-close-btn') return box.button;
+                return cancel;
+            } };
+    });
+    const context = { window: { deviceModeMobile: true }, document: {
+        querySelectorAll: () => modals,
+        getElementById: id => modals.find(modal => modal.cancel.id === id)?.cancel,
+        createElement: () => ({ style: {}, setAttribute() {}, addEventListener(event, handler) { this.handler = handler; } })
+    } };
+    vm.runInNewContext(section(main, 'function _initMobileCloseButtons()', 'function _updateMapEditorMobileCloseBtn()'), context);
+    context._initMobileCloseButtons();
+    for (const modal of modals) {
+        assert.equal(modal.box.button.style.display, 'flex');
+        modal.box.button.handler({ preventDefault() {} });
+    }
+    assert.deepEqual(calls, Object.values(actions));
+    context.window.deviceModeMobile = false;
+    context.window.matchMedia = () => ({ matches: true });
+    context._updateMobileCloseButtons();
+    assert.equal(modals[0].box.button.style.display, 'flex');
+    context.window.matchMedia = () => ({ matches: false });
+    context._updateMobileCloseButtons();
+    assert.equal(modals[0].box.button.style.display, 'none');
+});
+
 test('legacy maps lose neutral bots and only their related trigger actions', () => {
     const context = {}; loadMapRules(context);
     const original = { name: 'Arena', terrainType: 'snow', objects: [

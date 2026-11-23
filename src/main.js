@@ -7855,7 +7855,12 @@ if (profileEditCancel) profileEditCancel.addEventListener('click', () => {
 // Avatar buy panel
 // ── Mobile modal close buttons (X) ─────────────────────────────────────────────
 function _initMobileCloseButtons() {
-    const excludeModals = ['modeModal', 'mainMenu', 'settingsModal', 'mapEditorModal', 'meSettingsModal', 'meMapsModal', 'meConfirmOverlay', 'containerFlowModal'];
+    const excludeModals = ['mainMenu', 'mapEditorModal', 'containerFlowModal'];
+    const closeActions = {
+        modeModal: 'modeCancel', settingsModal: 'settingsCancel', tankDetailModal: 'tankDetailClose',
+        characterModal: 'characterCancel', meSettingsModal: 'meSettingsClose',
+        meMapsModal: 'meMapsClose', meConfirmOverlay: 'meConfirmNo'
+    };
     const modals = document.querySelectorAll('.modal-overlay');
     
     modals.forEach(modal => {
@@ -7874,11 +7879,14 @@ function _initMobileCloseButtons() {
         closeBtn.className = 'modal-close-btn';
         closeBtn.innerHTML = '×';
         closeBtn.setAttribute('type', 'button');
+        closeBtn.setAttribute('aria-label', 'Закрыть');
         
         // Add click handler to close modal
         closeBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            modal.style.display = 'none';
+            const action = document.getElementById(closeActions[modal.id]);
+            if (action) action.click();
+            else modal.style.display = 'none';
         });
         
         // Prepend to modal-box
@@ -7890,11 +7898,11 @@ function _initMobileCloseButtons() {
 }
 
 function _updateMobileCloseButtons() {
-    const isMobile = window.deviceModeMobile || false;
+    const isMobile = !!window.deviceModeMobile || !!window.matchMedia?.('(pointer: coarse)').matches;
     const modals = document.querySelectorAll('.modal-overlay');
     
     modals.forEach(modal => {
-        if (['modeModal', 'mainMenu'].includes(modal.id)) return;
+        if (modal.id === 'mainMenu') return;
         
         const closeBtn = modal.querySelector('.modal-close-btn');
         const cancelBtn = modal.querySelector('[id*="Cancel"], [id*="Close"], .btn-secondary');
@@ -7907,6 +7915,7 @@ function _updateMobileCloseButtons() {
         
         // For settingsModal and meMapsModal, always show cancel button regardless of mobile mode
         if (modal.id === 'settingsModal' || modal.id === 'meMapsModal') {
+            if (closeBtn) closeBtn.style.display = isMobile ? 'flex' : 'none';
             if (cancelBtn) cancelBtn.style.display = '';
             return;
         }
@@ -7926,7 +7935,7 @@ function _updateMobileCloseButtons() {
 }
 
 function _updateMapEditorMobileCloseBtn() {
-    const isMobile = window.deviceModeMobile || false;
+    const isMobile = !!window.deviceModeMobile || !!window.matchMedia?.('(pointer: coarse)').matches;
     const mobileBtn = document.getElementById('meCloseBtnMobile');
     const desktopBtn = document.getElementById('meCloseBtn');
     if (mobileBtn) mobileBtn.style.display = isMobile ? '' : 'none';

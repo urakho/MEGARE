@@ -146,7 +146,7 @@
         const name = window.tankDescriptions?.[type]?.name || window.mechDescriptions?.[type]?.name || type;
         const box = document.createElement('div'); box.className = 'modal-box tank-road-box';
         const header = document.createElement('div'); header.className = 'tank-road-header';
-        header.innerHTML = `<button class="tank-road-close" aria-label="Закрыть">✕</button><div class="tank-road-kicker">ДОРОГА МАСТЕРСТВА</div><h2 class="modal-title"></h2><p>Трофеи: ${current} · Рекорд: ${entry.best} / 10000</p><div class="tank-road-progress"><span style="width:${Math.min(100, entry.best / 100)}%"></span></div>`;
+        header.innerHTML = `<button type="button" class="tank-road-close" aria-label="Закрыть">×</button><div class="tank-road-kicker">ДОРОГА МАСТЕРСТВА</div><h2 class="modal-title"></h2><p>Трофеи: ${current} · Рекорд: ${entry.best} / 10000</p><div class="tank-road-progress"><span style="width:${Math.min(100, entry.best / 100)}%"></span></div>`;
         header.querySelector('h2').textContent = name;
         header.querySelector('button').onclick = () => modal.remove();
         box.appendChild(header);
